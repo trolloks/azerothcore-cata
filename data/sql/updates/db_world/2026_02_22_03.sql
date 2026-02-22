@@ -1,3 +1,4 @@
+-- DB update 2026_02_22_02 -> 2026_02_22_03
 --
 DELETE FROM `conditions` WHERE `SourceTypeOrReferenceId` = 10 AND `SourceGroup` IN (1267174, 1266870, 1267579, 1268083) AND `SourceEntry` = 43876 AND `ConditionTypeOrReference` = 7 AND `ConditionValue1` = 197;
 INSERT INTO `conditions` (`SourceTypeOrReferenceId`, `SourceGroup`, `SourceEntry`, `SourceId`, `ElseGroup`, `ConditionTypeOrReference`, `ConditionTarget`, `ConditionValue1`, `ConditionValue2`, `ConditionValue3`, `NegativeCondition`, `ErrorType`, `ErrorTextId`, `ScriptName`, `Comment`) VALUES
