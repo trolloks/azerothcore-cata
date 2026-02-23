@@ -6563,12 +6563,6 @@ void AuraEffect::HandlePeriodicTriggerSpellAuraTick(Unit* target, Unit* caster) 
                         caster->CastSpell(target, triggerSpellId, false);
                     return;
                 }
-            // Hunter - Rapid Recuperation
-            case 56654:
-            case 58882:
-                int32 amount = int32(target->GetMaxPower(POWER_MANA) * GetAmount() / 100.0f);
-                target->CastCustomSpell(target, triggerSpellId, &amount, nullptr, nullptr, true, nullptr, this);
-                return;
         }
     }
 
