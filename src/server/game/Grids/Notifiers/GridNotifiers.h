@@ -1005,6 +1005,9 @@ namespace Acore
         AnyGroupedUnitInObjectRangeCheck(WorldObject const* obj, Unit const* funit, float range, bool raid) : _source(obj), _refUnit(funit), _range(range), _raid(raid) {}
         bool operator()(Unit* u)
         {
+            if (u->IsVehicle())
+                return false;
+
             if (_raid)
             {
                 if (!_refUnit->IsInRaidWith(u))
