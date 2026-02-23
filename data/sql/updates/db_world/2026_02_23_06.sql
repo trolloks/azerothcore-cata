@@ -1,3 +1,4 @@
+-- DB update 2026_02_23_05 -> 2026_02_23_06
 -- Fix spell_script_names for spell_hun_rapid_recuperation
 -- Script was moved from talent (53228/53232) to periodic mana aura (56654/58882)
 DELETE FROM `spell_script_names` WHERE `ScriptName` = 'spell_hun_rapid_recuperation';
