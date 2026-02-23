@@ -1,3 +1,4 @@
+-- DB update 2026_02_23_03 -> 2026_02_23_04
 --
 DELETE FROM `creature_loot_template` WHERE `Entry` IN (24291, 23776, 24104, 26862, 26863, 29885, 27821, 26290, 30492);
 UPDATE `creature_template` SET `lootid` = 0 WHERE `Entry` IN (24291, 23776, 24104, 26862, 26863, 29885, 27821, 26290, 30492);
