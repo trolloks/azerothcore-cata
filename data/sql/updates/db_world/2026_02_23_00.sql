@@ -1,3 +1,4 @@
+-- DB update 2026_02_22_06 -> 2026_02_23_00
 -- Update gameobject 'Offering Bowl' with sniffed values
 -- updated spawns
 DELETE FROM `gameobject` WHERE (`id` IN (195068)) AND (`guid` IN (240205, 240206, 240207, 240208, 240209, 240210, 240211, 240212, 240213, 240214, 240215, 240216, 240217, 240218, 240219));
