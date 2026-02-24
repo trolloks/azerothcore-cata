@@ -1,3 +1,4 @@
+-- DB update 2026_02_24_04 -> 2026_02_24_05
 -- Update gameobject 'Bottle' with sniffed values
 -- updated spawns
 DELETE FROM `gameobject` WHERE (`id` IN (182807)) AND (`guid` IN (23644, 240263, 240265, 240266, 240267, 240268, 240269, 240270, 240271, 240272, 240273, 240274, 240275, 240276, 240277, 240278));
