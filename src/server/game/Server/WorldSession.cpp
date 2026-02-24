@@ -326,7 +326,7 @@ void WorldSession::SendPacket(WorldPacket const* packet)
         return;
     }
 
-    m_Socket->SendPacket(*packet);
+    m_Socket->SendPacketAndLogOpcode(*packet);
 }
 
 /// Add an incoming packet to the queue
@@ -386,7 +386,7 @@ bool WorldSession::Update(uint32 diff, PacketFilter& updater)
         ClientOpcodeHandler const* opHandle = opcodeTable[opcode];
 
         METRIC_DETAILED_TIMER("worldsession_update_opcode_time", METRIC_TAG("opcode", opHandle->Name));
-        LOG_DEBUG("network", "message id {} ({}) under READ", opcode, opHandle->Name);
+        LOG_INFO("network", "message id {} ({}) under READ", opcode, opHandle->Name);
 
         WorldSession::DosProtection::Policy const evaluationPolicy = AntiDOS.EvaluateOpcode(*packet, currentTime);
         switch (evaluationPolicy)

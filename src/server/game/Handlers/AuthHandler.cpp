@@ -21,23 +21,27 @@
 
 void WorldSession::SendAuthResponse(uint8 code, bool shortForm, uint32 queuePos)
 {
-    WorldPacket packet(SMSG_AUTH_RESPONSE, 1 + 4 + 1 + 4 + 1 + (shortForm ? 0 : (4 + 1)));
+    WorldPacket packet(SMSG_AUTH_RESPONSE);
+    packet.WriteBit(!shortForm);
+    if (!shortForm)
+        packet.WriteBit(false); // FCM
+    packet.WriteBit(code == AUTH_OK);
+    packet.FlushBits();
+
+    if (code == AUTH_OK)
+    {
+        packet << uint32(0); // TimeRemain
+        packet << uint8(Expansion()); // ActiveExpansionLevel
+        packet << uint32(0); // TimeSecondsUntilPCKick
+        packet << uint8(Expansion()); // AccountExpansionLevel
+        packet << uint32(0); // TimeRested
+        packet << uint8(0); // TimeOptions
+    }
+
     packet << uint8(code);
-    packet << uint32(0); // BillingTimeRemaining
-    packet << GetBillingPlanFlags();
-    packet << uint32(0); // BillingTimeRested
-    uint8 exp = Expansion(); // 0 - normal, 1 - TBC, 2 - WotLK, must be set in database manually for each account
-
-    if (exp >= MAX_EXPANSIONS)
-        exp = MAX_EXPANSIONS - 1;
-
-    packet << uint8(exp);
 
     if (!shortForm)
-    {
-        packet << uint32(queuePos);                             // Queue position
-        packet << uint8(0);                                     // Realm has a free character migration - bool
-    }
+        packet << uint32(queuePos); // QueuePosition
 
     SendPacket(&packet);
 }

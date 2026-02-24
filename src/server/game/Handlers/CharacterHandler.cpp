@@ -230,7 +230,7 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
 
     uint8 num = 0;
 
-    data << num;
+    /*data << num;
 
     _legitCharacters.clear();
     if (result)
@@ -238,7 +238,7 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
         do
         {
             ObjectGuid guid = ObjectGuid::Create<HighGuid::Player>((*result)[0].Get<uint32>());
-            LOG_DEBUG("network.opcode", "Loading char {} from account {}.", guid.ToString(), GetAccountId());
+            LOG_INFO("network.opcode", "Loading char {} from account {}.", guid.ToString(), GetAccountId());
             if (Player::BuildEnumData(result, &data))
             {
                 _legitCharacters.insert(guid);
@@ -247,7 +247,15 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
         } while (result->NextRow());
     }
 
-    data.put<uint8>(0, num);
+    data.put<uint8>(0, num);*/
+
+    // HACK EMPTY CHAR LIST FOR NOW
+    _legitCharacters.clear();
+
+    data.WriteBits(0, 23);
+    data.WriteBit(true);
+    data.WriteBits(0, 17);
+    data.FlushBits();
 
     SendPacket(&data);
 }

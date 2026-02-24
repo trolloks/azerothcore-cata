@@ -1225,7 +1225,7 @@ void OpcodeTable::Initialize()
     /*0x446*/ DEFINE_HANDLER(CMSG_CALENDAR_COMPLAIN,                                                STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleCalendarComplain                   );
     /*0x447*/ DEFINE_HANDLER(CMSG_CALENDAR_GET_NUM_PENDING,                                         STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleCalendarGetNumPending              );
     /*0x448*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_CALENDAR_SEND_NUM_PENDING,                          STATUS_NEVER);
-    /*0x449*/ DEFINE_HANDLER(CMSG_SAVE_DANCE,                                                       STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
+    /*0x449*/ //DEFINE_HANDLER(CMSG_SAVE_DANCE,                                                       STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x44A*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_NOTIFY_DANCE,                                       STATUS_NEVER);
     /*0x44B*/ DEFINE_HANDLER(CMSG_PLAY_DANCE,                                                       STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x44C*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_PLAY_DANCE,                                         STATUS_NEVER);
@@ -1439,6 +1439,8 @@ void OpcodeTable::Initialize()
     /*0x51C*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_COMMENTATOR_SKIRMISH_QUEUE_RESULT1,                 STATUS_NEVER);
     /*0x51D*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_COMMENTATOR_SKIRMISH_QUEUE_RESULT2,                 STATUS_NEVER);
     /*0x51E*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_MULTIPLE_MOVES, STATUS_NEVER);
+    /* CATA */
+    /*0x446D*/ DEFINE_HANDLER(CMSG_LOG_DISCONNECT,                                                  STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_EarlyProccess                     );
 
 #undef DEFINE_HANDLER
 #undef DEFINE_SERVER_OPCODE_HANDLER
@@ -1451,7 +1453,7 @@ inline std::string GetOpcodeNameForLoggingImpl(T id)
     std::ostringstream ss;
     ss << '[';
 
-    if (static_cast<uint16>(id) < NUM_OPCODE_HANDLERS)
+    if (static_cast<uint32>(id) < NUM_OPCODE_HANDLERS)
     {
         if (OpcodeHandler const* handler = opcodeTable[id])
             ss << handler->Name;
