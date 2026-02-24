@@ -2177,6 +2177,14 @@ uint8 Aura::GetProcEffectMask(AuraApplication* aurApp, ProcEventInfo& eventInfo,
             return 0;
     }
 
+    // Don't consume stealth charges from friendly spells
+    if (m_spellInfo->HasAura(SPELL_AURA_MOD_STEALTH))
+    {
+        if (SpellInfo const* spellInfo = eventInfo.GetSpellInfo())
+            if (spellInfo->IsPositive())
+                return 0;
+    }
+
     // check if we have charges to proc with
     if (IsUsingCharges() && !GetCharges())
         return 0;
