@@ -155,7 +155,7 @@ void AccountInfo::LoadResult(Field* fields)
     FailedLogins = fields[6].Get<uint32>();
     IsBanned = fields[7].Get<bool>() || fields[9].Get<bool>();
     IsPermanentlyBanned = fields[8].Get<bool>() || fields[10].Get<bool>();
-    SecurityLevel = static_cast<AccountTypes>(fields[11].Get<uint8>()) > SEC_CONSOLE ? SEC_CONSOLE : static_cast<AccountTypes>(fields[12].Get<uint8>());
+    SecurityLevel = static_cast<AccountTypes>(fields[11].Get<uint8>()) > SEC_CONSOLE ? SEC_CONSOLE : static_cast<AccountTypes>(fields[11].Get<uint8>());
 
     // Use our own uppercasing of the account name instead of using UPPER() in mysql query
     // This is how the account was created in the first place and changing it now would result in breaking
