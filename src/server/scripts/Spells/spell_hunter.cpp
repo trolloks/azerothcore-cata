@@ -1581,7 +1581,7 @@ class spell_hun_piercing_shots : public AuraScript
         ASSERT(piercingShots->GetMaxTicks() > 0);
         bp /= piercingShots->GetMaxTicks();
 
-        caster->CastCustomSpell(target, SPELL_HUNTER_PIERCING_SHOTS, &bp, nullptr, nullptr, true, nullptr, aurEff);
+        target->CastDelayedSpellWithPeriodicAmount(caster, SPELL_HUNTER_PIERCING_SHOTS, SPELL_AURA_PERIODIC_DAMAGE, bp);
     }
 
     void Register() override
