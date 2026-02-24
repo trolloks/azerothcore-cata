@@ -1,3 +1,4 @@
+-- DB update 2026_02_24_00 -> 2026_02_24_01
 -- Update creature 'Chapman' with sniffed values
 -- updated spawns
 DELETE FROM `creature` WHERE (`id1` IN (34382)) AND (`guid` IN (240228, 240229, 240251, 240252, 240253, 240254, 240255, 240256, 240257, 240258));

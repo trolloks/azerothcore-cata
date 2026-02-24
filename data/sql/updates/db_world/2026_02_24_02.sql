@@ -1,3 +1,4 @@
+-- DB update 2026_02_24_01 -> 2026_02_24_02
 -- Update creature 'Catrina' with sniffed values
 -- updated spawns
 DELETE FROM `creature` WHERE (`id1` IN (34383)) AND (`guid` IN (240226, 240227, 240259, 240260, 240261, 240262, 240263, 240264, 240265, 240266));
