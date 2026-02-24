@@ -1,3 +1,4 @@
+-- DB update 2026_02_23_07 -> 2026_02_24_00
 -- Update gameobject 'Mixed Fruit Bowl' with sniffed values
 -- updated spawns
 DELETE FROM `gameobject` WHERE (`id` IN (195067)) AND (`guid` IN (240026, 240040, 240052, 240053, 240054, 240055, 240056, 240059, 240061, 240062, 240220, 240221, 240222, 240223, 240224, 240225, 240226, 240227, 240228, 240229, 240230));
