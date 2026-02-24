@@ -1,3 +1,4 @@
+-- DB update 2026_02_24_03 -> 2026_02_24_04
 -- Update gameobject 'Bread of the Dead' with sniffed values
 -- updated spawns
 DELETE FROM `gameobject` WHERE (`id` IN (195066)) AND (`guid` IN (240285, 240288, 240292, 240293, 240296, 240297, 240299, 240300, 240301, 240305, 240306, 240308, 240311, 240313, 240314, 240317));
