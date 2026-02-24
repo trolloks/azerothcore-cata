@@ -1,3 +1,4 @@
+-- DB update 2026_02_24_05 -> 2026_02_24_06
 --
 UPDATE `spell_proc`SET `ProcsPerMinute` = 2  WHERE `SpellId` = 51528;
 UPDATE `spell_proc`SET `ProcsPerMinute` = 4  WHERE `SpellId` = 51529;
