@@ -2184,7 +2184,7 @@ uint8 Aura::GetProcEffectMask(AuraApplication* aurApp, ProcEventInfo& eventInfo,
     if (m_spellInfo->HasAura(SPELL_AURA_MOD_STEALTH))
     {
         if (SpellInfo const* spellInfo = eventInfo.GetSpellInfo())
-            if (spellInfo->IsPositive())
+            if (spellInfo->IsPositive() || !eventInfo.GetActor()->IsHostileTo(aurApp->GetTarget()))
                 return 0;
     }
 
