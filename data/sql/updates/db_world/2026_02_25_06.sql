@@ -1,3 +1,4 @@
+-- DB update 2026_02_25_05 -> 2026_02_25_06
 -- Update gameobject 'Serpentshrine Console' with sniffed values
 -- new spawns
 DELETE FROM `gameobject` WHERE (`id` IN (185115, 185117, 185118)) AND (`guid` IN (191, 192, 193));
