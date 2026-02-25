@@ -1,3 +1,4 @@
+-- DB update 2026_02_25_11 -> 2026_02_25_12
 --
 DELETE FROM `spell_proc` WHERE `SpellId` IN (21747,24256,27997,28460,33511,33522,38319,40303,43730,43983,45396,45398,45444,55717);
 INSERT INTO `spell_proc` (`SpellId`, `SchoolMask`, `SpellFamilyName`, `SpellFamilyMask0`, `SpellFamilyMask1`, `SpellFamilyMask2`, `ProcFlags`, `SpellTypeMask`, `SpellPhaseMask`, `HitMask`, `AttributesMask`, `DisableEffectsMask`, `ProcsPerMinute`, `Chance`, `Cooldown`, `Charges`) VALUES
