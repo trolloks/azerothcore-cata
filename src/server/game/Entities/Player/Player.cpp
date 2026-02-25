@@ -9983,22 +9983,9 @@ bool Player::HasSpellModApplied(SpellModifier* mod, Spell* spell)
 void Player::SetSpellModTakingSpell(Spell* spell, bool apply)
 {
     if (apply && m_spellModTakingSpell)
-    {
-        LOG_INFO("misc", "Player::SetSpellModTakingSpell (A1) - {}, {}", spell->m_spellInfo->Id, m_spellModTakingSpell->m_spellInfo->Id);
-        return;
-        //ASSERT(m_spellModTakingSpell == nullptr);
-    }
+        ASSERT(m_spellModTakingSpell == nullptr);
     else if (!apply)
-    {
-        if (!m_spellModTakingSpell)
-            LOG_INFO("misc", "Player::SetSpellModTakingSpell (B1) - {}", spell->m_spellInfo->Id);
-        else if (m_spellModTakingSpell != spell)
-        {
-            LOG_INFO("misc", "Player::SetSpellModTakingSpell (C1) - {}, {}", spell->m_spellInfo->Id, m_spellModTakingSpell->m_spellInfo->Id);
-            return;
-        }
-        //ASSERT(m_spellModTakingSpell && m_spellModTakingSpell == spell);
-    }
+        ASSERT(m_spellModTakingSpell && m_spellModTakingSpell == spell);
 
     m_spellModTakingSpell = apply ? spell : nullptr;
 }
