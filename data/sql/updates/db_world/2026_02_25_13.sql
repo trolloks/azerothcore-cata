@@ -1,3 +1,4 @@
+-- DB update 2026_02_25_12 -> 2026_02_25_13
 -- Update gameobject 'unnamed flames' with sniffed values
 -- new spawns
 DELETE FROM `gameobject` WHERE (`id` IN (184511, 184512, 184513)) AND (`guid` IN (198, 199, 200));
