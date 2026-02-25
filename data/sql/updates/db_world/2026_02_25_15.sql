@@ -1,3 +1,4 @@
+-- DB update 2026_02_25_14 -> 2026_02_25_15
 --
 DELETE FROM `reference_loot_template` WHERE `Entry` = 1227274 AND `Item` IN (
 36533, -- Adorned Broadsword
