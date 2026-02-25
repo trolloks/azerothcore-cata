@@ -9982,10 +9982,10 @@ bool Player::HasSpellModApplied(SpellModifier* mod, Spell* spell)
 
 void Player::SetSpellModTakingSpell(Spell* spell, bool apply)
 {
-    if (apply && m_spellModTakingSpell)
-        ASSERT(m_spellModTakingSpell == nullptr);
-    else if (!apply)
-        ASSERT(m_spellModTakingSpell && m_spellModTakingSpell == spell);
+    if (apply && m_spellModTakingSpell && m_spellModTakingSpell != spell)
+        return;
+    else if (!apply && m_spellModTakingSpell != spell)
+        return;
 
     m_spellModTakingSpell = apply ? spell : nullptr;
 }
