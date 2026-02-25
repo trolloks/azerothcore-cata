@@ -2164,9 +2164,12 @@ uint8 Aura::GetProcEffectMask(AuraApplication* aurApp, ProcEventInfo& eventInfo,
             return 0;
 
         // check if aura can proc when spell is triggered (exception for hunter auto shot & wands)
+        // Kill/killed/death events should not be blocked by the triggered-spell check -
+        // the kill itself is the proc trigger, not the spell that dealt the killing blow
         if (!GetSpellInfo()->HasAttribute(SPELL_ATTR3_CAN_PROC_FROM_PROCS) &&
             !(procEntry->AttributesMask & PROC_ATTR_TRIGGERED_CAN_PROC) &&
-            !(eventInfo.GetTypeMask() & AUTO_ATTACK_PROC_FLAG_MASK))
+            !(eventInfo.GetTypeMask() & AUTO_ATTACK_PROC_FLAG_MASK) &&
+            !(eventInfo.GetTypeMask() & (PROC_FLAG_KILL | PROC_FLAG_KILLED | PROC_FLAG_DEATH)))
         {
             if (spell->IsTriggered() && !spell->GetSpellInfo()->HasAttribute(SPELL_ATTR3_NOT_A_PROC))
                 return 0;
