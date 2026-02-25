@@ -1,3 +1,4 @@
+-- DB update 2026_02_25_15 -> 2026_02_25_16
 -- Update gameobject 'Doodad_WoodSign%' with sniffed values
 -- updated spawns
 DELETE FROM `gameobject` WHERE (`id` IN (175657, 175656)) AND (`guid` IN (45623, 45624));
