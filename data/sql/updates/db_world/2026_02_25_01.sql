@@ -1,3 +1,4 @@
+-- DB update 2026_02_25_00 -> 2026_02_25_01
 DELETE FROM `smart_scripts` WHERE `entryorguid` = 194569 AND `source_type` = 1 AND `id` IN (0, 1, 2);
 
 DELETE FROM `conditions` WHERE `SourceTypeOrReferenceId` = 22 AND `SourceGroup` = 2 AND `SourceEntry` = 194569 AND `SourceId` = 1;
