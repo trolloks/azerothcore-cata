@@ -1,3 +1,4 @@
+-- DB update 2026_02_25_09 -> 2026_02_25_10
 -- Update gameobject 'Blood of Heroes' with sniffed values
 -- updated spawns
 DELETE FROM `gameobject` WHERE (`id` IN (176213)) AND (`guid` IN (45512, 45736, 45853, 45892, 45934, 45936, 5276, 5277, 5278, 5279, 5281));
