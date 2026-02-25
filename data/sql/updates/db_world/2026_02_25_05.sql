@@ -1,3 +1,4 @@
+-- DB update 2026_02_25_04 -> 2026_02_25_05
 -- Threat of Thassarian: OH attack should fire even when MH misses/dodges/parries
 -- SpellTypeMask 0 = don't filter by spell type (miss/dodge/parry have no damage, so
 --   PROC_SPELL_TYPE_DAMAGE won't match - need to allow PROC_SPELL_TYPE_NO_DMG_HEAL too)
