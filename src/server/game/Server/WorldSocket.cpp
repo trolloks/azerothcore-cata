@@ -281,7 +281,6 @@ bool WorldSocket::Update()
         {
             queued->CompressIfNeeded();
             ServerPktHeader header(queued->size() + 2, queued->GetOpcode());
-            LOG_INFO("network", "WorldSocket::Update: sending packet with Opcode: 0x{:X}", queued->GetOpcode());
             if (queued->NeedsEncryption()){
                 _authCrypt.EncryptSend(header.header, header.getHeaderLength());
             }

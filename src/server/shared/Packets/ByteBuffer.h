@@ -242,6 +242,12 @@ public:
         delete[] buffer;
         return retval;
     }
+    
+    void WriteString(std::string const& str)
+    {
+        if (size_t len = str.length())
+            append(str.c_str(), len);
+    }
 
     // Reads a byte (if needed) in-place
     void ReadByteSeq(uint8& b)

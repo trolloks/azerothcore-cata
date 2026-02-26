@@ -19,6 +19,7 @@
 #define CharacterPackets_h__
 
 #include "Packet.h"
+#include "ObjectGuid.h"
 
 namespace WorldPackets
 {
@@ -85,6 +86,16 @@ namespace WorldPackets
             LogoutCancelAck() : ServerPacket(SMSG_LOGOUT_CANCEL_ACK, 0) { }
 
             WorldPacket const* Write() override { return &_worldPacket; }
+        };
+
+        class PlayerLogin final : public ClientPacket
+        {
+        public:
+            PlayerLogin(WorldPacket&& packet) : ClientPacket(CMSG_PLAYER_LOGIN, std::move(packet)) { }
+
+            void Read() override;
+
+            ObjectGuid Guid;      ///< Guid of the player that is logging in
         };
 
         class PlayerLogout final : public ClientPacket

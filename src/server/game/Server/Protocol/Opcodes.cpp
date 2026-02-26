@@ -1441,6 +1441,8 @@ void OpcodeTable::Initialize()
     /*0x51E*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_MULTIPLE_MOVES, STATUS_NEVER);
     /* CATA */
     /*0x446D*/ DEFINE_HANDLER(CMSG_LOG_DISCONNECT,                                                  STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_EarlyProccess                     );
+    /*0x2422*/ DEFINE_HANDLER(CMSG_LOADING_SCREEN_NOTIFY,                                           STATUS_AUTHED,     PROCESS_THREADUNSAFE,   &WorldSession::HandleLoadScreenOpcode                   );
+    /*0x7816*/ DEFINE_HANDLER(CMSG_VIOLENCE_LEVEL,                                                  STATUS_AUTHED,     PROCESS_INPLACE,        &WorldSession::HandleViolenceLevel                      );
 
 #undef DEFINE_HANDLER
 #undef DEFINE_SERVER_OPCODE_HANDLER

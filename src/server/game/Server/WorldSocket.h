@@ -40,7 +40,7 @@ public:
 
     bool NeedsEncryption() const { return _encrypt; }
 
-    bool NeedsCompression() const { return GetOpcode() == SMSG_UPDATE_OBJECT && size() > 100; }
+    bool NeedsCompression() const { return GetOpcode() == SMSG_UPDATE_OBJECT && size() > 0x400; }
 
     void CompressIfNeeded();
 
