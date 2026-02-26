@@ -1341,6 +1341,7 @@ enum Opcodes : uint16
     CMSG_LOG_DISCONNECT                             = 0x446D,
     CMSG_LOADING_SCREEN_NOTIFY                      = 0x2422,
     CMSG_VIOLENCE_LEVEL                             = 0x7816,
+    SMSG_PHASE_SHIFT_CHANGE                         = 0x70A0,
     NUM_MSG_TYPES                                   = 0xFFFF,
 };
 

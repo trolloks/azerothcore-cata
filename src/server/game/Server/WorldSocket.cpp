@@ -97,13 +97,13 @@ void compressBuff(void* dst, uint32* dst_size, void* src, int src_size)
     *dst_size = c_stream.total_out;
 }
 
-void EncryptableAndCompressiblePacket::CompressIfNeeded()
+void EncryptableAndCompressiblePacket::CompressIfNeeded(z_stream* compressionStream)
 {
     if (!NeedsCompression())
         return;
 
     LOG_INFO("network", "Compressing packet with opcode 0x{:X} and size {} bytes", GetOpcode(), size());
-    uint32 pSize = size();
+    /*uint32 pSize = size();
 
     uint32 destsize = compressBound(pSize);
     ByteBuffer buf(destsize + sizeof(uint32));
@@ -120,7 +120,56 @@ void EncryptableAndCompressiblePacket::CompressIfNeeded()
     
     OpcodeServer uncompressedOpcode = OpcodeServer(GetOpcode());
     uint32 opcode = uncompressedOpcode | AsUnderlyingType(COMPRESSED_OPCODE_MASK);
+    SetOpcode(opcode);*/
+
+    OpcodeServer uncompressedOpcode = OpcodeServer(GetOpcode());
+    if (uncompressedOpcode & AsUnderlyingType(COMPRESSED_OPCODE_MASK))
+    {
+        LOG_ERROR("network", "Packet with opcode 0x%04X is already compressed!", uncompressedOpcode);
+        return;
+    }
+
+    uint32 opcode = uncompressedOpcode | AsUnderlyingType(COMPRESSED_OPCODE_MASK);
+    uint32 size = wpos();
+    uint32 destsize = compressBound(size);
+
+    std::vector<uint8> storage(destsize);
+
+    _compressionStream = compressionStream;
+    Compress(static_cast<void*>(&storage[0]), &destsize, static_cast<const void*>(contents()), size);
+    if (destsize == 0)
+        return;
+
+    clear();
+    reserve(destsize + sizeof(uint32));
+    *this << uint32(size);
+    append(&storage[0], destsize);
     SetOpcode(opcode);
+}
+
+void EncryptableAndCompressiblePacket::Compress(void* dst, uint32 *dst_size, const void* src, int src_size)
+{
+    _compressionStream->next_out = (Bytef*)dst;
+    _compressionStream->avail_out = *dst_size;
+    _compressionStream->next_in = (Bytef*)src;
+    _compressionStream->avail_in = (uInt)src_size;
+
+    int32 z_res = deflate(_compressionStream, Z_SYNC_FLUSH);
+    if (z_res != Z_OK)
+    {
+        LOG_ERROR("network", "Can't compress packet (zlib: deflate) Error code: %i (%s, msg: %s)", z_res, zError(z_res), _compressionStream->msg);
+        *dst_size = 0;
+        return;
+    }
+
+    if (_compressionStream->avail_in != 0)
+    {
+        LOG_ERROR("network", "Can't compress packet (zlib: deflate not greedy)");
+        *dst_size = 0;
+        return;
+    }
+
+    *dst_size -= _compressionStream->avail_out;
 }
 
 WorldSocket::WorldSocket(IoContextTcpSocket&& socket)
@@ -279,7 +328,7 @@ bool WorldSocket::Update()
         std::size_t currentPacketSize;
         do
         {
-            queued->CompressIfNeeded();
+            queued->CompressIfNeeded(_compressionStream);
             ServerPktHeader header(queued->size() + 2, queued->GetOpcode());
             if (queued->NeedsEncryption()){
                 _authCrypt.EncryptSend(header.header, header.getHeaderLength());

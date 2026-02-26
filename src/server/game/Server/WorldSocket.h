@@ -30,10 +30,12 @@
 
 using boost::asio::ip::tcp;
 
+struct z_stream_s;
+
 class EncryptableAndCompressiblePacket : public WorldPacket
 {
 public:
-    EncryptableAndCompressiblePacket(WorldPacket const& packet, bool encrypt) : WorldPacket(packet), _encrypt(encrypt)
+    EncryptableAndCompressiblePacket(WorldPacket const& packet, bool encrypt) : WorldPacket(packet), _encrypt(encrypt), _compressionStream(nullptr)
     {
         SocketQueueLink.store(nullptr, std::memory_order_relaxed);
     }
@@ -42,15 +44,15 @@ public:
 
     bool NeedsCompression() const { return GetOpcode() == SMSG_UPDATE_OBJECT && size() > 0x400; }
 
-    void CompressIfNeeded();
+    void CompressIfNeeded(z_stream_s* compressionStream);
 
     std::atomic<EncryptableAndCompressiblePacket*> SocketQueueLink;
 
 private:
+    void Compress(void* dst, uint32 *dst_size, const void* src, int src_size);
+    z_stream_s* _compressionStream;
     bool _encrypt;
 };
-
-struct z_stream_s;
 
 namespace WorldPackets
 {
