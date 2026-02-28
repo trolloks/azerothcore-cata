@@ -1,3 +1,5 @@
+# PLEASE NOTE: THIS CATACLYSM FORK IS A WORK IN PROGRESS AND IS NOT FULLY PLAYABLE YET
+
 # ![logo](https://raw.githubusercontent.com/azerothcore/azerothcore.github.io/master/images/logo-github.png) AzerothCore
 
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
