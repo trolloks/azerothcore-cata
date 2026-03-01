@@ -70,6 +70,7 @@ class AC_SHARED_API ByteBuffer
 {
 public:
     constexpr static std::size_t DEFAULT_SIZE = 0x1000;
+    static uint8 const InitialBitPos = 8;
 
     // constructor
     ByteBuffer()
@@ -77,13 +78,13 @@ public:
         _storage.reserve(DEFAULT_SIZE);
     }
 
-    explicit ByteBuffer(std::size_t reserve) : _rpos(0), _wpos(0)
+    explicit ByteBuffer(std::size_t reserve) : _rpos(0), _wpos(0), _bitpos(InitialBitPos), _curbitval(0)
     {
         _storage.reserve(reserve);
     }
 
     ByteBuffer(ByteBuffer&& buf) noexcept :
-        _rpos(buf._rpos), _wpos(buf._wpos), _storage(std::move(buf._storage))
+        _rpos(buf._rpos), _wpos(buf._wpos), _bitpos(buf._bitpos), _curbitval(buf._curbitval), _storage(std::move(buf._storage))
     {
         buf._rpos = 0;
         buf._wpos = 0;
@@ -99,6 +100,8 @@ public:
         {
             _rpos = right._rpos;
             _wpos = right._wpos;
+            _bitpos = right._bitpos;
+            _curbitval = right._curbitval;
             _storage = right._storage;
         }
 
@@ -139,6 +142,124 @@ public:
         static_assert(std::is_fundamental<T>::value, "append(compound)");
         EndianConvert(value);
         put(pos, (uint8*)&value, sizeof(value));
+    }
+
+    void FlushBits()
+    {
+        if (_bitpos == 8)
+            return;
+
+        _bitpos = 8;
+
+        append((uint8 *)&_curbitval, sizeof(uint8));
+        _curbitval = 0;
+    }
+
+    bool WriteBit(uint32 bit)
+    {
+        --_bitpos;
+        if (bit)
+            _curbitval |= (1 << (_bitpos));
+
+        if (_bitpos == 0)
+        {
+            _bitpos = 8;
+            append((uint8 *)&_curbitval, sizeof(_curbitval));
+            _curbitval = 0;
+        }
+
+        return (bit != 0);
+    }
+
+    bool ReadBit()
+    {
+        if (_bitpos >= 8)
+        {
+            read(&_curbitval, 1);
+            _bitpos = 0;
+        }
+
+        return ((_curbitval >> (8 - ++_bitpos)) & 1) != 0;
+    }
+
+    void WriteBits(uint64 value, int32 bits)
+    {
+        // remove bits that don't fit
+        value &= (1 << bits) - 1;
+        value &= (UI64LIT(1) << bits) - 1;
+
+        if (bits > int32(_bitpos))
+        {
+            // first write to fill bit buffer
+            _curbitval |= value >> (bits - _bitpos);
+            bits -= _bitpos;
+            _bitpos = 8; // required "unneccessary" write to avoid double flushing
+            append(&_curbitval, sizeof(_curbitval));
+
+            // then append as many full bytes as possible
+            while (bits >= 8)
+            {
+                bits -= 8;
+                append<uint8>(value >> bits);
+            }
+
+            // store remaining bits in the bit buffer
+            _bitpos = 8 - bits;
+            _curbitval = (value & ((1 << bits) - 1)) << _bitpos;
+            _curbitval = (value & ((UI64LIT(1) << bits) - 1)) << _bitpos;
+        }
+        else
+        {
+            // entire value fits in the bit buffer
+            _bitpos -= bits;
+            _curbitval |= value << _bitpos;
+
+            if (_bitpos == 0)
+            {
+                _bitpos = 8;
+                append(&_curbitval, sizeof(_curbitval));
+                _curbitval = 0;
+            }
+        }
+    }
+
+    uint32 ReadBits(int32 bits)
+    {
+        uint32 value = 0;
+        for (int32 i = bits - 1; i >= 0; --i)
+            value |= uint32(ReadBit()) << i;
+
+        return value;
+    }
+
+    std::string ReadString(uint32 length)
+    {
+        if (!length)
+            return std::string();
+        char* buffer = new char[length + 1]();
+        read((uint8*)buffer, length);
+        std::string retval = buffer;
+        delete[] buffer;
+        return retval;
+    }
+    
+    void WriteString(std::string const& str)
+    {
+        if (size_t len = str.length())
+            append(str.c_str(), len);
+    }
+
+    // Reads a byte (if needed) in-place
+    void ReadByteSeq(uint8& b)
+    {
+        if (b != 0)
+            b ^= read<uint8>();
+    }
+
+    void WriteByteSeq(uint8 b)
+    {
+        if (b != 0)
+            append<uint8>(b ^ 1);
     }
 
     ByteBuffer& operator<<(bool value)
@@ -528,7 +649,8 @@ public:
     void hexlike() const;
 
 protected:
-    std::size_t _rpos{0}, _wpos{0};
+    std::size_t _rpos{0}, _wpos{0}, _bitpos{InitialBitPos};
+    uint8 _curbitval;
     std::vector<uint8> _storage;
 };
 

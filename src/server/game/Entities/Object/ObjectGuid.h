@@ -66,9 +66,12 @@ enum class HighGuid
     Vehicle        = 0xF150,                      // blizz F550
     DynamicObject  = 0xF100,                      // blizz F100
     Corpse         = 0xF101,                      // blizz F100
+    AreaTrigger    = 0xF102,
+    BattleGround   = 0x1F1,
     Mo_Transport   = 0x1FC0,                      // blizz 1FC0 (for GAMEOBJECT_TYPE_MO_TRANSPORT)
     Instance       = 0x1F40,                      // blizz 1F40
     Group          = 0x1F50,
+    Guild          = 0x1FF0
 };
 
 template<HighGuid high>
@@ -97,6 +100,8 @@ GUID_TRAIT_GLOBAL(HighGuid::Item)
 GUID_TRAIT_GLOBAL(HighGuid::Mo_Transport)
 GUID_TRAIT_GLOBAL(HighGuid::Group)
 GUID_TRAIT_GLOBAL(HighGuid::Instance)
+GUID_TRAIT_GLOBAL(HighGuid::BattleGround)
+GUID_TRAIT_GLOBAL(HighGuid::Guild)
 GUID_TRAIT_MAP_SPECIFIC(HighGuid::Transport)
 GUID_TRAIT_MAP_SPECIFIC(HighGuid::Unit)
 GUID_TRAIT_MAP_SPECIFIC(HighGuid::Vehicle)
@@ -104,6 +109,7 @@ GUID_TRAIT_MAP_SPECIFIC(HighGuid::Pet)
 GUID_TRAIT_MAP_SPECIFIC(HighGuid::GameObject)
 GUID_TRAIT_MAP_SPECIFIC(HighGuid::DynamicObject)
 GUID_TRAIT_MAP_SPECIFIC(HighGuid::Corpse)
+GUID_TRAIT_MAP_SPECIFIC(HighGuid::AreaTrigger)
 
 class ObjectGuid;
 class PackedGuid;
@@ -127,26 +133,26 @@ class ObjectGuid
         template<HighGuid type>
         static typename std::enable_if<ObjectGuidTraits<type>::MapSpecific, ObjectGuid>::type Create(uint32 entry, LowType counter) { return MapSpecific(type, entry, counter); }
 
-        ObjectGuid()  = default;
-        explicit ObjectGuid(uint64 guid) : _guid(guid) { }
-        ObjectGuid(HighGuid hi, uint32 entry, LowType counter) : _guid(counter ? uint64(counter) | (uint64(entry) << 24) | (uint64(hi) << 48) : 0) { }
-        ObjectGuid(HighGuid hi, LowType counter) : _guid(counter ? uint64(counter) | (uint64(hi) << 48) : 0) { }
+        ObjectGuid()  { _data._guid = UI64LIT(0); }
+        explicit ObjectGuid(uint64 guid) { _data._guid = guid; }
+        ObjectGuid(HighGuid hi, uint32 entry, LowType counter) { _data._guid = counter ? uint64(counter) | (uint64(entry) << 24) | (uint64(hi) << 48) : 0; }
+        ObjectGuid(HighGuid hi, LowType counter) { _data._guid = counter ? uint64(counter) | (uint64(hi) << 48) : 0; }
 
         PackedGuidReader ReadAsPacked() { return PackedGuidReader(*this); }
 
-        void Set(uint64 guid) { _guid = guid; }
-        void Clear() { _guid = 0; }
+        void Set(uint64 guid) { _data._guid = guid; }
+        void Clear() { _data._guid = 0; }
 
         [[nodiscard]] PackedGuid WriteAsPacked() const;
 
-        [[nodiscard]] uint64   GetRawValue() const { return _guid; }
-        [[nodiscard]] HighGuid GetHigh() const { return HighGuid((_guid >> 48) & 0x0000FFFF); }
-        [[nodiscard]] uint32   GetEntry() const { return HasEntry() ? uint32((_guid >> 24) & UI64LIT(0x0000000000FFFFFF)) : 0; }
+        [[nodiscard]] uint64   GetRawValue() const { return _data._guid; }
+        [[nodiscard]] HighGuid GetHigh() const { return HighGuid((uint64(_data._guid)  >> 48) & 0x0000FFFF); }
+        [[nodiscard]] uint32   GetEntry() const { return HasEntry() ? uint32((_data._guid >> 24) & UI64LIT(0x0000000000FFFFFF)) : 0; }
         [[nodiscard]] LowType  GetCounter()  const
         {
             return HasEntry()
-                   ? LowType(_guid & UI64LIT(0x0000000000FFFFFF))
-                   : LowType(_guid & UI64LIT(0x00000000FFFFFFFF));
+                   ? LowType(_data._guid & UI64LIT(0x0000000000FFFFFF))
+                   : LowType(_data._guid & UI64LIT(0x00000000FFFFFFFF));
         }
 
         static LowType GetMaxCounter(HighGuid high)
@@ -158,7 +164,10 @@ class ObjectGuid
 
         [[nodiscard]] ObjectGuid::LowType GetMaxCounter() const { return GetMaxCounter(GetHigh()); }
 
-        [[nodiscard]] bool IsEmpty()             const { return _guid == 0; }
+        uint8& operator[](uint32 index);
+        uint8 const& operator[](uint32 index) const;
+
+        [[nodiscard]] bool IsEmpty()             const { return _data._guid == 0; }
         [[nodiscard]] bool IsCreature()          const { return GetHigh() == HighGuid::Unit; }
         [[nodiscard]] bool IsPet()               const { return GetHigh() == HighGuid::Pet; }
         [[nodiscard]] bool IsVehicle()           const { return GetHigh() == HighGuid::Vehicle; }
@@ -171,11 +180,14 @@ class ObjectGuid
         [[nodiscard]] bool IsGameObject()        const { return GetHigh() == HighGuid::GameObject; }
         [[nodiscard]] bool IsDynamicObject()     const { return GetHigh() == HighGuid::DynamicObject; }
         [[nodiscard]] bool IsCorpse()            const { return GetHigh() == HighGuid::Corpse; }
+        [[nodiscard]] bool IsAreaTrigger()       const { return GetHigh() == HighGuid::AreaTrigger; }
+        [[nodiscard]] bool IsBattleground()      const { return GetHigh() == HighGuid::BattleGround; }
         [[nodiscard]] bool IsTransport()         const { return GetHigh() == HighGuid::Transport; }
         [[nodiscard]] bool IsMOTransport()       const { return GetHigh() == HighGuid::Mo_Transport; }
         [[nodiscard]] bool IsAnyTypeGameObject() const { return IsGameObject() || IsTransport() || IsMOTransport(); }
         [[nodiscard]] bool IsInstance()          const { return GetHigh() == HighGuid::Instance; }
         [[nodiscard]] bool IsGroup()             const { return GetHigh() == HighGuid::Group; }
+        [[nodiscard]] bool IsGuild()             const { return GetHigh() == HighGuid::Guild; }
 
         static TypeID GetTypeId(HighGuid high)
         {
@@ -192,8 +204,11 @@ class ObjectGuid
                 case HighGuid::Mo_Transport:  return TYPEID_GAMEOBJECT;
                 case HighGuid::Vehicle:       return TYPEID_UNIT;
                 // unknown
+                case HighGuid::AreaTrigger:
                 case HighGuid::Instance:
+                case HighGuid::BattleGround:
                 case HighGuid::Group:
+                case HighGuid::Guild:
                 default:                      return TYPEID_OBJECT;
             }
         }
@@ -246,7 +261,11 @@ class ObjectGuid
         // used to catch wrong type assignment
         operator int64() const = delete;
 
-        uint64 _guid{0};
+        union
+        {
+            uint64 _guid;
+            uint8 _bytes[sizeof(uint64)];
+        } _data;
 };
 
 // Some Shared defines

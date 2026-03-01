@@ -30,6 +30,7 @@
 #include "DatabaseEnv.h"
 #include "GossipDef.h"
 #include "Packet.h"
+#include "Position.h"
 #include "SharedDefines.h"
 #include "World.h"
 #include <map>
@@ -89,6 +90,7 @@ namespace WorldPackets
         class LogoutRequest;
         class ShowingCloak;
         class ShowingHelm;
+        class PlayerLogin;
         class PlayerLogout;
         class PlayedTimeClient;
     }
@@ -338,6 +340,44 @@ protected:
 
     /// Server side data
     uint8 CharCount = 0;
+};
+
+struct CharacterInfo
+{
+    friend class Player;
+    friend class WorldSession;
+
+protected:
+    struct VisualItemInfo
+    {
+        uint32 DisplayID = 0;
+        uint32 DisplayEnchantID = 0;
+        uint8 InvType = 0;
+    };
+
+    Position PreloadPos;
+    ObjectGuid Guid;
+    ObjectGuid GuildGUID;
+    uint32 Flags = 0;       ///< Character flag @see enum CharacterFlags
+    uint32 Flags2 = 0;      ///< Character customization flags @see enum CharacterCustomizeFlags
+    int32 MapID = 0;
+    uint32 PetCreatureDisplayID = 0;
+    uint32 PetCreatureFamilyID = 0;
+    uint32 PetExperienceLevel = 0;
+    int32 ZoneID = 0;
+    uint8 ClassID = 0;
+    uint8 ExperienceLevel = 0;
+    uint8 FaceID = 0;
+    uint8 FacialHair = 0;
+    uint8 HairColor = 0;
+    uint8 HairStyle = 0;
+    uint8 ListPosition = 0; ///< Order of the characters in list
+    uint8 RaceID = 0;
+    uint8 SexID = 0;
+    uint8 SkinID = 0;
+    bool FirstLogin = false;
+    std::string Name;
+    std::array<VisualItemInfo, 23> VisualItems = { };
 };
 
 struct CharacterRenameInfo
@@ -627,7 +667,9 @@ public:                                                 // opcodes handlers
     void HandleCharEnumOpcode(WorldPacket& recvPacket);
     void HandleCharDeleteOpcode(WorldPacket& recvPacket);
     void HandleCharCreateOpcode(WorldPacket& recvPacket);
-    void HandlePlayerLoginOpcode(WorldPacket& recvPacket);
+    void HandleLoadScreenOpcode(WorldPacket& recvPacket);
+    void HandleViolenceLevel(WorldPacket& recvPacket);
+
     void HandleCharEnum(PreparedQueryResult result);
     void HandlePlayerLoginFromDB(LoginQueryHolder const& holder);
     void HandlePlayerLoginToCharInWorld(Player* pCurrChar);
@@ -678,6 +720,7 @@ public:                                                 // opcodes handlers
     void HandleLootMasterGiveOpcode(WorldPacket& recvPacket);
     void HandleWhoOpcode(WorldPacket& recvPacket);
     void HandleLogoutRequestOpcode(WorldPackets::Character::LogoutRequest& logoutRequest);
+    void HandlePlayerLoginOpcode(WorldPackets::Character::PlayerLogin& playerLogin);
     void HandlePlayerLogoutOpcode(WorldPackets::Character::PlayerLogout& playerLogout);
     void HandleLogoutCancelOpcode(WorldPackets::Character::LogoutCancel& logoutCancel);
 

@@ -23,6 +23,18 @@
 
 ObjectGuid const ObjectGuid::Empty = ObjectGuid();
 
+uint8& ObjectGuid::operator[](uint32 index)
+{
+    ASSERT(index < sizeof(uint64));
+    return _data._bytes[index];
+}
+
+uint8 const& ObjectGuid::operator[](uint32 index) const
+{
+    ASSERT(index < sizeof(uint64));
+    return _data._bytes[index];
+}
+
 char const* ObjectGuid::GetTypeName(HighGuid high)
 {
     switch (high)
@@ -47,7 +59,7 @@ char const* ObjectGuid::GetTypeName(HighGuid high)
 std::string ObjectGuid::ToString() const
 {
     std::ostringstream str;
-    str << "GUID Full: 0x" << std::hex << std::setw(16) << std::setfill('0') << _guid << std::dec;
+    str << "GUID Full: 0x" << std::hex << std::setw(16) << std::setfill('0') << _data._guid << std::dec;
     str << " Type: " << GetTypeName();
     if (HasEntry())
         str << (IsPet() ? " Pet number: " : " Entry: ") << GetEntry() << " ";
