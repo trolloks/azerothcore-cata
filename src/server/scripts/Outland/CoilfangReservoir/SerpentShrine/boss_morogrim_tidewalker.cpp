@@ -55,31 +55,16 @@ const uint32 waterGlobuleIds[4] = {SPELL_SUMMON_WATER_GLOBULE_1, SPELL_SUMMON_WA
 struct boss_morogrim_tidewalker : public BossAI
 {
     boss_morogrim_tidewalker(Creature* creature) : BossAI(creature, DATA_MOROGRIM_TIDEWALKER)
-    {
-        scheduler.SetValidator([this]
-        {
-            return !me->HasUnitState(UNIT_STATE_CASTING);
-        });
-    }
+    {    }
 
     void Reset() override
     {
         BossAI::Reset();
-        _recentlySpoken = false;
     }
 
-    void KilledUnit(Unit*) override
+    void KilledUnit(Unit* /*victim*/) override
     {
-        if (!_recentlySpoken)
-        {
-            Talk(SAY_SLAY);
-            _recentlySpoken = true;
-        }
-
-        scheduler.Schedule(6s, [this](TaskContext)
-        {
-            _recentlySpoken = false;
-        });
+        Talk(SAY_SLAY);
     }
 
     void JustSummoned(Creature* summon) override
@@ -136,8 +121,6 @@ struct boss_morogrim_tidewalker : public BossAI
             context.Repeat(45s, 60s);
         });
     }
-private:
-    bool _recentlySpoken;
 };
 
 class spell_morogrim_tidewalker_watery_grave : public SpellScript

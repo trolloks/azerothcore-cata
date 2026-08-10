@@ -55,6 +55,7 @@ public:
                 IsFriendSummoned = false;
         }
 
+        using CreatureAI::WaypointReached;
         void WaypointReached(uint32 waypointId) override
         {
             switch (waypointId)
@@ -125,7 +126,7 @@ class npc_mikhail : public CreatureScript
 public:
     npc_mikhail() : CreatureScript("npc_mikhail") { }
 
-    bool OnQuestAccept(Player* player, Creature* creature, const Quest* quest) override
+    bool OnQuestAccept(Player* player, Creature* creature, Quest const* quest) override
     {
         if (quest->GetQuestId() == QUEST_MISSING_DIPLO_PT11)
         {

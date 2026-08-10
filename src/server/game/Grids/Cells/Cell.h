@@ -54,13 +54,13 @@ struct Cell
         y = data.Part.grid_y * MAX_NUMBER_OF_CELLS + data.Part.cell_y;
     }
 
-    [[nodiscard]] bool DiffCell(const Cell& cell) const
+    [[nodiscard]] bool DiffCell(Cell const& cell) const
     {
         return(data.Part.cell_x != cell.data.Part.cell_x ||
                data.Part.cell_y != cell.data.Part.cell_y);
     }
 
-    [[nodiscard]] bool DiffGrid(const Cell& cell) const
+    [[nodiscard]] bool DiffGrid(Cell const& cell) const
     {
         return(data.Part.grid_x != cell.data.Part.grid_x ||
                data.Part.grid_y != cell.data.Part.grid_y);
@@ -107,6 +107,7 @@ struct Cell
     template<class T> static void VisitObjects(float x, float y, Map* map, T& visitor, float radius);
 
     template<class T> static void VisitFarVisibleObjects(WorldObject const* obj, T& visitor, float radius);
+    template<class T> static void VisitFarVisibleObjects(float x, float y, Map* map, T& visitor, float radius);
 
 private:
     template<class T, class CONTAINER> void VisitCircle(TypeContainerVisitor<T, CONTAINER>&, Map&, CellCoord const&, CellCoord const&) const;

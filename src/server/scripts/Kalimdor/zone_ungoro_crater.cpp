@@ -69,6 +69,7 @@ public:
 
         uint32 DemoralizingShoutTimer;
 
+        using CreatureAI::WaypointReached;
         void WaypointReached(uint32 waypointId) override
         {
             if (Player* player = GetPlayerForEscort())
@@ -167,7 +168,7 @@ class npc_ringo : public CreatureScript
 public:
     npc_ringo() : CreatureScript("npc_ringo") { }
 
-    bool OnQuestAccept(Player* player, Creature* creature, const Quest* quest) override
+    bool OnQuestAccept(Player* player, Creature* creature, Quest const* quest) override
     {
         if (quest->GetQuestId() == QUEST_A_LITTLE_HELP)
         {

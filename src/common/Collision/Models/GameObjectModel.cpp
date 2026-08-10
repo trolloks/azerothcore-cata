@@ -24,6 +24,7 @@
 #include "VMapFactory.h"
 #include "VMapMgr2.h"
 #include "WorldModel.h"
+#include "WorldModelStore.h"
 
 using G3D::Vector3;
 using G3D::Ray;
@@ -101,14 +102,6 @@ void LoadGameObjectModelList(std::string const& dataPath)
     LOG_INFO("server.loading", " ");
 }
 
-GameObjectModel::~GameObjectModel()
-{
-    if (iModel)
-    {
-        VMAP::VMapFactory::createOrGetVMapMgr()->releaseModelInstance(name);
-    }
-}
-
 bool GameObjectModel::initialize(std::unique_ptr<GameObjectModelOwnerBase> modelOwner, std::string const& dataPath)
 {
     ModelList::const_iterator it = model_list.find(modelOwner->GetDisplayId());
@@ -125,7 +118,7 @@ bool GameObjectModel::initialize(std::unique_ptr<GameObjectModelOwnerBase> model
         return false;
     }
 
-    iModel = VMAP::VMapFactory::createOrGetVMapMgr()->acquireModelInstance(dataPath + "vmaps/", it->second.name,
+    iModel = sWorldModelStore->AcquireModelInstance(dataPath + "vmaps/", it->second.name,
         it->second.isWmo ? VMAP::ModelFlags::MOD_WORLDSPAWN : VMAP::ModelFlags::MOD_M2);
 
     if (!iModel)
@@ -177,7 +170,7 @@ GameObjectModel* GameObjectModel::Create(std::unique_ptr<GameObjectModelOwnerBas
     return mdl;
 }
 
-bool GameObjectModel::intersectRay(const G3D::Ray& ray, float& MaxDist, bool StopAtFirstHit, uint32 ph_mask, VMAP::ModelIgnoreFlags ignoreFlags) const
+bool GameObjectModel::intersectRay(G3D::Ray const& ray, float& MaxDist, bool StopAtFirstHit, uint32 ph_mask, VMAP::ModelIgnoreFlags ignoreFlags) const
 {
     if (!(phasemask & ph_mask) || !owner->IsSpawned())
     {
@@ -205,7 +198,8 @@ bool GameObjectModel::intersectRay(const G3D::Ray& ray, float& MaxDist, bool Sto
 
 bool GameObjectModel::GetLocationInfo(G3D::Vector3 const& point, VMAP::LocationInfo& info, uint32 ph_mask) const
 {
-    if (!(phasemask & ph_mask) || !owner->IsSpawned() || !IsMapObject())
+    // transports provide inaccurate area info while moving (e.g. Booty Bay - Ratchet boat, see #7335)
+    if (!(phasemask & ph_mask) || !owner->IsSpawned() || !IsMapObject() || owner->IsTransport())
         return false;
 
     if (!iBound.contains(point))
@@ -223,6 +217,8 @@ bool GameObjectModel::GetLocationInfo(G3D::Vector3 const& point, VMAP::LocationI
         float world_Z = ((modelGround * iInvRot) * iScale + iPos).z;
         if (info.ground_Z < world_Z)
         {
+            info.rootId = groupInfo.rootId;
+            info.hitModel = groupInfo.hitModel;
             info.ground_Z = world_Z;
             return true;
         }

@@ -137,7 +137,13 @@ public:
             if (spellInfo->Id == SPELL_TELEPORT)
             {
                 me->DespawnOrUnsummon();
-                me->GetInstanceScript()->SetData(TYPE_WATCHERS, _keeper);
+                InstanceScript* instance = me->GetInstanceScript();
+                uint32 mask = instance->GetPersistentData(
+                    PERSISTENT_DATA_WATCHERS_MASK);
+                instance->StorePersistentData(
+                    PERSISTENT_DATA_WATCHERS_MASK,
+                    mask | (1 << _keeper));
+                instance->SetData(EVENT_KEEPER_TELEPORTED, 0);
             }
         }
 
@@ -230,6 +236,33 @@ class spell_ulduar_energy_sap_aura : public AuraScript
     void Register() override
     {
         OnEffectPeriodic += AuraEffectPeriodicFn(spell_ulduar_energy_sap_aura::HandleEffectPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DAMAGE);
+    }
+};
+
+// 61906 - Random Aggro Periodic (5 sec)
+class spell_ulduar_random_aggro_periodic : public AuraScript
+{
+    PrepareAuraScript(spell_ulduar_random_aggro_periodic);
+
+    void HandleEffectPeriodic(AuraEffect const* /*aurEff*/)
+    {
+        Unit* target = GetTarget();
+        target->GetThreatMgr().ResetAllThreat();
+
+        Creature* creature = target->ToCreature();
+        if (!creature || !creature->IsAIEnabled)
+            return;
+
+        if (Unit* victim = creature->AI()->SelectTarget(SelectTargetMethod::Random, 0, 100.0f, true))
+        {
+            creature->AddThreat(victim, 3000000.0f);
+            creature->AI()->AttackStart(victim);
+        }
+    }
+
+    void Register() override
+    {
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_ulduar_random_aggro_periodic::HandleEffectPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
     }
 };
 
@@ -584,6 +617,7 @@ void AddSC_ulduar()
     new npc_ulduar_keeper();
     RegisterSpellScript(spell_ulduar_teleporter);
     RegisterSpellScript(spell_ulduar_energy_sap_aura);
+    RegisterSpellScript(spell_ulduar_random_aggro_periodic);
     RegisterUlduarCreatureAI(npc_ulduar_snow_mound);
     RegisterUlduarCreatureAI(npc_ulduar_storm_tempered_keeper);
     RegisterUlduarCreatureAI(npc_ulduar_arachnopod_destroyer);

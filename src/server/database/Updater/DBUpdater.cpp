@@ -64,6 +64,22 @@ std::string& DBUpdaterUtil::corrected_path()
     return path;
 }
 
+uint32& DBUpdaterUtil::failed_updates()
+{
+    static uint32 count = 0;
+    return count;
+}
+
+void DBUpdaterUtil::MarkUpdateFailed()
+{
+    ++failed_updates();
+}
+
+uint32 DBUpdaterUtil::GetFailedUpdateCount()
+{
+    return failed_updates();
+}
+
 // Auth Database
 template<>
 std::string DBUpdater<LoginDatabaseConnection>::GetConfigEntry()
@@ -93,7 +109,8 @@ bool DBUpdater<LoginDatabaseConnection>::IsEnabled(uint32 const updateMask)
 template<>
 std::string DBUpdater<LoginDatabaseConnection>::GetDBModuleName()
 {
-    return "db-auth";
+    // must be lowercase
+    return "auth";
 }
 
 // World Database
@@ -125,7 +142,8 @@ bool DBUpdater<WorldDatabaseConnection>::IsEnabled(uint32 const updateMask)
 template<>
 std::string DBUpdater<WorldDatabaseConnection>::GetDBModuleName()
 {
-    return "db-world";
+    // must be lowercase
+    return "world";
 }
 
 // Character Database
@@ -157,7 +175,8 @@ bool DBUpdater<CharacterDatabaseConnection>::IsEnabled(uint32 const updateMask)
 template<>
 std::string DBUpdater<CharacterDatabaseConnection>::GetDBModuleName()
 {
-    return "db-characters";
+    // must be lowercase
+    return "characters";
 }
 
 // All
@@ -172,7 +191,7 @@ bool DBUpdater<T>::Create(DatabaseWorkerPool<T>& pool)
 {
     LOG_WARN("sql.updates", "Database \"{}\" does not exist", pool.GetConnectionInfo()->database);
 
-    const char* disableInteractive = std::getenv("AC_DISABLE_INTERACTIVE");
+    char const* disableInteractive = std::getenv("AC_DISABLE_INTERACTIVE");
 
     if (!sConfigMgr->isDryRun() && (disableInteractive == nullptr || std::strcmp(disableInteractive, "1") != 0))
     {
@@ -399,7 +418,7 @@ bool DBUpdater<T>::Populate(DatabaseWorkerPool<T>& pool)
 
     std::vector<std::filesystem::path> sqlFiles;
 
-    for (const auto &entry : std::filesystem::directory_iterator(DirPath))
+    for (auto const& entry : std::filesystem::directory_iterator(DirPath))
     {
         if (entry.path().extension() == ".sql")
             sqlFiles.push_back(entry.path());
@@ -407,7 +426,7 @@ bool DBUpdater<T>::Populate(DatabaseWorkerPool<T>& pool)
 
     std::sort(sqlFiles.begin(), sqlFiles.end());
 
-    for (const auto &file : sqlFiles)
+    for (auto const& file : sqlFiles)
     {
         LOG_INFO("sql.updates", ">> Applying \'{}\'...", file.filename().generic_string());
 
@@ -520,6 +539,10 @@ void DBUpdater<T>::ApplyFile(DatabaseWorkerPool<T>& pool, std::string const& hos
             "You cannot use auto-update system and import sql files from AzerothCore repository with your sql client. "
             "If you are a developer, please fix your sql query.",
             path.generic_string(), pool.GetConnectionInfo()->database);
+
+        // Recorded in both modes. A dry run does not throw below, so it keeps attempting the
+        // remaining files and this count is the only thing left to fail the run on.
+        DBUpdaterUtil::MarkUpdateFailed();
 
         if (!sConfigMgr->isDryRun())
         {

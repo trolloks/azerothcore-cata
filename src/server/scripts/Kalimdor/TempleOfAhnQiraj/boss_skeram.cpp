@@ -16,6 +16,7 @@
  */
 
 #include "CreatureScript.h"
+#include "Player.h"
 #include "ScriptedCreature.h"
 #include "SpellScript.h"
 #include "SpellScriptLoader.h"
@@ -95,7 +96,7 @@ struct boss_skeram : public BossAI
         creature->CastSpell(creature, SPELL_BIRTH, true);
         creature->SetControlled(true, UNIT_STATE_ROOT);
         creature->SetReactState(REACT_PASSIVE);
-        creature->SetImmuneToAll(true);
+        creature->SetImmuneToAll(true, true);
 
         _copiesGUIDs.push_back(creature->GetGUID());
     }
@@ -142,7 +143,7 @@ struct boss_skeram : public BossAI
             me->RemoveCorpse();
     }
 
-    void JustEngagedWith(Unit* /*who*/) override
+    void JustEngagedWith(Unit* who) override
     {
         _JustEngagedWith();
         events.Reset();
@@ -154,7 +155,9 @@ struct boss_skeram : public BossAI
 
         if (!me->IsSummon())
         {
-            Talk(SAY_AGGRO);
+            // Resolve pets/guardians to their owner so gendered locales resolve $g against the puller
+            Unit* puller = who->GetCharmerOrOwnerPlayerOrPlayerItself();
+            Talk(SAY_AGGRO, puller ? puller : who);
         }
     }
 
@@ -211,7 +214,7 @@ struct boss_skeram : public BossAI
             _copiesGUIDs.clear();
             DoCast(me, SPELL_SUMMON_IMAGES, true);
             me->SetReactState(REACT_PASSIVE);
-            me->SetImmuneToAll(true);
+            me->SetImmuneToAll(true, true);
             me->SetControlled(true, UNIT_STATE_ROOT);
             Talk(SAY_SPLIT);
             _hpct -= 25.0f;

@@ -67,10 +67,6 @@ struct boss_high_astromancer_solarian : public BossAI
     boss_high_astromancer_solarian(Creature* creature) : BossAI(creature, DATA_ASTROMANCER)
     {
         callForHelpRange = 105.0f;
-        scheduler.SetValidator([this]
-        {
-            return !me->HasUnitState(UNIT_STATE_CASTING);
-        });
     }
 
     void Reset() override
@@ -108,10 +104,7 @@ struct boss_high_astromancer_solarian : public BossAI
 
     void KilledUnit(Unit* victim) override
     {
-        if (victim->IsPlayer() && roll_chance_i(50))
-        {
-            Talk(SAY_KILL);
-        }
+        Talk(SAY_KILL, victim);
     }
 
     void JustDied(Unit* killer) override
@@ -198,8 +191,8 @@ struct boss_high_astromancer_solarian : public BossAI
                 });
             }).Schedule(23s, [this](TaskContext)
             {
-                me->GetThreatMgr().ClearAllThreat();
                 me->SetReactState(REACT_AGGRESSIVE);
+                DoResetThreatList();
                 summons.DoForAllSummons([&](WorldObject* summon)
                 {
                     if (Creature* light = summon->ToCreature())

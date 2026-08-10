@@ -35,12 +35,7 @@ enum eBlackStalker
 struct boss_ghazan : public BossAI
 {
     boss_ghazan(Creature* creature) : BossAI(creature, DATA_GHAZAN)
-    {
-        scheduler.SetValidator([this]
-        {
-            return !me->HasUnitState(UNIT_STATE_CASTING);
-        });
-    }
+    {    }
 
     void InitializeAI() override
     {
@@ -139,7 +134,7 @@ class at_underbog_ghazan : public OnlyOnceAreaTriggerScript
 public:
     at_underbog_ghazan() : OnlyOnceAreaTriggerScript("at_underbog_ghazan") {}
 
-    bool _OnTrigger(Player* player, const AreaTrigger* /*at*/) override
+    bool _OnTrigger(Player* player, AreaTrigger const* /*at*/) override
     {
         if (InstanceScript* instance = player->GetInstanceScript())
         {

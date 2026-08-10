@@ -72,18 +72,12 @@ struct boss_lady_vashj : public BossAI
 {
     boss_lady_vashj(Creature* creature) : BossAI(creature, DATA_LADY_VASHJ)
     {
-        scheduler.SetValidator([this]
-        {
-            return !me->HasUnitState(UNIT_STATE_CASTING);
-        });
-
         _intro = false;
     }
 
     void Reset() override
     {
         _count = 0;
-        _recentlySpoken = false;
         _batTimer = 20s;
         _playerAngle = 0.0f;
         BossAI::Reset();
@@ -99,15 +93,7 @@ struct boss_lady_vashj : public BossAI
 
     void KilledUnit(Unit* /*victim*/) override
     {
-        if (!_recentlySpoken)
-        {
-            Talk(SAY_SLAY);
-            _recentlySpoken = true;
-        }
-        scheduler.Schedule(6s, [this](TaskContext)
-        {
-            _recentlySpoken = false;
-        });
+        Talk(SAY_SLAY);
     }
 
     void JustDied(Unit* killer) override
@@ -133,7 +119,7 @@ struct boss_lady_vashj : public BossAI
                 summon->CastSpell(summon, SPELL_MAGIC_BARRIER);
                 break;
             case NPC_ENCHANTED_ELEMENTAL:
-                summon->GetMotionMaster()->MoveFollow(me, 0.0f, 0.0f, MOTION_SLOT_ACTIVE, false);
+                summon->GetMotionMaster()->MoveFollow(me, 0.0f, 0.0f, MOTION_SLOT_ACTIVE, false, false);
                 summon->SetWalk(true);
                 summon->SetReactState(REACT_PASSIVE);
                 break;
@@ -263,7 +249,6 @@ struct boss_lady_vashj : public BossAI
 
 private:
     float _playerAngle;
-    bool _recentlySpoken;
     bool _intro;
     int32 _count;
     std::chrono::seconds _batTimer;
@@ -401,6 +386,26 @@ class spell_lady_vashj_summons : public SpellScript
     }
 };
 
+// Spell 38132 - Paralyze (applied to player when looting Tainted Core item 31088)
+class spell_lady_vashj_tainted_core_paralyze : public AuraScript
+{
+    PrepareAuraScript(spell_lady_vashj_tainted_core_paralyze);
+
+    void HandleEffectRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        if (GetTargetApplication()->GetRemoveMode() != AURA_REMOVE_BY_DEATH)
+            return;
+
+        if (Player* player = GetTarget()->ToPlayer())
+            player->DestroyItemCount(ITEM_TAINTED_CORE, -1, true);
+    }
+
+    void Register() override
+    {
+        AfterEffectRemove += AuraEffectRemoveFn(spell_lady_vashj_tainted_core_paralyze::HandleEffectRemove, EFFECT_0, SPELL_AURA_MOD_ROOT, AURA_EFFECT_HANDLE_REAL);
+    }
+};
+
 void AddSC_boss_lady_vashj()
 {
     RegisterSerpentShrineAI(boss_lady_vashj);
@@ -409,4 +414,5 @@ void AddSC_boss_lady_vashj()
     RegisterSpellScript(spell_lady_vashj_summon_sporebat);
     RegisterSpellScript(spell_lady_vashj_spore_drop_effect);
     RegisterSpellScript(spell_lady_vashj_summons);
+    RegisterSpellScript(spell_lady_vashj_tainted_core_paralyze);
 }

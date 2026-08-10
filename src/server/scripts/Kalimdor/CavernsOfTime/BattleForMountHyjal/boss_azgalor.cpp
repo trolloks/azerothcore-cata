@@ -44,14 +44,7 @@ enum Texts
 struct boss_azgalor : public BossAI
 {
 public:
-    boss_azgalor(Creature* creature) : BossAI(creature, DATA_AZGALOR)
-    {
-        _recentlySpoken = false;
-        scheduler.SetValidator([this]
-            {
-                return !me->HasUnitState(UNIT_STATE_CASTING);
-            });
-    }
+    boss_azgalor(Creature* creature) : BossAI(creature, DATA_AZGALOR) { }
 
     void JustEngagedWith(Unit * who) override
     {
@@ -89,18 +82,10 @@ public:
             me->GetMotionMaster()->MoveWaypoint(HORDE_BOSS_PATH, false);
     }
 
-    void KilledUnit(Unit * victim) override
+    void KilledUnit(Unit* victim) override
     {
-        if (!_recentlySpoken && victim->IsPlayer() && me->IsAlive())
-        {
-            Talk(SAY_ONSLAY);
-            _recentlySpoken = true;
-
-            scheduler.Schedule(6s, [this](TaskContext)
-            {
-                _recentlySpoken = false;
-            });
-        }
+        if (me->IsAlive())
+            Talk(SAY_ONSLAY, victim);
     }
 
     void JustDied(Unit * killer) override
@@ -115,8 +100,6 @@ public:
         BossAI::JustDied(killer);
     }
 
-private:
-    bool _recentlySpoken;
 };
 
 class spell_azgalor_doom : public SpellScript

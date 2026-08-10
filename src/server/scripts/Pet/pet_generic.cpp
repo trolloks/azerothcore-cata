@@ -20,11 +20,14 @@
 #include "Group.h"
 #include "PassiveAI.h"
 #include "Player.h"
+#include "RaceMgr.h"
 #include "ScriptedCreature.h"
 #include "ScriptedGossip.h"
 #include "SpellAuras.h"
 #include "SpellScript.h"
 #include "SpellScriptLoader.h"
+#include <unordered_map>
+
 /*
  * Ordered alphabetically using scriptname.
  * Scriptnames of files in this file should be prefixed with "npc_pet_gen_".
@@ -60,9 +63,10 @@ struct npc_pet_gen_soul_trader_beacon : public ScriptedAI
 
     Player* GetOwner() const { return ObjectAccessor::GetPlayer(*me, ownerGUID); }
 
-    void SpellHitTarget(Unit* target, SpellInfo const* spellInfo) override
+    void SpellHit(Unit* /*caster*/, SpellInfo const* spellInfo) override
     {
-        if (spellInfo->Id == SPELL_STEAL_ESSENCE_VISUAL && target == me)
+        // Handle the kill notification from the owner's kill aura (spell 50051)
+        if (spellInfo->Id == SPELL_OWNER_KILLED_INFORM)
         {
             Talk(1);
             events.ScheduleEvent(EVENT_ADD_TOKEN, 3s);
@@ -80,7 +84,10 @@ struct npc_pet_gen_soul_trader_beacon : public ScriptedAI
                 break;
             case EVENT_ADD_TOKEN:
                 me->RemoveAurasDueToSpell(SPELL_EMOTE_STATE_SWIM_RUN);
-                me->CastSpell(me, SPELL_CREATE_TOKEN, true);
+                // Cast the token creation spell on the player owner, not on the pet
+                if (Player* owner = GetOwner())
+                    me->CastSpell(owner, SPELL_CREATE_TOKEN, true);
+
                 Talk(2);
                 break;
         }
@@ -125,23 +132,20 @@ struct argentPonyBanner
 {
     uint32 achievement;
     uint32 spell;
-    const char* text;
+    char const* text;
 };
 
-static argentPonyBanner argentBanners[MAX_RACES] =
-{
-    {0, 0, ""},
-    {2781, 62594, "Stormwind Champion's Pennant"},
-    {2783, 63433, "Orgrimmar Champion's Pennant"},
-    {2780, 63427, "Ironforge Champion's Pennant"},
-    {2777, 63406, "Darnassus Champion's Pennant"},
-    {2787, 63430, "Forsaken Champion's Pennant"},
-    {2786, 63436, "Thunder Bluff Champion's Pennant"},
-    {2779, 63396, "Gnomeregan Champion's Pennant"},
-    {2784, 63399, "Darkspear Champion's Pennant"},
-    {0, 0, ""},
-    {2785, 63403, "Silvermoon Champion's Pennant"},
-    {2778, 63423, "Exodar Champion's Pennant"}
+static std::unordered_map<uint8, argentPonyBanner> argentBanners = {
+    {RACE_HUMAN,         {2781, 62594, "Stormwind Champion's Pennant"}},
+    {RACE_ORC,           {2783, 63433, "Orgrimmar Champion's Pennant"}},
+    {RACE_DWARF,         {2780, 63427, "Ironforge Champion's Pennant"}},
+    {RACE_NIGHTELF,      {2777, 63406, "Darnassus Champion's Pennant"}},
+    {RACE_UNDEAD_PLAYER, {2787, 63430, "Forsaken Champion's Pennant"}},
+    {RACE_TAUREN,        {2786, 63436, "Thunder Bluff Champion's Pennant"}},
+    {RACE_GNOME,         {2779, 63396, "Gnomeregan Champion's Pennant"}},
+    {RACE_TROLL,         {2784, 63399, "Darkspear Champion's Pennant"}},
+    {RACE_BLOODELF,      {2785, 63403, "Silvermoon Champion's Pennant"}},
+    {RACE_DRAENEI,       {2778, 63423, "Exodar Champion's Pennant"}}
 };
 
 struct npc_pet_gen_argent_pony_bridle : public ScriptedAI
@@ -152,7 +156,6 @@ struct npc_pet_gen_argent_pony_bridle : public ScriptedAI
         _init = false;
         _mountTimer = 4000;
         _lastAura = 0;
-        memset(_banners, 0, sizeof(_banners));
     }
 
     void EnterEvadeMode(EvadeReason /*why*/) override
@@ -211,10 +214,12 @@ struct npc_pet_gen_argent_pony_bridle : public ScriptedAI
                     }
 
                     // Generate Banners
-                    uint32 mask = player->GetTeamId(true) ? RACEMASK_HORDE : RACEMASK_ALLIANCE;
-                    for (uint8 i = 1; i < MAX_RACES; ++i)
-                        if (mask & (1 << (i - 1)) && player->HasAchieved(argentBanners[i].achievement))
-                            _banners[i] = true;
+                    uint32 mask = player->GetTeamId(true) ? sRaceMgr->GetHordeRaceMask() : sRaceMgr->GetAllianceRaceMask();
+                    for (auto const& [raceId, banner] : argentBanners)
+                    {
+                        if ((mask & (1 << (raceId - 1))) && player->HasAchieved(banner.achievement))
+                            _banners[raceId] = true;
+                    }
                 }
 
         if (duration && aura)
@@ -247,7 +252,8 @@ struct npc_pet_gen_argent_pony_bridle : public ScriptedAI
         if (param == 0)
             return _state;
 
-        return _banners[param];
+        auto itr = _banners.find(param);
+        return (itr != _banners.end() && itr->second) ? 1 : 0;
     }
 
     void DoAction(int32 param) override
@@ -279,9 +285,11 @@ struct npc_pet_gen_argent_pony_bridle : public ScriptedAI
                 AddGossipItemFor(player, GOSSIP_ICON_CHAT, "Visit a mailbox.", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_MAILBOX);
         }
 
-        for (uint8 i = RACE_HUMAN; i < MAX_RACES; ++i)
-            if (creature->AI()->GetData(i) == uint32(true))
-                AddGossipItemFor(player, GOSSIP_ICON_CHAT, argentBanners[i].text, GOSSIP_SENDER_MAIN, argentBanners[i].spell);
+        for (auto const& [raceId, banner] : argentBanners)
+        {
+            if (creature->AI()->GetData(raceId) == uint32(true))
+                AddGossipItemFor(player, GOSSIP_ICON_CHAT, banner.text, GOSSIP_SENDER_MAIN, banner.spell);
+        }
 
         SendGossipMenuFor(player, player->GetGossipTextId(creature), creature->GetGUID());
         return true;
@@ -336,7 +344,7 @@ private:
     bool _init;
     uint8 _state;
     int32 _mountTimer;
-    bool _banners[MAX_RACES];
+    std::unordered_map<uint8, bool> _banners;
     uint32 _lastAura;
 };
 

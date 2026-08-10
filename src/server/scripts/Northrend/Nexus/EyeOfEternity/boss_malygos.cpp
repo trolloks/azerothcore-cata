@@ -16,6 +16,7 @@
  */
 
 #include "CombatAI.h"
+#include "Containers.h"
 #include "CreatureScript.h"
 #include "GameObjectAI.h"
 #include "GameObjectScript.h"
@@ -72,7 +73,7 @@ enum MalygosSpells
     SPELL_ARCANE_OVERLOAD_SIZE          = 56435,
     SPELL_ARCANE_OVERLOAD_PROTECTION    = 56438,
 
-    SPELL_SURGE_OF_POWER                = 56505, // no heroic version?
+    SPELL_SURGE_OF_POWER                = 56505,
     SPELL_SURGE_OF_POWER_DMG            = 56548,
 
     SPELL_DESTROY_PLATFORM_EFFECT       = 59099,
@@ -80,6 +81,10 @@ enum MalygosSpells
 
     SPELL_ARCANE_PULSE                  = 57432,
     SPELL_PH3_SURGE_OF_POWER            = 57407,
+    SPELL_PH3_SURGE_OF_POWER_25         = 60936,
+    SPELL_SURGE_OF_POWER_WARN_SELECTOR_25 = 60939,
+
+    SPELL_RIDE_RED_DRAGON_BUDDY         = 56071,
 
     SPELL_STATIC_FIELD_MAIN             = 57430,
     SPELL_STATIC_FIELD_SUMMON           = 57431,
@@ -168,6 +173,12 @@ enum Texts
     SAY_ALEXSTRASZA_FOUR  = 3,
 };
 
+enum MalygosData
+{
+    DATA_FIRST_SURGE_TARGET_GUID = 14,
+    NUM_MAX_SURGE_TARGETS        = 3,
+};
+
 enum Phases
 {
     PHASE_NONE = 0,
@@ -196,12 +207,7 @@ struct boss_malygos : public BossAI
     uint8 IntroCounter;
     bool bLockHealthCheck;
     bool _executingVortex;
-
-    void InitializeAI() override
-    {
-        me->SetDisableGravity(true);
-        Reset();
-    }
+    ObjectGuid _surgeTargetGUID[NUM_MAX_SURGE_TARGETS];
 
     void Reset() override
     {
@@ -212,15 +218,30 @@ struct boss_malygos : public BossAI
         IntroCounter = 0;
         bLockHealthCheck = false;
         _executingVortex = false;
+        for (uint8 i = 0; i < NUM_MAX_SURGE_TARGETS; ++i)
+            _surgeTargetGUID[i].Clear();
 
         SetInvincibility(true);
         me->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_ONESHOT_NONE);
         me->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_PACIFIED);
         me->RemoveUnitFlag(UNIT_FLAG_DISABLE_MOVE);
-
+        me->SetDisableGravity(true);
         me->SetAnimTier(AnimTier::Fly);
 
         instance->DoStopTimedAchievement(ACHIEVEMENT_TIMED_TYPE_EVENT, ACHIEV_YOU_DONT_HAVE_AN_ENTERNITY_EVENT);
+    }
+
+    void SetGUID(ObjectGuid const& guid, int32 id) override
+    {
+        if (id >= DATA_FIRST_SURGE_TARGET_GUID && id < DATA_FIRST_SURGE_TARGET_GUID + NUM_MAX_SURGE_TARGETS)
+            _surgeTargetGUID[id - DATA_FIRST_SURGE_TARGET_GUID] = guid;
+    }
+
+    ObjectGuid GetGUID(int32 id) const override
+    {
+        if (id >= DATA_FIRST_SURGE_TARGET_GUID && id < DATA_FIRST_SURGE_TARGET_GUID + NUM_MAX_SURGE_TARGETS)
+            return _surgeTargetGUID[id - DATA_FIRST_SURGE_TARGET_GUID];
+        return ObjectGuid::Empty;
     }
 
     void MovementInform(uint32 type, uint32 id) override
@@ -368,7 +389,10 @@ struct boss_malygos : public BossAI
         case EVENT_START_FIGHT:
         {
             instance->SetData(DATA_HIDE_IRIS_AND_PORTAL, 0);
+
+            instance->DoStopTimedAchievement(ACHIEVEMENT_TIMED_TYPE_EVENT, ACHIEV_YOU_DONT_HAVE_AN_ENTERNITY_EVENT); // just in case at reset some players already left the instance
             instance->DoStartTimedAchievement(ACHIEVEMENT_TIMED_TYPE_EVENT, ACHIEV_YOU_DONT_HAVE_AN_ENTERNITY_EVENT);
+
             me->RemoveUnitFlag(UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_PACIFIED);
             if (Unit* target = me->SelectNearestTarget(250.0f))
             {
@@ -653,19 +677,49 @@ struct boss_malygos : public BossAI
             events.Repeat(12s);
             break;
         case EVENT_SPELL_PH3_SURGE_OF_POWER:
-            me->CastSpell((Unit*)nullptr, SPELL_PH3_SURGE_OF_POWER, false);
+        {
+            if (Is25ManRaid())
+            {
+                for (uint8 i = 0; i < NUM_MAX_SURGE_TARGETS; ++i)
+                    _surgeTargetGUID[i].Clear();
+
+                DoCastAOE(SPELL_SURGE_OF_POWER_WARN_SELECTOR_25, true);
+                me->m_Events.AddEventAtOffset([this]
+                {
+                    DoCastAOE(SPELL_PH3_SURGE_OF_POWER_25, true);
+                }, 3s);
+            }
+            else
+            {
+                for (uint8 i = 0; i < NUM_MAX_SURGE_TARGETS; ++i)
+                    _surgeTargetGUID[i].Clear();
+
+                if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 0.0f, false, true, SPELL_RIDE_RED_DRAGON_BUDDY))
+                {
+                    if (Vehicle* vehicle = target->GetVehicleKit())
+                        if (Unit* passenger = vehicle->GetPassenger(0))
+                            if (Player* player = passenger->ToPlayer())
+                                Talk(EMOTE_SURGE_OF_POWER_WARNING_P3, player);
+
+                    SetGUID(target->GetGUID(), DATA_FIRST_SURGE_TARGET_GUID);
+                    me->m_Events.AddEventAtOffset([this]
+                    {
+                        DoCastAOE(SPELL_PH3_SURGE_OF_POWER, true);
+                    }, 3s);
+                }
+            }
             events.Repeat(7s);
             break;
+        }
         }
 
         DoMeleeAttackIfReady();
     }
 
-    void JustDied(Unit*  /*killer*/) override
+    void JustDied(Unit* /*killer*/) override
     {
         _JustDied();
         Talk(SAY_DEATH);
-        instance->DoUpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_KILL_CREATURE, NPC_MALYGOS, 1);
     }
 
     void KilledUnit(Unit* victim) override
@@ -839,7 +893,10 @@ struct npc_nexus_lord : public ScriptedAI
     {
         me->SetReactState(REACT_PASSIVE);
         timer = 0;
-        me->CastSpell(me, SPELL_TELEPORT_VISUAL, true);
+        ScheduleUniqueTimedEvent(0s, [&]
+        {
+            DoCastSelf(SPELL_TELEPORT_VISUAL, true);
+        }, EVENT_TELEPORT_VISUAL);
     }
 
     uint16 timer;
@@ -904,7 +961,10 @@ struct npc_scion_of_eternity : public ScriptedAI
     npc_scion_of_eternity(Creature* creature) : ScriptedAI(creature)
     {
         me->SetReactState(REACT_PASSIVE);
-        me->CastSpell(me, SPELL_TELEPORT_VISUAL, true);
+        ScheduleUniqueTimedEvent(0s, [&]
+        {
+            DoCastSelf(SPELL_TELEPORT_VISUAL, true);
+        }, EVENT_TELEPORT_VISUAL);
         ScheduleTimedEvent(20s, 25s, [&]
         {
             GuidVector guids;
@@ -946,6 +1006,7 @@ struct npc_hover_disk : public VehicleAI
     npc_hover_disk(Creature* creature) : VehicleAI(creature)
     {
         events.Reset();
+        me->SetAnimTier(AnimTier::Fly);
     }
 
     EventMap events;
@@ -955,6 +1016,7 @@ struct npc_hover_disk : public VehicleAI
         events.Reset();
         if (!who)
             return;
+
         if (apply)
         {
             if (who->IsPlayer())
@@ -963,27 +1025,33 @@ struct npc_hover_disk : public VehicleAI
                 who->ApplySpellImmune(0, IMMUNITY_ID, SPELL_SURGE_OF_POWER_DMG, true);
                 me->SetSpeed(MOVE_RUN, 1.5f);
                 me->SetSpeed(MOVE_FLIGHT, 1.5f);
+                me->SetCanFly(true);
+                me->SetDisableGravity(true);
             }
             else if (who->GetEntry() == NPC_NEXUS_LORD)
             {
+                who->CastSpell(who, SPELL_TELEPORT_VISUAL);
                 me->SetSpeed(MOVE_RUN, 1.5f);
                 me->SetSpeed(MOVE_FLIGHT, 1.5f);
+                me->SetCanFly(true);
             }
             else
             {
+                who->CastSpell(who, SPELL_TELEPORT_VISUAL);
                 me->SetSpeed(MOVE_RUN, 0.6f);
                 me->SetSpeed(MOVE_FLIGHT, 0.6f);
+                me->SetCanFly(true);
             }
-
-            who->SetFacingTo(me->GetOrientation());
-            me->SetCanFly(true);
         }
         else
         {
-            me->GetMotionMaster()->MoveIdle();
-            me->DisableSpline();
+            me->StopMoving();
+            me->SetDisableGravity(false);
             me->SetCanFly(false);
             me->GetMotionMaster()->MoveLand(0, me->GetPositionX(), me->GetPositionY(), 267.24f, 10.0f);
+            me->SetImmuneToNPC(true);
+            me->RemoveUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
+            me->SetFaction(FACTION_FRIENDLY);
 
             if (who->IsPlayer())
             {
@@ -1102,7 +1170,10 @@ struct npc_alexstrasza : public ScriptedAI
 
 struct npc_eoe_wyrmrest_skytalon : public VehicleAI
 {
-    npc_eoe_wyrmrest_skytalon(Creature* creature) : VehicleAI(creature) { }
+    npc_eoe_wyrmrest_skytalon(Creature* creature) : VehicleAI(creature)
+    {
+        me->SetAnimTier(AnimTier::Fly);
+    }
 
     void IsSummonedBy(WorldObject* summoner) override
     {
@@ -1184,18 +1255,15 @@ class spell_malygos_vortex_visual : public AuraScript
         if (!caster)
             return;
 
-        for (auto const* ref : caster->GetThreatMgr().GetUnsortedThreatList())
+        if (InstanceScript* instance = caster->GetInstanceScript())
         {
-            if (Player* player = ref->GetVictim()->ToPlayer())
+            if (Creature* trigger = ObjectAccessor::GetCreature(*caster, instance->GetGuidData(DATA_VORTEX_TRIGGER)))
             {
-                if (player->IsGameMaster())
-                    continue;
-
-                if (InstanceScript* instance =caster->GetInstanceScript())
+                caster->GetMap()->DoForAllPlayers([&](Player* player)
                 {
-                    if (Creature* trigger =ObjectAccessor::GetCreature(*caster, instance->GetGuidData(DATA_VORTEX_TRIGGER)))
+                    if (player->IsAlive() && !player->IsGameMaster())
                         trigger->CastSpell(player, SPELL_VORTEX_TELEPORT, true);
-                }
+                });
             }
         }
 
@@ -1211,48 +1279,123 @@ class spell_malygos_vortex_visual : public AuraScript
     }
 };
 
+// 57407 - Surge of Power (Phase 3 - 10-man)
 class spell_eoe_ph3_surge_of_power : public SpellScript
 {
     PrepareSpellScript(spell_eoe_ph3_surge_of_power);
 
-    ObjectGuid DrakeGUID[3];
-
     bool Load() override
     {
-        if (Unit* caster = GetCaster())
-            if (Creature* creature = caster->ToCreature())
-            {
-                uint8 i = 0;
-                std::list<Unit*> drakes;
-                creature->AI()->SelectTargetList(drakes, (creature->GetMap()->GetSpawnMode() == 0 ? 1 : 3), SelectTargetMethod::Random, 0, 0.0f, false, true, 57403 /*only drakes have this aura*/);
-                for (std::list<Unit*>::iterator itr = drakes.begin(); itr != drakes.end() && i < 3; ++itr)
-                {
-                    DrakeGUID[i++] = (*itr)->GetGUID();
-                    if (Vehicle* vehicle = (*itr)->GetVehicleKit())
-                        if (Unit* passenger = vehicle->GetPassenger(0))
-                            if (Player* player = passenger->ToPlayer())
-                                creature->AI()->Talk(EMOTE_SURGE_OF_POWER_WARNING_P3, player);
-                }
-            }
-
-        return true;
+        return GetCaster()->IsCreature();
     }
 
     void FilterTargets(std::list<WorldObject*>& targets)
     {
-        if (Unit* caster = GetCaster())
+        // The spell targets an area, but only the drake that received the fixate warning
+        // should be hit. The boss AI stores that drake's GUID; keep only that target.
+        Creature* caster = GetCaster()->ToCreature();
+        ObjectGuid targetGuid = caster->AI()->GetGUID(DATA_FIRST_SURGE_TARGET_GUID);
+
+        targets.remove_if([targetGuid](WorldObject* target)
         {
-            targets.clear();
-            for (uint8 i = 0; i < 3; ++i)
-                if (DrakeGUID[i])
-                    if (Unit* u = ObjectAccessor::GetUnit(*caster, DrakeGUID[i]))
-                        targets.push_back(u);
-        }
+            return target->GetGUID() != targetGuid;
+        });
     }
 
     void Register() override
     {
         OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_eoe_ph3_surge_of_power::FilterTargets, EFFECT_0, TARGET_UNIT_SRC_AREA_ENEMY);
+    }
+};
+
+// 60939 - Surge of Power (Warning Selector - 25-man)
+class spell_malygos_surge_of_power_warning_selector_25 : public SpellScript
+{
+    PrepareSpellScript(spell_malygos_surge_of_power_warning_selector_25);
+
+    bool Load() override
+    {
+        return GetCaster()->IsCreature();
+    }
+
+    bool Validate(SpellInfo const* /*spell*/) override
+    {
+        return ValidateSpellInfo({ SPELL_PH3_SURGE_OF_POWER_25 });
+    }
+
+    void SendThreeTargets(std::list<WorldObject*>& targets)
+    {
+        Creature* caster = GetCaster()->ToCreature();
+
+        // Keep only creatures with vehicle kits (drakes)
+        targets.remove_if([](WorldObject* target)
+        {
+            Creature* creature = target->ToCreature();
+            return !creature || !creature->GetVehicleKit();
+        });
+
+        if (targets.empty())
+            return;
+
+        Acore::Containers::RandomResize(targets, NUM_MAX_SURGE_TARGETS);
+
+        uint8 guidDataSlot = DATA_FIRST_SURGE_TARGET_GUID;
+        for (WorldObject* obj : targets)
+        {
+            Creature* target = obj->ToCreature();
+            caster->AI()->SetGUID(target->GetGUID(), guidDataSlot++);
+
+            if (Vehicle* vehicle = target->GetVehicleKit())
+                if (Unit* passenger = vehicle->GetPassenger(0))
+                    if (Player* player = passenger->ToPlayer())
+                        caster->AI()->Talk(EMOTE_SURGE_OF_POWER_WARNING_P3, player);
+        }
+    }
+
+    void Register() override
+    {
+        OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_malygos_surge_of_power_warning_selector_25::SendThreeTargets, EFFECT_0, TARGET_UNIT_SRC_AREA_ENEMY);
+    }
+};
+
+// 60936 - Surge of Power (Phase 3 - 25-man)
+class spell_malygos_surge_of_power_25 : public SpellScript
+{
+    PrepareSpellScript(spell_malygos_surge_of_power_25);
+
+    bool Load() override
+    {
+        return GetCaster()->IsCreature();
+    }
+
+    void FilterTargets(std::list<WorldObject*>& targets)
+    {
+        Creature* caster = GetCaster()->ToCreature();
+
+        for (auto itr = targets.begin(); itr != targets.end();)
+        {
+            bool found = false;
+
+            for (uint8 i = DATA_FIRST_SURGE_TARGET_GUID;
+                i < DATA_FIRST_SURGE_TARGET_GUID + NUM_MAX_SURGE_TARGETS; ++i)
+            {
+                if ((*itr)->GetGUID() == caster->AI()->GetGUID(i))
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+                targets.erase(itr++);
+            else
+                ++itr;
+        }
+    }
+
+    void Register() override
+    {
+        OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_malygos_surge_of_power_25::FilterTargets, EFFECT_0, TARGET_UNIT_SRC_AREA_ENEMY);
     }
 };
 
@@ -1310,6 +1453,8 @@ void AddSC_boss_malygos()
     RegisterSpellScript(spell_wyrmrest_skytalon_ride_red_dragon_buddy_trigger);
 
     RegisterSpellScript(spell_eoe_ph3_surge_of_power);
+    RegisterSpellScript(spell_malygos_surge_of_power_warning_selector_25);
+    RegisterSpellScript(spell_malygos_surge_of_power_25);
     RegisterSpellScript(spell_malygos_vortex_dummy);
     RegisterSpellScript(spell_malygos_vortex_visual);
 }

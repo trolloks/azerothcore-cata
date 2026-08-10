@@ -80,7 +80,7 @@ enum BillingPlanFlags
     SESSION_USAGE           = 0x10, // Unk, NYI
     SESSION_TIME_MIXTURE    = 0x20, // Unk, NYI
     SESSION_RESTRICTED      = 0x40, // Unk, NYI
-    SESSION_ENABLE_CAIS     = 0x80, // Unk, NYI, possibly account play time limit related for China?
+    SESSION_ENABLE_CAIS     = 0x80, // Account play time limit related for China
 };
 
 enum RealmZone
@@ -235,12 +235,14 @@ public:
     [[nodiscard]] uint32 GetCleaningFlags() const override { return _cleaningFlags; }
     void   SetCleaningFlags(uint32 flags) override { _cleaningFlags = flags; }
     void   ResetEventSeasonalQuests(uint16 event_id) override;
+    void   ReloadRBAC() override;
 
     [[nodiscard]] std::string const& GetRealmName() const override { return _realmName; } // pussywizard
     void SetRealmName(std::string name) override { _realmName = name; } // pussywizard
 
 protected:
     void _UpdateGameTime();
+    bool RescheduleShutdownForWintergrasp();
     // callback for UpdateRealmCharacters
     void _UpdateRealmCharCount(PreparedQueryResult resultCharCount,uint32 accountId);
 

@@ -31,6 +31,7 @@
 #include "ObjectMgr.h"
 #include "Opcodes.h"
 #include "Player.h"
+#include "RBAC.h"
 #include "ScriptMgr.h"
 #include "SocialMgr.h"
 #include "World.h"
@@ -903,6 +904,13 @@ void Guild::BankMoveItemData::LogBankEvent(CharacterDatabaseTransaction trans, M
 void Guild::BankMoveItemData::LogAction(MoveItemData* pFrom) const
 {
     MoveItemData::LogAction(pFrom);
+    if (!pFrom->IsBank() && m_pPlayer->GetSession()->HasPermission(rbac::RBAC_PERM_LOG_GM_TRADE))
+    {
+        LOG_GM(m_pPlayer->GetSession()->GetAccountId(), "GM {} (Account: {}) deposit item: {} (Entry: {} Count: {}) to guild bank named: {} (Guild ID: {})",
+            m_pPlayer->GetName(), m_pPlayer->GetSession()->GetAccountId(),
+            pFrom->GetItem()->GetTemplate()->Name1, pFrom->GetItem()->GetEntry(), pFrom->GetItem()->GetCount(),
+            m_pGuild->GetName(), m_pGuild->GetId());
+    }
 }
 
 Item* Guild::BankMoveItemData::_StoreItem(CharacterDatabaseTransaction trans, BankTab* pTab, Item* pItem, ItemPosCount& pos, bool clone) const
@@ -1311,7 +1319,7 @@ void Guild::HandleSetInfo(WorldSession* session, std::string_view info)
     }
 }
 
-void Guild::HandleSetEmblem(WorldSession* session, const EmblemInfo& emblemInfo)
+void Guild::HandleSetEmblem(WorldSession* session, EmblemInfo const& emblemInfo)
 {
     Player* player = session->GetPlayer();
     if (!_IsLeader(player))
@@ -1683,6 +1691,12 @@ void Guild::HandleMemberDepositMoney(WorldSession* session, uint32 amount)
 
     CharacterDatabase.CommitTransaction(trans);
 
+    if (session->HasPermission(rbac::RBAC_PERM_LOG_GM_TRADE))
+    {
+        LOG_GM(session->GetAccountId(), "GM {} (Account: {}) deposited {} to guild bank (Guild: {} GuildId: {})",
+            player->GetName(), session->GetAccountId(), amount, GetName(), GetId());
+    }
+
     std::string aux = Acore::Impl::ByteArrayToHexStr(reinterpret_cast<uint8*>(&m_bankMoney), 8, true);
     _BroadcastEvent(GE_BANK_MONEY_SET, ObjectGuid::Empty, aux.c_str());
 
@@ -1736,6 +1750,12 @@ bool Guild::HandleMemberWithdrawMoney(WorldSession* session, uint32 amount, bool
     // Log guild bank event
     _LogBankEvent(trans, repair ? GUILD_BANK_LOG_REPAIR_MONEY : GUILD_BANK_LOG_WITHDRAW_MONEY, uint8(0), player->GetGUID(), amount);
     CharacterDatabase.CommitTransaction(trans);
+
+    if (session->HasPermission(rbac::RBAC_PERM_LOG_GM_TRADE))
+    {
+        LOG_GM(session->GetAccountId(), "GM {} (Account: {}) withdrew {} from guild bank (Guild: {} GuildId: {})",
+            player->GetName(), session->GetAccountId(), amount, GetName(), GetId());
+    }
 
     if (amount > 10 * GOLD)     // sender_acc = 0 (guild has no account), sender_guid = Guild id, sender_name = Guild name
         CharacterDatabase.Execute("INSERT INTO log_money VALUES({}, {}, \"{}\", \"{}\", {}, \"{}\", {}, \"(guild, members: {}, new amount: {}, leader guid low: {}, withdrawer level: {})\", NOW(), {})",
@@ -2463,7 +2483,7 @@ bool Guild::_IsLeader(Player* player) const
 {
     if (player->GetGUID() == m_leaderGuid)
         return true;
-    if (const Member* member = GetMember(player->GetGUID()))
+    if (Member const* member = GetMember(player->GetGUID()))
         return member->IsRank(GR_GUILDMASTER);
     return false;
 }
@@ -2524,21 +2544,21 @@ void Guild::_SetRankBankTabRightsAndSlots(uint8 rankId, GuildBankRightsAndSlots 
 
 inline std::string Guild::_GetRankName(uint8 rankId) const
 {
-    if (const RankInfo* rankInfo = GetRankInfo(rankId))
+    if (RankInfo const* rankInfo = GetRankInfo(rankId))
         return rankInfo->GetName();
     return "<unknown>";
 }
 
 inline uint32 Guild::_GetRankRights(uint8 rankId) const
 {
-    if (const RankInfo* rankInfo = GetRankInfo(rankId))
+    if (RankInfo const* rankInfo = GetRankInfo(rankId))
         return rankInfo->GetRights();
     return 0;
 }
 
 inline int32 Guild::_GetRankBankMoneyPerDay(uint8 rankId) const
 {
-    if (const RankInfo* rankInfo = GetRankInfo(rankId))
+    if (RankInfo const* rankInfo = GetRankInfo(rankId))
         return rankInfo->GetBankMoneyPerDay();
     return 0;
 }
@@ -2546,14 +2566,14 @@ inline int32 Guild::_GetRankBankMoneyPerDay(uint8 rankId) const
 inline int32 Guild::_GetRankBankTabSlotsPerDay(uint8 rankId, uint8 tabId) const
 {
     if (tabId < _GetPurchasedTabsSize())
-        if (const RankInfo* rankInfo = GetRankInfo(rankId))
+        if (RankInfo const* rankInfo = GetRankInfo(rankId))
             return rankInfo->GetBankTabSlotsPerDay(tabId);
     return 0;
 }
 
 inline int8 Guild::_GetRankBankTabRights(uint8 rankId, uint8 tabId) const
 {
-    if (const RankInfo* rankInfo = GetRankInfo(rankId))
+    if (RankInfo const* rankInfo = GetRankInfo(rankId))
         return rankInfo->GetBankTabRights(tabId);
     return 0;
 }
@@ -2600,7 +2620,7 @@ inline void Guild::_UpdateMemberWithdrawSlots(CharacterDatabaseTransaction trans
 
 inline bool Guild::_MemberHasTabRights(ObjectGuid guid, uint8 tabId, uint32 rights) const
 {
-    if (const Member* member = GetMember(guid))
+    if (Member const* member = GetMember(guid))
     {
         // Leader always has full rights
         if (member->IsRank(GR_GUILDMASTER) || m_leaderGuid == guid)
@@ -2644,7 +2664,7 @@ void Guild::_LogBankEvent(CharacterDatabaseTransaction trans, GuildBankEventLogT
 
 inline Item* Guild::_GetItem(uint8 tabId, uint8 slotId) const
 {
-    if (const BankTab* tab = GetBankTab(tabId))
+    if (BankTab const* tab = GetBankTab(tabId))
         return tab->GetItem(slotId);
     return nullptr;
 }

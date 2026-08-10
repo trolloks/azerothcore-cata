@@ -73,7 +73,7 @@ void OPvPCapturePoint::AddGO(uint32 type, ObjectGuid::LowType guid, uint32 entry
 {
     if (!entry)
     {
-        const GameObjectData* data = sObjectMgr->GetGameObjectData(guid);
+        GameObjectData const* data = sObjectMgr->GetGameObjectData(guid);
         if (!data)
         {
             return;
@@ -90,13 +90,13 @@ void OPvPCapturePoint::AddCre(uint32 type, ObjectGuid::LowType guid, uint32 entr
 {
     if (!entry)
     {
-        const CreatureData* data = sObjectMgr->GetCreatureData(guid);
+        CreatureData const* data = sObjectMgr->GetCreatureData(guid);
         if (!data)
         {
             return;
         }
 
-        entry = data->id1;
+        entry = data->id;
     }
 
     _creatures[type] = guid;
@@ -215,14 +215,14 @@ bool OPvPCapturePoint::DelObject(uint32 type)
 
 bool OPvPCapturePoint::DelCapturePoint()
 {
-    sObjectMgr->DeleteGOData(m_capturePointSpawnId);
-    m_capturePointSpawnId = 0;
-
     if (_capturePoint)
     {
         _capturePoint->SetRespawnTime(0);                                 // not save respawn time
         _capturePoint->Delete();
     }
+
+    sObjectMgr->DeleteGOData(m_capturePointSpawnId);
+    m_capturePointSpawnId = 0;
 
     return true;
 }

@@ -22,10 +22,12 @@
 #include "ObjectAccessor.h"
 #include "Opcodes.h"
 #include "Player.h"
+#include "RBAC.h"
 #include "ScriptMgr.h"
 #include "SocialMgr.h"
 #include "Spell.h"
 #include "SpellMgr.h"
+#include "TC9Sidecar.h"
 #include "World.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
@@ -458,6 +460,37 @@ void WorldSession::HandleAcceptTradeOpcode(WorldPacket& /*recvPacket*/)
             return;
         }
 
+        // cache traded item info before moving (pointers become invalid after moveItems if items merge into existing stacks)
+        struct TradedItemInfo
+        {
+            bool present = false;
+            std::string name;
+            uint32 entry = 0;
+            uint32 count = 0;
+        };
+        TradedItemInfo myItemsInfo[TRADE_SLOT_TRADED_COUNT];
+        TradedItemInfo hisItemsInfo[TRADE_SLOT_TRADED_COUNT];
+        std::string myItemsStr, hisItemsStr;
+        for (uint8 i = 0; i < TRADE_SLOT_TRADED_COUNT; ++i)
+        {
+            if (myItems[i])
+            {
+                myItemsInfo[i].present = true;
+                myItemsInfo[i].name = myItems[i]->GetTemplate()->Name1;
+                myItemsInfo[i].entry = myItems[i]->GetEntry();
+                myItemsInfo[i].count = myItems[i]->GetCount();
+                myItemsStr += Acore::StringFormat("{} (Entry:{}) x{}, ", myItemsInfo[i].name, myItemsInfo[i].entry, myItemsInfo[i].count);
+            }
+            if (hisItems[i])
+            {
+                hisItemsInfo[i].present = true;
+                hisItemsInfo[i].name = hisItems[i]->GetTemplate()->Name1;
+                hisItemsInfo[i].entry = hisItems[i]->GetEntry();
+                hisItemsInfo[i].count = hisItems[i]->GetCount();
+                hisItemsStr += Acore::StringFormat("{} (Entry:{}) x{}, ", hisItemsInfo[i].name, hisItemsInfo[i].entry, hisItemsInfo[i].count);
+            }
+        }
+
         // execute trade: 1. remove
         for (uint8 i = 0; i < TRADE_SLOT_TRADED_COUNT; ++i)
         {
@@ -471,6 +504,79 @@ void WorldSession::HandleAcceptTradeOpcode(WorldPacket& /*recvPacket*/)
                 hisItems[i]->SetGuidValue(ITEM_FIELD_GIFTCREATOR, trader->GetGUID());
                 trader->MoveItemFromInventory(hisItems[i]->GetBagSlot(), hisItems[i]->GetSlot(), true);
             }
+        }
+
+        bool needsCrossrealmHandling = sToCloud9Sidecar->IsCrossrealm() && _player->GetGUID().GetRealmID() != trader->GetGUID().GetRealmID();
+
+        // Create new items for crossrealm usage.
+        if (needsCrossrealmHandling)
+        {
+            CharacterDatabasePreparedStatement* stmt = nullptr;
+            CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
+            stmt = CharacterDatabase.GetPreparedStatement(CHAR_NO_OP_PROVIDE_REALM_CONTEXT);
+            stmt->SetData(0, _player->GetGUID().GetRealmID());
+            trans->Append(stmt);
+
+            for (uint8 i = 0; i < TRADE_SLOT_TRADED_COUNT; i++)
+            {
+                if (myItems[i])
+                {
+                    Item* newItem = myItems[i]->CloneItem(myItems[i]->GetCount(), trader);
+                    if (!newItem)
+                    {
+                        ItemPosCountVec playerDst;
+                        if (_player->CanStoreItem(NULL_BAG, NULL_SLOT, playerDst, myItems[i], false) == EQUIP_ERR_OK)
+                            _player->MoveItemToInventory(playerDst, myItems[i], true, true);
+
+                        // Should we handle else statement here?
+
+                        continue;
+                    }
+
+                    stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_ITEM_INSTANCE);
+                    stmt->SetData(0, myItems[i]->GetGUID().GetCounter());
+                    trans->Append(stmt);
+
+                    delete myItems[i];
+
+                    myItems[i] = newItem;
+                }
+            }
+            CharacterDatabase.CommitTransaction(trans);
+
+            trans = CharacterDatabase.BeginTransaction();
+
+            stmt = CharacterDatabase.GetPreparedStatement(CHAR_NO_OP_PROVIDE_REALM_CONTEXT);
+            stmt->SetData(0, trader->GetGUID().GetRealmID());
+            trans->Append(stmt);
+
+            for (uint8 i = 0; i < TRADE_SLOT_TRADED_COUNT; i++)
+            {
+                if (hisItems[i])
+                {
+                    Item* newItem = hisItems[i]->CloneItem(hisItems[i]->GetCount(), _player);
+                    if (!newItem)
+                    {
+                        ItemPosCountVec playerDst;
+                        if (trader->CanStoreItem(NULL_BAG, NULL_SLOT, playerDst, hisItems[i], false) == EQUIP_ERR_OK)
+                            trader->MoveItemToInventory(playerDst, hisItems[i], true, true);
+
+                        // Should we handle else statement here?
+
+                        continue;
+                    }
+
+                    stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_ITEM_INSTANCE);
+                    stmt->SetData(0, hisItems[i]->GetGUID().GetCounter());
+                    trans->Append(stmt);
+
+                    delete hisItems[i];
+
+                    hisItems[i] = newItem;
+                }
+            }
+            CharacterDatabase.CommitTransaction(trans);
+
         }
 
         // execute trade: 2. store
@@ -494,6 +600,42 @@ void WorldSession::HandleAcceptTradeOpcode(WorldPacket& /*recvPacket*/)
         trader->ModifyMoney(-int32(his_trade->GetMoney()));
         trader->ModifyMoney(my_trade->GetMoney());
 
+        if (HasPermission(rbac::RBAC_PERM_LOG_GM_TRADE))
+        {
+            for (uint8 i = 0; i < TRADE_SLOT_TRADED_COUNT; ++i)
+            {
+                if (myItemsInfo[i].present)
+                    LOG_GM(GetAccountId(), "GM {} (Account: {}) traded item: {} (Entry: {} Count: {}) to {}",
+                        _player->GetName(), GetAccountId(),
+                        myItemsInfo[i].name, myItemsInfo[i].entry, myItemsInfo[i].count,
+                        trader->GetName());
+            }
+            if (my_trade->GetMoney() > 0)
+                LOG_GM(GetAccountId(), "GM {} (Account: {}) traded money: {} to {}",
+                    _player->GetName(), GetAccountId(), my_trade->GetMoney(), trader->GetName());
+        }
+        if (trader->GetSession()->HasPermission(rbac::RBAC_PERM_LOG_GM_TRADE))
+        {
+            for (uint8 i = 0; i < TRADE_SLOT_TRADED_COUNT; ++i)
+            {
+                if (hisItemsInfo[i].present)
+                    LOG_GM(trader->GetSession()->GetAccountId(), "GM {} (Account: {}) traded item: {} (Entry: {} Count: {}) to {}",
+                        trader->GetName(), trader->GetSession()->GetAccountId(),
+                        hisItemsInfo[i].name, hisItemsInfo[i].entry, hisItemsInfo[i].count,
+                        _player->GetName());
+            }
+            if (his_trade->GetMoney() > 0)
+                LOG_GM(trader->GetSession()->GetAccountId(), "GM {} (Account: {}) traded money: {} to {}",
+                    trader->GetName(), trader->GetSession()->GetAccountId(), his_trade->GetMoney(), _player->GetName());
+        }
+
+        // log completed trade
+        LOG_INFO("entities.player.trade", "Trade: Account: {} (IP: {}), Player [{}] ({}) traded with Player [{}] ({}): gave {} copper, received {} copper, gave item(s) [{}], received item(s) [{}]",
+            GetAccountId(), GetRemoteAddress(), _player->GetName(), _player->GetGUID().GetCounter(),
+            trader->GetName(), trader->GetGUID().GetCounter(),
+            my_trade->GetMoney(), his_trade->GetMoney(),
+            myItemsStr, hisItemsStr);
+
         if (my_spell)
             my_spell->prepare(&my_targets);
 
@@ -507,11 +649,25 @@ void WorldSession::HandleAcceptTradeOpcode(WorldPacket& /*recvPacket*/)
         delete trader->m_trade;
         trader->m_trade = nullptr;
 
-        // desynchronized with the other saves here (SaveInventoryAndGoldToDB() not have own transaction guards)
-        CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
-        _player->SaveInventoryAndGoldToDB(trans);
-        trader->SaveInventoryAndGoldToDB(trans);
-        CharacterDatabase.CommitTransaction(trans);
+        // We can't use single transaction with different databases.
+        if (needsCrossrealmHandling)
+        {
+            CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
+            _player->SaveInventoryAndGoldToDB(trans);
+            CharacterDatabase.CommitTransaction(trans);
+
+            trans = CharacterDatabase.BeginTransaction();
+            trader->SaveInventoryAndGoldToDB(trans);
+            CharacterDatabase.CommitTransaction(trans);
+        }
+        else
+        {
+            // desynchronized with the other saves here (SaveInventoryAndGoldToDB() not have own transaction guards)
+            CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
+            _player->SaveInventoryAndGoldToDB(trans);
+            trader->SaveInventoryAndGoldToDB(trans);
+            CharacterDatabase.CommitTransaction(trans);
+        }
 
         info.Status = TRADE_STATUS_TRADE_COMPLETE;
         trader->GetSession()->SendTradeStatus(info);
@@ -607,6 +763,13 @@ void WorldSession::HandleInitiateTradeOpcode(WorldPacket& recvPacket)
         return;
     }
 
+    if (sWorld->getBoolConfig(CONFIG_TRIAL_RESTRICTION_TRADE) && IsTrialAccount())
+    {
+        info.Status = TRADE_STATUS_TRIAL_ACCOUNT;
+        SendTradeStatus(info);
+        return;
+    }
+
     if (GetPlayer()->IsSpectator())
         return;
 
@@ -654,7 +817,15 @@ void WorldSession::HandleInitiateTradeOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (!sWorld->getBoolConfig(CONFIG_ALLOW_TWO_SIDE_TRADE) && pOther->GetTeamId() != _player->GetTeamId())
+    if (sWorld->getBoolConfig(CONFIG_TRIAL_RESTRICTION_TRADE) && pOther->GetSession()->IsTrialAccount())
+    {
+        info.Status = TRADE_STATUS_TRIAL_ACCOUNT;
+        SendTradeStatus(info);
+        return;
+    }
+
+    if (pOther->GetTeamId() != _player->GetTeamId() &&
+        !GetPlayer()->GetSession()->HasPermission(rbac::RBAC_PERM_ALLOW_TWO_SIDE_TRADE))
     {
         info.Status = TRADE_STATUS_WRONG_FACTION;
         SendTradeStatus(info);

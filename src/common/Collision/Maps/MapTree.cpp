@@ -22,6 +22,7 @@
 #include "ModelInstance.h"
 #include "VMapDefinitions.h"
 #include "VMapMgr2.h"
+#include "WorldModelStore.h"
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -35,7 +36,7 @@ namespace VMAP
     {
     public:
         MapRayCallback(ModelInstance* val, ModelIgnoreFlags ignoreFlags): prims(val), flags(ignoreFlags), hit(false) { }
-        bool operator()(const G3D::Ray& ray, uint32 entry, float& distance, bool StopAtFirstHit)
+        bool operator()(G3D::Ray const& ray, uint32 entry, float& distance, bool StopAtFirstHit)
         {
             bool result = prims[entry].intersectRay(ray, distance, StopAtFirstHit, flags);
             if (result)
@@ -55,7 +56,7 @@ namespace VMAP
     {
     public:
         LocationInfoCallback(ModelInstance* val, LocationInfo& info): prims(val), locInfo(info), result(false) {}
-        void operator()(const Vector3& point, uint32 entry)
+        void operator()(Vector3 const& point, uint32 entry)
         {
 #if defined(VMAP_DEBUG)
             LOG_DEBUG("maps", "LocationInfoCallback: trying to intersect '{}'", prims[entry].name);
@@ -83,14 +84,14 @@ namespace VMAP
         return tilefilename.str();
     }
 
-    bool StaticMapTree::GetLocationInfo(const Vector3& pos, LocationInfo& info) const
+    bool StaticMapTree::GetLocationInfo(Vector3 const& pos, LocationInfo& info) const
     {
         LocationInfoCallback intersectionCallBack(iTreeValues, info);
         iTree.intersectPoint(pos, intersectionCallBack);
         return intersectionCallBack.result;
     }
 
-    StaticMapTree::StaticMapTree(uint32 mapID, const std::string& basePath)
+    StaticMapTree::StaticMapTree(uint32 mapID, std::string const& basePath)
         : iMapID(mapID), iIsTiled(false), iTreeValues(0), iBasePath(basePath)
     {
         if (iBasePath.length() > 0 && iBasePath[iBasePath.length() - 1] != '/' && iBasePath[iBasePath.length() - 1] != '\\')
@@ -112,7 +113,7 @@ namespace VMAP
     Else, pMaxDist is not modified and returns false;
     */
 
-    bool StaticMapTree::GetIntersectionTime(const G3D::Ray& pRay, float& pMaxDist, bool StopAtFirstHit, ModelIgnoreFlags ignoreFlags) const
+    bool StaticMapTree::GetIntersectionTime(G3D::Ray const& pRay, float& pMaxDist, bool StopAtFirstHit, ModelIgnoreFlags ignoreFlags) const
     {
         float distance = pMaxDist;
         MapRayCallback intersectionCallBack(iTreeValues, ignoreFlags);
@@ -125,7 +126,7 @@ namespace VMAP
     }
     //=========================================================
 
-    bool StaticMapTree::isInLineOfSight(const Vector3& pos1, const Vector3& pos2, ModelIgnoreFlags ignoreFlags) const
+    bool StaticMapTree::isInLineOfSight(Vector3 const& pos1, Vector3 const& pos2, ModelIgnoreFlags ignoreFlags) const
     {
         float maxDist = (pos2 - pos1).magnitude();
         // return false if distance is over max float, in case of cheater teleporting to the end of the universe
@@ -152,7 +153,7 @@ namespace VMAP
     Return the hit pos or the original dest pos
     */
 
-    bool StaticMapTree::GetObjectHitPos(const Vector3& pPos1, const Vector3& pPos2, Vector3& pResultHitPos, float pModifyDist) const
+    bool StaticMapTree::GetObjectHitPos(Vector3 const& pPos1, Vector3 const& pPos2, Vector3& pResultHitPos, float pModifyDist) const
     {
         bool result = false;
         float maxDist = (pPos2 - pPos1).magnitude();
@@ -197,7 +198,7 @@ namespace VMAP
 
     //=========================================================
 
-    float StaticMapTree::getHeight(const Vector3& pPos, float maxSearchDist) const
+    float StaticMapTree::getHeight(Vector3 const& pPos, float maxSearchDist) const
     {
         float height = G3D::finf();
         Vector3 dir = Vector3(0, 0, -1);
@@ -212,7 +213,7 @@ namespace VMAP
 
     //=========================================================
 
-    LoadResult StaticMapTree::CanLoadMap(const std::string& vmapPath, uint32 mapID, uint32 tileX, uint32 tileY)
+    LoadResult StaticMapTree::CanLoadMap(std::string const& vmapPath, uint32 mapID, uint32 tileX, uint32 tileY)
     {
         std::string basePath = vmapPath;
         if (basePath.length() > 0 && basePath[basePath.length() - 1] != '/' && basePath[basePath.length() - 1] != '\\')
@@ -259,7 +260,7 @@ namespace VMAP
 
     //=========================================================
 
-    bool StaticMapTree::InitMap(const std::string& fname, VMapMgr2* vm)
+    bool StaticMapTree::InitMap(std::string const& fname)
     {
         //VMAP_DEBUG_LOG(LOG_FILTER_MAPS, "StaticMapTree::InitMap() : initializing StaticMapTree '{}'", fname);
         bool success = false;
@@ -291,13 +292,12 @@ namespace VMAP
 #endif
         if (!iIsTiled && ModelSpawn::readFromFile(rf, spawn))
         {
-            WorldModel* model = vm->acquireModelInstance(iBasePath, spawn.name, spawn.flags);
+            std::shared_ptr<WorldModel> model = sWorldModelStore->AcquireModelInstance(iBasePath, spawn.name, spawn.flags);
             //VMAP_DEBUG_LOG(LOG_FILTER_MAPS, "StaticMapTree::InitMap() : loading {}", spawn.name);
             if (model)
             {
                 // assume that global model always is the first and only tree value (could be improved...)
                 iTreeValues[0] = ModelInstance(spawn, model);
-                iLoadedSpawns[0] = 1;
             }
             else
             {
@@ -312,23 +312,14 @@ namespace VMAP
 
     //=========================================================
 
-    void StaticMapTree::UnloadMap(VMapMgr2* vm)
+    void StaticMapTree::UnloadMap()
     {
-        for (loadedSpawnMap::iterator i = iLoadedSpawns.begin(); i != iLoadedSpawns.end(); ++i)
-        {
-            iTreeValues[i->first].setUnloaded();
-            for (uint32 refCount = 0; refCount < i->second; ++refCount)
-            {
-                vm->releaseModelInstance(iTreeValues[i->first].name);
-            }
-        }
-        iLoadedSpawns.clear();
         iLoadedTiles.clear();
     }
 
     //=========================================================
 
-    bool StaticMapTree::LoadMapTile(uint32 tileX, uint32 tileY, VMapMgr2* vm)
+    bool StaticMapTree::LoadMapTile(uint32 tileX, uint32 tileY)
     {
         if (!iIsTiled)
         {
@@ -367,10 +358,11 @@ namespace VMAP
                 if (result)
                 {
                     // acquire model instance
-                    WorldModel* model = vm->acquireModelInstance(iBasePath, spawn.name, spawn.flags);
+                    std::shared_ptr<WorldModel> model = sWorldModelStore->AcquireModelInstance(iBasePath, spawn.name, spawn.flags);
                     if (!model)
                     {
                         LOG_ERROR("maps", "StaticMapTree::LoadMapTile() : could not acquire WorldModel pointer [{}, {}]", tileX, tileY);
+                        // why do we continue to try to load if the model was unsuccessful here?
                     }
 
                     // update tree
@@ -378,22 +370,22 @@ namespace VMAP
 
                     if (fread(&referencedVal, sizeof(uint32), 1, tf) == 1)
                     {
-                        if (!iLoadedSpawns.count(referencedVal))
+                        if (referencedVal >= iNTreeValues)
                         {
-#if defined(VMAP_DEBUG)
-                            if (referencedVal > iNTreeValues)
-                            {
-                                LOG_DEBUG("maps", "StaticMapTree::LoadMapTile() : invalid tree element ({}/{})", referencedVal, iNTreeValues);
-                                continue;
-                            }
-#endif
-                            iTreeValues[referencedVal] = ModelInstance(spawn, model);
-                            iLoadedSpawns[referencedVal] = 1;
+                            LOG_DEBUG("maps", "StaticMapTree::LoadMapTile() : invalid tree element ({}/{})", referencedVal, iNTreeValues);
+                            continue;
                         }
+
+                        // This looks odd and is confusing, took some research to figure it out:
+                        // the first WorldModel will create a "groupmodel" of all other same-models in the tile
+                        // we don't actually care about anything else
+                        if (!iTreeValues[referencedVal].getWorldModel())
+                        {
+                            iTreeValues[referencedVal] = ModelInstance(spawn, model);
+                        }
+#if defined(VMAP_DEBUG)
                         else
                         {
-                            ++iLoadedSpawns[referencedVal];
-#if defined(VMAP_DEBUG)
                             if (iTreeValues[referencedVal].ID != spawn.ID)
                             {
                                 LOG_DEBUG("maps", "StaticMapTree::LoadMapTile() : trying to load wrong spawn in node");
@@ -402,8 +394,8 @@ namespace VMAP
                             {
                                 LOG_DEBUG("maps", "StaticMapTree::LoadMapTile() : name collision on GUID={}", spawn.ID);
                             }
-#endif
                         }
+#endif
                     }
                     else
                     {
@@ -427,7 +419,7 @@ namespace VMAP
 
     //=========================================================
 
-    void StaticMapTree::UnloadMapTile(uint32 tileX, uint32 tileY, VMapMgr2* vm)
+    void StaticMapTree::UnloadMapTile(uint32 tileX, uint32 tileY)
     {
         uint32 tileID = packTileID(tileX, tileY);
         loadedTileMap::iterator tile = iLoadedTiles.find(tileID);
@@ -435,57 +427,6 @@ namespace VMAP
         {
             LOG_ERROR("maps", "StaticMapTree::UnloadMapTile() : trying to unload non-loaded tile - Map:{} X:{} Y:{}", iMapID, tileX, tileY);
             return;
-        }
-        if (tile->second) // file associated with tile
-        {
-            std::string tilefile = iBasePath + getTileFileName(iMapID, tileX, tileY);
-            FILE* tf = fopen(tilefile.c_str(), "rb");
-            if (tf)
-            {
-                bool result = true;
-                char chunk[8];
-                if (!readChunk(tf, chunk, VMAP_MAGIC, 8))
-                {
-                    result = false;
-                }
-                uint32 numSpawns;
-                if (fread(&numSpawns, sizeof(uint32), 1, tf) != 1)
-                {
-                    result = false;
-                }
-                for (uint32 i = 0; i < numSpawns && result; ++i)
-                {
-                    // read model spawns
-                    ModelSpawn spawn;
-                    result = ModelSpawn::readFromFile(tf, spawn);
-                    if (result)
-                    {
-                        // release model instance
-                        vm->releaseModelInstance(spawn.name);
-
-                        // update tree
-                        uint32 referencedNode;
-
-                        if (fread(&referencedNode, sizeof(uint32), 1, tf) != 1)
-                        {
-                            result = false;
-                        }
-                        else
-                        {
-                            if (!iLoadedSpawns.count(referencedNode))
-                            {
-                                LOG_ERROR("maps", "StaticMapTree::UnloadMapTile() : trying to unload non-referenced model '{}' (ID:{})", spawn.name, spawn.ID);
-                            }
-                            else if (--iLoadedSpawns[referencedNode] == 0)
-                            {
-                                iTreeValues[referencedNode].setUnloaded();
-                                iLoadedSpawns.erase(referencedNode);
-                            }
-                        }
-                    }
-                }
-                fclose(tf);
-            }
         }
         iLoadedTiles.erase(tile);
 

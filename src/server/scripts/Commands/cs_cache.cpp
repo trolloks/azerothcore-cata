@@ -19,7 +19,9 @@
 #include "CommandScript.h"
 #include "Group.h"
 #include "Language.h"
+#include "MailMgr.h"
 #include "Player.h"
+#include "RBAC.h"
 
 using namespace Acore::ChatCommands;
 
@@ -32,9 +34,9 @@ public:
     {
         static ChatCommandTable cacheCommandTable =
         {
-            { "info",      HandleCacheInfoCommand,       SEC_GAMEMASTER, Console::Yes    },
-            { "delete",    HandleCacheDeleteCommand,     SEC_ADMINISTRATOR, Console::Yes },
-            { "refresh",   HandleCacheRefreshCommand,    SEC_GAMEMASTER, Console::Yes    }
+            { "info",      HandleCacheInfoCommand,       rbac::RBAC_PERM_COMMAND_DEBUG, Console::Yes    },
+            { "delete",    HandleCacheDeleteCommand,     rbac::RBAC_PERM_COMMAND_DEBUG, Console::Yes },
+            { "refresh",   HandleCacheRefreshCommand,    rbac::RBAC_PERM_COMMAND_DEBUG, Console::Yes    }
         };
 
         static ChatCommandTable commandTable =
@@ -121,7 +123,7 @@ public:
 
                 sCharacterCache->UpdateCharacterAccountId(cPlayer->GetGUID(), cPlayer->GetSession()->GetAccountId());
                 sCharacterCache->UpdateCharacterGuildId(cPlayer->GetGUID(), cPlayer->GetGuildId());
-                sCharacterCache->UpdateCharacterMailCount(cPlayer->GetGUID(), cPlayer->GetMailSize(), true);
+                sMailMgr->RecountMailCount(cPlayer->GetGUID().GetCounter());
                 sCharacterCache->UpdateCharacterArenaTeamId(cPlayer->GetGUID(), ARENA_SLOT_2v2, cPlayer->GetArenaTeamId(ARENA_SLOT_2v2));
                 sCharacterCache->UpdateCharacterArenaTeamId(cPlayer->GetGUID(), ARENA_SLOT_3v3, cPlayer->GetArenaTeamId(ARENA_SLOT_3v3));
                 sCharacterCache->UpdateCharacterArenaTeamId(cPlayer->GetGUID(), ARENA_SLOT_5v5, cPlayer->GetArenaTeamId(ARENA_SLOT_5v5));

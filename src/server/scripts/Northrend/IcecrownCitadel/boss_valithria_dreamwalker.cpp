@@ -139,23 +139,20 @@ enum Events
 
 enum Actions
 {
-    ACTION_ENTER_COMBAT = 1,
-    MISSED_PORTALS      = 2,
-    ACTION_DEATH        = 3,
+    ACTION_ENTER_COMBAT    = 1,
+    MISSED_PORTALS         = 2,
+    ACTION_DEATH           = 3,
+    ACTION_SETUP_ARCHMAGES = 4,
+};
+
+enum SummonGroups
+{
+    SUMMON_GROUP_ALL = 1,
+    SUMMON_GROUP_10  = 2,
+    SUMMON_GROUP_25  = 3,
 };
 
 Position const ValithriaSpawnPos = {4210.813f, 2484.443f, 364.9558f, 0.01745329f};
-
-class RisenArchmageCheck
-{
-public:
-    // look for all permanently spawned Risen Archmages that are not yet in combat
-    bool operator()(Creature* creature)
-    {
-        return creature->IsAlive() && creature->GetEntry() == NPC_RISEN_ARCHMAGE &&
-               creature->GetSpawnId() && !creature->IsInCombat();
-    }
-};
 
 struct ManaVoidSelector
 {
@@ -249,12 +246,8 @@ public:
                 creature->DespawnOrUnsummon();
                 return;
             case NPC_RISEN_ARCHMAGE:
-                if (!creature->GetSpawnId())
-                {
-                    creature->DespawnOrUnsummon();
-                    return;
-                }
-                break;
+                creature->DespawnOrUnsummon();
+                return;
             default:
                 return;
         }
@@ -341,18 +334,12 @@ public:
                 _done = true;
                 Talk(SAY_VALITHRIA_SUCCESS);
                 _instance->SendEncounterUnit(ENCOUNTER_FRAME_DISENGAGE, me);
-                _instance->DoRemoveAurasDueToSpellOnPlayers(70766);
                 me->RemoveAurasDueToSpell(SPELL_CORRUPTION_VALITHRIA);
                 me->CastSpell(me, SPELL_ACHIEVEMENT_CHECK, true);
                 me->CastSpell((Unit*)nullptr, SPELL_DREAMWALKERS_RAGE, false);
-                _events.Reset();
                 _events.ScheduleEvent(EVENT_DREAM_SLIP, 3500ms);
-                _instance->SetBossState(DATA_VALITHRIA_DREAMWALKER, DONE);
-
-                if (Creature* trigger = ObjectAccessor::GetCreature(*me, _instance->GetGuidData(DATA_VALITHRIA_TRIGGER)))
-                    trigger->AI()->EnterEvadeMode();
                 if (Creature* lichKing = ObjectAccessor::GetCreature(*me, _instance->GetGuidData(DATA_VALITHRIA_LICH_KING)))
-                    lichKing->AI()->Reset();
+                    lichKing->AI()->EnterEvadeMode();
             }
             else if (!_over75PercentTalkDone && me->HealthAbovePctHealed(75, heal))
             {
@@ -361,11 +348,8 @@ public:
             }
             else if (_instance->GetBossState(DATA_VALITHRIA_DREAMWALKER) == NOT_STARTED)
             {
-                if (Creature* trigger = ObjectAccessor::GetCreature(*me, _instance->GetGuidData(DATA_VALITHRIA_TRIGGER)))
-                {
-                    trigger->AI()->DoAction(ACTION_ENTER_COMBAT);
-                    _instance->SetBossState(DATA_VALITHRIA_DREAMWALKER, IN_PROGRESS);
-                }
+                if (Creature* archmage = me->FindNearestCreature(NPC_RISEN_ARCHMAGE, 30.0f))
+                    DoZoneInCombat(archmage); // archmage chain will put trigger in combat
             }
         }
 
@@ -388,7 +372,7 @@ public:
                         Talk(SAY_VALITHRIA_DEATH);
                         _instance->SendEncounterUnit(ENCOUNTER_FRAME_DISENGAGE, me);
                         if (Creature* trigger = ObjectAccessor::GetCreature(*me, _instance->GetGuidData(DATA_VALITHRIA_TRIGGER)))
-                            trigger->AI()->EnterEvadeMode();
+                            trigger->AI()->DoAction(ACTION_DEATH);
                     }
                 }
             }
@@ -404,6 +388,8 @@ public:
                 me->SetDisplayId(11686);
                 me->SetUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
                 me->DespawnOrUnsummon(4s);
+                if (Creature* trigger = ObjectAccessor::GetCreature(*me, _instance->GetGuidData(DATA_VALITHRIA_TRIGGER)))
+                    Unit::Kill(me, trigger);
                 if (Creature* lichKing = ObjectAccessor::GetCreature(*me, _instance->GetGuidData(DATA_VALITHRIA_LICH_KING)))
                     lichKing->CastSpell(lichKing, SPELL_SPAWN_CHEST, false);
                 _instance->SetData(DATA_WEEKLY_QUEST_ID, 0); // show hidden npc if necessary
@@ -434,13 +420,8 @@ public:
         void UpdateAI(uint32 diff) override
         {
             // does not enter combat
-            if (_instance->GetBossState(DATA_VALITHRIA_DREAMWALKER) == NOT_STARTED)
-            {
-                uint32 startingHealth = me->GetMaxHealth() * 0.5f;
-                if (me->GetHealth() != startingHealth) // healing when boss cannot be engaged (lower spire not finished, cheating) doesn't start the fight, prevent winning this way
-                    me->SetHealth(startingHealth);
+            if (_instance->GetBossState(DATA_VALITHRIA_DREAMWALKER) != IN_PROGRESS)
                 return;
-            }
 
             _events.Update(diff);
 
@@ -459,7 +440,7 @@ public:
                     if (!IsHeroic())
                         Talk(SAY_VALITHRIA_DREAM_PORTAL);
                     for (uint32 i = 0; i < _portalCount; ++i)
-                        me->CastSpell(me, SPELL_PRE_SUMMON_DREAM_PORTAL, false);
+                        me->CastSpell(me, SPELL_PRE_SUMMON_DREAM_PORTAL, true);
                     _events.ScheduleEvent(EVENT_DREAM_PORTAL, 45s, 48s);
                     break;
                 case EVENT_DREAM_SLIP:
@@ -508,105 +489,71 @@ public:
 
         void Reset() override
         {
-            events.Reset();
-            summons.DespawnAll();
-            if (instance->GetBossState(DATA_VALITHRIA_DREAMWALKER) != DONE)
-                instance->SetBossState(DATA_VALITHRIA_DREAMWALKER, NOT_STARTED);
+            _Reset();
             me->SetReactState(REACT_PASSIVE);
-            checkTimer = 5000;
+            summons.DespawnAll();
+
+            me->SummonCreatureGroup(SUMMON_GROUP_ALL);
+            if (Is25ManRaid())
+                me->SummonCreatureGroup(SUMMON_GROUP_25);
+            else
+                me->SummonCreatureGroup(SUMMON_GROUP_10);
+
+            EntryCheckPredicate pred(NPC_RISEN_ARCHMAGE);
+            summons.DoAction(ACTION_SETUP_ARCHMAGES, pred);
         }
 
-        void JustEngagedWith(Unit* target) override
+        void JustEnteredCombat(Unit* target) override
         {
+            if (IsEngaged())
+                return;
+
             if (!instance->CheckRequiredBosses(DATA_VALITHRIA_DREAMWALKER, target->ToPlayer()))
             {
-                me->setActive(true);
-                EnterEvadeMode();
+                EnterEvadeMode(EVADE_REASON_SEQUENCE_BREAK);
                 instance->DoCastSpellOnPlayers(LIGHT_S_HAMMER_TELEPORT);
                 return;
             }
-            if (instance->GetBossState(DATA_VALITHRIA_DREAMWALKER) == DONE)
-            {
-                me->CombatStop();
-                return;
-            }
+
+            EngagementStart(target);
 
             me->setActive(true);
-            me->SetInCombatWithZone();
+            DoZoneInCombat();
             instance->SetBossState(DATA_VALITHRIA_DREAMWALKER, IN_PROGRESS);
             if (Creature* valithria = ObjectAccessor::GetCreature(*me, instance->GetGuidData(DATA_VALITHRIA_DREAMWALKER)))
                 valithria->AI()->DoAction(ACTION_ENTER_COMBAT);
             if (Creature* lichKing = ObjectAccessor::GetCreature(*me, instance->GetGuidData(DATA_VALITHRIA_LICH_KING)))
                 lichKing->AI()->DoAction(ACTION_ENTER_COMBAT);
 
-            std::list<Creature*> archmages;
-            RisenArchmageCheck check;
-            Acore::CreatureListSearcher<RisenArchmageCheck> searcher(me, archmages, check);
-            Cell::VisitObjects(me, searcher, 100.0f);
-            for (std::list<Creature*>::iterator itr = archmages.begin(); itr != archmages.end(); ++itr)
-                (*itr)->AI()->DoAction(ACTION_ENTER_COMBAT);
-        }
-
-        void AttackStart(Unit* target) override
-        {
-            if (target->IsPlayer())
-                BossAI::AttackStart(target);
-        }
-
-        void EnterEvadeMode(EvadeReason why = EVADE_REASON_OTHER) override
-        {
-            CreatureAI::EnterEvadeMode(why);
+            EntryCheckPredicate pred(NPC_RISEN_ARCHMAGE);
+            summons.DoAction(ACTION_ENTER_COMBAT, pred);
         }
 
         void MoveInLineOfSight(Unit* /*who*/) override {}
 
-        bool CanAIAttack(Unit const* target) const override
+        void JustExitedCombat() override
         {
-            return target->IsPlayer();
-        }
+            EngagementOver();
 
-        void JustReachedHome() override
-        {
-            if (instance->GetBossState(DATA_VALITHRIA_DREAMWALKER) != DONE)
-                DoAction(ACTION_DEATH); // setActive(false) in ValithriaDespawner
-            else
-                _JustReachedHome();
+            me->setActive(false);
+
+            if (!me->IsAlive())
+                return;
+            if (instance->GetBossState(DATA_VALITHRIA_DREAMWALKER) == DONE)
+                return;
+            DoAction(ACTION_DEATH);
         }
 
         void DoAction(int32 action) override
         {
             if (action == ACTION_DEATH)
+            {
+                instance->SetBossState(DATA_VALITHRIA_DREAMWALKER, NOT_STARTED);
                 me->m_Events.AddEventAtOffset(new ValithriaDespawner(me), 5s);
-            else if (action == ACTION_ENTER_COMBAT)
-            {
-                if (!me->IsInCombat())
-                    me->SetInCombatWithZone();
+                if (Creature* lichKing = ObjectAccessor::GetCreature(*me, instance->GetGuidData(DATA_VALITHRIA_LICH_KING)))
+                    lichKing->AI()->EnterEvadeMode();
             }
         }
-
-        void UpdateAI(uint32 diff) override
-        {
-            if (!me->IsInCombat())
-                return;
-
-            if (checkTimer <= diff)
-            {
-                checkTimer = 3000;
-                me->SetInCombatWithZone();
-                ThreatContainer::StorageType const& threatList = me->GetThreatMgr().GetThreatList();
-                if (!threatList.empty())
-                    for (ThreatContainer::StorageType::const_iterator itr = threatList.begin(); itr != threatList.end(); ++itr)
-                        if (Unit* target = (*itr)->getTarget())
-                            if (target->IsAlive() && target->IsPlayer() && me->GetExactDist(target) < 200.0f && !target->IsImmunedToDamageOrSchool(SPELL_SCHOOL_MASK_ALL))
-                                return;
-                EnterEvadeMode();
-            }
-            else
-                checkTimer -= diff;
-        }
-
-    private:
-        uint16 checkTimer;
     };
 
     CreatureAI* GetAI(Creature* creature) const override
@@ -712,7 +659,7 @@ public:
     struct npc_risen_archmageAI : public ScriptedAI
     {
         npc_risen_archmageAI(Creature* creature) : ScriptedAI(creature),
-            _instance(creature->GetInstanceScript())
+            _instance(creature->GetInstanceScript()), _isInitialArchmage(false)
         {
         }
 
@@ -725,23 +672,35 @@ public:
         {
             _events.Reset();
             _events.ScheduleEvent(EVENT_FROSTBOLT_VOLLEY, 5s, 15s);
-            _events.ScheduleEvent(EVENT_MANA_VOID, 15s, 25s);
+            _events.ScheduleEvent(EVENT_MANA_VOID, 20s, 25s);
             _events.ScheduleEvent(EVENT_COLUMN_OF_FROST, 10s, 20s);
         }
 
-        void JustEngagedWith(Unit* /*target*/) override
+        void JustEnteredCombat(Unit* who) override
         {
-            me->FinishSpell(CURRENT_CHANNELED_SPELL, false);
-            me->SetInCombatWithZone();
-            if (me->GetSpawnId())
+            if (IsEngaged())
+                return;
+
+            me->InterruptNonMeleeSpells(false);
+
+            EngagementStart(who);
+
+            if (_isInitialArchmage)
+            {
+                if (Creature* lichKing = ObjectAccessor::GetCreature(*me, _instance->GetGuidData(DATA_VALITHRIA_LICH_KING)))
+                    DoZoneInCombat(lichKing);
+
                 if (Creature* trigger = ObjectAccessor::GetCreature(*me, _instance->GetGuidData(DATA_VALITHRIA_TRIGGER)))
-                    trigger->AI()->DoAction(ACTION_ENTER_COMBAT);
+                    DoZoneInCombat(trigger);
+            }
         }
 
         void DoAction(int32 action) override
         {
-            if (action == ACTION_ENTER_COMBAT && !me->IsInCombat())
-                me->SetInCombatWithZone();
+            if (action == ACTION_ENTER_COMBAT)
+                DoZoneInCombat();
+            else if (action == ACTION_SETUP_ARCHMAGES)
+                _isInitialArchmage = true;
         }
 
         void JustSummoned(Creature* summon) override
@@ -754,10 +713,8 @@ public:
 
         void UpdateAI(uint32 diff) override
         {
-            if (!me->IsInCombat())
-                if (me->GetSpawnId())
-                    if (!me->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
-                        me->CastSpell(me, SPELL_CORRUPTION, true);
+            if (!me->IsInCombat() && me->IsAlive() && _isInitialArchmage && !me->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
+                DoCastSelf(SPELL_CORRUPTION);
 
             if (!UpdateVictim())
                 return;
@@ -796,6 +753,7 @@ public:
     private:
         EventMap _events;
         InstanceScript* _instance;
+        bool _isInitialArchmage;
     };
 
     CreatureAI* GetAI(Creature* creature) const override

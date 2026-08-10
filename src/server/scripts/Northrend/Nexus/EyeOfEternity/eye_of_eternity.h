@@ -49,6 +49,7 @@ enum NPCs
     NPC_SURGE_OF_POWER          = 30334,
     NPC_STATIC_FIELD            = 30592,
     NPC_ALEXSTRASZA             = 32295,
+    NPC_WYRMREST_SKYTALON       = 30161,
 };
 
 enum Data
@@ -72,7 +73,7 @@ enum eSpells
     SPELL_POWER_SPARK_GROUND_BUFF       = 55852,
     SPELL_POWER_SPARK_MALYGOS_BUFF      = 56152,
 
-    SPELL_TELEPORT_VISUAL               = 52096,
+    SPELL_TELEPORT_VISUAL               = 41232,
 
     SPELL_SCION_ARCANE_BARRAGE          = 56397,
     SPELL_ARCANE_SHOCK                  = 57058,

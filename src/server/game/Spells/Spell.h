@@ -38,6 +38,15 @@ class SpellEvent;
 class ByteBuffer;
 class BasicEvent;
 
+namespace Acore
+{
+    enum class WorldObjectSpellAreaTargetSearchReason
+    {
+        Area,
+        Chain
+    };
+}
+
 #define SPELL_CHANNEL_UPDATE_INTERVAL (1 * IN_MILLISECONDS)
 #define TRAJECTORY_MISSILE_SIZE 3.0f
 
@@ -91,13 +100,6 @@ enum SpellRangeFlag
     SPELL_RANGE_DEFAULT             = 0,
     SPELL_RANGE_MELEE               = 1,     //melee
     SPELL_RANGE_RANGED              = 2,     //hunter range and ranged weapon
-};
-
-enum SpellFinishReason : uint8
-{
-    SPELL_FINISHED_SUCCESSFUL_CAST     = 0, // spell has sucessfully launched
-    SPELL_FINISHED_CANCELED            = 1, // spell has been canceled (interrupts)
-    SPELL_FINISHED_CHANNELING_COMPLETE = 2  // spell channeling has been finished
 };
 
 struct SpellDestination
@@ -250,7 +252,7 @@ enum SpellEffectHandleMode
 // Xinef: special structure containing data for channel target spells
 struct ChannelTargetData
 {
-    ChannelTargetData(ObjectGuid cguid, const SpellDestination* dst) : channelGUID(cguid)
+    ChannelTargetData(ObjectGuid cguid, SpellDestination const* dst) : channelGUID(cguid)
     {
         if (dst)
             spellDst = *dst;
@@ -451,7 +453,7 @@ public:
     template<class SEARCHER> void SearchTargets(SEARCHER& searcher, uint32 containerMask, Unit* referer, Position const* pos, float radius);
 
     WorldObject* SearchNearbyTarget(float range, SpellTargetObjectTypes objectType, SpellTargetCheckTypes selectionType, ConditionList* condList = nullptr);
-    void SearchAreaTargets(std::list<WorldObject*>& targets, float range, Position const* position, Unit* referer, SpellTargetObjectTypes objectType, SpellTargetCheckTypes selectionType, ConditionList* condList);
+    void SearchAreaTargets(std::list<WorldObject*>& targets, float range, Position const* position, Unit* referer, SpellTargetObjectTypes objectType, SpellTargetCheckTypes selectionType, ConditionList* condList, Acore::WorldObjectSpellAreaTargetSearchReason searchReason = Acore::WorldObjectSpellAreaTargetSearchReason::Area, SpellTargetReferenceTypes referenceType = TARGET_REFERENCE_TYPE_CASTER);
     void SearchChainTargets(std::list<WorldObject*>& targets, uint32 chainTargets, WorldObject* target, SpellTargetObjectTypes objectType, SpellTargetCheckTypes selectType, SpellTargetSelectionCategories selectCategory, ConditionList* condList, bool isChainHeal);
 
     SpellCastResult prepare(SpellCastTargets const* targets, AuraEffect const* triggeredByAura = nullptr);
@@ -467,7 +469,7 @@ public:
     void TakeReagents();
     void TakeCastItem();
 
-    SpellCastResult CheckCast(bool strict);
+    SpellCastResult CheckCast(bool strict, uint32* param1 = nullptr, uint32* param2 = nullptr);
     SpellCastResult CheckPetCast(Unit* target);
 
     // handlers
@@ -479,7 +481,7 @@ public:
 
     void OnSpellLaunch();
 
-    SpellCastResult CheckItems();
+    SpellCastResult CheckItems(uint32* param1 = nullptr, uint32* param2 = nullptr);
     SpellCastResult CheckSpellFocus();
     SpellCastResult CheckRange(bool strict);
     SpellCastResult CheckPower();
@@ -565,6 +567,7 @@ public:
     bool IsNextMeleeSwingSpell() const;
     bool IsTriggered() const { return HasTriggeredCastFlag(TRIGGERED_FULL_MASK); };
     bool HasTriggeredCastFlag(TriggerCastFlags flag) const { return _triggeredCastFlags & flag; };
+    [[nodiscard]] bool IsProcDisabled() const { return HasTriggeredCastFlag(TRIGGERED_DISALLOW_PROC_EVENTS); }
     bool IsChannelActive() const { return m_caster->GetUInt32Value(UNIT_CHANNEL_SPELL) != 0; }
     bool IsAutoActionResetSpell() const;
     bool IsIgnoringCooldowns() const;
@@ -833,8 +836,10 @@ namespace Acore
     {
         float _range;
         Position const* _position;
+        Acore::WorldObjectSpellAreaTargetSearchReason _searchReason;
+        SpellTargetReferenceTypes _referenceType;
         WorldObjectSpellAreaTargetCheck(float range, Position const* position, Unit* caster,
-                                        Unit* referer, SpellInfo const* spellInfo, SpellTargetCheckTypes selectionType, ConditionList* condList);
+                                        Unit* referer, SpellInfo const* spellInfo, SpellTargetCheckTypes selectionType, ConditionList* condList, Acore::WorldObjectSpellAreaTargetSearchReason searchReason = Acore::WorldObjectSpellAreaTargetSearchReason::Area, SpellTargetReferenceTypes referenceType = TARGET_REFERENCE_TYPE_CASTER);
         bool operator()(WorldObject* target);
     };
 

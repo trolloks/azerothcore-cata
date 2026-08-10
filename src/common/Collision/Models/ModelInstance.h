@@ -23,6 +23,7 @@
 #include <G3D/Matrix3.h>
 #include <G3D/Ray.h>
 #include <G3D/Vector3.h>
+#include <memory>
 
 namespace VMAP
 {
@@ -50,29 +51,28 @@ namespace VMAP
         float iScale;
         G3D::AABox iBound;
         std::string name;
-        bool operator==(const ModelSpawn& other) const { return ID == other.ID; }
+        bool operator==(ModelSpawn const& other) const { return ID == other.ID; }
         //uint32 hashCode() const { return ID; }
         // temp?
-        [[nodiscard]] const G3D::AABox& GetBounds() const { return iBound; }
+        [[nodiscard]] G3D::AABox const& GetBounds() const { return iBound; }
 
         static bool readFromFile(FILE* rf, ModelSpawn& spawn);
-        static bool writeToFile(FILE* rw, const ModelSpawn& spawn);
+        static bool writeToFile(FILE* rw, ModelSpawn const& spawn);
     };
 
     class ModelInstance: public ModelSpawn
     {
     public:
         ModelInstance() { }
-        ModelInstance(const ModelSpawn& spawn, WorldModel* model);
-        void setUnloaded() { iModel = nullptr; }
-        bool intersectRay(const G3D::Ray& pRay, float& pMaxDist, bool StopAtFirstHit, ModelIgnoreFlags ignoreFlags) const;
-        bool GetLocationInfo(const G3D::Vector3& p, LocationInfo& info) const;
-        bool GetLiquidLevel(const G3D::Vector3& p, LocationInfo& info, float& liqHeight) const;
-        WorldModel* getWorldModel() { return iModel; }
+        ModelInstance(ModelSpawn const& spawn, std::shared_ptr<WorldModel> model);
+        bool intersectRay(G3D::Ray const& pRay, float& pMaxDist, bool StopAtFirstHit, ModelIgnoreFlags ignoreFlags) const;
+        bool GetLocationInfo(G3D::Vector3 const& p, LocationInfo& info) const;
+        bool GetLiquidLevel(G3D::Vector3 const& p, LocationInfo& info, float& liqHeight) const;
+        WorldModel* getWorldModel() { return iModel.get(); }
     protected:
         G3D::Matrix3 iInvRot;
         float iInvScale{0.0f};
-        WorldModel* iModel{nullptr};
+        std::shared_ptr<WorldModel> iModel;
     };
 } // namespace VMAP
 

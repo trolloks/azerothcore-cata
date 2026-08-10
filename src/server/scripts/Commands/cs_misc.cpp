@@ -24,6 +24,7 @@
 #include "CommandScript.h"
 #include "Common.h"
 #include "GameGraveyard.h"
+#include "GameObject.h"
 #include "GameTime.h"
 #include "GridNotifiers.h"
 #include "GridTerrainLoader.h"
@@ -36,11 +37,12 @@
 #include "Language.h"
 #include "MapMgr.h"
 #include "MiscPackets.h"
-#include "MMapFactory.h"
 #include "MovementGenerator.h"
 #include "ObjectAccessor.h"
 #include "Pet.h"
 #include "Player.h"
+#include "PoolMgr.h"
+#include "RBAC.h"
 #include "Realm.h"
 #include "ScriptMgr.h"
 #include "SpellAuras.h"
@@ -58,49 +60,6 @@
 
 constexpr auto SPELL_STUCK = 7355;
 constexpr auto SPELL_FREEZE = 9454;
-
-struct AccountFlagText
-{
-    AccountFlag flag;
-    std::string text;
-};
-
-AccountFlagText const accountFlagText[MAX_ACCOUNT_FLAG] =
-{
-    { ACCOUNT_FLAG_GM, "ACCOUNT_FLAG_GM" },
-    { ACCOUNT_FLAG_NOKICK, "ACCOUNT_FLAG_NOKICK" },
-    { ACCOUNT_FLAG_COLLECTOR, "ACCOUNT_FLAG_COLLECTOR" },
-    { ACCOUNT_FLAG_TRIAL, "ACCOUNT_FLAG_TRIAL" },
-    { ACCOUNT_FLAG_CANCELLED, "ACCOUNT_FLAG_CANCELLED" },
-    { ACCOUNT_FLAG_IGR, "ACCOUNT_FLAG_IGR" },
-    { ACCOUNT_FLAG_WHOLESALER, "ACCOUNT_FLAG_WHOLESALER" },
-    { ACCOUNT_FLAG_PRIVILEGED, "ACCOUNT_FLAG_PRIVILEGED" },
-    { ACCOUNT_FLAG_EU_FORBID_ELV, "ACCOUNT_FLAG_EU_FORBID_ELV" },
-    { ACCOUNT_FLAG_EU_FORBID_BILLING, "ACCOUNT_FLAG_EU_FORBID_BILLING" },
-    { ACCOUNT_FLAG_RESTRICTED, "ACCOUNT_FLAG_RESTRICTED" },
-    { ACCOUNT_FLAG_REFERRAL, "ACCOUNT_FLAG_REFERRAL" },
-    { ACCOUNT_FLAG_BLIZZARD, "ACCOUNT_FLAG_BLIZZARD" },
-    { ACCOUNT_FLAG_RECURRING_BILLING, "ACCOUNT_FLAG_RECURRING_BILLING" },
-    { ACCOUNT_FLAG_NOELECTUP, "ACCOUNT_FLAG_NOELECTUP" },
-    { ACCOUNT_FLAG_KR_CERTIFICATE, "ACCOUNT_FLAG_KR_CERTIFICATE" },
-    { ACCOUNT_FLAG_EXPANSION_COLLECTOR, "ACCOUNT_FLAG_EXPANSION_COLLECTOR" },
-    { ACCOUNT_FLAG_DISABLE_VOICE, "ACCOUNT_FLAG_DISABLE_VOICE" },
-    { ACCOUNT_FLAG_DISABLE_VOICE_SPEAK, "ACCOUNT_FLAG_DISABLE_VOICE_SPEAK" },
-    { ACCOUNT_FLAG_REFERRAL_RESURRECT, "ACCOUNT_FLAG_REFERRAL_RESURRECT" },
-    { ACCOUNT_FLAG_EU_FORBID_CC, "ACCOUNT_FLAG_EU_FORBID_CC" },
-    { ACCOUNT_FLAG_OPENBETA_DELL, "ACCOUNT_FLAG_OPENBETA_DELL" },
-    { ACCOUNT_FLAG_PROPASS, "ACCOUNT_FLAG_PROPASS" },
-    { ACCOUNT_FLAG_PROPASS_LOCK, "ACCOUNT_FLAG_PROPASS_LOCK" },
-    { ACCOUNT_FLAG_PENDING_UPGRADE, "ACCOUNT_FLAG_PENDING_UPGRADE" },
-    { ACCOUNT_FLAG_RETAIL_FROM_TRIAL, "ACCOUNT_FLAG_RETAIL_FROM_TRIAL" },
-    { ACCOUNT_FLAG_EXPANSION2_COLLECTOR, "ACCOUNT_FLAG_EXPANSION2_COLLECTOR" },
-    { ACCOUNT_FLAG_OVERMIND_LINKED, "ACCOUNT_FLAG_OVERMIND_LINKED" },
-    { ACCOUNT_FLAG_DEMOS, "ACCOUNT_FLAG_DEMOS" },
-    { ACCOUNT_FLAG_DEATH_KNIGHT_OK, "ACCOUNT_FLAG_DEATH_KNIGHT_OK" },
-    { ACCOUNT_FLAG_S2_REQUIRE_IGR, "ACCOUNT_FLAG_S2_REQUIRE_IGR" },
-    { ACCOUNT_FLAG_S2_TRIAL, "ACCOUNT_FLAG_S2_TRIAL" },
-    // { ACCOUNT_FLAG_S2_RESTRICTED, "ACCOUNT_FLAG_S2_RESTRICTED" }
-};
 
 std::string const GetLocalizeCreatureName(Creature* creature, LocaleConstant locale)
 {
@@ -137,66 +96,70 @@ public:
     {
         static ChatCommandTable auraCommandTable =
         {
-            { "stack",             HandleAuraStacksCommand,        SEC_GAMEMASTER,         Console::No  },
-            { "",                  HandleAuraCommand,              SEC_GAMEMASTER,         Console::No  }
+            { "stack",             HandleAuraStacksCommand,        rbac::RBAC_PERM_COMMAND_AURA_STACK,        Console::No  },
+            { "",                  HandleAuraCommand,              rbac::RBAC_PERM_COMMAND_AURA,              Console::No  }
         };
 
         static ChatCommandTable commandTable =
         {
-            { "commentator",       HandleCommentatorCommand,       SEC_MODERATOR,          Console::No  },
-            { "dev",               HandleDevCommand,               SEC_ADMINISTRATOR,      Console::No  },
-            { "gps",               HandleGPSCommand,               SEC_MODERATOR,          Console::No  },
-            { "aura",              auraCommandTable                                                     },
-            { "unaura",            HandleUnAuraCommand,            SEC_GAMEMASTER,         Console::No  },
-            { "appear",            HandleAppearCommand,            SEC_MODERATOR,          Console::No  },
-            { "summon",            HandleSummonCommand,            SEC_GAMEMASTER,         Console::No  },
-            { "groupsummon",       HandleGroupSummonCommand,       SEC_GAMEMASTER,         Console::No  },
-            { "commands",          HandleCommandsCommand,          SEC_PLAYER,             Console::Yes },
-            { "die",               HandleDieCommand,               SEC_GAMEMASTER,         Console::No  },
-            { "revive",            HandleReviveCommand,            SEC_GAMEMASTER,         Console::Yes },
-            { "dismount",          HandleDismountCommand,          SEC_PLAYER,             Console::No  },
-            { "guid",              HandleGUIDCommand,              SEC_GAMEMASTER,         Console::No  },
-            { "help",              HandleHelpCommand,              SEC_PLAYER,             Console::Yes },
-            { "cooldown",          HandleCooldownCommand,          SEC_GAMEMASTER,         Console::No  },
-            { "distance",          HandleGetDistanceCommand,       SEC_ADMINISTRATOR,      Console::No  },
-            { "recall",            HandleRecallCommand,            SEC_GAMEMASTER,         Console::No  },
-            { "save",              HandleSaveCommand,              SEC_PLAYER,             Console::No  },
-            { "saveall",           HandleSaveAllCommand,           SEC_GAMEMASTER,         Console::Yes },
-            { "kick",              HandleKickPlayerCommand,        SEC_GAMEMASTER,         Console::Yes },
-            { "unstuck",           HandleUnstuckCommand,           SEC_GAMEMASTER,         Console::Yes },
-            { "linkgrave",         HandleLinkGraveCommand,         SEC_ADMINISTRATOR,      Console::No  },
-            { "neargrave",         HandleNearGraveCommand,         SEC_GAMEMASTER,         Console::No  },
-            { "showarea",          HandleShowAreaCommand,          SEC_GAMEMASTER,         Console::No  },
-            { "hidearea",          HandleHideAreaCommand,          SEC_ADMINISTRATOR,      Console::No  },
-            { "additem",           HandleAddItemCommand,           SEC_GAMEMASTER,         Console::Yes },
-            { "additem set",       HandleAddItemSetCommand,        SEC_GAMEMASTER,         Console::No  },
-            { "wchange",           HandleChangeWeather,            SEC_ADMINISTRATOR,      Console::No  },
-            { "maxskill",          HandleMaxSkillCommand,          SEC_GAMEMASTER,         Console::No  },
-            { "setskill",          HandleSetSkillCommand,          SEC_GAMEMASTER,         Console::No  },
-            { "pinfo",             HandlePInfoCommand,             SEC_GAMEMASTER,         Console::Yes },
-            { "respawn",           HandleRespawnCommand,           SEC_GAMEMASTER,         Console::No  },
-            { "respawn all",       HandleRespawnAllCommand,        SEC_GAMEMASTER,         Console::No  },
-            { "mute",              HandleMuteCommand,              SEC_GAMEMASTER,         Console::Yes },
-            { "mutehistory",       HandleMuteInfoCommand,          SEC_GAMEMASTER,         Console::Yes },
-            { "unmute",            HandleUnmuteCommand,            SEC_GAMEMASTER,         Console::Yes },
-            { "movegens",          HandleMovegensCommand,          SEC_ADMINISTRATOR,      Console::No  },
-            { "cometome",          HandleComeToMeCommand,          SEC_ADMINISTRATOR,      Console::No  },
-            { "damage",            HandleDamageCommand,            SEC_GAMEMASTER,         Console::No  },
-            { "combatstop",        HandleCombatStopCommand,        SEC_GAMEMASTER,         Console::Yes },
-            { "flusharenapoints",  HandleFlushArenaPointsCommand,  SEC_ADMINISTRATOR,      Console::Yes },
-            { "freeze",            HandleFreezeCommand,            SEC_GAMEMASTER,         Console::No  },
-            { "unfreeze",          HandleUnFreezeCommand,          SEC_GAMEMASTER,         Console::No  },
-            { "possess",           HandlePossessCommand,           SEC_GAMEMASTER,         Console::No  },
-            { "unpossess",         HandleUnPossessCommand,         SEC_GAMEMASTER,         Console::No  },
-            { "bindsight",         HandleBindSightCommand,         SEC_ADMINISTRATOR,      Console::No  },
-            { "unbindsight",       HandleUnbindSightCommand,       SEC_ADMINISTRATOR,      Console::No  },
-            { "playall",           HandlePlayAllCommand,           SEC_GAMEMASTER,         Console::No  },
-            { "skirmish",          HandleSkirmishCommand,          SEC_ADMINISTRATOR,      Console::No  },
-            { "mailbox",           HandleMailBoxCommand,           SEC_MODERATOR,          Console::No  },
-            { "string",            HandleStringCommand,            SEC_GAMEMASTER,         Console::No  },
-            { "opendoor",          HandleOpenDoorCommand,          SEC_GAMEMASTER,         Console::No  },
-            { "bm",                HandleBMCommand,                SEC_GAMEMASTER,         Console::No  },
-            { "packetlog",         HandlePacketLog,                SEC_GAMEMASTER,         Console::Yes }
+            { "commentator",       HandleCommentatorCommand,       rbac::RBAC_PERM_COMMAND_COMMENTATOR,       Console::No  },
+            { "dev",               HandleDevCommand,               rbac::RBAC_PERM_COMMAND_DEV,               Console::No  },
+            { "gps",               HandleGPSCommand,               rbac::RBAC_PERM_COMMAND_GPS,               Console::No  },
+            { "aura",              auraCommandTable                                                                        },
+            { "unaura",            HandleUnAuraCommand,            rbac::RBAC_PERM_COMMAND_UNAURA,            Console::No  },
+            { "appear",            HandleAppearCommand,            rbac::RBAC_PERM_COMMAND_APPEAR,            Console::No  },
+            { "summon",            HandleSummonCommand,            rbac::RBAC_PERM_COMMAND_SUMMON,            Console::No  },
+            { "groupsummon",       HandleGroupSummonCommand,       rbac::RBAC_PERM_COMMAND_GROUP_SUMMON,      Console::No  },
+            { "commands",          HandleCommandsCommand,          rbac::RBAC_PERM_COMMAND_COMMANDS,          Console::Yes },
+            { "die",               HandleDieCommand,               rbac::RBAC_PERM_COMMAND_DIE,               Console::No  },
+            { "revive",            HandleReviveCommand,            rbac::RBAC_PERM_COMMAND_REVIVE,            Console::Yes },
+            { "dismount",          HandleDismountCommand,          rbac::RBAC_PERM_COMMAND_DISMOUNT,          Console::No  },
+            { "guid",              HandleGUIDCommand,              rbac::RBAC_PERM_COMMAND_GUID,              Console::No  },
+            { "help",              HandleHelpCommand,              rbac::RBAC_PERM_COMMAND_HELP,              Console::Yes },
+            { "cooldown",          HandleCooldownCommand,          rbac::RBAC_PERM_COMMAND_COOLDOWN,          Console::No  },
+            { "distance",          HandleGetDistanceCommand,       rbac::RBAC_PERM_COMMAND_DISTANCE,          Console::No  },
+            { "recall",            HandleRecallCommand,            rbac::RBAC_PERM_COMMAND_RECALL,            Console::No  },
+            { "save",              HandleSaveCommand,              rbac::RBAC_PERM_COMMAND_SAVE,              Console::No  },
+            { "saveall",           HandleSaveAllCommand,           rbac::RBAC_PERM_COMMAND_SAVEALL,           Console::Yes },
+            { "kick",              HandleKickPlayerCommand,        rbac::RBAC_PERM_COMMAND_KICK,              Console::Yes },
+            { "unstuck",           HandleUnstuckCommand,           rbac::RBAC_PERM_COMMAND_UNSTUCK,           Console::Yes },
+            { "linkgrave",         HandleLinkGraveCommand,         rbac::RBAC_PERM_COMMAND_LINKGRAVE,         Console::No  },
+            { "neargrave",         HandleNearGraveCommand,         rbac::RBAC_PERM_COMMAND_NEARGRAVE,         Console::No  },
+            { "showarea",          HandleShowAreaCommand,          rbac::RBAC_PERM_COMMAND_SHOWAREA,          Console::No  },
+            { "hidearea",          HandleHideAreaCommand,          rbac::RBAC_PERM_COMMAND_HIDEAREA,          Console::No  },
+            { "additem",           HandleAddItemCommand,           rbac::RBAC_PERM_COMMAND_ADDITEM,           Console::Yes },
+            { "additem set",       HandleAddItemSetCommand,        rbac::RBAC_PERM_COMMAND_ADDITEMSET,        Console::No  },
+            { "wchange",           HandleChangeWeather,            rbac::RBAC_PERM_COMMAND_WCHANGE,           Console::No  },
+            { "maxskill",          HandleMaxSkillCommand,          rbac::RBAC_PERM_COMMAND_MAXSKILL,          Console::No  },
+            { "setskill",          HandleSetSkillCommand,          rbac::RBAC_PERM_COMMAND_SETSKILL,          Console::No  },
+            { "pinfo",             HandlePInfoCommand,             rbac::RBAC_PERM_COMMAND_PINFO,             Console::Yes },
+            { "respawn",           HandleRespawnCommand,           rbac::RBAC_PERM_COMMAND_RESPAWN,           Console::No  },
+            { "respawn all",       HandleRespawnAllCommand,        rbac::RBAC_PERM_COMMAND_RESPAWN_ALL,       Console::No  },
+            { "respawn creature guid",    HandleRespawnCreatureByGuidCommand,    rbac::RBAC_PERM_COMMAND_RESPAWN_CREATURE_GUID,    Console::Yes },
+            { "respawn gameobject guid",  HandleRespawnGameObjectByGuidCommand,  rbac::RBAC_PERM_COMMAND_RESPAWN_GAMEOBJECT_GUID,  Console::Yes },
+            { "respawn creature entry",   HandleRespawnCreatureByEntryCommand,   rbac::RBAC_PERM_COMMAND_RESPAWN_CREATURE_ENTRY,   Console::Yes },
+            { "respawn gameobject entry", HandleRespawnGameObjectByEntryCommand, rbac::RBAC_PERM_COMMAND_RESPAWN_GAMEOBJECT_ENTRY, Console::Yes },
+            { "mute",              HandleMuteCommand,              rbac::RBAC_PERM_COMMAND_MUTE,              Console::Yes },
+            { "mutehistory",       HandleMuteInfoCommand,          rbac::RBAC_PERM_COMMAND_MUTEHISTORY,       Console::Yes },
+            { "unmute",            HandleUnmuteCommand,            rbac::RBAC_PERM_COMMAND_UNMUTE,            Console::Yes },
+            { "movegens",          HandleMovegensCommand,          rbac::RBAC_PERM_COMMAND_MOVEGENS,          Console::No  },
+            { "cometome",          HandleComeToMeCommand,          rbac::RBAC_PERM_COMMAND_COMETOME,          Console::No  },
+            { "damage",            HandleDamageCommand,            rbac::RBAC_PERM_COMMAND_DAMAGE,            Console::No  },
+            { "combatstop",        HandleCombatStopCommand,        rbac::RBAC_PERM_COMMAND_COMBATSTOP,        Console::Yes },
+            { "flusharenapoints",  HandleFlushArenaPointsCommand,  rbac::RBAC_PERM_COMMAND_FLUSHARENAPOINTS,  Console::Yes },
+            { "freeze",            HandleFreezeCommand,            rbac::RBAC_PERM_COMMAND_FREEZE,            Console::No  },
+            { "unfreeze",          HandleUnFreezeCommand,          rbac::RBAC_PERM_COMMAND_UNFREEZE,          Console::No  },
+            { "possess",           HandlePossessCommand,           rbac::RBAC_PERM_COMMAND_POSSESS,           Console::No  },
+            { "unpossess",         HandleUnPossessCommand,         rbac::RBAC_PERM_COMMAND_UNPOSSESS,         Console::No  },
+            { "bindsight",         HandleBindSightCommand,         rbac::RBAC_PERM_COMMAND_BINDSIGHT,         Console::No  },
+            { "unbindsight",       HandleUnbindSightCommand,       rbac::RBAC_PERM_COMMAND_UNBINDSIGHT,       Console::No  },
+            { "playall",           HandlePlayAllCommand,           rbac::RBAC_PERM_COMMAND_PLAYALL,           Console::No  },
+            { "skirmish",          HandleSkirmishCommand,          rbac::RBAC_PERM_COMMAND_SKIRMISH,          Console::No  },
+            { "mailbox",           HandleMailBoxCommand,           rbac::RBAC_PERM_COMMAND_MAILBOX,           Console::No  },
+            { "string",            HandleStringCommand,            rbac::RBAC_PERM_COMMAND_STRING,            Console::No  },
+            { "opendoor",          HandleOpenDoorCommand,          rbac::RBAC_PERM_COMMAND_OPENDOOR,          Console::No  },
+            { "bm",                HandleBMCommand,                rbac::RBAC_PERM_COMMAND_BEASTMASTER,       Console::No  },
+            { "packetlog",         HandlePacketLog,                rbac::RBAC_PERM_COMMAND_PACKETLOG,         Console::Yes }
         };
 
         return commandTable;
@@ -353,7 +316,7 @@ public:
                 break;
             }
 
-            const Group* g = plr->GetGroup();
+            Group const* g = plr->GetGroup();
 
             if (hcnt > 1)
             {
@@ -493,8 +456,21 @@ public:
             // Remove from LFG queues
             sLFGMgr->LeaveAllLfgQueues(player->GetGUID(), false);
 
+            // Book the reservation like the queue path does, so it is symmetric
+            // with RemovePlayerAtLeave's decrement and the 0-players/0-invited
+            // state can't let Battleground::Update delete the arena while players
+            // are still on the loading screen.
+            bg->IncreaseInvitedCount(teamId);
             player->SetBattlegroundId(bg->GetInstanceID(), bgTypeId, queueSlot, true, false, teamId);
-            sBattlegroundMgr->SendToBattleground(player, bg->GetInstanceID(), bgTypeId);
+
+            // A synchronous teleport failure would strand that reservation (the
+            // player never enters and never reaches RemovePlayerAtLeave), leaving
+            // the arena undeletable; release it and reset his bg data.
+            if (!sBattlegroundMgr->SendToBattleground(player, bg->GetInstanceID(), bgTypeId))
+            {
+                bg->DecreaseInvitedCount(teamId);
+                player->SetBattlegroundId(0, BATTLEGROUND_TYPE_NONE, PLAYER_MAX_BATTLEGROUND_QUEUES, false, false, TEAM_NEUTRAL);
+            }
         }
 
         handler->PSendSysMessage("Success! Players are now being teleported to the arena.");
@@ -630,7 +606,7 @@ public:
 
         uint32 haveMap = GridTerrainLoader::ExistMap(object->GetMapId(), cell.GridX(), cell.GridY()) ? 1 : 0;
         uint32 haveVMap = GridTerrainLoader::ExistVMap(object->GetMapId(), cell.GridX(), cell.GridY()) ? 1 : 0;
-        uint32 haveMMAP = MMAP::MMapFactory::createOrGetMMapMgr()->GetNavMesh(handler->GetSession()->GetPlayer()->GetMapId()) ? 1 : 0;
+        uint32 haveMMAP = handler->GetSession()->GetPlayer()->GetMap()->GetMapCollisionData().GetMMapData().GetNavMesh() ? 1 : 0;
 
         if (haveVMap)
         {
@@ -1397,7 +1373,7 @@ public:
         Player* player = handler->GetSession()->GetPlayer();
 
         // save GM account without delay and output message
-        if (handler->GetSession()->GetSecurity() >= SEC_GAMEMASTER)
+        if (handler->GetSession()->HasPermission(rbac::RBAC_PERM_COMMANDS_SAVE_WITHOUT_DELAY))
         {
             if (Player* target = handler->getSelectedPlayer())
             {
@@ -1770,34 +1746,123 @@ public:
 
         Player* playerTarget = player->GetConnectedPlayer();
 
-        if (!playerTarget)
-            return false;
-
         // Subtract
         if (count < 0)
         {
-            // Only have scam check on player accounts
-            if (playerTarget->GetSession()->GetSecurity() == SEC_PLAYER)
+            uint32 removeCount = uint32(-count);
+
+            if (playerTarget)
             {
-                if (!playerTarget->HasItemCount(itemId, 0))
+                // Only have scam check on player accounts
+                if (playerTarget->GetSession()->GetSecurity() == SEC_PLAYER)
                 {
-                    // output that player don't have any items to destroy
-                    handler->SendErrorMessage(LANG_REMOVEITEM_FAILURE, handler->GetNameLink(playerTarget), itemId);
-                    return false;
+                    if (!playerTarget->HasItemCount(itemId, 0))
+                    {
+                        // output that player don't have any items to destroy
+                        handler->SendErrorMessage(LANG_REMOVEITEM_FAILURE, handler->GetNameLink(playerTarget), itemId);
+                        return false;
+                    }
+
+                    if (!playerTarget->HasItemCount(itemId, removeCount))
+                    {
+                        // output that player don't have as many items that you want to destroy
+                        handler->SendErrorMessage(LANG_REMOVEITEM_ERROR, handler->GetNameLink(playerTarget), itemId);
+                        return false;
+                    }
                 }
 
-                if (!playerTarget->HasItemCount(itemId, -count))
-                {
-                    // output that player don't have as many items that you want to destroy
-                    handler->SendErrorMessage(LANG_REMOVEITEM_ERROR, handler->GetNameLink(playerTarget), itemId);
-                    return false;
-                }
+                // output successful amount of destroyed items
+                playerTarget->DestroyItemCount(itemId, removeCount, true, false);
+                handler->PSendSysMessage(LANG_REMOVEITEM, itemId, removeCount, handler->GetNameLink(playerTarget));
+                return true;
             }
 
-            // output successful amount of destroyed items
-            playerTarget->DestroyItemCount(itemId, -count, true, false);
-            handler->PSendSysMessage(LANG_REMOVEITEM, itemId, -count, handler->GetNameLink(playerTarget));
+            // offline target: remove the items directly from the DB
+            if (handler->HasLowerSecurity(nullptr, player->GetGUID()))
+                return false;
+
+            std::string nameLink = handler->playerLink(player->GetName());
+
+            CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHAR_INVENTORY_STACKS_BY_ENTRY_AND_OWNER);
+            stmt->SetData(0, itemId);
+            stmt->SetData(1, player->GetGUID().GetCounter());
+            PreparedQueryResult result = CharacterDatabase.Query(stmt);
+
+            std::vector<std::pair<ObjectGuid::LowType, uint32>> stacks;
+            uint32 totalCount = 0;
+            if (result)
+            {
+                do
+                {
+                    Field* fields = result->Fetch();
+                    stacks.emplace_back(fields[0].Get<uint32>(), fields[1].Get<uint32>());
+                    totalCount += fields[1].Get<uint32>();
+                } while (result->NextRow());
+            }
+
+            if (!totalCount)
+            {
+                handler->SendErrorMessage(LANG_REMOVEITEM_FAILURE, nameLink, itemId);
+                return false;
+            }
+
+            // Only have scam check on player accounts
+            uint32 accountId = sCharacterCache->GetCharacterAccountIdByGuid(player->GetGUID());
+            if (AccountMgr::GetSecurity(accountId, realm.Id.Realm) == SEC_PLAYER && totalCount < removeCount)
+            {
+                handler->SendErrorMessage(LANG_REMOVEITEM_ERROR, nameLink, itemId);
+                return false;
+            }
+
+            CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
+            uint32 remaining = removeCount;
+            for (auto const& [itemGuid, stackCount] : stacks)
+            {
+                if (!remaining)
+                    break;
+
+                if (stackCount <= remaining)
+                {
+                    remaining -= stackCount;
+                    Item::DeleteFromInventoryDB(trans, itemGuid);
+                    Item::DeleteFromDB(trans, itemGuid);
+
+                    stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_GIFT);
+                    stmt->SetData(0, itemGuid);
+                    trans->Append(stmt);
+
+                    stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_ITEM_REFUND_INSTANCE);
+                    stmt->SetData(0, itemGuid);
+                    trans->Append(stmt);
+
+                    stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_ITEM_BOP_TRADE);
+                    stmt->SetData(0, itemGuid);
+                    trans->Append(stmt);
+
+                    stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_ITEMCONTAINER_CONTAINER);
+                    stmt->SetData(0, itemGuid);
+                    trans->Append(stmt);
+                }
+                else
+                {
+                    stmt = CharacterDatabase.GetPreparedStatement(CHAR_UPD_ITEM_COUNT);
+                    stmt->SetData(0, stackCount - remaining);
+                    stmt->SetData(1, itemGuid);
+                    trans->Append(stmt);
+                    remaining = 0;
+                }
+            }
+            CharacterDatabase.CommitTransaction(trans);
+
+            handler->PSendSysMessage(LANG_REMOVEITEM, itemId, removeCount - remaining, nameLink);
             return true;
+        }
+
+        // Adding items requires the target to be online
+        if (!playerTarget)
+        {
+            handler->SendErrorMessage(LANG_PLAYER_NOT_FOUND);
+            return false;
         }
 
         // Adding items
@@ -2261,8 +2326,8 @@ public:
             uint32 accountFlags = playerTarget->GetSession()->GetAccountFlags();
             handler->PSendSysMessage(LANG_ACCOUNT_FLAGS_PINFO);
             for (uint8 i = 0; i < MAX_ACCOUNT_FLAG; i++)
-                if (accountFlags & static_cast<uint32>(accountFlagText[i].flag))
-                    handler->PSendSysMessage(LANG_SUBCMDS_LIST_ENTRY, accountFlagText[i].text);
+                if (accountFlags & (uint32(1) << i))
+                    handler->PSendSysMessage(LANG_SUBCMDS_LIST_ENTRY, accountFlagNames[i].full);
         }
 
         // Output VI. LANG_PINFO_ACC_LASTLOGIN
@@ -2418,6 +2483,13 @@ public:
         // Output XX. LANG_PINFO_CHR_PLAYEDTIME
         handler->PSendSysMessage(LANG_PINFO_CHR_PLAYEDTIME, (secsToTimeString(totalPlayerTime, true)));
 
+        // Output XXI. LANG_PINFO_CHR_ONLINETIME (only for online players)
+        if (playerTarget)
+        {
+            uint32 onlineTime = uint32(GameTime::GetGameTime().count() - playerTarget->m_logintime);
+            handler->PSendSysMessage(LANG_PINFO_CHR_ONLINETIME, secsToTimeString(onlineTime, true));
+        }
+
         // Mail Data - an own query, because it may or may not be useful.
         // SQL: "SELECT SUM(CASE WHEN (checked & 1) THEN 1 ELSE 0 END) AS 'readmail', COUNT(*) AS 'totalmail' FROM mail WHERE `receiver` = ?"
         CharacterDatabasePreparedStatement* mailQuery = CharacterDatabase.GetPreparedStatement(CHAR_SEL_PINFO_MAILS);
@@ -2437,6 +2509,265 @@ public:
             }
         }
 
+        return true;
+    }
+
+    static bool HandleRespawnCreatureByGuidCommand(ChatHandler* handler, ObjectGuid::LowType spawnId)
+    {
+        CreatureData const* creData = sObjectMgr->GetCreatureData(spawnId);
+        if (!creData)
+        {
+            handler->SendErrorMessage(LANG_RESPAWN_GUID_CREATURE_NOT_FOUND, spawnId);
+            return false;
+        }
+
+        Map* map = nullptr;
+        if (handler->GetSession())
+        {
+            Player* player = handler->GetSession()->GetPlayer();
+            if (player->GetMapId() == creData->mapid)
+                map = player->GetMap();
+        }
+        if (!map)
+            map = sMapMgr->FindMap(creData->mapid, 0);
+
+        if (!map)
+        {
+            handler->PSendSysMessage(LANG_RESPAWN_GUID_MAP_NOT_LOADED, creData->mapid);
+            return true;
+        }
+
+        // First pass: check if any instance is alive
+        bool isAlive = false;
+        auto const creBounds = map->GetCreatureBySpawnIdStore().equal_range(spawnId);
+        for (auto itr = creBounds.first; itr != creBounds.second; ++itr)
+        {
+            if (itr->second->IsAlive())
+            {
+                isAlive = true;
+                break;
+            }
+        }
+
+        if (isAlive)
+        {
+            handler->PSendSysMessage(LANG_RESPAWN_GUID_CREATURE_ALIVE, spawnId, creData->id);
+            return true;
+        }
+
+        // Second pass: respawn any dead corpses in the world
+        for (auto itr = creBounds.first; itr != creBounds.second; ++itr)
+        {
+            if (itr->second->isDead())
+                itr->second->Respawn(true);
+        }
+        // Also trigger via respawn time queue for fully-removed spawns
+        if (map->GetCreatureRespawnTime(spawnId) > 0)
+        {
+            time_t now = GameTime::GetGameTime().count();
+            map->SaveCreatureRespawnTime(spawnId, now);
+        }
+        handler->PSendSysMessage(LANG_RESPAWN_GUID_CREATURE_QUEUED, spawnId, creData->id);
+        return true;
+    }
+
+    static bool HandleRespawnGameObjectByGuidCommand(ChatHandler* handler, ObjectGuid::LowType spawnId)
+    {
+        GameObjectData const* goData = sObjectMgr->GetGameObjectData(spawnId);
+        if (!goData)
+        {
+            handler->SendErrorMessage(LANG_RESPAWN_GUID_GAMEOBJECT_NOT_FOUND, spawnId);
+            return false;
+        }
+
+        Map* map = nullptr;
+        if (handler->GetSession())
+        {
+            Player* player = handler->GetSession()->GetPlayer();
+            if (player->GetMapId() == goData->mapid)
+                map = player->GetMap();
+        }
+        if (!map)
+            map = sMapMgr->FindMap(goData->mapid, 0);
+
+        if (!map)
+        {
+            handler->PSendSysMessage(LANG_RESPAWN_GUID_MAP_NOT_LOADED, goData->mapid);
+            return true;
+        }
+
+        // First pass: check if any instance is already active
+        bool isActive = false;
+        auto const goBounds = map->GetGameObjectBySpawnIdStore().equal_range(spawnId);
+        for (auto itr = goBounds.first; itr != goBounds.second; ++itr)
+        {
+            if (itr->second->isSpawned())
+            {
+                isActive = true;
+                break;
+            }
+        }
+
+        if (isActive)
+        {
+            handler->PSendSysMessage(LANG_RESPAWN_GUID_GAMEOBJECT_ACTIVE, spawnId, goData->id);
+            return true;
+        }
+
+        // Second pass: respawn inactive objects in the world
+        for (auto itr = goBounds.first; itr != goBounds.second; ++itr)
+            itr->second->Respawn();
+        // Also trigger via respawn time queue for fully-removed spawns
+        if (map->GetGORespawnTime(spawnId) > 0)
+        {
+            time_t now = GameTime::GetGameTime().count();
+            map->SaveGORespawnTime(spawnId, now);
+        }
+        handler->PSendSysMessage(LANG_RESPAWN_GUID_GAMEOBJECT_QUEUED, spawnId, goData->id);
+        return true;
+    }
+
+    static bool HandleRespawnCreatureByEntryCommand(ChatHandler* handler, uint32 entry, Optional<uint32> mapIdArg, Optional<uint32> instanceIdArg)
+    {
+        if (!sObjectMgr->GetCreatureTemplate(entry))
+        {
+            handler->SendErrorMessage(LANG_RESPAWN_ENTRY_CREATURE_NOT_FOUND, entry);
+            return false;
+        }
+
+        Map* map = nullptr;
+        if (handler->GetSession())
+        {
+            // In-game: always use the player's current map
+            map = handler->GetSession()->GetPlayer()->GetMap();
+        }
+        else
+        {
+            // Console: mapId required, instanceId optional
+            if (!mapIdArg)
+            {
+                handler->SendSysMessage(LANG_LIST_RESPAWNS_NO_MAP);
+                return false;
+            }
+            map = sMapMgr->FindMap(*mapIdArg, instanceIdArg.value_or(0));
+        }
+
+        if (!map)
+        {
+            handler->PSendSysMessage(LANG_RESPAWN_GUID_MAP_NOT_LOADED, mapIdArg.value_or(0));
+            return false;
+        }
+
+        time_t now = GameTime::GetGameTime().count();
+        uint32 count = 0;
+
+        // Phase 1: respawn dead corpses that are still tracked in the spawn-id store.
+        // Collect first to avoid iterator invalidation caused by Respawn().
+        std::vector<Creature*> deadCreatures;
+        for (auto const& [spawnId, creature] : map->GetCreatureBySpawnIdStore())
+        {
+            CreatureData const* data = sObjectMgr->GetCreatureData(spawnId);
+            if (!data || data->id != entry)
+                continue;
+            if (creature->isDead())
+                deadCreatures.push_back(creature);
+        }
+        for (Creature* creature : deadCreatures)
+        {
+            creature->Respawn(true);
+            ++count;
+        }
+
+        // Phase 2: set respawn time to now for fully-removed spawns, skipping pools
+        std::vector<ObjectGuid::LowType> toRespawn;
+        for (auto const& [spawnId, respawnTime] : map->GetCreatureRespawnTimes())
+        {
+            CreatureData const* data = sObjectMgr->GetCreatureData(spawnId);
+            if (!data || data->id != entry)
+                continue;
+            if (sPoolMgr->IsPartOfAPool<Creature>(spawnId))
+                continue;
+            toRespawn.push_back(spawnId);
+        }
+        for (ObjectGuid::LowType spawnId : toRespawn)
+        {
+            map->SaveCreatureRespawnTime(spawnId, now);
+            ++count;
+        }
+
+        handler->PSendSysMessage(LANG_RESPAWN_ENTRY_CREATURE_QUEUED, count, entry);
+        return true;
+    }
+
+    static bool HandleRespawnGameObjectByEntryCommand(ChatHandler* handler, uint32 entry, Optional<uint32> mapIdArg, Optional<uint32> instanceIdArg)
+    {
+        if (!sObjectMgr->GetGameObjectTemplate(entry))
+        {
+            handler->SendErrorMessage(LANG_RESPAWN_ENTRY_GAMEOBJECT_NOT_FOUND, entry);
+            return false;
+        }
+
+        Map* map = nullptr;
+        if (handler->GetSession())
+        {
+            // In-game: always use the player's current map
+            map = handler->GetSession()->GetPlayer()->GetMap();
+        }
+        else
+        {
+            // Console: mapId required, instanceId optional
+            if (!mapIdArg)
+            {
+                handler->SendSysMessage(LANG_LIST_RESPAWNS_NO_MAP);
+                return false;
+            }
+            map = sMapMgr->FindMap(*mapIdArg, instanceIdArg.value_or(0));
+        }
+
+        if (!map)
+        {
+            handler->PSendSysMessage(LANG_RESPAWN_GUID_MAP_NOT_LOADED, mapIdArg.value_or(0));
+            return false;
+        }
+
+        time_t now = GameTime::GetGameTime().count();
+        uint32 count = 0;
+
+        // Phase 1: respawn inactive objects that are still tracked in the spawn-id store.
+        // Collect first to avoid iterator invalidation caused by Respawn().
+        std::vector<GameObject*> inactiveGOs;
+        for (auto const& [spawnId, go] : map->GetGameObjectBySpawnIdStore())
+        {
+            GameObjectData const* data = sObjectMgr->GetGameObjectData(spawnId);
+            if (!data || data->id != entry)
+                continue;
+            if (!go->isSpawned())
+                inactiveGOs.push_back(go);
+        }
+        for (GameObject* go : inactiveGOs)
+        {
+            go->Respawn();
+            ++count;
+        }
+
+        // Phase 2: set respawn time to now for fully-removed spawns, skipping pools
+        std::vector<ObjectGuid::LowType> toRespawn;
+        for (auto const& [spawnId, respawnTime] : map->GetGORespawnTimes())
+        {
+            GameObjectData const* data = sObjectMgr->GetGameObjectData(spawnId);
+            if (!data || data->id != entry)
+                continue;
+            if (sPoolMgr->IsPartOfAPool<GameObject>(spawnId))
+                continue;
+            toRespawn.push_back(spawnId);
+        }
+        for (ObjectGuid::LowType spawnId : toRespawn)
+        {
+            map->SaveGORespawnTime(spawnId, now);
+            ++count;
+        }
+
+        handler->PSendSysMessage(LANG_RESPAWN_ENTRY_GAMEOBJECT_QUEUED, count, entry);
         return true;
     }
 
@@ -2468,9 +2799,51 @@ public:
     {
         Player* player = handler->GetSession()->GetPlayer();
 
+        // Phase 1: respawn creatures/GOs that still have corpses in the grid
         Acore::RespawnDo u_do;
         Acore::WorldObjectWorker<Acore::RespawnDo> worker(player, u_do);
         Cell::VisitObjects(player, worker, player->GetGridActivationRange());
+
+        // Phase 2: force-respawn creatures/GOs that were fully removed (non-compat mode)
+        // by setting their respawn times to now so ProcessRespawns() picks them up
+        Map* map = player->GetMap();
+        uint32 gridId = Acore::ComputeGridCoord(player->GetPositionX(), player->GetPositionY()).GetId();
+        time_t now = GameTime::GetGameTime().count();
+
+        std::vector<ObjectGuid::LowType> creaturesToRespawn;
+        for (auto const& pair : map->GetCreatureRespawnTimes())
+        {
+            CreatureData const* data = sObjectMgr->GetCreatureData(pair.first);
+            if (!data || Acore::ComputeGridCoord(data->posX, data->posY).GetId() != gridId)
+                continue;
+
+            // Skip pooled spawns — Phase 1 already triggered pool rotation via
+            // Creature::Respawn() -> PoolMgr::UpdatePool(). Forcing a respawn time
+            // here would cause ProcessRespawns() to call UpdatePool() again,
+            // spawning duplicates beyond the pool's max_limit.
+            if (sPoolMgr->IsPartOfAPool<Creature>(pair.first))
+                continue;
+
+            creaturesToRespawn.push_back(pair.first);
+        }
+        for (ObjectGuid::LowType spawnId : creaturesToRespawn)
+            map->SaveCreatureRespawnTime(spawnId, now);
+
+        std::vector<ObjectGuid::LowType> goesToRespawn;
+        for (auto const& pair : map->GetGORespawnTimes())
+        {
+            GameObjectData const* data = sObjectMgr->GetGameObjectData(pair.first);
+            if (!data || Acore::ComputeGridCoord(data->posX, data->posY).GetId() != gridId)
+                continue;
+
+            // Skip pooled spawns — same reason as creatures above.
+            if (sPoolMgr->IsPartOfAPool<GameObject>(pair.first))
+                continue;
+
+            goesToRespawn.push_back(pair.first);
+        }
+        for (ObjectGuid::LowType spawnId : goesToRespawn)
+            map->SaveGORespawnTime(spawnId, now);
 
         return true;
     }
@@ -2904,7 +3277,7 @@ public:
         }
 
         playerTarget->CombatStop();
-        playerTarget->getHostileRefMgr().deleteReferences();
+        playerTarget->GetThreatMgr().RemoveMeFromThreatLists();
         return true;
     }
 

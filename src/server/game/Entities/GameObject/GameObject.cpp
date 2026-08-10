@@ -634,7 +634,7 @@ void GameObject::Update(uint32 diff)
                                         WorldPacket data(SMSG_FISH_ESCAPED, 0);
                                         caster->ToPlayer()->SendDirectMessage(&data);
                                     }
-                                    // can be delete
+                                    // can be deleted
                                     m_lootState = GO_JUST_DEACTIVATED;
                                     return;
                                 }
@@ -666,7 +666,7 @@ void GameObject::Update(uint32 diff)
                         // respawn timer
                         uint32 poolid = m_spawnId ? sPoolMgr->IsPartOfAPool<GameObject>(m_spawnId) : 0;
                         if (poolid)
-                            sPoolMgr->UpdatePool<GameObject>(poolid, m_spawnId);
+                            sPoolMgr->UpdatePool<GameObject>(GetMap()->GetPoolData(), poolid, m_spawnId);
                         else
                             GetMap()->AddToMap(this);
                     }
@@ -766,7 +766,7 @@ void GameObject::Update(uint32 diff)
                             {
                                 Group* group = sGroupMgr->GetGroupByGUID(lootingGroupLowGUID);
                                 if (group)
-                                    group->EndRoll(&loot, GetMap());
+                                    group->EndRoll(&loot);
                                 m_groupLootTimer = 0;
                                 lootingGroupLowGUID = 0;
                             }
@@ -962,9 +962,12 @@ void GameObject::DespawnOrUnsummon(Milliseconds delay /*= 0ms*/, Seconds forceRe
             }
 
             uint32 poolid = m_spawnId ? sPoolMgr->IsPartOfAPool<GameObject>(m_spawnId) : 0;
-            if (poolid)
+
+            // Keep the current pooled gameobject reserved until its respawn timer expires.
+            // GameObject::Update() will update the pool when the object is ready to respawn.
+            if (poolid && !m_respawnTime)
             {
-                sPoolMgr->UpdatePool<GameObject>(poolid, m_spawnId);
+                sPoolMgr->UpdatePool<GameObject>(GetMap()->GetPoolData(), poolid, m_spawnId);
             }
         }
     }
@@ -988,7 +991,7 @@ void GameObject::Delete()
 
     uint32 poolid = m_spawnId ? sPoolMgr->IsPartOfAPool<GameObject>(m_spawnId) : 0;
     if (poolid)
-        sPoolMgr->UpdatePool<GameObject>(poolid, m_spawnId);
+        sPoolMgr->UpdatePool<GameObject>(GetMap()->GetPoolData(), poolid, m_spawnId);
     else
         AddObjectToRemoveList();
 }
@@ -1031,7 +1034,7 @@ void GameObject::SaveToDB(bool saveAddon /*= false*/)
 
 void GameObject::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask, bool saveAddon /*= false*/)
 {
-    const GameObjectTemplate* goI = GetGOInfo();
+    GameObjectTemplate const* goI = GetGOInfo();
 
     if (!goI)
         return;
@@ -1120,6 +1123,11 @@ bool GameObject::LoadGameObjectFromDB(ObjectGuid::LowType spawnId, Map* map, boo
 
     m_goData = data;
     m_spawnId = spawnId;
+
+    // Set respawn compatibility mode based on spawn group flags
+    SpawnGroupTemplateData const* groupData = sObjectMgr->GetSpawnGroupData(data->spawnGroupId);
+    _respawnCompatibilityMode = sWorld->getBoolConfig(CONFIG_RESPAWN_FORCE_COMPATIBILITY_MODE)
+        || !groupData || (groupData->flags & SPAWNGROUP_FLAG_COMPATIBILITY_MODE);
 
     if (!Create(map->GenerateLowGuid<HighGuid::GameObject>(), entry, map, phaseMask, x, y, z, ang, data->rotation, animprogress, go_state, artKit))
         return false;
@@ -1426,7 +1434,7 @@ void GameObject::SetGoArtKit(uint8 kit)
 
 void GameObject::SetGoArtKit(uint8 artkit, GameObject* go, ObjectGuid::LowType lowguid)
 {
-    const GameObjectData* data = nullptr;
+    GameObjectData const* data = nullptr;
     if (go)
     {
         go->SetGoArtKit(artkit);
@@ -1703,7 +1711,7 @@ void GameObject::Use(Unit* user)
                 Player* player = user->ToPlayer();
 
                 if (info->camera.cinematicId)
-                    player->SendCinematicStart(info->camera.cinematicId);
+                    player->GetCinematicMgr().StartCinematic(info->camera.cinematicId);
 
                 if (info->camera.eventID)
                 {
@@ -1767,10 +1775,8 @@ void GameObject::Use(Unit* user)
                             // but you will likely cause junk in areas that require a high fishing skill (not yet implemented)
                             if (chance >= roll)
                             {
-                                //TODO: I do not understand this hack. Need some explanation.
-                                // prevent removing GO at spell cancel
-                                RemoveFromOwner();
-                                SetOwnerGUID(player->GetGUID());
+                                // Keep the bobber owned while loot is open, but clear the
+                                // spell id so finishing the fishing channel does not delete it.
                                 SetSpellId(0); // prevent removing unintended auras at Unit::RemoveGameObject
 
                                 // fishing pool catch
@@ -1841,13 +1847,18 @@ void GameObject::Use(Unit* user)
                 if (GetUniqueUseCount() == info->summoningRitual.reqParticipants)
                     return;
 
+                SpellCastResult castResult;
                 if (info->summoningRitual.animSpell)
-                    player->CastSpell(player, info->summoningRitual.animSpell, true);
+                    castResult = player->CastSpell(player, info->summoningRitual.animSpell, true);
                 else
-                    player->CastSpell(player, GetSpellId(),
+                    castResult = player->CastSpell(player, GetSpellId(),
                         TriggerCastFlags(TRIGGERED_IGNORE_EFFECTS
+                                       | TRIGGERED_IGNORE_SPELL_AND_CATEGORY_CD
                                        | TRIGGERED_IGNORE_POWER_AND_REAGENT_COST
                                        | TRIGGERED_CAST_DIRECTLY));
+
+                if (castResult != SPELL_CAST_OK)
+                    return;
 
                 AddUniqueUse(player);
 
@@ -2142,7 +2153,32 @@ void GameObject::SendCustomAnim(uint32 anim)
     SendMessageToSet(&data, true);
 }
 
-bool GameObject::IsInRange(float x, float y, float z, float radius) const
+bool GameObject::IsInRange2d(float x, float y, float radius) const
+{
+    GameObjectDisplayInfoEntry const* info = sGameObjectDisplayInfoStore.LookupEntry(m_goInfo->displayId);
+    if (!info)
+        return IsWithinDist2d(x, y, radius);
+
+    float sinA = std::sin(GetOrientation());
+    float cosA = cos(GetOrientation());
+    float dx = x - GetPositionX();
+    float dy = y - GetPositionY();
+    float dist = std::sqrt(dx * dx + dy * dy);
+    //! Check if the distance between the 2 objects is 0, can happen if both objects are on the same position.
+    //! The code below this check wont crash if dist is 0 because 0/0 in float operations is valid, and returns infinite
+    if (G3D::fuzzyEq(dist, 0.0f))
+        return true;
+
+    float scale = GetObjectScale();
+    float sinB = dx / dist;
+    float cosB = dy / dist;
+    dx = dist * (cosA * cosB + sinA * sinB);
+    dy = dist * (cosA * sinB - sinA * cosB);
+    return dx < (info->maxX * scale) + radius && dx >(info->minX * scale) - radius
+        && dy < (info->maxY * scale) + radius && dy >(info->minY * scale) - radius;
+}
+
+bool GameObject::IsInRange3d(float x, float y, float z, float radius) const
 {
     GameObjectDisplayInfoEntry const* info = sGameObjectDisplayInfoStore.LookupEntry(m_goInfo->displayId);
     if (!info)
@@ -2215,6 +2251,11 @@ void GameObject::UpdatePackedRotation()
     int64 y = int32(WorldRotation.y * PACK_YZ) * w_sign & PACK_YZ_MASK;
     int64 z = int32(WorldRotation.z * PACK_YZ) * w_sign & PACK_YZ_MASK;
     m_packedRotation = z | (y << 21) | (x << 42);
+}
+
+bool GameObject::IsWithinSightRange(Position const& pos, float dist) const
+{
+    return IsInRange2d(pos.GetPositionX(), pos.GetPositionY(), dist);
 }
 
 void GameObject::SetWorldRotation(G3D::Quat const& rot)
@@ -2775,7 +2816,7 @@ void GameObject::BuildValuesUpdate(uint8 updateType, ByteBuffer* data, Player* t
                             dynFlags |= GO_DYNFLAG_LO_SPARKLE;
                         break;
                     case GAMEOBJECT_TYPE_TRANSPORT:
-                        if (const StaticTransport* t = ToStaticTransport())
+                        if (StaticTransport const* t = ToStaticTransport())
                             if (t->GetPauseTime())
                             {
                                 if (GetGoState() == GO_STATE_READY)
@@ -2792,7 +2833,7 @@ void GameObject::BuildValuesUpdate(uint8 updateType, ByteBuffer* data, Player* t
                         // else it's ignored
                         break;
                     case GAMEOBJECT_TYPE_MO_TRANSPORT:
-                        if (const MotionTransport* t = ToMotionTransport())
+                        if (MotionTransport const* t = ToMotionTransport())
                             pathProgress = int16(float(t->GetPathProgress()) / float(t->GetPeriod()) * 65535.0f);
                         break;
                     default:
@@ -2927,6 +2968,7 @@ public:
     explicit GameObjectModelOwnerImpl(GameObject* owner) : _owner(owner) { }
 
     bool IsSpawned() const override { return _owner->isSpawned(); }
+    bool IsTransport() const override { return _owner->IsTransport(); }
     uint32 GetDisplayId() const override { return _owner->GetDisplayId(); }
     uint32 GetPhaseMask() const override { return (_owner->GetGoState() == GO_STATE_READY || _owner->IsTransport()) ? _owner->GetPhaseMask() : 0; }
     G3D::Vector3 GetPosition() const override { return G3D::Vector3(_owner->GetPositionX(), _owner->GetPositionY(), _owner->GetPositionZ()); }

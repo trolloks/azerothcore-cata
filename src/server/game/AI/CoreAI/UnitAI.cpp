@@ -17,12 +17,14 @@
 
 #include "UnitAI.h"
 #include "Creature.h"
+#include "CreatureAI.h"
 #include "CreatureAIImpl.h"
 #include "Player.h"
 #include "Spell.h"
 #include "SpellAuraEffects.h"
 #include "SpellInfo.h"
 #include "SpellMgr.h"
+#include "World.h"
 
 void UnitAI::AttackStart(Unit* victim)
 {
@@ -38,7 +40,7 @@ void UnitAI::AttackStartCaster(Unit* victim, float dist)
 
 void UnitAI::DoMeleeAttackIfReady()
 {
-    if (me->HasUnitState(UNIT_STATE_CASTING))
+    if (me->IsActionPreventedByCasting())
         return;
 
     Unit* victim = me->GetVictim();
@@ -73,7 +75,7 @@ void UnitAI::DoMeleeAttackIfReady()
 
 bool UnitAI::DoSpellAttackIfReady(uint32 spell)
 {
-    if (me->HasUnitState(UNIT_STATE_CASTING) || !me->isAttackReady())
+    if (me->IsActionPreventedByCasting() || !me->isAttackReady())
         return true;
 
     if (SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spell))
@@ -91,7 +93,7 @@ bool UnitAI::DoSpellAttackIfReady(uint32 spell)
 
 void UnitAI::DoSpellAttackToRandomTargetIfReady(uint32 spell, uint32 threatTablePosition /*= 0*/, float dist /*= 0.f*/, bool playerOnly /*= true*/)
 {
-    if (me->HasUnitState(UNIT_STATE_CASTING) || !me->isAttackReady())
+    if (me->IsActionPreventedByCasting() || !me->isAttackReady())
         return;
 
     if (SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spell))
@@ -135,10 +137,12 @@ SpellCastResult UnitAI::DoAddAuraToAllHostilePlayers(uint32 spellid)
 {
     if (me->IsInCombat())
     {
-        ThreatContainer::StorageType threatlist = me->GetThreatMgr().GetThreatList();
-        for (ThreatContainer::StorageType::const_iterator itr = threatlist.begin(); itr != threatlist.end(); ++itr)
+        for (ThreatReference const* ref : me->GetThreatMgr().GetUnsortedThreatList())
         {
-            if (Unit* unit = ObjectAccessor::GetUnit(*me, (*itr)->getUnitGuid()))
+            if (ref->IsOffline())
+                continue;
+
+            if (Unit* unit = ref->GetVictim())
             {
                 if (unit->IsPlayer())
                 {
@@ -146,8 +150,6 @@ SpellCastResult UnitAI::DoAddAuraToAllHostilePlayers(uint32 spellid)
                     return SPELL_CAST_OK;
                 }
             }
-            else
-                return SPELL_FAILED_BAD_TARGETS;
         }
     }
 
@@ -158,16 +160,16 @@ SpellCastResult UnitAI::DoCastToAllHostilePlayers(uint32 spellid, bool triggered
 {
     if (me->IsInCombat())
     {
-        ThreatContainer::StorageType threatlist = me->GetThreatMgr().GetThreatList();
-        for (ThreatContainer::StorageType::const_iterator itr = threatlist.begin(); itr != threatlist.end(); ++itr)
+        for (ThreatReference const* ref : me->GetThreatMgr().GetUnsortedThreatList())
         {
-            if (Unit* unit = ObjectAccessor::GetUnit(*me, (*itr)->getUnitGuid()))
+            if (ref->IsOffline())
+                continue;
+
+            if (Unit* unit = ref->GetVictim())
             {
                 if (unit->IsPlayer())
                     return me->CastSpell(unit, spellid, triggered);
             }
-            else
-                return SPELL_FAILED_BAD_TARGETS;
         }
     }
 
@@ -267,7 +269,7 @@ SpellCastResult UnitAI::DoCast(Unit* victim, uint32 spellId, bool triggered)
     if (!victim)
         return SPELL_FAILED_BAD_TARGETS;
 
-    if (me->HasUnitState(UNIT_STATE_CASTING) && !triggered)
+    if (me->IsActionPreventedByCasting() && !triggered)
         return SPELL_FAILED_SPELL_IN_PROGRESS;
 
     return me->CastSpell(victim, spellId, triggered);
@@ -283,7 +285,7 @@ SpellCastResult UnitAI::DoCastVictim(uint32 spellId, bool triggered)
 
 SpellCastResult UnitAI::DoCastAOE(uint32 spellId, bool triggered)
 {
-    if (!triggered && me->HasUnitState(UNIT_STATE_CASTING))
+    if (!triggered && me->IsActionPreventedByCasting())
         return SPELL_FAILED_SPELL_IN_PROGRESS;
 
     return me->CastSpell((Unit*)nullptr, spellId, triggered);
@@ -291,10 +293,14 @@ SpellCastResult UnitAI::DoCastAOE(uint32 spellId, bool triggered)
 
 /**
  * @brief Cast the spell on a random unit from the threat list
+ *
+ * @param aura Optional aura filter forwarded to SelectTarget: a positive value
+ *             requires the aura on the target, a negative value excludes targets
+ *             that already have it.
  */
-SpellCastResult UnitAI::DoCastRandomTarget(uint32 spellId, uint32 threatTablePosition, float dist, bool playerOnly, bool triggered, bool withTank)
+SpellCastResult UnitAI::DoCastRandomTarget(uint32 spellId, uint32 threatTablePosition, float dist, bool playerOnly, bool triggered, bool withTank, int32 aura)
 {
-    if (Unit* target = SelectTarget(SelectTargetMethod::Random, threatTablePosition, dist, playerOnly, withTank))
+    if (Unit* target = SelectTarget(SelectTargetMethod::Random, threatTablePosition, dist, playerOnly, withTank, aura))
     {
         return DoCast(target, spellId, triggered);
     }
@@ -376,7 +382,7 @@ void UnitAI::FillAISpellInfo()
     }
 }
 
-ThreatMgr& UnitAI::GetThreatMgr()
+ThreatManager& UnitAI::GetThreatMgr()
 {
     return me->GetThreatMgr();
 }
@@ -384,6 +390,80 @@ ThreatMgr& UnitAI::GetThreatMgr()
 void UnitAI::SortByDistance(std::list<Unit*>& list, bool ascending)
 {
     list.sort(Acore::ObjectDistanceOrderPred(me, ascending));
+}
+
+void UnitAI::EvadeTimerExpired()
+{
+    Creature* creature = me->ToCreature();
+    if (!creature)
+        return;
+
+    CreatureAI* ai = creature->AI();
+    if (!ai)
+        return;
+
+    // Check if we can teleport an unreachable player first
+    if (ObjectGuid targetGuid = creature->GetCannotReachTarget())
+    {
+        if (Player* player = ObjectAccessor::GetPlayer(*creature, targetGuid))
+        {
+            if (creature->IsEngagedBy(player) && ai->OnTeleportUnreacheablePlayer(player))
+            {
+                creature->SetCannotReachTarget();
+                return;
+            }
+        }
+    }
+
+    // Retail-like: instance trash teleports to its unreachable target instead of evading
+    if (sWorld->getBoolConfig(CONFIG_CREATURE_INSTANCE_TELEPORT_TO_UNREACHABLE_TARGET)
+        && creature->GetMap()->IsDungeon()
+        && !creature->IsDungeonBoss() && !creature->isWorldBoss()
+        && !creature->IsControlledByPlayer())
+    {
+        if (ObjectGuid targetGuid = creature->GetCannotReachTarget())
+        {
+            if (Unit* target = ObjectAccessor::GetUnit(*creature, targetGuid))
+            {
+                if (target->IsAlive() && creature->IsEngagedBy(target))
+                {
+                    creature->NearTeleportTo(target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(), target->GetOrientation());
+                    creature->SetCannotReachTarget();
+                    return;
+                }
+            }
+        }
+    }
+
+    if (creature->GetMap()->IsRaid())
+    {
+        creature->GetCombatManager().ContinueEvadeRegen();
+        return;
+    }
+
+    // If only one target, enter evade mode
+    if (creature->GetThreatMgr().GetThreatListSize() <= 1)
+    {
+        ai->EnterEvadeMode(CreatureAI::EVADE_REASON_NO_PATH);
+        return;
+    }
+
+    // Multiple targets - clear threat on unreachable target and try another
+    if (ObjectGuid targetGuid = creature->GetCannotReachTarget())
+    {
+        if (Unit* target = ObjectAccessor::GetUnit(*creature, targetGuid))
+        {
+            if (creature->GetThreatMgr().IsThreatenedBy(target))
+            {
+                creature->GetThreatMgr().ClearThreat(target);
+                creature->SetCannotReachTarget();
+                return;
+            }
+        }
+    }
+
+    // Fallback - enter evade
+    ai->EnterEvadeMode(CreatureAI::EVADE_REASON_NO_PATH);
 }
 
 //Enable PlayerAI when charmed

@@ -41,12 +41,14 @@ enum VezaxSpellData
     SPELL_MARK_OF_THE_FACELESS_AURA             = 63276,
     SPELL_MARK_OF_THE_FACELESS_EFFECT           = 63278,
 
+    SPELL_CLEAR_DEMONIC_CIRCLE                  = 62037,
     SPELL_AURA_OF_DESPAIR_1                     = 62692,
     SPELL_AURA_OF_DESPAIR_2                     = 64848,
     SPELL_CORRUPTED_RAGE                        = 68415,
     SPELL_CORRUPTED_WISDOM                      = 64646,
     SPELL_SHAMANISTIC_RAGE                      = 30823,
     SPELL_JUDGEMENTS_OF_THE_WISDOM_RANK_1       = 31876,
+    SPELL_DRUID_CLEARCASTING                    = 16870,
 
     SPELL_SUMMON_SARONITE_VAPORS                = 63081,
     NPC_SARONITE_VAPORS                         = 33488,
@@ -65,7 +67,6 @@ enum VezaxNpcs
 {
     // NPC_VEZAX                                = 33271,
     // NPC_VEZAX_BUNNY                          = 33500,
-    NPC_SARONITE_ANIMUS                         = 33524,
 };
 
 enum VezaxGOs
@@ -99,16 +100,13 @@ enum VezaxText
     SAY_EMOTE_ANIMUS                     = 6,
     SAY_EMOTE_BARRIER                    = 7,
     SAY_EMOTE_SURGE_OF_DARKNESS          = 8,
-};
-
-enum VaporsText
-{
-    SAY_EMOTE_VAPORS    = 0,
+    SAY_EMOTE_BARRIER_FADE               = 9,
+    SAY_EMOTE_VAPORS                     = 10,
 };
 
 struct boss_vezax : public BossAI
 {
-    boss_vezax(Creature* pCreature) : BossAI(pCreature, BOSS_VEZAX) { }
+    boss_vezax(Creature* creature) : BossAI(creature, BOSS_VEZAX) { }
 
     uint8 vaporsCount;
     bool hardmodeAvailable;
@@ -131,7 +129,7 @@ struct boss_vezax : public BossAI
         me->setActive(false);
     }
 
-    void JustEngagedWith(Unit*  /*pWho*/) override
+    void JustEngagedWith(Unit*  /*who*/) override
     {
         me->setActive(true);
         _JustEngagedWith();
@@ -145,6 +143,7 @@ struct boss_vezax : public BossAI
 
         Talk(SAY_AGGRO);
 
+        me->CastSpell(me, SPELL_CLEAR_DEMONIC_CIRCLE, true);
         me->CastSpell(me, SPELL_AURA_OF_DESPAIR_1, true);
     }
 
@@ -156,6 +155,7 @@ struct boss_vezax : public BossAI
                 hardmodeAvailable = false;
                 break;
             case 2:
+                Talk(SAY_EMOTE_BARRIER_FADE);
                 me->RemoveAura(SPELL_SARONITE_BARRIER);
                 me->SetLootMode(3);
                 break;
@@ -203,27 +203,23 @@ struct boss_vezax : public BossAI
                 Talk(SAY_BERSERK);
                 break;
             case EVENT_SPELL_VEZAX_SHADOW_CRASH:
-                {
-                    events.Repeat(10s);
+            {
+                events.Repeat(10s);
 
-                    std::vector<Player*> players;
-                    Map::PlayerList const& pl = me->GetMap()->GetPlayers();
-                    for (Map::PlayerList::const_iterator itr = pl.begin(); itr != pl.end(); ++itr)
-                    {
-                        Player* temp = itr->GetSource();
-                        if (temp->IsAlive() && temp->GetDistance(me) > 15.0f)
-                            players.push_back(temp);
-                    }
-                    if (!players.empty())
-                    {
-                        me->setAttackTimer(BASE_ATTACK, 2000);
-                        Player* target = players.at(urand(0, players.size() - 1));
-                        me->SetGuidValue(UNIT_FIELD_TARGET, target->GetGUID());
-                        me->CastSpell(target, SPELL_VEZAX_SHADOW_CRASH, false);
-                        events.ScheduleEvent(EVENT_RESTORE_TARGET, 750ms);
-                    }
+                constexpr float dist = 3.0f; // SelectTarget dist check includes CombatReach
+                Unit* target = SelectTarget(SelectTargetMethod::Random, 0, -dist, true, true, 0);
+                if (!target)
+                    target = SelectTarget(SelectTargetMethod::Random, 0, 0, true, true, 0);
+
+                if (target)
+                {
+                    me->setAttackTimer(BASE_ATTACK, 2000);
+                    me->SetGuidValue(UNIT_FIELD_TARGET, target->GetGUID());
+                    me->CastSpell(target, SPELL_VEZAX_SHADOW_CRASH, false);
+                    events.ScheduleEvent(EVENT_RESTORE_TARGET, 750ms);
                 }
-                break;
+            }
+            break;
             case EVENT_RESTORE_TARGET:
                 if (me->GetVictim())
                     me->SetGuidValue(UNIT_FIELD_TARGET, me->GetVictim()->GetGUID());
@@ -271,6 +267,7 @@ struct boss_vezax : public BossAI
                 {
                     vaporsCount++;
                     me->CastSpell(me, SPELL_SUMMON_SARONITE_VAPORS, false);
+                    Talk(SAY_EMOTE_VAPORS);
 
                     if (vaporsCount < 6 || !hardmodeAvailable)
                         events.Repeat(30s);
@@ -326,13 +323,6 @@ struct boss_vezax : public BossAI
     {
         _JustDied();
         Talk(SAY_DEATH);
-
-        if (GameObject* door = me->FindNearestGameObject(GO_VEZAX_DOOR, 500.0f))
-            if (door->GetGoState() != GO_STATE_ACTIVE)
-            {
-                door->SetLootState(GO_READY);
-                door->UseDoorOrButton(0, false);
-            }
     }
 
     void KilledUnit(Unit* who) override
@@ -346,57 +336,49 @@ struct boss_vezax : public BossAI
 
 struct npc_ulduar_saronite_vapors : public NullCreatureAI
 {
-    npc_ulduar_saronite_vapors(Creature* pCreature) : NullCreatureAI(pCreature)
+    npc_ulduar_saronite_vapors(Creature* creature) : NullCreatureAI(creature)
     {
-        pInstance = pCreature->GetInstanceScript();
+        _instance = creature->GetInstanceScript();
         me->GetMotionMaster()->MoveRandom(4.0f);
     }
 
-    InstanceScript* pInstance;
+    InstanceScript* _instance;
 
     void JustDied(Unit*  /*killer*/) override
     {
         me->CastSpell(me, SPELL_SARONITE_VAPORS_AURA, true);
 
         // killed saronite vapors, hard mode unavailable
-        if (pInstance)
-            if (Creature* vezax = pInstance->GetCreature(BOSS_VEZAX))
+        if (_instance)
+            if (Creature* vezax = _instance->GetCreature(BOSS_VEZAX))
                 vezax->AI()->DoAction(1);
-    }
-
-    void IsSummonedBy(WorldObject* /*summoner*/) override
-    {
-        Talk(SAY_EMOTE_VAPORS);
     }
 };
 
 struct npc_ulduar_saronite_animus : public ScriptedAI
 {
-    npc_ulduar_saronite_animus(Creature* pCreature) : ScriptedAI(pCreature)
+    npc_ulduar_saronite_animus(Creature* creature) : ScriptedAI(creature)
     {
-        pInstance = pCreature->GetInstanceScript();
-        if (pInstance)
-            if (Creature* vezax = pInstance->GetCreature(BOSS_VEZAX))
-                vezax->AI()->JustSummoned(me);
+        _instance = creature->GetInstanceScript();
         timer = 0;
-        me->SetInCombatWithZone();
     }
 
-    InstanceScript* pInstance;
+    InstanceScript* _instance;
     uint16 timer;
 
     void JustDied(Unit*  /*killer*/) override
     {
         me->DespawnOrUnsummon(3s);
 
-        if (pInstance)
-            if (Creature* vezax = pInstance->GetCreature(BOSS_VEZAX))
+        if (_instance)
+            if (Creature* vezax = _instance->GetCreature(BOSS_VEZAX))
                 vezax->AI()->DoAction(2);
     }
 
     void UpdateAI(uint32 diff) override
     {
-        UpdateVictim();
+        if (!UpdateVictim())
+            return;
 
         timer += diff;
         if (timer >= 2000)
@@ -415,7 +397,7 @@ class spell_aura_of_despair_aura : public AuraScript
 
     bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        return ValidateSpellInfo({ SPELL_AURA_OF_DESPAIR_2, SPELL_CORRUPTED_RAGE, SPELL_CORRUPTED_WISDOM });
+        return ValidateSpellInfo({ SPELL_AURA_OF_DESPAIR_2, SPELL_CORRUPTED_RAGE, SPELL_CORRUPTED_WISDOM, SPELL_DRUID_CLEARCASTING });
     }
 
     void OnApply(AuraEffect const*  /*aurEff*/, AuraEffectHandleModes  /*mode*/)
@@ -427,6 +409,11 @@ class spell_aura_of_despair_aura : public AuraScript
                     return;
 
                 target->CastSpell(target, SPELL_AURA_OF_DESPAIR_2, true);
+
+                // Resto druids: Omen of Clarity can no longer trigger Clearcasting (Patch 3.2.0)
+                if (target->ToPlayer()->GetSpec() == TALENT_TREE_DRUID_RESTORATION)
+                    target->ApplySpellImmune(SPELL_AURA_OF_DESPAIR_2, IMMUNITY_ID, SPELL_DRUID_CLEARCASTING, true);
+
                 if (target->HasSpell(SPELL_SHAMANISTIC_RAGE))
                     caster->CastSpell(target, SPELL_CORRUPTED_RAGE, true);
                 else if (target->HasSpell(SPELL_JUDGEMENTS_OF_THE_WISDOM_RANK_1) || target->HasSpell(SPELL_JUDGEMENTS_OF_THE_WISDOM_RANK_1 + 1) || target->HasSpell(SPELL_JUDGEMENTS_OF_THE_WISDOM_RANK_1 + 2))
@@ -441,6 +428,8 @@ class spell_aura_of_despair_aura : public AuraScript
             target->RemoveAurasDueToSpell(SPELL_AURA_OF_DESPAIR_2);
             target->RemoveAurasDueToSpell(SPELL_CORRUPTED_RAGE);
             target->RemoveAurasDueToSpell(SPELL_CORRUPTED_WISDOM);
+
+            target->ApplySpellImmune(SPELL_AURA_OF_DESPAIR_2, IMMUNITY_ID, SPELL_DRUID_CLEARCASTING, false);
         }
     }
 

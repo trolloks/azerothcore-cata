@@ -188,6 +188,8 @@ public:
                     return _encounterState;
                 case DATA_GUARDIANTIME_EVENT:
                     return _guardianTimer;
+                case DATA_INTRO_EVENT_FINISHED:
+                    return _encounterState >= COS_PROGRESS_FINISHED_INTRO ? 1 : 0;
             }
             return 0;
         }
@@ -363,7 +365,7 @@ public:
             return saveStream.str();
         }
 
-        void Load(const char* in) override
+        void Load(char const* in) override
         {
             if (!in)
             {

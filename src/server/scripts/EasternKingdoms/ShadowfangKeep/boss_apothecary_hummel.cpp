@@ -87,12 +87,7 @@ public:
     struct boss_apothecary_hummelAI : public BossAI
     {
         boss_apothecary_hummelAI(Creature* creature) : BossAI(creature, DATA_APOTHECARY_HUMMEL), _deadCount(0), _isDead(false)
-        {
-            scheduler.SetValidator([this]
-            {
-                return !me->HasUnitState(UNIT_STATE_CASTING);
-            });
-        }
+        {        }
 
         void sGossipSelect(Player* player, uint32 menuId, uint32 gossipListId) override
         {
@@ -261,7 +256,7 @@ public:
         uint8 _phase;
     };
 
-    bool OnQuestReward(Player* /*player*/, Creature* creature, const Quest* quest, uint32 /*slot*/) override
+    bool OnQuestReward(Player* /*player*/, Creature* creature, Quest const* quest, uint32 /*slot*/) override
     {
         if (quest->GetQuestId() == QUEST_YOUVE_BEEN_SERVED)
         {

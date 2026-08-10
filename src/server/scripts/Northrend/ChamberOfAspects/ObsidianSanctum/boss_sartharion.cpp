@@ -84,6 +84,7 @@ enum Spells
     SPELL_SARTHARION_FLAME_BREATH               = 56908,
     SPELL_SARTHARION_TAIL_LASH                  = 56910,
     SPELL_CYCLONE_AURA_PERIODIC                 = 57598,
+    SPELL_LAVA_STRIKE                           = 57571,
     SPELL_LAVA_STRIKE_DUMMY                     = 57578,
     SPELL_LAVA_STRIKE_DUMMY_TRIGGER             = 57697,
     SPELL_LAVA_STRIKE_SUMMON                    = 57572,
@@ -136,7 +137,7 @@ enum Misc
     // Movement points
     POINT_LANDING                               = 1,
 
-    // Lava directions. Its used to identify to which side lava was moving by last time
+    // Lava directions
     LAVA_LEFT_SIDE                              = 0,
     LAVA_RIGHT_SIDE                             = 1,
 
@@ -213,11 +214,11 @@ const Position TenebronEggsPos[2][MAX_TENEBORN_EGGS_SUMMONS] =
 
 const Position CycloneSummonPos[MAX_CYCLONE_COUNT] =
 {
-    { 3235.28f, 591.180f, 57.0833f, 0.59037f },
-    { 3200.97f, 480.929f, 57.0833f, 5.86197f },
-    { 3281.57f, 507.984f, 57.0833f, 5.54346f },
-    { 3210.11f, 531.957f, 57.0833f, 3.76777f },
-    { 3286.42f, 585.010f, 57.0833f, 4.10307f },
+    { 3238.55f, 589.14f, 57.0f, 0.59037f },
+    { 3209.70f, 475.85f, 57.0f, 5.86197f },
+    { 3282.10f, 504.02f, 57.0f, 5.54346f },
+    { 3209.42f, 532.55f, 57.0f, 3.76777f },
+    { 3283.50f, 581.75f, 57.0f, 4.10307f },
 };
 
 const Position AreaTriggerSummonPos[MAX_AREA_TRIGGER_COUNT] =
@@ -307,10 +308,10 @@ struct boss_sartharion : public BossAI
 {
     explicit boss_sartharion(Creature* creature) : BossAI(creature, DATA_SARTHARION),
         dragonsCount(0),
-        lastLavaSide(LAVA_RIGHT_SIDE),
         usedBerserk(false),
         below11PctReached(false)
     {
+        callForHelpRange = 500.0f;
     }
 
     void Reset() override
@@ -405,14 +406,20 @@ struct boss_sartharion : public BossAI
             DoCastSelf(SPELL_WILL_OF_SARTHARION, true);
             instance->DoAction(ACTION_START_PATROL);
         }
-
-        me->CallForHelp(500.0f);
     }
 
     void JustDied(Unit* /*killer*/) override
     {
         _JustDied();
         Talk(SAY_SARTHARION_DEATH);
+
+        // Despawn remaining drakes
+        for (uint32 i : dragons)
+            if (Creature* boss = instance->GetCreature(i))
+                boss->DespawnOrUnsummon();
+
+        instance->DoRemoveAurasDueToSpellOnPlayers(SPELL_TWILIGHT_TORMENT_VESPERON);
+        instance->DoRemoveAurasDueToSpellOnPlayers(SPELL_TWILIGHT_TORMENT_SARTHARION);
     }
 
     void SetData(uint32 type, uint32 data) override
@@ -570,6 +577,8 @@ struct boss_sartharion : public BossAI
         // Handle Sartharion combat abilities
         events.Update(diff);
 
+        scheduler.Update(diff);
+
         if (me->HasUnitState(UNIT_STATE_CASTING))
             return;
 
@@ -628,31 +637,26 @@ private:
         extraEvents.ScheduleEvent(EVENT_SARTHARION_START_LAVA, 3600ms);
         extraEvents.ScheduleEvent(EVENT_SARTHARION_FINISH_LAVA, 11s);
 
-        // Send wave from left
-        if (lastLavaSide == LAVA_RIGHT_SIDE)
+        // Randomly choose which side the wave comes from
+        if (urand(LAVA_LEFT_SIDE, LAVA_RIGHT_SIDE) == LAVA_LEFT_SIDE)
         {
             for (uint8 i = 0; i < MAX_LEFT_LAVA_TSUNAMIS; ++i)
             {
                 Creature* tsunami = me->SummonCreature(NPC_FLAME_TSUNAMI, 3211.0f, FlameTsunamiLeftOffsets[i], 57.083332f, 0.0f, TEMPSUMMON_TIMED_DESPAWN, 13500);
 
-                if (((i - 2) % 3 == 0) && tsunami) // If center of wave
+                if (((i - 1) % 3 == 0) && tsunami) // If center of wave
                     tsunami->CastSpell(tsunami, SPELL_FLAME_TSUNAMI_VISUAL, true);
             }
-
-            lastLavaSide = LAVA_LEFT_SIDE;
         }
-        // from right
         else
         {
             for (uint8 i = 0; i < MAX_RIGHT_LAVA_TSUNAMIS; ++i)
             {
                 Creature* tsunami = me->SummonCreature(NPC_FLAME_TSUNAMI, 3286.0f, FlameTsunamiRightOffsets[i], 57.083332f, 3.14f, TEMPSUMMON_TIMED_DESPAWN, 13500);
 
-                if (((i - 2) % 3 == 0) && tsunami) // If center of wave
+                if (((i - 1) % 3 == 0) && tsunami) // If center of wave
                     tsunami->CastSpell(tsunami, SPELL_FLAME_TSUNAMI_VISUAL, true);
             }
-
-            lastLavaSide = LAVA_RIGHT_SIDE;
         }
     }
 
@@ -683,7 +687,6 @@ private:
     EventMap extraEvents;
     std::list<uint32> volcanoBlows;
     uint8 dragonsCount;
-    uint8 lastLavaSide; // 0 = left, 1 = right
     bool usedBerserk;
     bool below11PctReached;
 };
@@ -839,6 +842,8 @@ struct boss_sartharion_dragonAI : public BossAI
             {
                 Talk(SAY_VESPERON_DEATH);
                 instance->DoAction(ACTION_CLEAR_PORTAL);
+                instance->DoRemoveAurasDueToSpellOnPlayers(SPELL_TWILIGHT_TORMENT_VESPERON);
+                instance->DoRemoveAurasDueToSpellOnPlayers(SPELL_TWILIGHT_TORMENT_SARTHARION);
                 if (!isCalledBySartharion || instance->GetBossState(DATA_SARTHARION) != IN_PROGRESS)
                     instance->SetBossState(DATA_VESPERON, DONE);
                 break;
@@ -846,7 +851,10 @@ struct boss_sartharion_dragonAI : public BossAI
         }
 
         if (!isCalledBySartharion)
+        {
             ClearInstance();
+            me->GetMap()->ToInstanceMap()->PermBindAllPlayers();
+        }
         else
         {
             if (Creature* sartharion = ObjectAccessor::GetCreature(*me, instance->GetGuidData(DATA_SARTHARION)))
@@ -922,6 +930,7 @@ struct boss_sartharion_dragonAI : public BossAI
             // Dragon speaks and starts flying to landing position
             Talk(SAY_DRAKE_RESPOND);
             me->GetMotionMaster()->Clear();
+            extraEvents.CancelEvent(EVENT_DRAGON_PATROL_WAYPOINT);
             me->SetDisableGravity(true);
             me->SetHover(true);
             me->SetAnimTier(AnimTier::Fly);
@@ -1372,20 +1381,23 @@ class spell_sartharion_lava_strike : public SpellScript
     bool Load() override
     {
         _spawned = false;
+        _dummyFired = false;
         return true;
     }
 
     void HandleDummy(SpellEffIndex /*effIndex*/)
     {
-        if (!GetCaster() || !GetHitUnit())
+        if (!GetCaster() || !GetHitUnit() || _dummyFired)
             return;
 
-        GetCaster()->CastSpell(GetHitUnit()->GetPositionX(), GetHitUnit()->GetPositionY(), GetHitUnit()->GetPositionZ(), SPELL_LAVA_STRIKE_DUMMY_TRIGGER, true);
+        _dummyFired = true;
+
+        GetCaster()->CastSpell(GetHitUnit(), SPELL_LAVA_STRIKE, true);
     }
 
     void HandleSchoolDamage(SpellEffIndex /*effIndex*/)
     {
-        if (!GetCaster() || !GetHitUnit() || _spawned)
+        if (!GetCaster() || !GetHitUnit() || !GetHitUnit()->IsPlayer() || _spawned)
             return;
 
         if (InstanceScript* instance = GetCaster()->GetInstanceScript())
@@ -1394,21 +1406,31 @@ class spell_sartharion_lava_strike : public SpellScript
             {
                 sarth->AI()->SetData(DATA_VOLCANO_BLOWS, GetHitUnit()->GetGUID().GetCounter());
                 sarth->CastSpell(GetHitUnit(), SPELL_LAVA_STRIKE_SUMMON, true);
-                _spawned = true;
             }
         }
+
+        _spawned = true;
+    }
+
+    void HandleSummon(SpellEffIndex effIndex)
+    {
+        if (GetCaster()->GetEntry() != NPC_SARTHARION)
+            PreventHitEffect(effIndex);
     }
 
     void Register() override
     {
         if (m_scriptSpellId == SPELL_LAVA_STRIKE_DUMMY)
             OnEffectHitTarget += SpellEffectFn(spell_sartharion_lava_strike::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+        else if (m_scriptSpellId == SPELL_LAVA_STRIKE_SUMMON)
+            OnEffectHit += SpellEffectFn(spell_sartharion_lava_strike::HandleSummon, EFFECT_0, SPELL_EFFECT_SUMMON);
         else
             OnEffectHitTarget += SpellEffectFn(spell_sartharion_lava_strike::HandleSchoolDamage, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
     }
 
 private:
     bool _spawned{false};
+    bool _dummyFired{false};
 };
 
 // 57491 - Flame Tsunami

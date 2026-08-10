@@ -70,6 +70,7 @@ enum UlduarData
     DATA_MIMIRON_LEVIATHAN_MKII             = 301,
     DATA_MIMIRON_VX001                      = 302,
     DATA_MIMIRON_ACU                        = 303,
+    DATA_MIMIRON_DB_TARGET                  = 304,
 
     // Mimiron doors
     DATA_GO_MIMIRON_DOOR_1                  = 311,
@@ -87,9 +88,7 @@ enum UlduarData
 
     // XT-002
     DATA_XT002_DOORS                        = 400,
-
-    // Kologarn
-    DATA_KOLOGARN_DOORS                     = 410,
+    DATA_XT002_HEART                        = 401,
 
     // Thorim
     DATA_THORIM_LEVER_GATE                  = 500,
@@ -110,9 +109,12 @@ enum UlduarData
     DATA_UNIVERSE_GLOBE                     = 608,
     DATA_ALGALON_TRAPDOOR                   = 609,
     DATA_BRANN_BRONZEBEARD_ALG              = 610,
+    DATA_RESUMMON_ALGALON                   = 611,
 
     // Achievements
     DATA_DWARFAGEDDON                       = 700,
+    DATA_QUICK_SHAVE                        = 701,
+    DATA_IRON_DWARF_MEDIUM_RARE             = 702,
 
     // Tram
     DATA_CALL_TRAM                          = 710,
@@ -126,6 +128,7 @@ enum UlduarData
     DATA_SARA                               = 760,
     DATA_BRAIN_OF_YOGG_SARON               = 761,
     DATA_YOGG_SARON_DOORS                   = 762,
+    DATA_VOICE_OF_YOGG_SARON                = 763,
 
     // Middle section
     DATA_ASSEMBLY_DOORS                     = 770,
@@ -143,6 +146,12 @@ enum UlduarData
     DATA_BRANN_MEMOTESAY                    = 801,
     DATA_BRANN_EASY_MODE                    = 802,
     DATA_BRANN_BASE_CAMP                    = 803,
+
+    // Observation Ring Keepers
+    DATA_FREYA_GOSSIP                       = 810,
+    DATA_HODIR_GOSSIP                       = 811,
+    DATA_MIMIRON_GOSSIP                     = 812,
+    DATA_THORIM_GOSSIP                      = 813,
 };
 
 enum UlduarNPCs
@@ -152,6 +161,9 @@ enum UlduarNPCs
     NPC_IGNIS                               = 33118,
     NPC_RAZORSCALE                          = 33186,
     NPC_XT002                               = 33293,
+    NPC_XT_TOY_PILE                         = 33337,
+    NPC_XS013_SCRAPBOT                      = 33343,
+    NPC_HEART_OF_DECONSTRUCTOR              = 33329,
     NPC_STEELBREAKER                        = 32867,
     NPC_MOLGEIM                             = 32927,
     NPC_BRUNDIR                             = 32857,
@@ -162,6 +174,7 @@ enum UlduarNPCs
     NPC_THORIM                              = 32865,
     NPC_FREYA                               = 32906,
     NPC_VEZAX                               = 33271,
+    NPC_SARONITE_ANIMUS                     = 33524,
     NPC_SARA                                = 33134,
     NPC_YOGGSARON                           = 33288,
     NPC_BRAIN_OF_YOGG_SARON                 = 33890,
@@ -169,11 +182,22 @@ enum UlduarNPCs
 
     // Razorscale
     NPC_HARPOON_FIRE_STATE                  = 33282,
+    NPC_RAZORSCALE_SPAWNER                  = 33245,
+    NPC_RAZORSCALE_CONTROLLER               = 33233,
+    NPC_EXPEDITION_COMMANDER                = 33210,
+    NPC_EXPEDITION_ENGINEER                 = 33287,
+    NPC_EXPEDITION_DEFENDER                 = 33816,
+    NPC_EXPEDITION_TRAPPER                  = 33259,
+    NPC_DARK_RUNE_GUARDIAN                  = 33388,
+    NPC_DARK_RUNE_WATCHER                   = 33453,
+    NPC_DARK_RUNE_SENTINEL                  = 33846,
+    NPC_RAZORSCALE_DEVOURING_FLAME          = 34188,
 
     // Mimiron
     NPC_MIMIRON_LEVIATHAN_MKII              = 33432,
     NPC_MIMIRON_VX001                       = 33651,
     NPC_MIMIRON_ACU                         = 33670,
+    NPC_MIMIRON_DB_TARGET                   = 33576,
 
     // Freya
     NPC_ELDER_BRIGHTLEAF                    = 32915,
@@ -181,6 +205,7 @@ enum UlduarNPCs
     NPC_ELDER_IRONBRANCH                    = 32913,
 
     // Yogg-Saron
+    NPC_VOICE_OF_YOGG_SARON                 = 33280,
     NPC_FREYA_GOSSIP                        = 33241,
     NPC_HODIR_GOSSIP                        = 33213,
     NPC_THORIM_GOSSIP                       = 33242,
@@ -223,8 +248,6 @@ enum UlduarGameObjects
     GO_HODIR_CHEST_NORMAL_HERO              = 194308,
     GO_HODIR_CHEST_HARD                     = 194200,
     GO_HODIR_CHEST_HARD_HERO                = 194201,
-    GO_FREYA_CHEST                          = 194330, // Normal, -2 - elder offset
-    GO_FREYA_CHEST_HERO                     = 194331, // Hero, -2 - elder offset
     GO_MIMIRON_CHEST                        = 194789,
     GO_MIMIRON_CHEST_HARD                   = 194957,
     GO_MIMIRON_CHEST_HERO                   = 194956,
@@ -251,7 +274,6 @@ enum UlduarGameObjects
     GO_ARCHIVUM_DOORS                       = 194556,
     GO_ASSEMBLY_DOORS                       = 194554,
     GO_KOLOGARN_BRIDGE                      = 194232,
-    GO_KOLOGARN_DOORS                       = 194553,
     GO_KEEPERS_GATE                         = 194255,
     GO_XT002_DOORS                          = 194631,
 
@@ -275,6 +297,14 @@ enum UlduarGameObjects
     GO_VEZAX_DOOR                           = 194750,
 
     GO_SNOW_MOUND                           = 194907,
+
+    // Razorscale
+    GO_RAZOR_HARPOON_1                      = 194519,
+    GO_RAZOR_HARPOON_2                      = 194541,
+    GO_RAZOR_HARPOON_3                      = 194542,
+    GO_RAZOR_HARPOON_4                      = 194543,
+    GO_RAZOR_BROKEN_HARPOON                 = 194565,
+    GO_RAZOR_MOLE_MACHINE                   = 194316,
 
     // Thorim
     GO_ARENA_LEVER_GATE                     = 194560,
@@ -300,6 +330,18 @@ enum UlduarGameObjects
     GO_GIFT_OF_THE_OBSERVER_25              = 194822,
 };
 
+enum UlduarPersistentData
+{
+    PERSISTENT_DATA_WATCHERS_MASK           = 0,
+    PERSISTENT_DATA_CONSPEEDATORY,
+    PERSISTENT_DATA_UNBROKEN,
+    PERSISTENT_DATA_ALGALON_TIMER,
+    PERSISTENT_DATA_C_OF_ULDUAR_MASK,
+    PERSISTENT_DATA_MAGE_BARRIER,
+    PERSISTENT_DATA_ALGALON_FIRST_PULL,
+    MAX_PERSISTENT_DATA
+};
+
 enum UlduarMisc
 {
     // Flame Leviathan
@@ -312,6 +354,9 @@ enum UlduarMisc
     EVENT_TOWER_OF_FLAMES_DESTROYED         = 21033,
     EVENT_TOWER_OF_LIFE_DESTROYED           = 21030,
 
+    // Sent by Shatter Chest (62502), triggered by Hodir's hard mode timer missile (62501)
+    EVENT_HODIR_SHATTER_CHEST               = 20907,
+
     ACTION_LEVIATHAN_REFRESH_TOWERS         = -1,
     ACTION_TOWER_OF_STORM_DESTROYED         = 1,
     ACTION_TOWER_OF_FROST_DESTROYED         = 2,
@@ -319,9 +364,11 @@ enum UlduarMisc
     ACTION_TOWER_OF_LIFE_DESTROYED          = 4,
 
     EVENT_UPDATE_ALGALON_TIMER              = 1,
+    EVENT_RESUMMON_ALGALON                  = 2,
     ACTION_FEEDS_ON_TEARS_FAILED            = 0,
     ACTION_INIT_ALGALON                     = 1,
     ACTION_DESPAWN_ALGALON                  = 2,
+    ACTION_START_INTRO                      = 3,
 
     TIMER_ALGALON_DEFEATED                  = 300,
     TIMER_ALGALON_TO_SUMMON                 = 200,

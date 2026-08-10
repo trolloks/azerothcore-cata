@@ -16,6 +16,7 @@
  */
 
 #include "AreaDefines.h"
+#include "CombatAI.h"
 #include "CreatureScript.h"
 #include "PassiveAI.h"
 #include "Player.h"
@@ -23,10 +24,12 @@
 #include "ScriptedEscortAI.h"
 #include "ScriptedFollowerAI.h"
 #include "ScriptedGossip.h"
+#include "SmartAI.h"
 #include "SpellAuras.h"
 #include "SpellInfo.h"
 #include "SpellScript.h"
 #include "SpellScriptLoader.h"
+#include "WaypointMgr.h"
 
 enum eDrakeHunt
 {
@@ -55,6 +58,8 @@ class spell_q11919_q11940_drake_hunt_aura : public AuraScript
 
         Creature* owner = GetOwner()->ToCreature();
         owner->RemoveAllAurasExceptType(SPELL_AURA_DUMMY);
+        if (SmartAI* ai = CAST_AI(SmartAI, owner->AI()))
+            ai->SetEvadeDisabled(true);
         owner->CombatStop(true);
         owner->GetThreatMgr().ClearAllThreat();
         owner->GetMotionMaster()->Clear(false);
@@ -240,50 +245,6 @@ public:
 };
 
 /*######
-## npc_iruk
-######*/
-
-enum Iruk
-{
-    GOSSIP_MENU_ID_NPC_IRUK                 = 9280,
-    GOSSIP_OPTION_SEARCH_CORPSE             = 0,
-    NPC_TEXT_THIS_YOUNG_TUSKARR             = 12585,
-
-    QUEST_SPIRITS_WATCH_OVER_US             = 11961,
-
-    SPELL_CREATE_TOTEM_OF_ISSLIRUK          = 46816
-};
-
-class npc_iruk : public CreatureScript
-{
-public:
-    npc_iruk() : CreatureScript("npc_iruk") { }
-
-    bool OnGossipHello(Player* player, Creature* creature) override
-    {
-        if (player->GetQuestStatus(QUEST_SPIRITS_WATCH_OVER_US) == QUEST_STATUS_INCOMPLETE)
-            AddGossipItemFor(player, GOSSIP_MENU_ID_NPC_IRUK, GOSSIP_OPTION_SEARCH_CORPSE, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 1);
-
-        SendGossipMenuFor(player, NPC_TEXT_THIS_YOUNG_TUSKARR, creature->GetGUID());
-
-        return true;
-    }
-
-    bool OnGossipSelect(Player* player, Creature* /*creature*/, uint32 /*sender*/, uint32 action) override
-    {
-        ClearGossipMenuFor(player);
-
-        if (action == GOSSIP_ACTION_INFO_DEF + 1)
-        {
-            player->CastSpell(player, SPELL_CREATE_TOTEM_OF_ISSLIRUK, true);
-            CloseGossipMenuFor(player);
-        }
-
-        return true;
-    }
-};
-
-/*######
 ## npc_nerubar_victim
 ######*/
 
@@ -294,51 +255,70 @@ enum Nerubar
     SPELL_FREED_WARSONG_MAGE                = 45526,
     SPELL_FREED_WARSONG_SHAMAN              = 45527,
     SPELL_FREED_WARSONG_WARRIOR             = 45514,
-    SPELL_FREED_WARSONG_PEON                = 45532
+    SPELL_FREED_WARSONG_PEON                = 45532,
+    SPELL_FREED_SOLDIER_DEBUFF              = 45523,
+
+    MAX_FREED_SOLDIERS                      = 3
 };
 
-const uint32 nerubarVictims[3] =
+uint32 const nerubarCaptiveSpells[4] =
 {
-    SPELL_FREED_WARSONG_MAGE, SPELL_FREED_WARSONG_SHAMAN, SPELL_FREED_WARSONG_WARRIOR
+    SPELL_FREED_WARSONG_PEON, SPELL_FREED_WARSONG_WARRIOR, SPELL_FREED_WARSONG_MAGE, SPELL_FREED_WARSONG_SHAMAN
 };
 
-class npc_nerubar_victim : public CreatureScript
+struct npc_nerubar_victim : public NullCreatureAI
 {
-public:
-    npc_nerubar_victim() : CreatureScript("npc_nerubar_victim") { }
+    npc_nerubar_victim(Creature* creature) : NullCreatureAI(creature) { }
 
-    struct npc_nerubar_victimAI : public NullCreatureAI
+    void JustDied(Unit* killer) override
     {
-        npc_nerubar_victimAI(Creature* creature) : NullCreatureAI(creature) { }
+        if (!killer)
+            return;
 
-        void JustDied(Unit* killer) override
+        Player* player = killer->GetCharmerOrOwnerPlayerOrPlayerItself();
+        if (!player)
+            return;
+
+        uint32 captiveSpell = nerubarCaptiveSpells[urand(0, 3)];
+
+        if (captiveSpell == SPELL_FREED_WARSONG_PEON)
         {
-            if (!killer || !killer->IsPlayer())
-            {
+            if (player->GetQuestStatus(QUEST_TAKEN_BY_THE_SCOURGE) != QUEST_STATUS_INCOMPLETE)
                 return;
-            }
 
-            Player* player = killer->ToPlayer();
-
-            if (player->GetQuestStatus(QUEST_TAKEN_BY_THE_SCOURGE) == QUEST_STATUS_INCOMPLETE)
-            {
-                uint8 uiRand = urand(0, 99);
-                if (uiRand < 40)
-                {
-                    player->CastSpell(me, SPELL_FREED_WARSONG_PEON, true);
-                    player->KilledMonsterCredit(NPC_WARSONG_PEON);
-                }
-                else if (uiRand < 80)
-                {
-                    player->CastSpell(me, nerubarVictims[urand(0, 2)], true);
-                }
-            }
+            player->CastSpell(me, captiveSpell, true);
+            player->KilledMonsterCredit(NPC_WARSONG_PEON);
+            return;
         }
-    };
 
-    CreatureAI* GetAI(Creature* creature) const override
+        // freeing a soldier stacks a hidden debuff on the player, one stack per soldier
+        if (Aura const* freedSoldiers = player->GetAura(SPELL_FREED_SOLDIER_DEBUFF))
+            if (freedSoldiers->GetStackAmount() >= MAX_FREED_SOLDIERS)
+                return;
+
+        player->CastSpell(me, captiveSpell, true);
+    }
+};
+
+// 45522 - Dispel Freed Soldier Debuff
+class spell_dispel_freed_soldier_debuff : public SpellScript
+{
+    PrepareSpellScript(spell_dispel_freed_soldier_debuff);
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        return new npc_nerubar_victimAI(creature);
+        return ValidateSpellInfo({ SPELL_FREED_SOLDIER_DEBUFF });
+    }
+
+    void HandleScriptEffect(SpellEffIndex /* effIndex */)
+    {
+        // cast by a freed soldier on its summoner when it leaves
+        GetHitUnit()->RemoveAuraFromStack(SPELL_FREED_SOLDIER_DEBUFF);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_dispel_freed_soldier_debuff::HandleScriptEffect, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
     }
 };
 
@@ -377,6 +357,7 @@ public:
             }
         }
 
+        using CreatureAI::WaypointReached;
         void WaypointReached(uint32 waypointId) override
         {
             switch (waypointId)
@@ -752,6 +733,7 @@ public:
                 player->FailQuest(QUEST_ESCAPING_THE_MIST);
         }
 
+        using CreatureAI::WaypointReached;
         void WaypointReached(uint32 waypointId) override
         {
             Player* player = GetPlayerForEscort();
@@ -786,87 +768,6 @@ public:
     CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_mootoo_the_youngerAI(creature);
-    }
-};
-
-/*######
-## npc_bonker_togglevolt
-######*/
-
-enum BonkerTogglevolt
-{
-    NPC_BONKER_TOGGLEVOLT   = 25589,
-    QUEST_GET_ME_OUTA_HERE  = 11673,
-
-    SAY_BONKER_1            = 0,
-    SAY_BONKER_2            = 1
-};
-
-class npc_bonker_togglevolt : public CreatureScript
-{
-public:
-    npc_bonker_togglevolt() : CreatureScript("npc_bonker_togglevolt") { }
-
-    bool OnQuestAccept(Player* player, Creature* creature, Quest const* quest) override
-    {
-        if (quest->GetQuestId() == QUEST_GET_ME_OUTA_HERE)
-        {
-            creature->SetStandState(UNIT_STAND_STATE_STAND);
-            creature->AI()->Talk(SAY_BONKER_2, player);
-            CAST_AI(npc_escortAI, (creature->AI()))->Start(true, player->GetGUID());
-        }
-        return true;
-    }
-
-    struct npc_bonker_togglevoltAI : public npc_escortAI
-    {
-        npc_bonker_togglevoltAI(Creature* creature) : npc_escortAI(creature) { }
-        uint32 Bonker_agro;
-
-        void Reset() override
-        {
-            Bonker_agro = 0;
-            SetDespawnAtFar(false);
-        }
-
-        void JustDied(Unit* /*killer*/) override
-        {
-            if (Player* player = GetPlayerForEscort())
-                player->FailQuest(QUEST_GET_ME_OUTA_HERE);
-        }
-
-        void UpdateEscortAI(uint32 /*diff*/) override
-        {
-            if (GetAttack() && UpdateVictim())
-            {
-                if (Bonker_agro == 0)
-                {
-                    Talk(SAY_BONKER_1);
-                    Bonker_agro++;
-                }
-                DoMeleeAttackIfReady();
-            }
-            else Bonker_agro = 0;
-        }
-
-        void WaypointReached(uint32 waypointId) override
-        {
-            Player* player = GetPlayerForEscort();
-            if (!player)
-                return;
-
-            switch (waypointId)
-            {
-                case 29:
-                    player->GroupEventHappens(QUEST_GET_ME_OUTA_HERE, me);
-                    break;
-            }
-        }
-    };
-
-    CreatureAI* GetAI(Creature* creature) const override
-    {
-        return new npc_bonker_togglevoltAI(creature);
     }
 };
 
@@ -1371,25 +1272,170 @@ class spell_bloodspore_haze : public SpellScript
     }
 };
 
+enum RescueInjuredSoldier
+{
+    SPELL_SOLDIER_RESCUED           = 47968,
+    SPELL_SOLDIER_RESCUED_CREDIT    = 47967
+};
+
+// 47962 - Rescue Injured Soldier
+class spell_q11652_rescue_injured_soldier : public SpellScript
+{
+    PrepareSpellScript(spell_q11652_rescue_injured_soldier);
+
+    bool Validate(SpellInfo const* spellInfo) override
+    {
+        return ValidateSpellInfo({ uint32(spellInfo->Effects[EFFECT_0].CalcValue()), SPELL_SOLDIER_RESCUED });
+    }
+
+    void HandleScriptEffect(SpellEffIndex /*effIndex*/)
+    {
+        Unit* tank = GetCaster();
+        Unit* soldier = GetHitUnit();
+
+        // already riding along, so there is nobody left to pick up here
+        if (!tank->GetVehicleKit() || soldier->GetVehicleBase())
+            return;
+
+        // the soldier climbs aboard by casting 'Ride Vehicle' back at the tank, taking the first free seat
+        soldier->CastSpell(tank, uint32(GetEffectValue()), true);
+
+        // every seat taken - nobody was picked up, so no rescue to report
+        if (soldier->GetVehicleBase() != tank)
+            return;
+
+        soldier->CastSpell(tank, SPELL_SOLDIER_RESCUED, true);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_q11652_rescue_injured_soldier::HandleScriptEffect, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
+    }
+};
+
+// 47968 - Soldier Rescued
+class spell_q11652_soldier_rescued : public SpellScript
+{
+    PrepareSpellScript(spell_q11652_soldier_rescued);
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_SOLDIER_RESCUED_CREDIT });
+    }
+
+    void HandleDummy(SpellEffIndex /*effIndex*/)
+    {
+        // cast by the passenger on the tank, which in turn credits whoever is driving it
+        GetHitUnit()->CastSpell((Unit*)nullptr, SPELL_SOLDIER_RESCUED_CREDIT, true);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_q11652_soldier_rescued::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+    }
+};
+
+enum DuskData
+{
+    SAY_DUSK_PHYLACTERY = 0,
+
+    SPELL_DAN_EJECT     = 51254,
+
+    PATH_DUSK           = 281820,
+
+    NODE_DUSK_EJECT     = 20,
+    POINT_DUSK_END      = 21
+};
+
+// 28182 - Dusk
+struct npc_dusk : public VehicleAI
+{
+    npc_dusk(Creature* creature) : VehicleAI(creature), _ejected(false)
+    {
+        me->SetReactState(REACT_PASSIVE);
+    }
+
+    void PassengerBoarded(Unit* who, int8 /*seatId*/, bool apply) override
+    {
+        if (!who->IsPlayer())
+            return;
+
+        if (!apply)
+        {
+            // Rider bailed out before reaching the water
+            if (!_ejected)
+                me->DespawnOrUnsummon();
+
+            return;
+        }
+
+        // Required to make the waypoints function
+        who->ToPlayer()->SetClientControl(me, 0, true);
+
+        me->m_Events.AddEventAtOffset([this]() {
+            me->LoadPath(PATH_DUSK);
+            me->GetMotionMaster()->MoveWaypoint(PATH_DUSK, false);
+        }, 2200ms);
+    }
+
+    void WaypointReached(uint32 nodeId, uint32 pathId) override
+    {
+        if (pathId != PATH_DUSK || nodeId != NODE_DUSK_EJECT)
+            return;
+
+        _ejected = true;
+        me->CastSpell(me, SPELL_DAN_EJECT);
+
+        me->m_Events.AddEventAtOffset([this]() {
+            Talk(SAY_DUSK_PHYLACTERY);
+        }, 1700ms);
+
+        me->m_Events.AddEventAtOffset([this]()
+        {
+            // Dropping the rider uncharms Dusk, and RemoveCharmedBy kills the motion slot
+            if (WaypointPath const* path = sWaypointMgr->GetPath(PATH_DUSK))
+            {
+                if (!path->Nodes.empty())
+                {
+                    WaypointNode const& last = path->Nodes.back();
+                    me->SetWalk(true);
+                    me->GetMotionMaster()->MovePoint(POINT_DUSK_END, last.X, last.Y, last.Z);
+                }
+            }
+        }, 4s);
+    }
+
+    void MovementInform(uint32 type, uint32 pointId) override
+    {
+        if (type == POINT_MOTION_TYPE && pointId == POINT_DUSK_END)
+            me->DespawnOrUnsummon(1200ms);
+    }
+
+private:
+    bool _ejected;
+};
+
 void AddSC_borean_tundra()
 {
     RegisterSpellScript(spell_q11919_q11940_drake_hunt_aura);
     new npc_sinkhole_kill_credit();
     new npc_khunok_the_behemoth();
-    new npc_iruk();
-    new npc_nerubar_victim();
+    RegisterCreatureAI(npc_nerubar_victim);
+    RegisterSpellScript(spell_dispel_freed_soldier_debuff);
     new npc_lurgglbr();
     RegisterSpellScript(spell_arcane_chains_character_force_cast);
     new npc_imprisoned_beryl_sorcerer();
     new npc_mootoo_the_younger();
-    new npc_bonker_togglevolt();
     new npc_valiance_keep_cannoneer();
     new npc_warmage_coldarra();
     new npc_hidden_cultist();
     RegisterSpellScript(spell_q11719_bloodspore_ruination_45997);
     new npc_bloodmage_laurith();
     RegisterCreatureAI(npc_jenny);
+    RegisterCreatureAI(npc_dusk);
     RegisterSpellScript(spell_necropolis_beam);
     RegisterSpellScript(spell_soul_deflection);
     RegisterSpellScript(spell_bloodspore_haze);
+    RegisterSpellScript(spell_q11652_rescue_injured_soldier);
+    RegisterSpellScript(spell_q11652_soldier_rescued);
 }

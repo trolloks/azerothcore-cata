@@ -19,9 +19,10 @@
 #include "CommandScript.h"
 #include "Language.h"
 #include "Player.h"
+#include "RBAC.h"
 #include "WorldSession.h"
 
-constexpr std::array<const char*, MAX_ITEM_SUBCLASS_CONTAINER> bagSpecsToString =
+constexpr std::array<char const*, MAX_ITEM_SUBCLASS_CONTAINER> bagSpecsToString =
 {
     "normal",
     "soul",
@@ -71,7 +72,7 @@ public:
     {
         static ChatCommandTable inventoryCommandTable =
         {
-            { "count",      HandleInventoryCountCommand,   SEC_MODERATOR, Console::No }
+            { "count",      HandleInventoryCountCommand,   rbac::RBAC_PERM_COMMAND_ADDITEM, Console::No }
         };
 
         static ChatCommandTable commandTable =

@@ -67,35 +67,33 @@ public:
 
     struct boss_grobbulusAI : public BossAI
     {
-        explicit boss_grobbulusAI(Creature* c) : BossAI(c, BOSS_GROBBULUS), summons(me)
+        explicit boss_grobbulusAI(Creature* c) : BossAI(c, BOSS_GROBBULUS)
         {}
 
-        EventMap events;
-        SummonList summons;
         uint32 dropSludgeTimer{};
 
         void Reset() override
         {
             BossAI::Reset();
-            events.Reset();
-            summons.DespawnAll();
             dropSludgeTimer = 0;
         }
 
-        void PullChamberAdds()
+        void PullChamberAdds(Unit* target)
         {
+            if (!target)
+                return;
             std::list<Creature*> StichedGiants;
             me->GetCreaturesWithEntryInRange(StichedGiants, 300.0f, NPC_STICHED_GIANT);
             for (std::list<Creature*>::const_iterator itr = StichedGiants.begin(); itr != StichedGiants.end(); ++itr)
             {
-                (*itr)->ToCreature()->AI()->AttackStart(me->GetVictim());
+                (*itr)->ToCreature()->AI()->AttackStart(target);
             }
         }
 
         void JustEngagedWith(Unit* who) override
         {
             BossAI::JustEngagedWith(who);
-            PullChamberAdds();
+            PullChamberAdds(who);
             me->SetInCombatWithZone();
             events.ScheduleEvent(EVENT_POISON_CLOUD, 15s);
             events.ScheduleEvent(EVENT_MUTATING_INJECTION, 20s);
@@ -110,17 +108,6 @@ public:
                 cr->SetInCombatWithZone();
             }
             summons.Summon(cr);
-        }
-
-        void SummonedCreatureDespawn(Creature* summon) override
-        {
-            summons.Despawn(summon);
-        }
-
-        void JustDied(Unit*  killer) override
-        {
-            BossAI::JustDied(killer);
-            summons.DespawnAll();
         }
 
         void KilledUnit(Unit* who) override

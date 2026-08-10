@@ -31,6 +31,7 @@
 #include "ObjectGuid.h"
 #include "Optional.h"
 #include "Position.h"
+#include "UnitDefines.h"
 #include "UpdateData.h"
 #include "UpdateMask.h"
 #include "ObjectVisibilityContainer.h"
@@ -240,6 +241,7 @@ protected:
 
     void _InitValues();
     void _Create(ObjectGuid::LowType guidlow, uint32 entry, HighGuid guidhigh);
+    void _Create(ObjectGuid guid);
     [[nodiscard]] std::string _ConcatFields(uint16 startIndex, uint16 size) const;
     bool _LoadIntoDataField(std::string const& data, uint32 startOffset, uint32 count);
 
@@ -279,7 +281,7 @@ private:
 
     // for output helpfull error messages from asserts
     [[nodiscard]] bool PrintIndexError(uint32 index, bool set) const;
-    Object(const Object&);                              // prevent generation copy constructor
+    Object(Object const&);                              // prevent generation copy constructor
     Object& operator=(Object const&);                   // prevent generation assigment operator
 };
 
@@ -343,6 +345,9 @@ struct MovementInfo
     void AddMovementFlag(uint32 flag) { flags |= flag; }
     void RemoveMovementFlag(uint32 flag) { flags &= ~flag; }
     [[nodiscard]] bool HasMovementFlag(uint32 flag) const { return flags & flag; }
+
+    [[nodiscard]] UnitMoveType GetSpeedType() const { return GetSpeedType(flags); }
+    [[nodiscard]] static UnitMoveType GetSpeedType(uint32 moveFlags);
 
     [[nodiscard]] uint16 GetExtraMovementFlags() const { return flags2; }
     void AddExtraMovementFlag(uint16 flag) { flags2 |= flag; }
@@ -503,8 +508,8 @@ public:
     void UpdateGroundPositionZ(float x, float y, float& z) const;
     void UpdateAllowedPositionZ(float x, float y, float& z, float* groundZ = nullptr) const;
 
-    void GetRandomPoint(const Position& srcPos, float distance, float& rand_x, float& rand_y, float& rand_z) const;
-    [[nodiscard]] Position GetRandomPoint(const Position& srcPos, float distance) const;
+    void GetRandomPoint(Position const& srcPos, float distance, float& rand_x, float& rand_y, float& rand_z) const;
+    [[nodiscard]] Position GetRandomPoint(Position const& srcPos, float distance) const;
 
     [[nodiscard]] uint32 GetInstanceId() const { return m_InstanceId; }
 
@@ -527,7 +532,7 @@ public:
     [[nodiscard]] virtual std::string const& GetNameForLocaleIdx(LocaleConstant /*locale_idx*/) const { return m_name; }
 
     float GetDistance(WorldObject const* obj) const;
-    [[nodiscard]] float GetDistance(const Position& pos) const;
+    [[nodiscard]] float GetDistance(Position const& pos) const;
     [[nodiscard]] float GetDistance(float x, float y, float z) const;
     float GetDistance2d(WorldObject const* obj) const;
     [[nodiscard]] float GetDistance2d(float x, float y) const;
@@ -536,9 +541,10 @@ public:
     bool IsSelfOrInSameMap(WorldObject const* obj) const;
     bool IsInMap(WorldObject const* obj) const;
     [[nodiscard]] bool IsWithinDist3d(float x, float y, float z, float dist) const;
-    bool IsWithinDist3d(const Position* pos, float dist) const;
+    bool IsWithinDist3d(Position const* pos, float dist) const;
     [[nodiscard]] bool IsWithinDist2d(float x, float y, float dist) const;
-    bool IsWithinDist2d(const Position* pos, float dist) const;
+    bool IsWithinDist2d(Position const* pos, float dist) const;
+    virtual bool IsWithinSightRange(Position const& pos, float dist) const;
     // use only if you will sure about placing both object at same map
     bool IsWithinDist(WorldObject const* obj, float dist2compare, bool is3D = true, bool incOwnRadius = true, bool incTargetRadius = true) const;
     bool IsWithinDistInMap(WorldObject const* obj, float dist2compare, bool is3D = true, bool incOwnRadius = true, bool incTargetRadius = true) const;
@@ -600,6 +606,11 @@ public:
     [[nodiscard]] float GetGridActivationRange() const;
     [[nodiscard]] float GetVisibilityRange() const;
     virtual float GetSightRange(WorldObject const* target = nullptr) const;
+
+    [[nodiscard]] static float GetLeewayBonusRangeForTargets(Player const* player, Unit const* target);
+    [[nodiscard]] float GetLeewayBonusRange(Unit const* target) const;
+    [[nodiscard]] float GetLeewayBonusRadius() const;
+
     //bool CanSeeOrDetect(WorldObject const* obj, bool ignoreStealth = false, bool distanceCheck = false) const;
     bool CanSeeOrDetect(WorldObject const* obj, bool ignoreStealth = false, bool distanceCheck = false, bool checkAlert = false) const;
 
@@ -625,7 +636,7 @@ public:
     void ClearZoneScript();
     [[nodiscard]] ZoneScript* GetZoneScript() const { return m_zoneScript; }
 
-    TempSummon* SummonCreature(uint32 id, const Position& pos, TempSummonType spwtype = TEMPSUMMON_MANUAL_DESPAWN, uint32 despwtime = 0, uint32 vehId = 0, SummonPropertiesEntry const* properties = nullptr, bool visibleBySummonerOnly = false) const;
+    TempSummon* SummonCreature(uint32 id, Position const& pos, TempSummonType spwtype = TEMPSUMMON_MANUAL_DESPAWN, uint32 despwtime = 0, uint32 vehId = 0, SummonPropertiesEntry const* properties = nullptr, bool visibleBySummonerOnly = false) const;
     TempSummon* SummonCreature(uint32 id, float x, float y, float z, float ang = 0, TempSummonType spwtype = TEMPSUMMON_MANUAL_DESPAWN, uint32 despwtime = 0, SummonPropertiesEntry const* properties = nullptr, bool visibleBySummonerOnly = false);
     GameObject* SummonGameObject(uint32 entry, float x, float y, float z, float ang, float rotation0, float rotation1, float rotation2, float rotation3, uint32 respawnTime, bool checkTransport = true, GOSummonType summonType = GO_SUMMON_TIMED_OR_CORPSE_DESPAWN);
     Creature*   SummonTrigger(float x, float y, float z, float ang, uint32 dur, bool setLevel = false, CreatureAI * (*GetAI)(Creature*) = nullptr);

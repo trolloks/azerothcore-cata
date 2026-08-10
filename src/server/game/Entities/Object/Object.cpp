@@ -122,9 +122,13 @@ void Object::_InitValues()
 
 void Object::_Create(ObjectGuid::LowType guidlow, uint32 entry, HighGuid guidhigh)
 {
+    _Create(ObjectGuid(guidhigh, entry, guidlow));
+}
+
+void Object::_Create(ObjectGuid guid)
+{
     if (!m_uint32Values) _InitValues();
 
-    ObjectGuid guid(guidhigh, entry, guidlow);
     SetGuidValue(OBJECT_FIELD_GUID, guid);
     SetUInt32Value(OBJECT_FIELD_TYPE, m_objectType);
     m_PackGUID.Set(guid);
@@ -995,6 +999,30 @@ std::string Object::GetDebugInfo() const
     return sstr.str();
 }
 
+UnitMoveType MovementInfo::GetSpeedType(uint32 moveFlags)
+{
+    if (moveFlags & MOVEMENTFLAG_FLYING)
+    {
+        if (moveFlags & MOVEMENTFLAG_BACKWARD)
+            return MOVE_FLIGHT_BACK;
+
+        return MOVE_FLIGHT;
+    }
+    else if (moveFlags & MOVEMENTFLAG_SWIMMING)
+    {
+        if (moveFlags & MOVEMENTFLAG_BACKWARD)
+            return MOVE_SWIM_BACK;
+
+        return MOVE_SWIM;
+    }
+    else if (moveFlags & MOVEMENTFLAG_WALKING)
+        return MOVE_WALK;
+    else if (moveFlags & MOVEMENTFLAG_BACKWARD)
+        return MOVE_RUN_BACK;
+
+    return MOVE_RUN;
+}
+
 void MovementInfo::OutDebug()
 {
     LOG_INFO("movement", "MOVEMENT INFO");
@@ -1274,7 +1302,7 @@ float WorldObject::GetDistance(WorldObject const* obj) const
     return d > 0.0f ? d : 0.0f;
 }
 
-[[nodiscard]] float WorldObject::GetDistance(const Position& pos) const
+[[nodiscard]] float WorldObject::GetDistance(Position const& pos) const
 {
     float d = GetExactDist(&pos) - GetObjectSize();
     return d > 0.0f ? d : 0.0f;
@@ -1323,7 +1351,7 @@ bool WorldObject::IsInMap(WorldObject const* obj) const
     return IsInDist(x, y, z, dist + GetObjectSize());
 }
 
-bool WorldObject::IsWithinDist3d(const Position* pos, float dist) const
+bool WorldObject::IsWithinDist3d(Position const* pos, float dist) const
 {
     return IsInDist(pos, dist + GetObjectSize());
 }
@@ -1333,9 +1361,15 @@ bool WorldObject::IsWithinDist3d(const Position* pos, float dist) const
     return IsInDist2d(x, y, dist + GetObjectSize());
 }
 
-bool WorldObject::IsWithinDist2d(const Position* pos, float dist) const
+bool WorldObject::IsWithinDist2d(Position const* pos, float dist) const
 {
     return IsInDist2d(pos, dist + GetObjectSize());
+}
+
+// Visibility always uses 2d checks, factors in self-object size already. Gameobjects will override this for custom calc
+bool WorldObject::IsWithinSightRange(Position const& pos, float dist) const
+{
+    return IsInDist2d(&pos, dist + GetObjectSize());
 }
 
 // use only if you will sure about placing both object at same map
@@ -1525,7 +1559,7 @@ bool WorldObject::isInBack(WorldObject const* target, float arc) const
     return !HasInArc(2 * M_PI - arc, target);
 }
 
-void WorldObject::GetRandomPoint(const Position& pos, float distance, float& rand_x, float& rand_y, float& rand_z) const
+void WorldObject::GetRandomPoint(Position const& pos, float distance, float& rand_x, float& rand_y, float& rand_z) const
 {
     if (!distance)
     {
@@ -1546,7 +1580,7 @@ void WorldObject::GetRandomPoint(const Position& pos, float distance, float& ran
     UpdateGroundPositionZ(rand_x, rand_y, rand_z);            // update to LOS height if available
 }
 
-Position WorldObject::GetRandomPoint(const Position& srcPos, float distance) const
+Position WorldObject::GetRandomPoint(Position const& srcPos, float distance) const
 {
     float x, y, z;
     GetRandomPoint(srcPos, distance, x, y, z);
@@ -1650,7 +1684,7 @@ float WorldObject::GetGridActivationRange() const
 {
     if (ToPlayer())
     {
-        if (ToPlayer()->GetCinematicMgr()->IsOnCinematic())
+        if (ToPlayer()->GetCinematicMgr().IsOnCinematic())
         {
             return DEFAULT_VISIBILITY_INSTANCE;
         }
@@ -1701,7 +1735,7 @@ float WorldObject::GetSightRange(WorldObject const* target) const
                         return VISIBILITY_DIST_WINTERGRASP;
                     else if (target->IsVisibilityOverridden())
                         return target->GetVisibilityOverrideDistance();
-                    else if (ToPlayer()->GetCinematicMgr()->IsOnCinematic())
+                    else if (ToPlayer()->GetCinematicMgr().IsOnCinematic())
                         return DEFAULT_VISIBILITY_INSTANCE;
                     else
                         return GetMap()->GetVisibilityRange();
@@ -1723,6 +1757,56 @@ float WorldObject::GetSightRange(WorldObject const* target) const
     return 0.0f;
 }
 
+float WorldObject::GetLeewayBonusRangeForTargets(Player const* player, Unit const* target)
+{
+    if (!player || !target)
+        return 0.0f;
+
+    constexpr uint32 leewayMoveFlags = MOVEMENTFLAG_FORWARD | MOVEMENTFLAG_STRAFE_LEFT | MOVEMENTFLAG_STRAFE_RIGHT | MOVEMENTFLAG_FALLING;
+    if (player->HasUnitMovementFlag(leewayMoveFlags) && !player->IsWalking() && target->HasUnitMovementFlag(leewayMoveFlags) && !target->IsWalking())
+        return LEEWAY_BONUS_RANGE;
+
+    return 0.0f;
+}
+
+float WorldObject::GetLeewayBonusRange(Unit const* target) const
+{
+    if (!target)
+        return 0.0f;
+
+    if (Player const* player = ToPlayer())
+        return GetLeewayBonusRangeForTargets(player, target);
+
+    if (Player const* playerTarget = target->ToPlayer())
+        return GetLeewayBonusRangeForTargets(playerTarget, ToUnit());
+
+    return 0.0f;
+}
+
+float WorldObject::GetLeewayBonusRadius() const
+{
+    if (Player const* player = ToPlayer())
+    {
+        bool hasLeewayMovement = false;
+
+        if (player->HasUnitState(UNIT_STATE_JUMPING) || player->HasUnitMovementFlag(MOVEMENTFLAG_FALLING))
+            hasLeewayMovement = true;
+        else
+        {
+            float speedXY = (player->m_movementInfo.jump.xyspeed > 0.0f)
+                ? player->m_movementInfo.jump.xyspeed
+                : player->GetSpeed(player->IsWalking() ? MOVE_WALK : MOVE_RUN);
+
+            hasLeewayMovement = speedXY > LEEWAY_MIN_MOVE_SPEED;
+        }
+
+        if (hasLeewayMovement)
+            return LEEWAY_BONUS_RANGE;
+    }
+
+    return 0.0f;
+}
+
 bool WorldObject::CanSeeOrDetect(WorldObject const* obj, bool ignoreStealth, bool distanceCheck, bool checkAlert) const
 {
     if (this == obj)
@@ -1740,40 +1824,39 @@ bool WorldObject::CanSeeOrDetect(WorldObject const* obj, bool ignoreStealth, boo
         if (Player const* player = ToPlayer())
         {
             if (cObj->IsAIEnabled && !cObj->AI()->CanBeSeen(player))
-            {
                 return false;
-            }
 
-            ConditionList conditions = sConditionMgr->GetConditionsForNotGroupedEntry(CONDITION_SOURCE_TYPE_CREATURE_VISIBILITY, cObj->GetEntry());
-            if (!sConditionMgr->IsObjectMeetToConditions((WorldObject*)this, (WorldObject*)obj, conditions))
-            {
+            if (!player->CanSeeObjectByVisibilityConditions(obj))
                 return false;
-            }
         }
     }
 
     // Gameobject scripts
     if (GameObject const* goObj = obj->ToGameObject())
     {
-        if (ToPlayer() && !goObj->AI()->CanBeSeen(ToPlayer()))
+        if (Player const* player = ToPlayer())
         {
-            return false;
+            if (!goObj->AI()->CanBeSeen(player))
+                return false;
+
+            if (!player->CanSeeObjectByVisibilityConditions(obj))
+                return false;
         }
     }
 
     // pussywizard: arena spectator
     if (obj->IsPlayer())
-        if (((Player const*)obj)->IsSpectator() && ((Player const*)obj)->FindMap()->IsBattleArena())
+        if (((Player const*)obj)->IsSpectator() && ((Player const*)obj)->FindMap() && ((Player const*)obj)->FindMap()->IsBattleArena())
             return false;
 
     bool corpseVisibility = false;
     if (distanceCheck)
     {
         bool corpseCheck = false;
-        WorldObject const* viewpoint = this;
+        Position const* sightPosition = this;
         if (Player const* thisPlayer = ToPlayer())
         {
-            viewpoint = thisPlayer->GetSeer();
+            sightPosition = &thisPlayer->GetSightPosition();
 
             if (Creature const* creature = obj->ToCreature())
             {
@@ -1807,19 +1890,19 @@ bool WorldObject::CanSeeOrDetect(WorldObject const* obj, bool ignoreStealth, boo
                         return false;
 
                 // pussywizard: during arena preparation, don't allow to detect pets if can't see its owner (spoils enemy arena frames)
-                if (target->IsPet() && target->GetOwnerGUID() && target->FindMap()->IsBattleArena() && GetGUID() != target->GetOwnerGUID())
-                    if (BattlegroundMap* bgmap = target->FindMap()->ToBattlegroundMap())
-                        if (Battleground* bg = bgmap->GetBG())
-                            if (bg->GetStatus() < STATUS_IN_PROGRESS && !thisPlayer->HaveAtClient(target->GetOwnerGUID()))
-                                return false;
+                if (Map* targetMap = target->FindMap())
+                    if (target->IsPet() && target->GetOwnerGUID() && targetMap->IsBattleArena() && GetGUID() != target->GetOwnerGUID())
+                        if (BattlegroundMap* bgmap = targetMap->ToBattlegroundMap())
+                            if (Battleground* bg = bgmap->GetBG())
+                                if (bg->GetStatus() < STATUS_IN_PROGRESS && !thisPlayer->HaveAtClient(target->GetOwnerGUID()))
+                                    return false;
             }
 
             if (thisPlayer->GetFarSightDistance() && !thisPlayer->isInFront(obj))
                 return false;
         }
 
-        // Xinef: check reversely obj vs viewpoint, object could be a gameObject which overrides _IsWithinDist function to include gameobject size
-        if (!corpseCheck && !viewpoint->IsWithinDist(obj, GetSightRange(obj), false))
+        if (!corpseCheck && !obj->IsWithinSightRange(*sightPosition, GetSightRange(obj)))
             return false;
     }
 
@@ -1856,7 +1939,7 @@ bool WorldObject::CanSeeOrDetect(WorldObject const* obj, bool ignoreStealth, boo
 
     // pussywizard: arena spectator
     if (this->IsPlayer())
-        if (((Player const*)this)->IsSpectator() && ((Player const*)this)->FindMap()->IsBattleArena() && (obj->m_invisibility.GetFlags() || obj->m_stealth.GetFlags()))
+        if (((Player const*)this)->IsSpectator() && ((Player const*)this)->FindMap() && ((Player const*)this)->FindMap()->IsBattleArena() && (obj->m_invisibility.GetFlags() || obj->m_stealth.GetFlags()))
             return false;
 
     if (!CanDetect(obj, ignoreStealth, !distanceCheck, checkAlert))
@@ -2094,7 +2177,7 @@ void WorldObject::SendMessageToSetInRange(WorldPacket const* data, float dist, b
 
 void WorldObject::SendMessageToSet(WorldPacket const* data, Player const* skipped_rcvr) const
 {
-    Acore::MessageDistDeliverer notifier(this, data, 0.0f, false, skipped_rcvr);
+    Acore::MessageDistDeliverer notifier(this, data, 0.0f, Acore::TeamFilter::All, skipped_rcvr);
     notifier.Visit(GetObjectVisibilityContainer().GetVisiblePlayersMap());
 }
 
@@ -2258,8 +2341,9 @@ TempSummon* Map::SummonCreature(uint32 entry, Position const& pos, SummonPropert
 
     summon->InitSummon();
 
-    // call MoveInLineOfSight for nearby creatures
-    Acore::AIRelocationNotifier notifier(*summon);
+    // call MoveInLineOfSight for nearby players and creatures; players are visited
+    // first (grid typelist order) so aggressive summons prefer them over pets/totems
+    Acore::AIRelocationNotifier notifier(*summon, true);
     Cell::VisitObjects(summon, notifier, GetVisibilityRange());
 
     return summon;
@@ -2361,7 +2445,7 @@ void WorldObject::ClearZoneScript()
     m_zoneScript = nullptr;
 }
 
-TempSummon* WorldObject::SummonCreature(uint32 entry, const Position& pos, TempSummonType spwtype, uint32 duration, uint32  /*vehId*/, SummonPropertiesEntry const* properties, bool visibleBySummonerOnly /*= false*/) const
+TempSummon* WorldObject::SummonCreature(uint32 entry, Position const& pos, TempSummonType spwtype, uint32 duration, uint32  /*vehId*/, SummonPropertiesEntry const* properties, bool visibleBySummonerOnly /*= false*/) const
 {
     if (Map* map = FindMap())
     {

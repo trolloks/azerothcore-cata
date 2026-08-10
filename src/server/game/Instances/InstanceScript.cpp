@@ -28,8 +28,10 @@
 #include "Opcodes.h"
 #include "Pet.h"
 #include "Player.h"
+#include "RBAC.h"
 #include "ScriptMgr.h"
 #include "Spell.h"
+#include "TC9Sidecar.h"
 #include "WorldSession.h"
 
 BossBoundaryData::~BossBoundaryData()
@@ -40,6 +42,9 @@ BossBoundaryData::~BossBoundaryData()
 
 void InstanceScript::SaveToDB()
 {
+    if (sToCloud9Sidecar->ClusterModeEnabled() && !sToCloud9Sidecar->IsMapAssigned(instance->GetEntry()->MapID))
+        return;
+
     std::string data = GetSaveData();
     //if (data.empty()) // pussywizard: encounterMask can be updated and theres no reason to not save
     //    return;
@@ -134,6 +139,11 @@ void InstanceScript::HandleGameObject(ObjectGuid GUID, bool open, GameObject* go
     }
 }
 
+void InstanceScript::HandleGameObject(uint32 type, bool open)
+{
+    HandleGameObject(ObjectGuid::Empty, open, GetGameObject(type));
+}
+
 bool InstanceScript::IsEncounterInProgress() const
 {
     for (std::vector<BossInfo>::const_iterator itr = bosses.begin(); itr != bosses.end(); ++itr)
@@ -143,7 +153,7 @@ bool InstanceScript::IsEncounterInProgress() const
     return false;
 }
 
-void InstanceScript::LoadBossBoundaries(const BossBoundaryData& data)
+void InstanceScript::LoadBossBoundaries(BossBoundaryData const& data)
 {
     for (BossBoundaryEntry const& entry : data)
         if (entry.bossId < bosses.size())
@@ -161,7 +171,7 @@ void InstanceScript::SetHeaders(std::string const& dataHeaders)
     }
 }
 
-void InstanceScript::LoadMinionData(const MinionData* data)
+void InstanceScript::LoadMinionData(MinionData const* data)
 {
     while (data->entry)
     {
@@ -173,7 +183,7 @@ void InstanceScript::LoadMinionData(const MinionData* data)
     LOG_DEBUG("scripts.ai", "InstanceScript::LoadMinionData: {} minions loaded.", uint64(minions.size()));
 }
 
-void InstanceScript::LoadDoorData(const DoorData* data)
+void InstanceScript::LoadDoorData(DoorData const* data)
 {
     while (data->entry)
     {
@@ -382,11 +392,18 @@ void InstanceScript::SetSummoner(Creature* creature)
                 summoner->AI()->JustSummoned(creature);
 }
 
+bool InstanceScript::_SkipCheckRequiredBosses(Player const* player /*= nullptr*/) const
+{
+    return player && player->GetSession()->HasPermission(rbac::RBAC_PERM_SKIP_CHECK_INSTANCE_REQUIRED_BOSSES);
+}
+
 bool InstanceScript::SetBossState(uint32 id, EncounterState state)
 {
     if (id < bosses.size())
     {
         BossInfo* bossInfo = &bosses[id];
+        MinionSet minions = bossInfo->minion;
+
         sScriptMgr->OnBeforeSetBossState(id, state, bossInfo->state, instance);
         if (bossInfo->state == TO_BE_DECIDED) // loading
         {
@@ -399,8 +416,8 @@ bool InstanceScript::SetBossState(uint32 id, EncounterState state)
                 return false;
 
             if (state == DONE)
-                for (MinionSet::iterator i = bossInfo->minion.begin(); i != bossInfo->minion.end(); ++i)
-                    if ((*i)->isWorldBoss() && (*i)->IsAlive())
+                for (Creature* minion : minions)
+                    if (minion && minion->isWorldBoss() && minion->IsAlive())
                         return false;
 
             bossInfo->state = state;
@@ -411,8 +428,9 @@ bool InstanceScript::SetBossState(uint32 id, EncounterState state)
             for (DoorSet::iterator i = bossInfo->door[type].begin(); i != bossInfo->door[type].end(); ++i)
                 UpdateDoorState(*i);
 
-        for (MinionSet::iterator i = bossInfo->minion.begin(); i != bossInfo->minion.end(); ++i)
-            UpdateMinionState(*i, state);
+        for (Creature* minion : minions)
+            if (minion)
+                UpdateMinionState(minion, state);
 
         return true;
     }
@@ -448,7 +466,7 @@ void InstanceScript::DoForAllMinions(uint32 id, std::function<void(Creature*)> e
     }
 }
 
-void InstanceScript::Load(const char* data)
+void InstanceScript::Load(char const* data)
 {
     if (!data)
     {

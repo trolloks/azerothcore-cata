@@ -301,13 +301,13 @@ public:
             if (events.GetPhaseMask() & PHASE_ONE_MASK && damage >= me->GetPower(POWER_MANA))
             {
                 // reset threat
-                ThreatContainer::StorageType const& threatlist = me->GetThreatMgr().GetThreatList();
-                for (ThreatContainer::StorageType::const_iterator itr = threatlist.begin(); itr != threatlist.end(); ++itr)
+                for (ThreatReference const* ref : me->GetThreatMgr().GetUnsortedThreatList())
                 {
-                    Unit* unit = ObjectAccessor::GetUnit((*me), (*itr)->getUnitGuid());
-
-                    if (unit && DoGetThreat(unit))
-                        DoModifyThreatByPercent(unit, -100);
+                    if (Unit* unit = ref->GetVictim())
+                    {
+                        if (DoGetThreat(unit))
+                            DoModifyThreatByPercent(unit, -100);
+                    }
                 }
 
                 Talk(SAY_PHASE_2);
@@ -607,7 +607,7 @@ public:
         }
 
         // helper for summoning wave mobs
-        void Summon(uint32 entry, const Position& pos)
+        void Summon(uint32 entry, Position const& pos)
         {
             if (me->SummonCreature(entry, pos, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 10000))
                 if (TempSummon* trigger = me->SummonCreature(WORLD_TRIGGER, pos, TEMPSUMMON_TIMED_DESPAWN, 2000))
@@ -1176,8 +1176,7 @@ public:
     {
         if (InstanceScript* instance = player->GetInstanceScript())
             if (instance->GetBossState(DATA_LADY_DEATHWHISPER) != DONE)
-                if (!player->IsGameMaster())
-                    if (Creature* ladyDeathwhisper = ObjectAccessor::GetCreature(*player, instance->GetGuidData(DATA_LADY_DEATHWHISPER)))
+                if (Creature* ladyDeathwhisper = ObjectAccessor::GetCreature(*player, instance->GetGuidData(DATA_LADY_DEATHWHISPER)))
                         ladyDeathwhisper->AI()->DoAction(ACTION_START_INTRO);
         return true;
     }

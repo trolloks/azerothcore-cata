@@ -477,7 +477,7 @@ void WorldSession::HandleCastSpellOpcode(WorldPacket& recvPacket)
         // pussywizard: casting player's spells from vehicle when seat allows it
         // if ANYTHING CHANGES in this function, INFORM ME BEFORE applying!!!
         if (Vehicle* veh = mover->GetVehicleKit())
-            if (const VehicleSeatEntry* seat = veh->GetSeatForPassenger(_player))
+            if (VehicleSeatEntry const* seat = veh->GetSeatForPassenger(_player))
                 if (seat->m_flags & VEHICLE_SEAT_FLAG_CAN_ATTACK || spellInfo->Effects[EFFECT_0].Effect == SPELL_EFFECT_OPEN_LOCK /*allow looting from vehicle, but only if player has required spell (all necessary opening spells are in playercreateinfo_spell)*/)
                     if ((mover->IsCreature() && !mover->ToCreature()->HasSpell(spellId)) || spellInfo->IsPassive()) // the creature can't cast that spell, check player instead
                     {
@@ -530,14 +530,16 @@ void WorldSession::HandleCastSpellOpcode(WorldPacket& recvPacket)
     }
 
     // auto-selection buff level base at target level (in spellInfo)
-    if (targets.GetUnitTarget())
-    {
-        SpellInfo const* actualSpellInfo = spellInfo->GetAuraRankForLevel(targets.GetUnitTarget()->GetLevel());
+    if (spellInfo->IsPositive())
+        if (Unit* target = targets.GetUnitTarget())
+            if (mover->IsFriendlyTo(target))
+            {
+                SpellInfo const* actualSpellInfo = spellInfo->GetAuraRankForLevel(target->GetLevel());
 
-        // if rank not found then function return nullptr but in explicit cast case original spell can be casted and later failed with appropriate error message
-        if (actualSpellInfo)
-            spellInfo = actualSpellInfo;
-    }
+                // if rank not found then function return nullptr but in explicit cast case original spell can be casted and later failed with appropriate error message
+                if (actualSpellInfo)
+                    spellInfo = actualSpellInfo;
+            }
 
     Spell* spell = new Spell(mover, spellInfo, triggerFlag, ObjectGuid::Empty, false);
 

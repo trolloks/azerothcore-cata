@@ -15,7 +15,6 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "CreatureScript.h"
 #include "Player.h"
 #include "SpellAuraEffects.h"
 #include "SpellInfo.h"
@@ -613,7 +612,7 @@ class spell_warr_shattering_throw : public SpellScript
 
         // remove shields, will still display immune to damage part
         if (Unit* target = GetHitUnit())
-            target->RemoveAurasWithMechanic(1 << MECHANIC_IMMUNE_SHIELD, AURA_REMOVE_BY_ENEMY_SPELL);
+            target->RemoveAurasWithMechanic(1ULL << MECHANIC_IMMUNE_SHIELD, AURA_REMOVE_BY_ENEMY_SPELL);
     }
 
     void Register() override
@@ -634,7 +633,7 @@ class spell_warr_sweeping_strikes : public AuraScript
 
     bool Load() override
     {
-        _procTarget = nullptr;
+        _procTargetGUID.Clear();
         return true;
     }
 
@@ -642,9 +641,7 @@ class spell_warr_sweeping_strikes : public AuraScript
     {
         Unit* actor = eventInfo.GetActor();
         if (!actor)
-        {
             return false;
-        }
 
         if (SpellInfo const* spellInfo = eventInfo.GetSpellInfo())
         {
@@ -655,40 +652,49 @@ class spell_warr_sweeping_strikes : public AuraScript
                 case SPELL_WARRIOR_WHIRLWIND_OFF:
                     return false;
                 case SPELL_WARRIOR_WHIRLWIND_MAIN:
+                {
                     if (actor->HasSpellCooldown(SPELL_WARRIOR_SWEEPING_STRIKES_EXTRA_ATTACK_1))
-                    {
                         return false;
-                    }
+
                     break;
+                }
                 default:
                     break;
             }
         }
 
-        _procTarget = actor->SelectNearbyNoTotemTarget(eventInfo.GetProcTarget());
-        return _procTarget != nullptr;
+        Unit* procTarget = actor->SelectNearbyNoTotemTarget(eventInfo.GetProcTarget());
+        if (procTarget)
+            _procTargetGUID = procTarget->GetGUID();
+
+        return procTarget != nullptr;
     }
 
     void HandleProc(AuraEffect const* aurEff, ProcEventInfo& eventInfo)
     {
         PreventDefaultAction();
+
+        Unit* procTarget = ObjectAccessor::GetUnit(*GetTarget(), _procTargetGUID);
+        if (!procTarget)
+            return;
+
         if (DamageInfo* damageInfo = eventInfo.GetDamageInfo())
         {
             SpellInfo const* spellInfo = damageInfo->GetSpellInfo();
-            if (spellInfo && spellInfo->Id == SPELL_WARRIOR_EXECUTE && !_procTarget->HasAuraState(AURA_STATE_HEALTHLESS_20_PERCENT))
+            if (spellInfo && spellInfo->Id == SPELL_WARRIOR_EXECUTE
+                && !procTarget->HasAuraState(AURA_STATE_HEALTHLESS_20_PERCENT))
             {
                 // If triggered by Execute (while target is not under 20% hp) deals normalized weapon damage
-                GetTarget()->CastSpell(_procTarget, SPELL_WARRIOR_SWEEPING_STRIKES_EXTRA_ATTACK_2, aurEff);
+                GetTarget()->CastSpell(procTarget, SPELL_WARRIOR_SWEEPING_STRIKES_EXTRA_ATTACK_2, aurEff);
             }
             else
             {
                 if (spellInfo && spellInfo->Id == SPELL_WARRIOR_WHIRLWIND_MAIN)
-                {
                     eventInfo.GetActor()->AddSpellCooldown(SPELL_WARRIOR_SWEEPING_STRIKES_EXTRA_ATTACK_1, 0, 500);
-                }
 
-                int32 damage = damageInfo->GetUnmitigatedDamage();
-                GetTarget()->CastCustomSpell(_procTarget, SPELL_WARRIOR_SWEEPING_STRIKES_EXTRA_ATTACK_1, &damage, 0, 0, true, nullptr, aurEff);
+                auto damage = static_cast<int32>(damageInfo->GetUnmitigatedDamage());
+                GetTarget()->CastCustomSpell(procTarget, SPELL_WARRIOR_SWEEPING_STRIKES_EXTRA_ATTACK_1,
+                    &damage, nullptr, nullptr, true, nullptr, aurEff);
             }
         }
     }
@@ -700,7 +706,7 @@ class spell_warr_sweeping_strikes : public AuraScript
     }
 
 private:
-    Unit* _procTarget = nullptr;
+    ObjectGuid _procTargetGUID;
 };
 
 // 50720 - Vigilance
@@ -724,7 +730,7 @@ class spell_warr_vigilance : public AuraScript
 
     bool Load() override
     {
-        _procTarget = nullptr;
+        _procTargetGUID.Clear();
         return true;
     }
 
@@ -748,19 +754,27 @@ class spell_warr_vigilance : public AuraScript
             target->RemoveAurasDueToSpell(SPELL_GEN_DAMAGE_REDUCTION_AURA);
         }
 
-        target->ResetRedirectThreat();
+        target->GetThreatMgr().UnregisterRedirectThreat(SPELL_WARRIOR_VIGILANCE_REDIRECT_THREAT, GetCasterGUID());
     }
 
     bool CheckProc(ProcEventInfo& /*eventInfo*/)
     {
-        _procTarget = GetCaster();
-        return _procTarget;
+        if (Unit* caster = GetCaster())
+        {
+            _procTargetGUID = caster->GetGUID();
+            return true;
+        }
+        return false;
     }
 
     void HandleProc(AuraEffect const* aurEff, ProcEventInfo& /*eventInfo*/)
     {
         PreventDefaultAction();
-        GetTarget()->CastSpell(_procTarget, SPELL_WARRIOR_VIGILANCE_PROC, true, nullptr, aurEff);
+        Unit* procTarget = ObjectAccessor::GetUnit(*GetTarget(), _procTargetGUID);
+        if (!procTarget)
+            return;
+
+        GetTarget()->CastSpell(procTarget, SPELL_WARRIOR_VIGILANCE_PROC, true, nullptr, aurEff);
     }
 
     void Register() override
@@ -772,7 +786,7 @@ class spell_warr_vigilance : public AuraScript
     }
 
 private:
-    Unit* _procTarget;
+    ObjectGuid _procTargetGUID;
 };
 
 // 59665 - Vigilance (Redirect Threat)
@@ -884,6 +898,10 @@ class spell_warr_retaliation : public AuraScript
 
     bool CheckProc(ProcEventInfo& eventInfo)
     {
+        // Prevent counterattacking yourself on activation
+        if (eventInfo.GetActor() == eventInfo.GetActionTarget())
+            return false;
+
         // check attack comes not from behind and warrior is not stunned
         return eventInfo.GetActionTarget()->isInFront(eventInfo.GetActor(), float(M_PI)) && !GetTarget()->HasUnitState(UNIT_STATE_STUNNED);
     }
@@ -924,7 +942,7 @@ class spell_warr_heroic_strike : public SpellScript
         bool bonusDamage = false;
         for (AuraEffect* eff : AuraEffectList)
         {
-            const SpellInfo* spellInfo = eff->GetSpellInfo();
+            SpellInfo const* spellInfo = eff->GetSpellInfo();
             if (!spellInfo)
                 continue;
 
@@ -1010,7 +1028,7 @@ class spell_warr_second_wind : public AuraScript
             return false;
 
         // Must be from stun or root mechanic
-        if (!(procSpell->GetAllEffectsMechanicMask() & ((1 << MECHANIC_ROOT) | (1 << MECHANIC_STUN))))
+        if (!(procSpell->GetAllEffectsMechanicMask() & ((1ULL << MECHANIC_ROOT) | (1ULL << MECHANIC_STUN))))
             return false;
 
         // Not from self

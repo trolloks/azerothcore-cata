@@ -22,6 +22,7 @@
 #include "GameTime.h"
 #include "ObjectMgr.h"
 #include "Player.h"
+#include "RBAC.h"
 #include "ReputationMgr.h"
 
 using namespace Acore::ChatCommands;
@@ -35,11 +36,11 @@ public:
     {
         static ChatCommandTable questCommandTable =
         {
-            { "add",      HandleQuestAdd,      SEC_GAMEMASTER, Console::Yes },
-            { "complete", HandleQuestComplete, SEC_GAMEMASTER, Console::Yes },
-            { "remove",   HandleQuestRemove,   SEC_GAMEMASTER, Console::Yes },
-            { "reward",   HandleQuestReward,   SEC_GAMEMASTER, Console::Yes },
-            { "status",   HandleQuestStatus,   SEC_GAMEMASTER, Console::Yes },
+            { "add",      HandleQuestAdd,      rbac::RBAC_PERM_COMMAND_QUEST_ADD,      Console::Yes },
+            { "complete", HandleQuestComplete, rbac::RBAC_PERM_COMMAND_QUEST_COMPLETE, Console::Yes },
+            { "remove",   HandleQuestRemove,   rbac::RBAC_PERM_COMMAND_QUEST_REMOVE,   Console::Yes },
+            { "reward",   HandleQuestReward,   rbac::RBAC_PERM_COMMAND_QUEST_REWARD,   Console::Yes },
+            { "status",   HandleQuestStatus,   rbac::RBAC_PERM_COMMAND_QUEST,          Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
@@ -728,6 +729,25 @@ public:
         return true;
     }
 
+    static char const* QuestStatusToString(QuestStatus status)
+    {
+        switch (status)
+        {
+            case QUEST_STATUS_NONE:
+                return "Not Taken";
+            case QUEST_STATUS_COMPLETE:
+                return "Complete";
+            case QUEST_STATUS_INCOMPLETE:
+                return "Incomplete";
+            case QUEST_STATUS_FAILED:
+                return "Failed";
+            case QUEST_STATUS_REWARDED:
+                return "Rewarded";
+            default:
+                return "Unknown";
+        }
+    }
+
     static bool HandleQuestStatus(ChatHandler* handler, Quest const* quest, Optional<PlayerIdentifier> playerTarget)
     {
         if (!playerTarget)
@@ -740,33 +760,10 @@ public:
         }
 
         uint32 entry = quest->GetQuestId();
-        std::string status;
+
         if (Player* player = playerTarget->GetConnectedPlayer())
         {
-            QuestStatus qs = player->GetQuestStatus(entry);
-            switch (qs)
-            {
-                case QUEST_STATUS_NONE:
-                    status = "Not Taken";
-                    break;
-                case QUEST_STATUS_COMPLETE:
-                    status = "Complete";
-                    break;
-                case QUEST_STATUS_INCOMPLETE:
-                    status = "Incomplete";
-                    break;
-                case QUEST_STATUS_FAILED:
-                    status = "Failed";
-                    break;
-                case QUEST_STATUS_REWARDED:
-                    status = "Rewarded";
-                    break;
-                default:
-                    status = "Unknown";
-                    break;
-            }
-
-            handler->PSendSysMessage(LANG_CMD_QUEST_STATUS, quest->GetTitle(), entry, status);
+            handler->PSendSysMessage(LANG_CMD_QUEST_STATUS, quest->GetTitle(), entry, QuestStatusToString(player->GetQuestStatus(entry)));
 
             if (!player->CanTakeQuest(quest, false))
             {
@@ -845,8 +842,35 @@ public:
         }
         else
         {
-            handler->SendErrorMessage(LANG_PLAYER_NOT_FOUND);
-            return false;
+            ObjectGuid::LowType guid = playerTarget->GetGUID().GetCounter();
+            char const* status;
+
+            CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHAR_QUESTSTATUS_BY_QUEST);
+            stmt->SetData(0, guid);
+            stmt->SetData(1, entry);
+
+            if (PreparedQueryResult result = CharacterDatabase.Query(stmt))
+                status = QuestStatusToString(QuestStatus(result->Fetch()[0].Get<uint8>()));
+            else if (quest->IsSeasonal())
+            {
+                stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHAR_QUESTSTATUS_SEASONAL_BY_QUEST);
+                stmt->SetData(0, guid);
+                stmt->SetData(1, entry);
+                stmt->SetData(2, quest->GetEventIdForQuest());
+                status = CharacterDatabase.Query(stmt) ? "Rewarded" : "Not Taken";
+            }
+            // rewarded repeatable quests report Not Taken, matching Player::GetQuestStatus
+            else if (!quest->IsRepeatable())
+            {
+                stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHAR_QUESTSTATUS_REWARDED_BY_QUEST);
+                stmt->SetData(0, guid);
+                stmt->SetData(1, entry);
+                status = CharacterDatabase.Query(stmt) ? "Rewarded" : "Not Taken";
+            }
+            else
+                status = "Not Taken";
+
+            handler->PSendSysMessage(LANG_CMD_QUEST_STATUS, quest->GetTitle(), entry, status);
         }
 
         return true;

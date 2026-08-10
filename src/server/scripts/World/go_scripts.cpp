@@ -18,7 +18,6 @@
 #include "AreaDefines.h"
 #include "CellImpl.h"
 #include "Chat.h"
-#include "CreatureScript.h"
 #include "GameEventMgr.h"
 #include "GameObjectAI.h"
 #include "GameObjectScript.h"
@@ -73,20 +72,6 @@ public:
     GameObjectAI* GetAI(GameObject* go) const override
     {
         return new go_witherbark_totem_bundleAI(go);
-    }
-};
-
-class go_arena_ready_marker : public GameObjectScript
-{
-public:
-    go_arena_ready_marker() : GameObjectScript("go_arena_ready_marker") { }
-
-    bool OnGossipHello(Player* player, GameObject* /*go*/) override
-    {
-        if (Battleground* bg = player->GetBattleground())
-            bg->ReadyMarkerClicked(player);
-
-        return false;
     }
 };
 
@@ -1482,7 +1467,8 @@ public:
                 return true;
             }
 
-            player->CastSpell(player, stoneSpell, false);
+            // Cast as the warlock owner so the clicker's trinkets can't proc.
+            owner->CastSpell(player, stoneSpell, true);
 
             // Item has to actually be created to remove a charge on the well.
             if (player->HasItemCount(stoneId))
@@ -1560,7 +1546,8 @@ public:
 enum AmberpineOuthouse
 {
     QUEST_DOING_YOUR_DUTY           = 12227,
-    SPELL_INDISPOSED                = 53017,
+    SPELL_INDISPOSED_MALE           = 48323,
+    SPELL_INDISPOSED_FEMALE         = 53017,
     SPELL_INDISPOSED_II             = 48324,
     SPELL_INDISPOSED_III            = 48341,
     GOSSIP_OUTHOUSE_INUSE           = 12775,
@@ -1593,7 +1580,17 @@ public:
         if (action == GOSSIP_ACTION_INFO_DEF + 1)
         {
             CloseGossipMenuFor(player);
-            player->CastSpell(player, SPELL_INDISPOSED);
+            switch (player->getGender())
+            {
+            case GENDER_FEMALE:
+                player->CastSpell(player, SPELL_INDISPOSED_FEMALE);
+                break;
+            case GENDER_MALE:
+                player->CastSpell(player, SPELL_INDISPOSED_MALE);
+                break;
+            default:
+                break;
+            }
             player->CastSpell(player, SPELL_INDISPOSED_II);
             player->CastSpell(player, SPELL_INDISPOSED_III);
             return true;
@@ -1878,7 +1875,6 @@ void AddSC_go_scripts()
 {
     new go_seer_of_zebhalak();
     new go_witherbark_totem_bundle();
-    new go_arena_ready_marker();
     new go_ethereum_prison();
     new go_ethereum_stasis();
     new go_resonite_cask();

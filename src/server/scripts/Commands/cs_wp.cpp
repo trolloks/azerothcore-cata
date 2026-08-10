@@ -18,6 +18,7 @@
 #include "Chat.h"
 #include "CommandScript.h"
 #include "Player.h"
+#include "RBAC.h"
 #include "WaypointMgr.h"
 
 #if AC_COMPILER == AC_COMPILER_GNU
@@ -35,13 +36,13 @@ public:
     {
         static ChatCommandTable wpCommandTable =
         {
-            { "add",        HandleWpAddCommand,      SEC_ADMINISTRATOR, Console::No },
-            { "event",      HandleWpEventCommand,    SEC_ADMINISTRATOR, Console::No },
-            { "load",       HandleWpLoadCommand,     SEC_ADMINISTRATOR, Console::No },
-            { "modify",     HandleWpModifyCommand,   SEC_ADMINISTRATOR, Console::No },
-            { "unload",     HandleWpUnLoadCommand,   SEC_ADMINISTRATOR, Console::No },
-            { "reload",     HandleWpReloadCommand,   SEC_ADMINISTRATOR, Console::No },
-            { "show",       HandleWpShowCommand,     SEC_ADMINISTRATOR, Console::No }
+            { "add",        HandleWpAddCommand,      rbac::RBAC_PERM_COMMAND_WP_ADD,    Console::No },
+            { "event",      HandleWpEventCommand,    rbac::RBAC_PERM_COMMAND_WP_EVENT,  Console::No },
+            { "load",       HandleWpLoadCommand,     rbac::RBAC_PERM_COMMAND_WP_LOAD,   Console::No },
+            { "modify",     HandleWpModifyCommand,   rbac::RBAC_PERM_COMMAND_WP_MODIFY, Console::No },
+            { "unload",     HandleWpUnLoadCommand,   rbac::RBAC_PERM_COMMAND_WP_UNLOAD, Console::No },
+            { "reload",     HandleWpReloadCommand,   rbac::RBAC_PERM_COMMAND_WP_RELOAD, Console::No },
+            { "show",       HandleWpShowCommand,     rbac::RBAC_PERM_COMMAND_WP_SHOW,   Console::No }
         };
         static ChatCommandTable commandTable =
         {
@@ -70,7 +71,7 @@ public:
     *
     * @return true - command did succeed, false - something went wrong
     */
-    static bool HandleWpAddCommand(ChatHandler* handler, const char* args)
+    static bool HandleWpAddCommand(ChatHandler* handler, char const* args)
     {
         // optional
         char* path_number = nullptr;
@@ -133,7 +134,7 @@ public:
         return true;
     }                                                           // HandleWpAddCommand
 
-    static bool HandleWpLoadCommand(ChatHandler* handler, const char* args)
+    static bool HandleWpLoadCommand(ChatHandler* handler, char const* args)
     {
         if (!*args)
             return false;
@@ -212,7 +213,7 @@ public:
         return true;
     }
 
-    static bool HandleWpReloadCommand(ChatHandler* handler, const char* args)
+    static bool HandleWpReloadCommand(ChatHandler* handler, char const* args)
     {
         if (!*args)
             return false;
@@ -227,7 +228,7 @@ public:
         return true;
     }
 
-    static bool HandleWpUnLoadCommand(ChatHandler* handler, const char* /*args*/)
+    static bool HandleWpUnLoadCommand(ChatHandler* handler, char const* /*args*/)
     {
         Creature* target = handler->getSelectedCreature();
 
@@ -268,7 +269,7 @@ public:
         return true;
     }
 
-    static bool HandleWpEventCommand(ChatHandler* handler, const char* args)
+    static bool HandleWpEventCommand(ChatHandler* handler, char const* args)
     {
         if (!*args)
             return false;
@@ -339,7 +340,7 @@ public:
 
             uint32 a2, a3, a4, a5, a6;
             float a8, a9, a10, a11;
-            char const* a7;
+            std::string a7;
 
             WorldDatabasePreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_SEL_WAYPOINT_SCRIPT_BY_ID);
             stmt->SetData(0, id);
@@ -361,7 +362,7 @@ public:
                 a4 = fields[2].Get<uint32>();
                 a5 = fields[3].Get<uint32>();
                 a6 = fields[4].Get<uint32>();
-                a7 = fields[5].Get<std::string>().c_str();
+                a7 = fields[5].Get<std::string>();
                 a8 = fields[6].Get<float>();
                 a9 = fields[7].Get<float>();
                 a10 = fields[8].Get<float>();
@@ -540,7 +541,7 @@ public:
         return true;
     }
 
-    static bool HandleWpModifyCommand(ChatHandler* handler, const char* args)
+    static bool HandleWpModifyCommand(ChatHandler* handler, char const* args)
     {
         if (!*args)
             return false;
@@ -717,7 +718,7 @@ public:
             return true;
         }                                                       // move
 
-        const char* text = arg_str;
+        char const* text = arg_str;
 
         if (text == 0)
         {
@@ -736,7 +737,7 @@ public:
         return true;
     }
 
-    static bool HandleWpShowCommand(ChatHandler* handler, const char* args)
+    static bool HandleWpShowCommand(ChatHandler* handler, char const* args)
     {
         if (!*args)
             return false;
@@ -1036,7 +1037,7 @@ public:
         if (show == "off")
         {
             WorldDatabasePreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_SEL_CREATURE_BY_ID);
-            stmt->SetArguments(1, 1, 1);
+            stmt->SetArguments(1, 1);
 
             PreparedQueryResult result = WorldDatabase.Query(stmt);
             if (!result)

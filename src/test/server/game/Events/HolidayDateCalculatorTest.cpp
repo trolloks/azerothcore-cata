@@ -21,7 +21,7 @@
 class HolidayDateCalculatorTest : public ::testing::Test
 {
 protected:
-    void ExpectDate(const std::tm& date, int year, int month, int day)
+    void ExpectDate(std::tm const& date, int year, int month, int day)
     {
         EXPECT_EQ(date.tm_year + 1900, year);
         EXPECT_EQ(date.tm_mon + 1, month);
@@ -51,6 +51,45 @@ protected:
     bool IsLeapYear(int year)
     {
         return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+    }
+
+    // Portable replacement for mktime() when only the date fields need rolling over.
+    // std::mktime rejects pre-1970 dates on MSVC, so tests covering years before 1970
+    // cannot rely on it to normalize month/day overflow (see HolidayDateCalculator.cpp).
+    void NormalizeTm(std::tm& date)
+    {
+        static int const table[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+        auto daysInMonth = [&](int y, int m)
+        {
+            return (m == 2 && IsLeapYear(y)) ? 29 : table[m - 1];
+        };
+
+        int year = date.tm_year + 1900;
+        int month = date.tm_mon + 1;
+        int day = date.tm_mday;
+
+        while (day > daysInMonth(year, month))
+        {
+            day -= daysInMonth(year, month);
+            if (++month > 12)
+            {
+                month = 1;
+                ++year;
+            }
+        }
+        while (day < 1)
+        {
+            if (--month < 1)
+            {
+                month = 12;
+                --year;
+            }
+            day += daysInMonth(year, month);
+        }
+
+        date.tm_year = year - 1900;
+        date.tm_mon = month - 1;
+        date.tm_mday = day;
     }
 };
 
@@ -311,7 +350,7 @@ TEST_F(HolidayDateCalculatorTest, Noblegarden_DayAfterEaster_1900_2200)
         // Calculate expected Noblegarden date (Easter + 1)
         std::tm expectedNoblegarden = easter;
         expectedNoblegarden.tm_mday += 1;
-        mktime(&expectedNoblegarden); // Normalize (handles month rollover)
+        NormalizeTm(expectedNoblegarden); // Normalize (handles month rollover)
 
         // Get calculated Noblegarden from holiday rule
         HolidayRule noblegarden = { 181, HolidayCalculationType::EASTER_OFFSET, 0, 0, 0, 1 };
@@ -343,7 +382,7 @@ TEST_F(HolidayDateCalculatorTest, PilgrimsBounty_SundayBeforeThanksgiving_1900_2
         // Pilgrim's Bounty starts on Sunday before (4 days earlier)
         std::tm expectedPilgrims = thanksgiving;
         expectedPilgrims.tm_mday -= 4;
-        mktime(&expectedPilgrims);
+        NormalizeTm(expectedPilgrims);
 
         // Get calculated date using rule with -4 offset
         HolidayRule pilgrimsBounty = { 404, HolidayCalculationType::NTH_WEEKDAY, 11, 4, static_cast<int>(Weekday::THURSDAY), -4 };
@@ -370,7 +409,7 @@ TEST_F(HolidayDateCalculatorTest, FixedDateHolidays_ConsistentAcrossYears_1900_2
 {
     // Fixed date holidays should have same month/day every year
     // Note: Brewfest, Harvest Festival, and Winter Veil are now dynamic (not fixed date)
-    struct FixedHolidayTestCase { uint32_t holidayId; int month; int day; const char* name; };
+    struct FixedHolidayTestCase { uint32_t holidayId; int month; int day; char const* name; };
     std::vector<FixedHolidayTestCase> testCases = {
         { 341, 6, 21, "Midsummer Fire Festival" },
         { 62,  7,  4, "Fireworks Spectacular" },
@@ -648,7 +687,7 @@ TEST_F(HolidayDateCalculatorTest, WeekdayOnOrAfter_MonthBoundary_RollsIntoNextMo
 TEST_F(HolidayDateCalculatorTest, StressTest_AllCalculations_1900_2200)
 {
     // Run all holiday calculations for entire range to ensure no crashes
-    const std::vector<HolidayRule>& rules = HolidayDateCalculator::GetHolidayRules();
+    std::vector<HolidayRule> const& rules = HolidayDateCalculator::GetHolidayRules();
 
     int totalCalculations = 0;
 
@@ -1235,4 +1274,240 @@ TEST_F(HolidayDateCalculatorTest, DarkmoonFaire_InHolidayRules)
     EXPECT_TRUE(foundElwynn) << "Darkmoon Faire Elwynn (374) should be in HolidayRules";
     EXPECT_TRUE(foundMulgore) << "Darkmoon Faire Mulgore (375) should be in HolidayRules";
     EXPECT_TRUE(foundTerokkar) << "Darkmoon Faire Terokkar (376) should be in HolidayRules";
+}
+
+// ============================================================================
+// FindStartTimeForStage tests
+// ============================================================================
+
+class FindStartTimeForStageTest : public ::testing::Test
+{
+protected:
+    // Helper to create a time_t from year/month/day/hour
+    static time_t MakeTime(int year, int month, int day, int hour = 0)
+    {
+        std::tm t = {};
+        t.tm_year = year - 1900;
+        t.tm_mon = month - 1;
+        t.tm_mday = day;
+        t.tm_hour = hour;
+        t.tm_isdst = -1;
+        return mktime(&t);
+    }
+
+    // Pack two dates into an array (rest zeroed)
+    void PackTwoDates(uint32_t* dates, int y1, int m1, int d1, int y2, int m2, int d2)
+    {
+        std::tm t1 = {};
+        t1.tm_year = y1 - 1900;
+        t1.tm_mon = m1 - 1;
+        t1.tm_mday = d1;
+        t1.tm_isdst = -1;
+        mktime(&t1);
+        dates[0] = HolidayDateCalculator::PackDate(t1);
+
+        std::tm t2 = {};
+        t2.tm_year = y2 - 1900;
+        t2.tm_mon = m2 - 1;
+        t2.tm_mday = d2;
+        t2.tm_isdst = -1;
+        mktime(&t2);
+        dates[1] = HolidayDateCalculator::PackDate(t2);
+
+        for (int i = 2; i < 26; ++i)
+            dates[i] = 0;
+    }
+};
+
+// Stage 1 (no offset): curTime before event starts -> selects first date
+TEST_F(FindStartTimeForStageTest, Stage1_BeforeStart_SelectsFirstDate)
+{
+    uint32_t dates[26] = {};
+    PackTwoDates(dates, 2026, 3, 6, 2026, 4, 3);
+
+    time_t curTime = MakeTime(2026, 3, 1);
+    time_t stageOffset = 0;
+    uint32_t stageLengthMin = 72 * 60; // 72 hours = 3 days
+
+    time_t result = HolidayDateCalculator::FindStartTimeForStage(dates, 26, stageOffset, stageLengthMin, curTime);
+    EXPECT_EQ(result, MakeTime(2026, 3, 6));
+}
+
+// Stage 1 (no offset): curTime during event -> selects current date
+TEST_F(FindStartTimeForStageTest, Stage1_DuringEvent_SelectsCurrentDate)
+{
+    uint32_t dates[26] = {};
+    PackTwoDates(dates, 2026, 3, 6, 2026, 4, 3);
+
+    time_t curTime = MakeTime(2026, 3, 7, 12); // mid-event
+    time_t stageOffset = 0;
+    uint32_t stageLengthMin = 72 * 60; // 3 days
+
+    time_t result = HolidayDateCalculator::FindStartTimeForStage(dates, 26, stageOffset, stageLengthMin, curTime);
+    EXPECT_EQ(result, MakeTime(2026, 3, 6));
+}
+
+// Stage 1 (no offset): curTime after event ends -> selects next date
+TEST_F(FindStartTimeForStageTest, Stage1_AfterEnd_SelectsNextDate)
+{
+    uint32_t dates[26] = {};
+    PackTwoDates(dates, 2026, 3, 6, 2026, 4, 3);
+
+    time_t curTime = MakeTime(2026, 3, 20); // well past first event
+    time_t stageOffset = 0;
+    uint32_t stageLengthMin = 72 * 60; // 3 days
+
+    time_t result = HolidayDateCalculator::FindStartTimeForStage(dates, 26, stageOffset, stageLengthMin, curTime);
+    EXPECT_EQ(result, MakeTime(2026, 4, 3));
+}
+
+// THE BUG: Stage 2 with stageOffset > 0, curTime in the window that the old
+// code would incorrectly skip (between startTime + stageLength and
+// startTime + stageOffset + stageLength). Without the fix, this would
+// return the NEXT occurrence's start instead of the current one.
+TEST_F(FindStartTimeForStageTest, Stage2_DuringLateWindow_SelectsCurrentDate)
+{
+    // Simulate Darkmoon Faire:
+    // Holiday starts Mar 6 (Friday, building phase)
+    // Stage 1 (building): 72 hours = 3 days (Mar 6-9)
+    // Stage 2 (active):  168 hours = 7 days (Mar 9-16)
+    // Total holiday: Mar 6 - Mar 16 (10 days)
+    // Next occurrence: Apr 3
+    uint32_t dates[26] = {};
+    PackTwoDates(dates, 2026, 3, 6, 2026, 4, 3);
+
+    time_t stageOffset = 72 * 3600; // Stage 1 = 72 hours in seconds
+    uint32_t stageLengthMin = 168 * 60; // Stage 2 = 168 hours in minutes
+
+    // curTime = Mar 14 (day 8 of holiday, day 5 of stage 2)
+    // Old bug: startTime(Mar 6) + 168h = Mar 13, so curTime > that -> SKIP to Apr 3!
+    // Fixed:   startTime(Mar 6) + 72h + 168h = Mar 16, so curTime < that -> correct
+    time_t curTime = MakeTime(2026, 3, 14, 12);
+
+    time_t result = HolidayDateCalculator::FindStartTimeForStage(dates, 26, stageOffset, stageLengthMin, curTime);
+    // Should return Mar 6 + stageOffset = Mar 9 (stage 2 start)
+    EXPECT_EQ(result, MakeTime(2026, 3, 6) + stageOffset);
+}
+
+// Stage 2: curTime after entire holiday ends -> selects next occurrence
+TEST_F(FindStartTimeForStageTest, Stage2_AfterHolidayEnds_SelectsNextDate)
+{
+    uint32_t dates[26] = {};
+    PackTwoDates(dates, 2026, 3, 6, 2026, 4, 3);
+
+    time_t stageOffset = 72 * 3600;
+    uint32_t stageLengthMin = 168 * 60;
+
+    // curTime = Mar 20 (well past the entire holiday)
+    time_t curTime = MakeTime(2026, 3, 20);
+
+    time_t result = HolidayDateCalculator::FindStartTimeForStage(dates, 26, stageOffset, stageLengthMin, curTime);
+    EXPECT_EQ(result, MakeTime(2026, 4, 3) + stageOffset);
+}
+
+// No valid dates -> returns 0
+TEST_F(FindStartTimeForStageTest, NoDates_ReturnsZero)
+{
+    uint32_t dates[26] = {};
+    time_t curTime = MakeTime(2026, 6, 1);
+
+    time_t result = HolidayDateCalculator::FindStartTimeForStage(dates, 26, 0, 168 * 60, curTime);
+    EXPECT_EQ(result, 0);
+}
+
+// All dates in the past -> returns 0
+TEST_F(FindStartTimeForStageTest, AllDatesPast_ReturnsZero)
+{
+    uint32_t dates[26] = {};
+    PackTwoDates(dates, 2026, 1, 5, 2026, 2, 6);
+
+    time_t stageOffset = 0;
+    uint32_t stageLengthMin = 72 * 60;
+
+    time_t curTime = MakeTime(2026, 6, 1); // way after both dates
+    time_t result = HolidayDateCalculator::FindStartTimeForStage(dates, 26, stageOffset, stageLengthMin, curTime);
+    EXPECT_EQ(result, 0);
+}
+
+// ============================================================================
+// FindLoopingStartTime tests (Battleground Call to Arms)
+// ============================================================================
+
+class FindLoopingStartTimeTest : public ::testing::Test
+{
+protected:
+    static time_t MakeTime(int year, int month, int day, int hour = 0)
+    {
+        std::tm t = {};
+        t.tm_year = year - 1900;
+        t.tm_mon = month - 1;
+        t.tm_mday = day;
+        t.tm_hour = hour;
+        t.tm_isdst = -1;
+        return mktime(&t);
+    }
+
+    static uint32_t PackAnchor(int year, int month, int day, int hour, int minute)
+    {
+        uint32_t packed = 0;
+        packed |= (static_cast<uint32_t>(year - 2000) & 0x1F) << 24;
+        packed |= (static_cast<uint32_t>(month - 1) & 0xF) << 20;
+        packed |= (static_cast<uint32_t>(day - 1) & 0x3F) << 14;
+        packed |= (static_cast<uint32_t>(hour) & 0x1F) << 6;
+        packed |= (static_cast<uint32_t>(minute) & 0x3F);
+        return packed;
+    }
+
+    static constexpr uint32_t OCCURENCE_MIN = 60480; // 42 day cycle (AV Call to Arms)
+};
+
+TEST_F(FindLoopingStartTimeTest, ZeroAnchor_ReturnsZero)
+{
+    time_t curTime = MakeTime(2026, 6, 1);
+    EXPECT_EQ(HolidayDateCalculator::FindLoopingStartTime(0, 0, OCCURENCE_MIN, curTime), 0);
+}
+
+TEST_F(FindLoopingStartTimeTest, FutureAnchor_NotRolled)
+{
+    uint32_t anchor = PackAnchor(2026, 10, 30, 0, 0);
+    time_t curTime = MakeTime(2026, 6, 1);
+    EXPECT_EQ(HolidayDateCalculator::FindLoopingStartTime(anchor, 0, OCCURENCE_MIN, curTime),
+        MakeTime(2026, 10, 30));
+}
+
+// The bug: an ancient midnight anchor must roll forward preserving phase, not fall back to a stale start_time.
+TEST_F(FindLoopingStartTimeTest, AncientAnchor_RollsToMostRecentOccurrence)
+{
+    uint32_t anchor = PackAnchor(2007, 10, 26, 0, 0);
+    time_t curTime = MakeTime(2026, 2, 6, 12);
+
+    time_t result = HolidayDateCalculator::FindLoopingStartTime(anchor, 0, OCCURENCE_MIN, curTime);
+
+    time_t const period = static_cast<time_t>(OCCURENCE_MIN) * 60;
+    time_t const base = MakeTime(2007, 10, 26);
+
+    EXPECT_LE(result, curTime);
+    EXPECT_GT(result + period, curTime);
+    EXPECT_EQ((result - base) % period, 0);
+}
+
+TEST_F(FindLoopingStartTimeTest, StageOffsetApplied)
+{
+    uint32_t anchor = PackAnchor(2007, 10, 26, 0, 0);
+    time_t stageOffset = 96 * 3600;
+    time_t curTime = MakeTime(2026, 2, 6, 12);
+
+    time_t result = HolidayDateCalculator::FindLoopingStartTime(anchor, stageOffset, OCCURENCE_MIN, curTime);
+
+    time_t const period = static_cast<time_t>(OCCURENCE_MIN) * 60;
+    time_t const base = MakeTime(2007, 10, 26) + stageOffset;
+    EXPECT_EQ((result - base) % period, 0);
+}
+
+TEST_F(FindLoopingStartTimeTest, ZeroOccurence_ReturnsAnchor)
+{
+    uint32_t anchor = PackAnchor(2007, 10, 26, 0, 0);
+    time_t curTime = MakeTime(2026, 2, 6, 12);
+    EXPECT_EQ(HolidayDateCalculator::FindLoopingStartTime(anchor, 0, 0, curTime),
+        MakeTime(2007, 10, 26));
 }

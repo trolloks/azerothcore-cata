@@ -20,14 +20,20 @@
 #include "Base32.h"
 #include "Chat.h"
 #include "CommandScript.h"
+#include "Common.h"
 #include "CryptoGenerics.h"
 #include "IPLocation.h"
+#include "Language.h"
 #include "Player.h"
+#include "RBAC.h"
 #include "Realm.h"
 #include "ScriptMgr.h"
 #include "SecretMgr.h"
 #include "StringConvert.h"
 #include "TOTP.h"
+#include "Util.h"
+#include "WorldSession.h"
+#include "WorldSessionMgr.h"
 #include <unordered_map>
 
 #if AC_COMPILER == AC_COMPILER_GNU
@@ -45,42 +51,50 @@ public:
     {
         static ChatCommandTable accountSetCommandTable =
         {
-            { "addon",      HandleAccountSetAddonCommand,     SEC_GAMEMASTER, Console::Yes },
-            { "gmlevel",    HandleAccountSetGmLevelCommand,   SEC_ADMINISTRATOR, Console::Yes },
-            { "password",   HandleAccountSetPasswordCommand,  SEC_ADMINISTRATOR, Console::Yes },
-            { "2fa",        HandleAccountSet2FACommand,       SEC_PLAYER,    Console::Yes  },
-            { "email",      HandleAccountSetEmailCommand,     SEC_ADMINISTRATOR, Console::Yes }
+            { "addon",      HandleAccountSetAddonCommand,     rbac::RBAC_PERM_COMMAND_ACCOUNT_SET_ADDON, Console::Yes },
+            { "gmlevel",    HandleAccountSetGmLevelCommand,   rbac::RBAC_PERM_COMMAND_ACCOUNT_SET_SECLEVEL, Console::Yes },
+            { "password",   HandleAccountSetPasswordCommand,  rbac::RBAC_PERM_COMMAND_ACCOUNT_SET_PASSWORD, Console::Yes },
+            { "2fa",        HandleAccountSet2FACommand,       rbac::RBAC_PERM_COMMAND_ACCOUNT_SET, Console::Yes  },
+            { "email",      HandleAccountSetEmailCommand,     rbac::RBAC_PERM_COMMAND_ACCOUNT_SET_SEC_EMAIL, Console::Yes }
         };
 
         static ChatCommandTable accountLockCommandTable
         {
-            { "country",    HandleAccountLockCountryCommand,  SEC_PLAYER,    Console::Yes  },
-            { "ip",         HandleAccountLockIpCommand,       SEC_PLAYER,    Console::Yes  }
+            { "country",    HandleAccountLockCountryCommand,  rbac::RBAC_PERM_COMMAND_ACCOUNT_LOCK_COUNTRY, Console::Yes  },
+            { "ip",         HandleAccountLockIpCommand,       rbac::RBAC_PERM_COMMAND_ACCOUNT_LOCK_IP, Console::Yes  }
         };
 
         static ChatCommandTable account2faCommandTable
         {
-            { "setup",      HandleAccount2FASetupCommand,   SEC_PLAYER,    Console::No  },
-            { "remove",     HandleAccount2FARemoveCommand,  SEC_PLAYER,    Console::No  }
+            { "setup",      HandleAccount2FASetupCommand,   rbac::RBAC_PERM_COMMAND_ACCOUNT, Console::No  },
+            { "remove",     HandleAccount2FARemoveCommand,  rbac::RBAC_PERM_COMMAND_ACCOUNT, Console::No  }
         };
 
         static ChatCommandTable accountRemoveCommandTable
         {
-            { "country",    HandleAccountRemoveLockCountryCommand,  SEC_ADMINISTRATOR, Console::Yes },
+            { "country",    HandleAccountRemoveLockCountryCommand,  rbac::RBAC_PERM_COMMAND_ACCOUNT_LOCK_COUNTRY, Console::Yes },
+        };
+
+        static ChatCommandTable accountFlagCommandTable
+        {
+            { "list",       HandleAccountFlagListCommand,    rbac::RBAC_PERM_COMMAND_ACCOUNT_FLAG_LIST,   Console::Yes },
+            { "add",        HandleAccountFlagAddCommand,     rbac::RBAC_PERM_COMMAND_ACCOUNT_FLAG_ADD,    Console::Yes },
+            { "remove",     HandleAccountFlagRemoveCommand,  rbac::RBAC_PERM_COMMAND_ACCOUNT_FLAG_REMOVE, Console::Yes }
         };
 
         static ChatCommandTable accountCommandTable =
         {
             { "2fa",        account2faCommandTable                                       },
-            { "addon",      HandleAccountAddonCommand,       SEC_MODERATOR, Console::No  },
-            { "create",     HandleAccountCreateCommand,      SEC_CONSOLE,   Console::Yes },
-            { "delete",     HandleAccountDeleteCommand,      SEC_CONSOLE,   Console::Yes },
-            { "onlinelist", HandleAccountOnlineListCommand,  SEC_CONSOLE,   Console::Yes },
+            { "addon",      HandleAccountAddonCommand,       rbac::RBAC_PERM_COMMAND_ACCOUNT_ADDON, Console::No  },
+            { "create",     HandleAccountCreateCommand,      rbac::RBAC_PERM_COMMAND_ACCOUNT_CREATE, Console::Yes },
+            { "delete",     HandleAccountDeleteCommand,      rbac::RBAC_PERM_COMMAND_ACCOUNT_DELETE, Console::Yes },
+            { "flag",       accountFlagCommandTable                                      },
+            { "onlinelist", HandleAccountOnlineListCommand,  rbac::RBAC_PERM_COMMAND_ACCOUNT_ONLINE_LIST, Console::Yes },
             { "lock",       accountLockCommandTable                                      },
             { "set",        accountSetCommandTable                                       },
-            { "password",   HandleAccountPasswordCommand,    SEC_PLAYER,    Console::No  },
+            { "password",   HandleAccountPasswordCommand,    rbac::RBAC_PERM_COMMAND_ACCOUNT_PASSWORD, Console::No  },
             { "remove",     accountRemoveCommandTable                                    },
-            { "",           HandleAccountCommand,            SEC_PLAYER,    Console::No  }
+            { "",           HandleAccountCommand,            rbac::RBAC_PERM_COMMAND_ACCOUNT, Console::No  }
         };
 
         static ChatCommandTable commandTable =
@@ -279,7 +293,7 @@ public:
         // if email is not specified, use empty string
         std::string emailStr = email ? email : "";
 
-        AccountOpResult result = AccountMgr::CreateAccount(std::string(accountName), std::string(password), emailStr);
+        AccountOpResult result = sAccountMgr->CreateAccount(std::string(accountName), std::string(password), emailStr);
         switch (result)
         {
             case AOR_OK:
@@ -658,6 +672,16 @@ public:
     {
         AccountTypes gmLevel = handler->GetSession()->GetSecurity();
         handler->PSendSysMessage(LANG_ACCOUNT_LEVEL, uint32(gmLevel));
+
+        if (handler->GetSession()->HasPermission(rbac::RBAC_PERM_MAY_CHECK_OWN_EMAIL))
+        {
+            LoginDatabasePreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_GET_EMAIL_BY_ID);
+            stmt->SetData(0, handler->GetSession()->GetAccountId());
+            PreparedQueryResult result = LoginDatabase.Query(stmt);
+            if (result)
+                handler->PSendSysMessage(LANG_COMMAND_EMAIL_OUTPUT, (*result)[0].Get<std::string>());
+        }
+
         return true;
     }
 
@@ -898,6 +922,111 @@ public:
                 return false;
         }
         return true;
+    }
+
+    static Optional<uint8> ParseAccountFlagBit(std::string_view input)
+    {
+        for (uint8 i = 0; i < MAX_ACCOUNT_FLAG; ++i)
+            if (StringEqualI(input, accountFlagNames[i].full) || StringEqualI(input, accountFlagNames[i].shortName))
+                return i;
+
+        return std::nullopt;
+    }
+
+    static bool HandleAccountFlagListCommand(ChatHandler* handler, Optional<AccountIdentifier> account)
+    {
+        uint32 accountId;
+        std::string accountName;
+
+        if (account)
+        {
+            accountId = account->GetID();
+            accountName = account->GetName();
+        }
+        else if (WorldSession* session = handler->GetSession())
+        {
+            accountId = session->GetAccountId();
+            AccountMgr::GetName(accountId, accountName);
+        }
+        else
+        {
+            handler->SendErrorMessage(LANG_CMD_SYNTAX);
+            return false;
+        }
+
+        if (handler->HasLowerSecurityAccount(nullptr, accountId, true))
+            return false;
+
+        uint32 flags;
+        if (WorldSession* targetSession = sWorldSessionMgr->FindSession(accountId))
+            flags = targetSession->GetAccountFlags();
+        else
+        {
+            LoginDatabasePreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_FLAG);
+            stmt->SetData(0, accountId);
+            PreparedQueryResult result = LoginDatabase.Query(stmt);
+            if (!result)
+            {
+                handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName);
+                return false;
+            }
+
+            flags = (*result)[0].Get<uint32>();
+        }
+
+        if (!flags)
+        {
+            handler->PSendSysMessage(LANG_ACCOUNT_FLAG_LIST_EMPTY, accountName, accountId);
+            return true;
+        }
+
+        handler->PSendSysMessage(LANG_ACCOUNT_FLAG_LIST_HEADER, accountName, accountId);
+        for (uint8 i = 0; i < MAX_ACCOUNT_FLAG; ++i)
+            if (flags & (uint32(1) << i))
+                handler->PSendSysMessage(LANG_SUBCMDS_LIST_ENTRY, accountFlagNames[i].full);
+
+        return true;
+    }
+
+    static bool ChangeAccountFlag(ChatHandler* handler, AccountIdentifier const& account, std::string_view flagArg, bool add)
+    {
+        if (handler->HasLowerSecurityAccount(nullptr, account.GetID(), true))
+            return false;
+
+        Optional<uint8> bit = ParseAccountFlagBit(flagArg);
+        if (!bit)
+        {
+            handler->SendErrorMessage(LANG_ACCOUNT_FLAG_INVALID, flagArg);
+            return false;
+        }
+
+        // ACCOUNT_FLAG_GM is handled by GMLevel and should not be allowed to set manually
+        uint32 const flag = uint32(1) << *bit;
+        if (flag & ACCOUNT_FLAG_GM)
+        {
+            handler->SendErrorMessage(LANG_ACCOUNT_FLAG_RESERVED);
+            return false;
+        }
+
+        if (WorldSession* session = sWorldSessionMgr->FindSession(account.GetID()))
+            session->UpdateAccountFlag(flag, !add);
+        else
+            LoginDatabase.Execute("UPDATE account SET Flags = Flags {} {} WHERE id = {}",
+                add ? "|" : "& ~", flag, account.GetID());
+
+        handler->PSendSysMessage(add ? LANG_ACCOUNT_FLAG_ADDED : LANG_ACCOUNT_FLAG_REMOVED,
+            accountFlagNames[*bit].full, account.GetName(), account.GetID());
+        return true;
+    }
+
+    static bool HandleAccountFlagAddCommand(ChatHandler* handler, AccountIdentifier account, std::string_view flagArg)
+    {
+        return ChangeAccountFlag(handler, account, flagArg, true);
+    }
+
+    static bool HandleAccountFlagRemoveCommand(ChatHandler* handler, AccountIdentifier account, std::string_view flagArg)
+    {
+        return ChangeAccountFlag(handler, account, flagArg, false);
     }
 
     /// Set email for account
