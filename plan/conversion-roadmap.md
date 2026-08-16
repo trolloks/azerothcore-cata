@@ -118,6 +118,8 @@ are met:
   before deliberately copying any summary into the repository.
 - Seed disposable server, database, account, and character state. Record exact owned resources and
   process IDs so reset can touch only those resources.
+- Run databases in run-owned Docker containers and volumes bound to `127.0.0.1` on confirmed unused
+  host ports. Never reuse or modify an existing database, container, or volume.
 
 The eventual harness should expose five idempotent operations: `prepare`, `start`, `observe`,
 `collect`, and `reset`. Automate hashes, server readiness, ports, protocol milestones, disconnects,
@@ -168,6 +170,8 @@ disconnects.
 - Record negative results. `INCONCLUSIVE` is not a pass.
 - Do not commit raw packet captures. Commit only reviewed synthetic fixtures with dummy identities
   and reproducible generation inputs.
+- Treat existing database data as immutable. A plan that needs a database must define its disposable
+  Docker container, volume, unused-port check, ownership manifest, and bounded cleanup first.
 
 ## Detailed plans
 
