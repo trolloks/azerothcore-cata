@@ -257,6 +257,7 @@ void Map::LoadGridsInRange(Position const& center, float radius)
 
 bool Map::AddPlayerToMap(Player* player)
 {
+    LOG_INFO("network", "Try adding player to map instance");
     CellCoord cellCoord = Acore::ComputeCellCoord(player->GetPositionX(), player->GetPositionY());
     if (!cellCoord.IsCoordValid())
     {
@@ -281,7 +282,7 @@ bool Map::AddPlayerToMap(Player* player)
 
     if (player->IsAlive())
         ConvertCorpseToBones(player->GetGUID());
-
+    LOG_INFO("network", "Added player to map instance");
     sScriptMgr->OnPlayerEnterMap(this, player);
     return true;
 }
@@ -1623,7 +1624,7 @@ char const* Map::GetMapName() const
 
 void Map::SendInitSelf(Player* player)
 {
-    LOG_DEBUG("maps", "Creating player data for himself {}", player->GetGUID().ToString());
+    LOG_INFO("maps", "Creating player data for himself {}", player->GetGUID().ToString());
 
     WorldPacket packet;
     UpdateData data;
@@ -2049,6 +2050,7 @@ Map::EnterState InstanceMap::CannotEnter(Player* player, bool loginCheck)
 */
 bool InstanceMap::AddPlayerToMap(Player* player)
 {
+    LOG_INFO("network", "Trying to add to map instance");
     if (m_resetAfterUnload) // this instance has been reset, it's not meant to be used anymore
         return false;
 
@@ -2115,6 +2117,7 @@ bool InstanceMap::AddPlayerToMap(Player* player)
     m_resetAfterUnload = false;
     m_unloadWhenEmpty = false;
 
+    LOG_INFO("network", "Added player to map instance");
     // this will acquire the same mutex so it cannot be in the previous block
     Map::AddPlayerToMap(player);
 

@@ -346,7 +346,7 @@ void WorldSession::SendPacket(WorldPacket const* packet)
         return;
     }
 
-    m_Socket->SendPacket(*packet);
+    m_Socket->SendPacketAndLogOpcode(*packet);
 }
 
 /// Add an incoming packet to the queue
@@ -410,7 +410,7 @@ bool WorldSession::Update(uint32 diff, PacketFilter& updater)
         ClientOpcodeHandler const* opHandle = opcodeTable[opcode];
 
         METRIC_DETAILED_TIMER("worldsession_update_opcode_time", METRIC_TAG("opcode", opHandle->Name));
-        LOG_DEBUG("network", "message id {} ({}) under READ", opcode, opHandle->Name);
+        LOG_INFO("network", "message id {} ({}), status: {} under READ", opcode, opHandle->Name, opHandle->Status);
 
         WorldSession::DosProtection::Policy const evaluationPolicy = AntiDOS.EvaluateOpcode(*packet, currentTime);
         switch (evaluationPolicy)
@@ -427,6 +427,8 @@ bool WorldSession::Update(uint32 diff, PacketFilter& updater)
             default:
                 break;
         }
+
+        LOG_INFO("network", "DosProtection evaluation for opcode {} returned policy {}", opHandle->Name, static_cast<int>(evaluationPolicy));
 
         if (evaluationPolicy == WorldSession::DosProtection::Policy::Process
             || evaluationPolicy == WorldSession::DosProtection::Policy::Log)
@@ -454,6 +456,7 @@ bool WorldSession::Update(uint32 diff, PacketFilter& updater)
                         if (!sScriptMgr->CanPacketReceive(this, *packet))
                             break;
 
+                        LOG_INFO("network", "Processing message with status STATUS_LOGGEDIN");
                         opHandle->Call(this, *packet);
                         LogUnprocessedTail(packet);
                     }
@@ -1432,6 +1435,7 @@ Warden* WorldSession::GetWarden()
 
 WorldSession::DosProtection::Policy WorldSession::DosProtection::EvaluateOpcode(WorldPacket const& p, time_t const time) const
 {
+    LOG_INFO("network", "AntiDOS: Evaluating opcode {}", p.GetOpcode());
     AntiDosOpcodePolicy const* policy = sWorldGlobals->GetAntiDosPolicyForOpcode(p.GetOpcode());
     if (!policy)
         return WorldSession::DosProtection::Policy::Process; // Return true if there is no policy for the opcode
@@ -1459,6 +1463,7 @@ WorldSession::DosProtection::Policy WorldSession::DosProtection::EvaluateOpcode(
             opcodeTable[static_cast<OpcodeClient>(p.GetOpcode())]->Name, p.GetOpcode(), packetCounter.amountCounter);
     }
 
+    LOG_INFO("network", "AntiDOS: Still evaluating opcode {}", p.GetOpcode());
     switch (WorldSession::DosProtection::Policy(policy->Policy))
     {
         case WorldSession::DosProtection::Policy::Kick:

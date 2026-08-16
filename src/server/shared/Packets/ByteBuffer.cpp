@@ -24,8 +24,9 @@
 #include <sstream>
 #include <utf8.h>
 
-ByteBuffer::ByteBuffer(MessageBuffer&& buffer) :
-    _rpos(0), _wpos(0), _storage(buffer.Move()) { }
+ByteBuffer::ByteBuffer(MessageBuffer&& buffer) : _rpos(0), _wpos(0), _bitpos(InitialBitPos), _curbitval(0), _storage(buffer.Move())
+{
+}
 
 ByteBufferPositionException::ByteBufferPositionException(bool add, std::size_t pos, std::size_t size, std::size_t valueSize)
 {

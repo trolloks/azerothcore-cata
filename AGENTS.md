@@ -1,6 +1,7 @@
 # AGENTS.md
 
-AzerothCore is a C++ MMORPG server emulator for World of Warcraft 3.3.5a (WotLK), built with CMake, backed by MySQL.
+This fork converts the C++ AzerothCore 3.3.5a (WotLK) server emulator to Cataclysm 4.3.4 while
+staying close to upstream.
 
 ## Agent rules
 
@@ -19,6 +20,7 @@ Read the matching doc(s) BEFORE starting the task:
   - SmartAI work (`smart_scripts` data) → also `.agents/docs/cpp-scripts.md`
 - Reviewing a changeset or PR → `.agents/docs/code-review.md`
 - Self-reviewing a changeset before submission → also `.agents/docs/self-review-rules.md`
+- Cataclysm conversion work for this fork → `.agents/docs/cataclysm-conversion-goal.md`
 - Touching a subsystem that has a doc in `.agents/docs/systems/` → read that doc too
 - Capturing a lesson or adding/updating agent docs → `.agents/docs/README.md`
 
