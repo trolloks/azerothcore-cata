@@ -14,8 +14,29 @@ CollectSourceFiles(
         PRIVATE_SOURCES
 )
 
+set(BYTEBUFFER_TEST_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/common/Packets/ByteBufferTest.cpp)
+list(REMOVE_ITEM PRIVATE_SOURCES ${BYTEBUFFER_TEST_SOURCE})
+
 include_directories(
         "${CMAKE_CURRENT_SOURCE_DIR}/mocks"
+)
+
+add_executable(
+        bytebuffer_tests
+        ${BYTEBUFFER_TEST_SOURCE}
+        ${CMAKE_SOURCE_DIR}/src/server/shared/Packets/ByteBuffer.cpp
+)
+
+target_include_directories(
+        bytebuffer_tests
+        PRIVATE
+          ${CMAKE_SOURCE_DIR}/src/server/shared/Packets
+)
+
+target_link_libraries(
+        bytebuffer_tests
+        common
+        gtest_main
 )
 
 add_executable(
@@ -56,4 +77,11 @@ add_test(
         unit
         COMMAND
         ${CMAKE_BINARY_DIR}/src/test/unit_tests
+)
+
+add_test(
+        NAME
+        bytebuffer
+        COMMAND
+        ${CMAKE_BINARY_DIR}/src/test/bytebuffer_tests
 )
