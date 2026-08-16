@@ -367,7 +367,7 @@ def collect_diff(repo: Path, base_ref: str, head_ref: str) -> tuple[DiffHunk, ..
 def prefix_directions(name: str) -> tuple[str, ...]:
     if name.startswith("CMSG_") or name.startswith("TC9_CMSG_"):
         return ("c2s",)
-    if name.startswith("SMSG_"):
+    if name.startswith("SMSG_") or name.startswith("TC9_SMSG_"):
         return ("s2c",)
     if name.startswith("MSG_") or name.startswith("UMSG_"):
         return ("c2s", "s2c")
@@ -410,6 +410,12 @@ def parse_opcode_declarations(
 
 def parse_opcode_registrations(text: str) -> tuple[OpcodeRegistration, ...]:
     registrations: list[OpcodeRegistration] = []
+    text = re.sub(
+        r"//[^\n]*|/\*.*?\*/",
+        lambda match: "".join("\n" if char == "\n" else " " for char in match.group()),
+        text,
+        flags=re.DOTALL,
+    )
     client_pattern = re.compile(
         r"DEFINE_HANDLER\(\s*([A-Z][A-Z0-9_]*)\s*,\s*([A-Z][A-Z0-9_]*)\s*,\s*"
         r"([A-Z][A-Z0-9_]*)\s*,\s*&?([A-Za-z0-9_:]+)\s*\)",
@@ -1066,8 +1072,10 @@ def self_check() -> None:
         DEFINE_SERVER_OPCODE_HANDLER(SMSG_ONE, STATUS_NEVER);
         DEFINE_HANDLER(CMSG_TWO, STATUS_AUTHED, PROCESS_INPLACE, &WorldSession::HandleTwo);
         DEFINE_HANDLER(CMSG_THREE, STATUS_AUTHED, PROCESS_INPLACE, &WorldSession::HandleThree);
+        // DEFINE_HANDLER(CMSG_COMMENTED, STATUS_AUTHED, PROCESS_INPLACE, &WorldSession::HandleCommented);
         """
     )
+    assert all(row.name != "CMSG_COMMENTED" for row in registrations)
     collisions = detect_collisions(
         registrations,
         {"CMSG_ONE": 0x10, "SMSG_ONE": 0x10, "CMSG_TWO": 0x20, "CMSG_THREE": 0x20},
