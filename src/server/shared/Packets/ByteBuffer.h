@@ -242,7 +242,7 @@ public:
         delete[] buffer;
         return retval;
     }
-    
+
     void WriteString(std::string const& str)
     {
         if (size_t len = str.length())

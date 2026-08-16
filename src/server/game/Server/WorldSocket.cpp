@@ -138,7 +138,7 @@ void EncryptableAndCompressiblePacket::CompressIfNeeded(z_stream* compressionStr
     std::vector<uint8> storage(destsize);
 
     _compressionStream = compressionStream;
-    Compress(static_cast<void*>(&storage[0]), &destsize, static_cast<const void*>(contents()), size);
+    Compress(static_cast<void*>(&storage[0]), &destsize, static_cast<void const*>(contents()), size);
     if (destsize == 0)
         return;
 
@@ -149,7 +149,7 @@ void EncryptableAndCompressiblePacket::CompressIfNeeded(z_stream* compressionStr
     SetOpcode(opcode);
 }
 
-void EncryptableAndCompressiblePacket::Compress(void* dst, uint32 *dst_size, const void* src, int src_size)
+void EncryptableAndCompressiblePacket::Compress(void* dst, uint32 *dst_size, void const* src, int src_size)
 {
     _compressionStream->next_out = (Bytef*)dst;
     _compressionStream->avail_out = *dst_size;
@@ -332,7 +332,8 @@ bool WorldSocket::Update()
         {
             queued->CompressIfNeeded(_compressionStream);
             ServerPktHeader header(queued->size() + 2, queued->GetOpcode());
-            if (queued->NeedsEncryption()){
+            if (queued->NeedsEncryption())
+            {
                 _authCrypt.EncryptSend(header.header, header.getHeaderLength());
             }
 

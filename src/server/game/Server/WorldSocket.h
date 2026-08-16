@@ -49,7 +49,7 @@ public:
     std::atomic<EncryptableAndCompressiblePacket*> SocketQueueLink;
 
 private:
-    void Compress(void* dst, uint32 *dst_size, const void* src, int src_size);
+    void Compress(void* dst, uint32 *dst_size, void const* src, int src_size);
     z_stream_s* _compressionStream;
     bool _encrypt;
 };

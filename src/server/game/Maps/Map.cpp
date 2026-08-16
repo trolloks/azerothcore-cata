@@ -282,8 +282,6 @@ bool Map::AddPlayerToMap(Player* player)
 
     if (player->IsAlive())
         ConvertCorpseToBones(player->GetGUID());
-
-
     LOG_INFO("network", "Added player to map instance");
     sScriptMgr->OnPlayerEnterMap(this, player);
     return true;

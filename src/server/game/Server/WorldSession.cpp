@@ -429,7 +429,7 @@ bool WorldSession::Update(uint32 diff, PacketFilter& updater)
         }
 
         LOG_INFO("network", "DosProtection evaluation for opcode {} returned policy {}", opHandle->Name, static_cast<int>(evaluationPolicy));
-        
+
         if (evaluationPolicy == WorldSession::DosProtection::Policy::Process
             || evaluationPolicy == WorldSession::DosProtection::Policy::Log)
         {

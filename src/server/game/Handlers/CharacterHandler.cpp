@@ -235,7 +235,7 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
 
     if (result)
     {
-    do    
+        do
         {
             std::shared_ptr<CharacterInfo> charInfo = std::make_shared<CharacterInfo>();
             Field* fields = result->Fetch();
@@ -249,7 +249,7 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
             //    24                      25
             //    characters.extra_flags, character_declinedname.genitive
 
-            // print all fields as flat long string 
+            // print all fields as flat long string
             charInfo->Guid              = ObjectGuid::Create<HighGuid::Player>(fields[0].Get<uint32>());
             charInfo->Name              = fields[1].Get<std::string>();
             charInfo->RaceID            = fields[2].Get<uint8>();
@@ -284,7 +284,7 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
 
             if (playerFlags & PLAYER_FLAGS_RESTING)
                 charInfo->Flags |= CHARACTER_FLAG_RESTING;
-            
+
             /*if (atLoginFlags & AT_LOGIN_RESET_TALENTS)
                 charInfo->Flags |= CHARACTER_FLAG_RESET_TALENTS_ON_LOGIN;*/
 
@@ -302,7 +302,7 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
 
             /*if (sWorld->getBoolConfig(CONFIG_DECLINED_NAMES_USED) && !fields[22].Get<std::string>().empty())
                 charInfo->Flags |= CHARACTER_FLAG_DECLINED;*/
-        
+
             if (atLoginFlags & AT_LOGIN_CUSTOMIZE)
                 charInfo->Flags2 = CHAR_CUSTOMIZE_FLAG_CUSTOMIZE;
             else if (atLoginFlags & AT_LOGIN_CHANGE_FACTION)
@@ -344,7 +344,7 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
             std::vector<std::string_view> equipment = Acore::Tokenize(fields[22].Get<std::string_view>(), ' ', false);
             // NOTE: This still works for some reason, but it is not getting the correct info. Need to grab playerslot (the order in which chars show) correctly
             charInfo->ListPosition = fields[24].Get<uint8>();
-            
+
             for (uint8 slot = 0; slot < INVENTORY_SLOT_BAG_END; ++slot)
             {
                 uint32 const visualBase = slot * 2;
@@ -393,9 +393,9 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
                 charInfo->VisualItems[slot].DisplayID = proto->DisplayInfoID;
                 charInfo->VisualItems[slot].DisplayEnchantID = enchant ? enchant->aura_id : 0;
             }
-            
+
             LOG_INFO("network.opcode", "Loading char {} from account {}.", charInfo->Guid.ToString(), GetAccountId());
-            LOG_INFO("network.opcode", "Character is level {}, {} {}, in zone {}, map {}.", charInfo->ExperienceLevel, charInfo->SexID, charInfo->ClassID, charInfo->ZoneID, charInfo->MapID); 
+            LOG_INFO("network.opcode", "Character is level {}, {} {}, in zone {}, map {}.", charInfo->ExperienceLevel, charInfo->SexID, charInfo->ClassID, charInfo->ZoneID, charInfo->MapID);
             LOG_INFO("network.opcode", "Character has {} visual item(s).", charInfo->VisualItems.size());
             LOG_INFO("network.opcode", "Character has pet with display {}, level {}, family {}.", charInfo->PetCreatureDisplayID, charInfo->PetExperienceLevel, charInfo->PetCreatureFamilyID);
             LOG_INFO("network.opcode", "Character has flags {} and at login flags {}.", playerFlags, atLoginFlags);
@@ -413,7 +413,7 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
     data.WriteBit(true); // Success
     data.WriteBits(Characters.size(), 17);
     LOG_INFO("network.opcode", "Account {} has {} character(s).", GetAccountId(), Characters.size());
-    
+
     for (CharacterInfo const& charInfo : Characters)
     {
         data.WriteBit(charInfo.Guid[3]);
@@ -435,9 +435,9 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
         data.WriteBit(charInfo.Guid[6]);
         data.WriteBit(charInfo.GuildGUID[0]);
     }
-    
+
     data.FlushBits();
-    
+
     for (CharacterInfo const& charInfo : Characters)
     {
         data << uint8(charInfo.ClassID);
@@ -487,7 +487,7 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
         data.WriteByteSeq(charInfo.Guid[1]);
         data << int32(charInfo.ZoneID);
     }
-    
+
     SendPacket(&data);
 }
 
@@ -1146,8 +1146,6 @@ void WorldSession::HandlePlayerLoginFromDB(LoginQueryHolder const& holder)
                 chH.PSendSysMessage("{}", newCharString);
         }
     }
-
-
     LOG_INFO("network", "Adding to map");
     // Xinef: moved this from below
     ObjectAccessor::AddObject(pCurrChar);
@@ -1155,11 +1153,13 @@ void WorldSession::HandlePlayerLoginFromDB(LoginQueryHolder const& holder)
     if (!pCurrChar->GetMap()->AddPlayerToMap(pCurrChar) || !pCurrChar->CheckInstanceLoginValid())
     {
         AreaTriggerTeleport const* at = sObjectMgr->GetGoBackTrigger(pCurrChar->GetMapId());
-        if (at){
+        if (at)
+        {
             LOG_INFO("network", "Teleport to mapId:{}, x:{}, y:{}, z:{}.", at->target_mapId, at->target_X, at->target_Y, at->target_Z);
             pCurrChar->TeleportTo(at->target_mapId, at->target_X, at->target_Y, at->target_Z, pCurrChar->GetOrientation());
         }
-        else{
+        else
+        {
             LOG_INFO("network", "Teleport to homebind location, mapId:{}, x:{}, y:{}, z:{}.", pCurrChar->m_homebindMapId, pCurrChar->m_homebindX, pCurrChar->m_homebindY, pCurrChar->m_homebindZ);
             pCurrChar->TeleportTo(pCurrChar->m_homebindMapId, pCurrChar->m_homebindX, pCurrChar->m_homebindY, pCurrChar->m_homebindZ, pCurrChar->GetOrientation());
         }
@@ -1167,8 +1167,6 @@ void WorldSession::HandlePlayerLoginFromDB(LoginQueryHolder const& holder)
         // Probably a hackfix, but currently the best workaround to prevent character names showing as Unknown after teleport out from instances at login.
         pCurrChar->GetSession()->SendNameQueryOpcode(pCurrChar->GetGUID());
     }
-
-
     LOG_INFO("network", "Finished sending initial packets after going to map");
     pCurrChar->SendInitialPacketsAfterAddToMap();
 

@@ -135,7 +135,7 @@ enum Opcodes : uint16
     CMSG_ADD_FRIEND                                 = 0x6527,
     CMSG_DEL_FRIEND                                 = 0x6A15,
     CMSG_SET_CONTACT_NOTES                          = 0x6135,
-    CMSG_ADD_IGNORE                                 = 0x4726, 
+    CMSG_ADD_IGNORE                                 = 0x4726,
     CMSG_DEL_IGNORE                                 = 0x6D26, // got here
     CMSG_GROUP_INVITE                               = 0x06E,
     SMSG_GROUP_INVITE                               = 0x06F,
