@@ -1,0 +1,174 @@
+# Cataclysm conversion roadmap
+
+Status: working roadmap. Revise it as each numbered plan produces better evidence.
+
+## Goal
+
+Convert current AzerothCore from World of Warcraft 3.3.5a to Cataclysm 4.3.4 build 15595 without
+replacing AzerothCore's design with TrinityCore or a separate compatibility framework.
+
+The rule for every change is simple:
+
+1. Keep current AzerothCore ownership, interfaces, hooks, security checks, and file placement.
+2. Take required 4.3.4 behavior from the pinned Cataclysm TrinityCore source.
+3. Use `cata-js` as corroborating protocol notes and runtime evidence, never as an architecture to
+   transplant.
+4. Let the real build 15595 client decide whether a completed slice works.
+
+## Reference order
+
+| Priority | Source | Role |
+| --- | --- | --- |
+| 1 | Current `upstream/master` | Structure, framework, maintainability, and merge compatibility |
+| 2 | TrinityCore commit `c699217775d90794158422387b07a917e161b582` | Canonical 4.3.4 behavior and wire format |
+| 3 | `cata-js` commit `ab964a0e8dfe50a44fa92716ed05438f4a14dfd3` | Prior discoveries and client-visible failure notes |
+| 4 | Full `Wow-64.exe` build 15595 | Runtime acceptance judge |
+
+The TrinityCore working tree is dirty. Read the pinned commit, not uncommitted files. The `cata-js`
+runtime log proves a useful vertical slice only through commit `3a697ce`; later aura work is
+unverified and the log must not be committed because it contains account and packet data.
+
+## Current state
+
+`feature/cata` is based on current upstream and has six fork commits. The net Cata delta is 18 files,
+1,076 insertions, and 316 deletions. It is a partial authentication and character-list experiment.
+
+What fits the goal:
+
+- It retains AzerothCore's database, session, security, hook, and player-loading flows.
+- The initializer, part of world authentication, character enumeration, and packed player-login GUID
+  behavior contain useful Cata work.
+- The branch stays small enough to audit against upstream.
+
+What does not yet fit the goal:
+
+- One shared opcode table cannot represent Cata's client/server numeric collisions.
+- Most opcode values, packet payloads, update fields, DBC layouts, build identity, and expansion
+  settings remain WotLK.
+- GUID and bit-buffer foundations are incomplete, auth serializers disagree, and compression owns a
+  leaking raw zlib stream.
+- Character packet serialization bypasses AzerothCore's packet layer.
+- Temporary hot-path logging, dead code, empty handlers, and commented implementations increase the
+  upstream merge cost without adding Cata behavior.
+
+## Completion predicate
+
+The conversion is complete only when all of these statements are true:
+
+- The fork is based on a current upstream commit and every fork-only path is classified and checked
+  after each upstream update.
+- Supported authserver, worldserver, tools, and tests configure and build using the repository's
+  supported toolchains.
+- No active build, expansion, opcode, packet, update-field, client-data, or level-cap contract still
+  targets 3.3.5a unless it is documented historical data.
+- Fresh Cataclysm databases can be created and upgraded through a documented, repeatable process.
+- The build 15595 client can complete automated smoke paths for authentication, character lifecycle,
+  world entry, movement, combat, persistence, grouping, instances, and representative content.
+- Each converted subsystem has deterministic local checks and a real-client acceptance trace.
+- Upstream updates can be merged without replacing whole subsystems or reapplying hand-maintained
+  patches.
+
+## Plan families
+
+These are areas, not promised plan numbers. Each area will split into as many small plans as needed.
+A new numbered plan is written only when its predecessor is green and its inputs are known.
+
+| Area | Exit condition before moving on |
+| --- | --- |
+| Protocol foundation | Direction-safe opcodes, wire primitives, auth, and character list are proven |
+| Client data extraction | Build 15595 DBC, DB2, map, VMAP, and MMAP inputs are reproducible |
+| Client data stores | Cata layouts and loaders replace active WotLK contracts |
+| Database strategy | Auth, character, and world schemas have a legal, repeatable Cata migration path |
+| Object model | GUIDs, type IDs, update fields, visibility masks, and object updates agree |
+| World entry | Phasing and the complete loading sequence reach the world reliably |
+| Movement | Movement packets, acknowledgements, speed, spline, and teleport behavior agree |
+| Maps and visibility | Grids, transports, maps, collision, phasing, and nearby-object updates agree |
+| Character lifecycle | Creation, deletion, customization, races, classes, login, logout, and saves agree |
+| Player progression | Level 85 stats, resources, regeneration, experience, and skills agree |
+| Items and currencies | Equipment, inventory, bags, bank, currencies, and item persistence agree |
+| Talents and customization | Specs, talents, glyphs, reforging, transmog, and professions agree |
+| Spells and auras | Casting, auras, procs, cooldowns, dispels, and power costs agree |
+| Combat | Damage, healing, threat, death, resurrection, and combat state agree |
+| Creatures and AI | Spawning, respawn, AI, evade, pathfinding, and difficulty behavior agree |
+| Pets and vehicles | Pets, guardians, summons, possession, and vehicles agree |
+| Quests and phasing | Objectives, conditions, quest phases, rewards, and persistence agree |
+| World interaction | Loot, vendors, trainers, gossip, reputation, factions, and events agree |
+| Social | Chat, friends, ignores, groups, guilds, and calendar agree |
+| Economy | Trade, mail, auction house, and economy rules agree |
+| Instances and matching | LFG, instances, lockouts, and raid-finder behavior where applicable agree |
+| PvP | Battlegrounds, arenas, honor, rated PvP, and rewards agree |
+| Secondary systems | Achievements, archaeology, collections, and Cata-specific systems agree |
+| World content | Eastern Kingdoms, Kalimdor, expansion zones, and outdoor content agree |
+| Instance content | Dungeon and raid scripts, encounters, conditions, and rewards agree |
+| Operations | Config, migrations, observability, deployment, and admin commands agree |
+| Hardening | Long sessions, restart recovery, performance, security, and upstream rebase checks pass |
+
+## Real-client integration strategy
+
+Later vertical plans use the full build 15595 client as an acceptance judge. Client launch is allowed
+only after the relevant plan has explicit build/test authorization and all of these isolation gates
+are met:
+
+- Create a fully run-owned Bottles prefix. Never launch through the personal `Battle.NET` Bottle.
+- Use a fully run-owned client copy or a copy-on-write view whose isolation has been proven first.
+  Never launch the source client tree directly.
+- Capture pre-run and post-run manifests for the source client and personal Bottle, and require no
+  changes.
+- Store logs, screenshots, manifests, and packet evidence outside the Git worktree. Sanitize them
+  before deliberately copying any summary into the repository.
+- Seed disposable server, database, account, and character state. Record exact owned resources and
+  process IDs so reset can touch only those resources.
+
+The eventual harness should expose five idempotent operations: `prepare`, `start`, `observe`,
+`collect`, and `reset`. Automate hashes, server readiness, ports, protocol milestones, disconnects,
+sanitization, and cleanup. Keep credential entry and visual confirmation manual until the isolated
+flow is stable; an addon cannot observe authentication or character selection.
+
+### Packet capture and replay
+
+Use real-client sessions to create deterministic fixtures, then run most protocol checks without the
+client. Capture logical `WorldPacket` data at the server boundary:
+
+- Incoming: after TCP framing and header decryption, before opcode dispatch.
+- Outgoing: after packet serialization, before compression, header creation, and encryption.
+- Record only build, sequence, direction, connection type, opcode, and payload.
+- Exclude wall-clock time, addresses, ports, credentials, session keys, and personal identifiers.
+
+Raw PCAP remains optional forensic evidence. It is a poor primary fixture because authenticated
+world headers use session-specific crypto, TCP segmentation varies, and outbound compression keeps
+stream state across packets.
+
+Never redact sensitive bytes in place. Synthesize a new transcript using dummy accounts, fixed test
+keys and challenges, remapped GUIDs, fixed clocks and counters, and recomputed proofs. Keep three
+small test layers:
+
+1. Typed codec fixtures compare parsed fields or serialized opcode and payload.
+2. Session-flow replay feeds logical client packets through dispatch against fixed server state and
+   captures logical responses.
+3. Wire vectors test initializer framing, normal and large headers, crypto, and full ordered zlib
+   streams separately.
+
+This replaces repeated client runs for parser, serializer, dispatch, and login-sequence regressions.
+It does not replace real-client acceptance checks for crypto activation, connection redirects,
+packet ordering, streaming compression, world loading, movement, UI behavior, crashes, or silent
+disconnects.
+
+## Planning rules
+
+- One numbered plan owns one verifiable slice. Split it again when the real dependency graph is wider
+  than expected.
+- Start each plan from updated upstream and end it with a repeatable check.
+- Port semantic differences into existing AzerothCore layers. Do not bulk-copy TrinityCore files.
+- An opcode number is not implemented until its parser or serializer and client behavior are proven.
+- Add SQL only under the permitted pending-update directories unless the user explicitly authorizes a
+  broader database migration.
+- Do not start client-data extraction until the user confirms the source data's provenance and
+  intended use, and the plan defines an out-of-repository storage and ignore boundary.
+- Keep experimental tracing behind existing logging facilities and remove it before a plan closes.
+- Record negative results. `INCONCLUSIVE` is not a pass.
+- Do not commit raw packet captures. Commit only reviewed synthetic fixtures with dummy identities
+  and reproducible generation inputs.
+
+## Detailed plans
+
+- [Plan 1: conversion baseline and protocol contracts](01-conversion-baseline-and-protocol-contracts.md)
