@@ -123,6 +123,21 @@ TEST(ByteBufferBitsTest, ReadsExactValuesForSupportedWidths)
     EXPECT_EQ(thirtyTwoBits.ReadBits(32), 0x89ABCDEFu);
 }
 
+TEST(ByteBufferBitsTest, AlignsBitAndByteOperations)
+{
+    ByteBuffer written;
+    written.WriteBits(0x5, 3);
+    written.FlushBits();
+    written << uint8(0x12);
+    ExpectBytes(written, { 0xA0, 0x12 });
+
+    ByteBuffer read = BufferWithBytes({ 0xA0, 0x12 });
+    EXPECT_EQ(read.ReadBits(3), 0x5u);
+    uint8 nextByte = 0;
+    read >> nextByte;
+    EXPECT_EQ(nextByte, 0x12);
+}
+
 TEST(ByteBufferBitsTest, PreservesPartialBitsAcrossCopies)
 {
     ByteBuffer source;

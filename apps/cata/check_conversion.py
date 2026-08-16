@@ -754,6 +754,33 @@ def comparison_stats(
     }
 
 
+def byte_buffer_bit_issues(source: str) -> tuple[str, ...]:
+    issues: list[str] = []
+    member_state = re.search(r"uint8\s+_curbitval\s*\{\s*0\s*\}\s*;", source)
+    move_ctor = re.search(r"ByteBuffer\(ByteBuffer&& buf\) noexcept\s*:(.*?)\n\s*\{(.*?)\n\s*\}", source, re.DOTALL)
+    move_assign = re.search(r"operator=\(ByteBuffer&& right\).*?\{(.*?)\n\s*\}", source, re.DOTALL)
+    clear = re.search(r"void clear\(\)\s*\{(.*?)\n\s*\}", source, re.DOTALL)
+    resize = re.search(r"void resize\(std::size_t newsize\)\s*\{(.*?)\n\s*\}", source, re.DOTALL)
+
+    if member_state is None:
+        issues.append("default-curbitval-uninitialized")
+    if move_ctor is None or any(
+        token not in "".join(move_ctor.groups())
+        for token in ("_bitpos(buf._bitpos)", "_curbitval(buf._curbitval)", "buf.clear()")
+    ):
+        issues.append("move-constructor-bit-state-not-preserved")
+    if move_assign is None or any(
+        token not in move_assign.group(1)
+        for token in ("_bitpos = right._bitpos", "_curbitval = right._curbitval", "right.clear()")
+    ):
+        issues.append("move-assignment-bit-state-not-preserved")
+    for name, body in (("clear", clear), ("resize", resize)):
+        if body is None or any(token not in body.group(1) for token in ("_bitpos = InitialBitPos", "_curbitval = 0")):
+            issues.append(f"{name}-bit-state-not-reset")
+
+    return tuple(issues)
+
+
 def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], ...], tuple[Finding, ...]]:
     anchors: list[dict[str, Any]] = []
     findings: list[Finding] = []
@@ -805,17 +832,22 @@ def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], 
     )
 
     byte_buffer = read_ref_file(inputs.repo_root, inputs.head_ref, "src/server/shared/Packets/ByteBuffer.h")
-    bit_issues = []
-    default_ctor = re.search(r"ByteBuffer\(\)\s*\{(.*?)\n\s*\}", byte_buffer, re.DOTALL)
-    move_assign = re.search(r"operator=\(ByteBuffer&& right\).*?\{(.*?)\n\s*\}", byte_buffer, re.DOTALL)
-    if default_ctor and "_curbitval" not in default_ctor.group(1):
-        bit_issues.append("default-curbitval-uninitialized")
-    if move_assign and "_bitpos" not in move_assign.group(1):
-        bit_issues.append("move-bit-state-not-copied")
+    bit_issues = byte_buffer_bit_issues(byte_buffer)
     bit_row = ledger.anchors.get("protocol.byte-buffer-bits")
     if bit_row is None:
         findings.append(
             Finding("error", "MISSING_ANCHOR", "protocol.byte-buffer-bits", "named anchor has no ledger row")
+        )
+    elif (bit_row.state == "converted" or bit_row.implementation == "converted") and (
+        bit_issues or bit_row.fixture != "pass"
+    ):
+        findings.append(
+            Finding(
+                "error",
+                "CONVERTED_ANCHOR_WITHOUT_PROOF",
+                "protocol.byte-buffer-bits",
+                "converted bit-buffer anchor lacks deterministic source state or fixture proof",
+            )
         )
     anchors.append(
         {
@@ -1093,6 +1125,52 @@ def self_check() -> None:
     hunk = parse_diff_hunks(diff)[0]
     assert hunk.added == 1 and hunk.removed == 1
     assert validate_hunk_coverage({hunk.id, "missing"}, {hunk.id}) == ("missing",)
+
+    broken_byte_buffer = """
+    ByteBuffer(ByteBuffer&& buf) noexcept : _bitpos(buf._bitpos), _storage(std::move(buf._storage))
+    {
+        buf._rpos = 0;
+    }
+    ByteBuffer& operator=(ByteBuffer&& right) noexcept
+    {
+        _storage = std::move(right._storage);
+    }
+    void clear()
+    {
+        _storage.clear();
+    }
+    void resize(std::size_t newsize)
+    {
+        _storage.resize(newsize);
+    }
+    uint8 _curbitval;
+    """
+    fixed_byte_buffer = """
+    ByteBuffer(ByteBuffer&& buf) noexcept :
+        _bitpos(buf._bitpos), _curbitval(buf._curbitval), _storage(std::move(buf._storage))
+    {
+        buf.clear();
+    }
+    ByteBuffer& operator=(ByteBuffer&& right) noexcept
+    {
+        _bitpos = right._bitpos;
+        _curbitval = right._curbitval;
+        right.clear();
+    }
+    void clear()
+    {
+        _bitpos = InitialBitPos;
+        _curbitval = 0;
+    }
+    void resize(std::size_t newsize)
+    {
+        _bitpos = InitialBitPos;
+        _curbitval = 0;
+    }
+    uint8 _curbitval{0};
+    """
+    assert byte_buffer_bit_issues(broken_byte_buffer)
+    assert byte_buffer_bit_issues(fixed_byte_buffer) == ()
 
     defaults = LedgerRow(
         "defaults", "opcode", "*", "unverified-wip", "defer", "-", "wotlk", "wotlk",
