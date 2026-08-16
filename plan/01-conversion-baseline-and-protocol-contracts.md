@@ -1,6 +1,9 @@
 # Plan 1: conversion baseline and protocol contracts
 
-Status: ready for review. Execution has not started.
+Status: complete at the first green checkpoint `24f62ca2749facd0b57358cd1b0eff42e9839710`.
+
+Branch: `plan/01-conversion-baseline-and-protocol-contracts`, based directly on `master` at
+`6906fe6dadd097a2ec0c4271ad2c7f25fde9be10`.
 
 ## Outcome
 
@@ -52,13 +55,54 @@ commit, not its dirty working tree. Record and justify any other pin change.
 
 These are hypotheses until the Plan 1 checker reproduces them.
 
+## Checker design
+
+`apps/cata/check_conversion.py` is a read-only, standard-library checker. Source parsing owns measured
+facts; `plan/conversion-status.tsv` owns human decisions. A pessimistic opcode default materializes
+one row per active registration and explicit overrides record aliases or later proof. Changed blocks
+use content-derived identifiers, with file-level coverage allowed only for the self-referential
+ledger.
+
+The checker reads committed reference files with `git show`, verifies ancestry and the optional
+client hash, compares opcode declarations and registrations by direction, scans named WotLK anchors,
+and emits deterministic text or JSON. Its self-check covers parsing, ignored commented registrations,
+same- and opposite-direction collisions, missing hunk coverage, explicit aliases, and stable JSON.
+
+## Execution results
+
+The first green committed checkpoint used fork head `24f62ca2749facd0b57358cd1b0eff42e9839710`
+and upstream `5fa7cb00fa04814c4afe6701f0c6c09e9fb96cea`. Upstream was an ancestor; the fork was
+zero commits behind and fourteen ahead. The cumulative diff contained 26 files, 183 changed blocks,
+2,799 insertions, and 317 deletions, including the Plan 1 audit artifacts. The pre-audit fork at
+`6906fe6dadd097a2ec0c4271ad2c7f25fde9be10` contained 24 files and 181 changed blocks.
+
+The measured opcode inventory corrected the planning estimates:
+
+- 1,315 declarations and registrations, of which 1,309 have active nonzero values.
+- 111 of 867 same-name declarations match the pinned Cataclysm reference; 756 differ.
+- Six zero-valued registrations, two same-direction collisions, four opposite-direction collisions,
+  and one declared-versus-registered direction contradiction remain explicit warnings.
+- All 138 `cata-js` opcode names match the pinned Cataclysm reference; this corroborates values only,
+  not C++ handlers or payloads.
+
+The checker also reproduced every named WotLK anchor: build 12340, expansion 2, level 80, WotLK
+update fields and GUID layout, no matching DB2 source set, incomplete bit-buffer state, raw persistent
+compression ownership, and the combined opcode model. The full client executable hash matched the
+pinned SHA-256; the client was not launched.
+
+All 183 blocks were covered by the ledger. Two complete JSON runs were byte-identical. The result was
+`PASS` with zero errors and 457 warnings; warnings are the recorded conversion backlog and do not
+claim runtime compatibility. No production source, database, client tree, or Bottle was changed by
+Plan 1.
+
 ## Deliverables
 
 - `apps/cata/check_conversion.py`: one standard-library, read-only checker.
 - `plan/conversion-status.tsv`: the authoritative conversion ledger.
 - A machine-readable opcode comparison emitted by the checker.
 - A final audit of all current fork changes, summarized in the ledger and decision log.
-- Updated roadmap boundaries based on the reproduced dependency graph. Do not create Plan 2 yet.
+- Updated roadmap boundaries based on the reproduced dependency graph. Plan 2 was selected only after
+  the committed Plan 1 checker passed.
 
 Do not add a framework, dependency, generated source tree, or copied reference data.
 

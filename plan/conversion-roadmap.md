@@ -30,8 +30,9 @@ unverified and the log must not be committed because it contains account and pac
 
 ## Current state
 
-`feature/cata` is based on current upstream and has six fork commits. The net Cata delta is 18 files,
-1,076 insertions, and 316 deletions. It is a partial authentication and character-list experiment.
+The Plan 1 execution baseline at `6906fe6d` was zero commits behind upstream `5fa7cb00f` and eleven
+ahead. Its pre-audit delta was 24 files, 181 changed blocks, 1,434 insertions, and 317 deletions. It is
+a partial authentication and character-list experiment plus fork-specific planning context.
 
 What fits the goal:
 
@@ -118,6 +119,8 @@ are met:
   before deliberately copying any summary into the repository.
 - Seed disposable server, database, account, and character state. Record exact owned resources and
   process IDs so reset can touch only those resources.
+- Run databases in run-owned Docker containers and volumes bound to `127.0.0.1` on confirmed unused
+  host ports. Never reuse or modify an existing database, container, or volume.
 
 The eventual harness should expose five idempotent operations: `prepare`, `start`, `observe`,
 `collect`, and `reset`. Automate hashes, server readiness, ports, protocol milestones, disconnects,
@@ -157,6 +160,8 @@ disconnects.
 
 - One numbered plan owns one verifiable slice. Split it again when the real dependency graph is wider
   than expected.
+- Give each numbered plan its own `plan/NN-short-name` branch. Create it from the latest `master`
+  after the previous plan is merged; never stack plan branches.
 - Start each plan from updated upstream and end it with a repeatable check.
 - Port semantic differences into existing AzerothCore layers. Do not bulk-copy TrinityCore files.
 - An opcode number is not implemented until its parser or serializer and client behavior are proven.
@@ -168,7 +173,10 @@ disconnects.
 - Record negative results. `INCONCLUSIVE` is not a pass.
 - Do not commit raw packet captures. Commit only reviewed synthetic fixtures with dummy identities
   and reproducible generation inputs.
+- Treat existing database data as immutable. A plan that needs a database must define its disposable
+  Docker container, volume, unused-port check, ownership manifest, and bounded cleanup first.
 
 ## Detailed plans
 
 - [Plan 1: conversion baseline and protocol contracts](01-conversion-baseline-and-protocol-contracts.md)
+- [Plan 2: deterministic bit-buffer contract](02-deterministic-bit-buffer-contract.md)
