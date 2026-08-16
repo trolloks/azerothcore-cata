@@ -30,8 +30,9 @@ unverified and the log must not be committed because it contains account and pac
 
 ## Current state
 
-`feature/cata` is based on current upstream and has six fork commits. The net Cata delta is 18 files,
-1,076 insertions, and 316 deletions. It is a partial authentication and character-list experiment.
+The Plan 1 execution baseline at `6906fe6d` was zero commits behind upstream `5fa7cb00f` and eleven
+ahead. Its pre-audit delta was 24 files, 181 changed blocks, 1,434 insertions, and 317 deletions. It is
+a partial authentication and character-list experiment plus fork-specific planning context.
 
 What fits the goal:
 
@@ -176,3 +177,4 @@ disconnects.
 ## Detailed plans
 
 - [Plan 1: conversion baseline and protocol contracts](01-conversion-baseline-and-protocol-contracts.md)
+- [Plan 2: deterministic bit-buffer contract](02-deterministic-bit-buffer-contract.md)
