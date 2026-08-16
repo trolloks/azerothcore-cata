@@ -160,6 +160,8 @@ disconnects.
 
 - One numbered plan owns one verifiable slice. Split it again when the real dependency graph is wider
   than expected.
+- Give each numbered plan its own `plan/NN-short-name` branch. Create it from the latest `master`
+  after the previous plan is merged; never stack plan branches.
 - Start each plan from updated upstream and end it with a repeatable check.
 - Port semantic differences into existing AzerothCore layers. Do not bulk-copy TrinityCore files.
 - An opcode number is not implemented until its parser or serializer and client behavior are proven.

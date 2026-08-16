@@ -9,6 +9,12 @@ Keep the fork's design, framework, interfaces, and code structure as close to up
 so upstream updates remain straightforward to integrate. Prefer the smallest Cata-specific delta;
 depart from upstream only where Cataclysm protocol, data, or gameplay differences require it.
 
+## Branch workflow
+
+Each numbered plan uses its own `plan/NN-short-name` branch. Create that branch from the latest
+`master`, never from the previous plan branch. Merge the completed plan into `master` before creating
+the next plan branch. Do not implement numbered plans directly on `master` or `feature/cata`.
+
 ## Database safety
 
 Never point conversion work, tests, or client smoke runs at an existing database. Treat existing

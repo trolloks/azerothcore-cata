@@ -2,6 +2,9 @@
 
 Status: complete at the first green checkpoint `24f62ca2749facd0b57358cd1b0eff42e9839710`.
 
+Branch: `plan/01-conversion-baseline-and-protocol-contracts`, based directly on `master` at
+`6906fe6dadd097a2ec0c4271ad2c7f25fde9be10`.
+
 ## Outcome
 
 Turn the existing `feature/cata` experiment into a trustworthy, rerunnable conversion baseline.
