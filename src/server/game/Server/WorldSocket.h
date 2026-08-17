@@ -31,6 +31,7 @@
 using boost::asio::ip::tcp;
 
 struct z_stream_s;
+class WorldAuthenticationHandoffTest;
 
 class EncryptableAndCompressiblePacket : public WorldPacket
 {
@@ -77,6 +78,8 @@ struct ClientPktHeader
 
 class AC_GAME_API WorldSocket final : public Socket<WorldSocket>
 {
+    friend class WorldAuthenticationHandoffTest;
+
     static std::string const ServerConnectionInitialize;
     static std::string const ClientConnectionInitialize;
 

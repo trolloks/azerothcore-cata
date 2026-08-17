@@ -1010,6 +1010,57 @@ def authentication_codec_issues(
     return tuple(issues)
 
 
+def build_15595_admission_issues(migration: str) -> tuple[str, ...]:
+    issues: list[str] = []
+    required = (
+        "DELETE FROM `build_info` WHERE `build` = 15595;",
+        "`build`, `majorVersion`, `minorVersion`, `bugfixVersion`, `hotfixVersion`, `winAuthSeed`, "
+        "`win64AuthSeed`, `mac64AuthSeed`, `winChecksumSeed`, `macChecksumSeed`",
+        "(15595, 4, 3, 4, NULL, NULL, NULL, NULL, NULL, NULL);",
+        "ALTER TABLE `realmlist` ALTER COLUMN `gamebuild` SET DEFAULT 15595;",
+    )
+    if any(token not in migration for token in required):
+        issues.append("build-15595-admission-incomplete")
+    if re.search(r"UPDATE\s+`?realmlist`?", migration, re.IGNORECASE):
+        issues.append("build-15595-rewrites-existing-realm")
+    return tuple(issues)
+
+
+def authentication_handoff_issues(socket_header: str, tests: str, runner: str) -> tuple[str, ...]:
+    issues: list[str] = []
+    if socket_header.count("friend class WorldAuthenticationHandoffTest;") != 1:
+        issues.append("world-authentication-test-seam-missing")
+    if any(token not in tests for token in (
+        "HandleAuthSessionCallback(session, std::move(result))",
+        "LoginDatabase.AsyncQuery(statement)",
+        "databaseKey, expectedKey",
+        'unknown->Payload, "0015"',
+        'wrongRealm->Payload, "0027"',
+        'badDigest->Payload, "000D"',
+        'success->Payload, "400000000003000000000300000000000C"',
+        "sWorldSessionMgr->UpdateSessions(1)",
+        "PLAN6_WORLD_TRANSCRIPT",
+    )):
+        issues.append("world-authentication-handoff-fixture-incomplete")
+    if any(token not in runner for token in (
+        'MYSQL_IMAGE = "mysql:8.4"',
+        'response = recv_exact(connection, 32)',
+        'challenge_packet(15596, ACCOUNT)',
+        '"peer_k_equals_database_k": True',
+        '"database_k_equals_world_query_k": True',
+        '"org.azerothcore.plan": "6"',
+        "assert_owned(manifest, generation",
+        "def prepare(",
+        "def execute(",
+        "def inspect_run(",
+        "def reset(",
+        "def self_check(",
+        "args.compare_last_two",
+    )):
+        issues.append("authentication-handoff-runner-incomplete")
+    return tuple(issues)
+
+
 def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], ...], tuple[Finding, ...]]:
     anchors: list[dict[str, Any]] = []
     findings: list[Finding] = []
@@ -1171,6 +1222,50 @@ def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], 
             "evidence": authentication_row.evidence if authentication_row else "-",
         }
     )
+
+    admission_migration = read_ref_file(
+        inputs.repo_root, inputs.head_ref, "data/sql/updates/pending_db_auth/rev_1786964293354831242.sql"
+    )
+    admission_issues = build_15595_admission_issues(admission_migration)
+    admission_row = ledger.anchors.get("database.build-15595-admission")
+    if admission_row is None:
+        findings.append(Finding("error", "MISSING_ANCHOR", "database.build-15595-admission", "named anchor has no ledger row"))
+    elif (admission_row.state == "converted" or admission_row.implementation == "converted") and (
+        admission_issues or admission_row.fixture != "pass"
+    ):
+        findings.append(Finding("error", "CONVERTED_ANCHOR_WITHOUT_PROOF", "database.build-15595-admission",
+                                "converted build admission lacks the pending migration or disposable-database proof"))
+    anchors.append({
+        "key": "database.build-15595-admission",
+        "path": "data/sql/updates/pending_db_auth/rev_1786964293354831242.sql",
+        "current": ",".join(admission_issues) if admission_issues else "build-15595-admitted",
+        "target": "build-15595-admitted",
+        "matched_target": not admission_issues,
+        "plan": "Authentication handoff",
+        "state": admission_row.state if admission_row else "open",
+        "evidence": admission_row.evidence if admission_row else "-",
+    })
+
+    handoff_runner = read_ref_file(inputs.repo_root, inputs.head_ref, "apps/cata/run_authentication_handoff.py")
+    handoff_issues = authentication_handoff_issues(world_socket_header, authentication_tests, handoff_runner)
+    handoff_row = ledger.anchors.get("protocol.authentication-handoff")
+    if handoff_row is None:
+        findings.append(Finding("error", "MISSING_ANCHOR", "protocol.authentication-handoff", "named anchor has no ledger row"))
+    elif (handoff_row.state == "converted" or handoff_row.implementation == "converted") and (
+        handoff_issues or handoff_row.fixture != "pass"
+    ):
+        findings.append(Finding("error", "CONVERTED_ANCHOR_WITHOUT_PROOF", "protocol.authentication-handoff",
+                                "converted authentication handoff lacks its executable boundary proof"))
+    anchors.append({
+        "key": "protocol.authentication-handoff",
+        "path": "apps/cata/run_authentication_handoff.py",
+        "current": ",".join(handoff_issues) if handoff_issues else "authserver-world-handoff",
+        "target": "authserver-world-handoff",
+        "matched_target": not handoff_issues,
+        "plan": "Authentication handoff",
+        "state": handoff_row.state if handoff_row else "open",
+        "evidence": handoff_row.evidence if handoff_row else "-",
+    })
 
     opcode_header = read_ref_file(inputs.repo_root, inputs.head_ref, OPCODES_H)
     opcode_source = read_ref_file(inputs.repo_root, inputs.head_ref, OPCODES_CPP)
@@ -1698,6 +1793,26 @@ def self_check() -> None:
     )
     assert "authentication-fixtures-incomplete" in authentication_codec_issues(
         *auth_inputs[:-1], auth_tests.replace("KeepsAllTwelveAccountLengthBits", "BrokenAccountLengthTest", 1)
+    )
+
+    admission = (repo_root / "data/sql/updates/pending_db_auth/rev_1786964293354831242.sql").read_text()
+    handoff_runner = (repo_root / "apps/cata/run_authentication_handoff.py").read_text()
+    assert build_15595_admission_issues(admission) == ()
+    assert "build-15595-admission-incomplete" in build_15595_admission_issues(
+        admission.replace("SET DEFAULT 15595", "SET DEFAULT 12340", 1)
+    )
+    assert "build-15595-rewrites-existing-realm" in build_15595_admission_issues(
+        admission + "\nUPDATE realmlist SET gamebuild=15595;\n"
+    )
+    assert authentication_handoff_issues(socket_header, auth_tests, handoff_runner) == ()
+    assert "world-authentication-test-seam-missing" in authentication_handoff_issues(
+        socket_header.replace("friend class WorldAuthenticationHandoffTest;", "", 1), auth_tests, handoff_runner
+    )
+    assert "world-authentication-handoff-fixture-incomplete" in authentication_handoff_issues(
+        socket_header, auth_tests.replace("PLAN6_WORLD_TRANSCRIPT", "BROKEN_TRANSCRIPT", 1), handoff_runner
+    )
+    assert "authentication-handoff-runner-incomplete" in authentication_handoff_issues(
+        socket_header, auth_tests, handoff_runner.replace("recv_exact(connection, 32)", "recv_exact(connection, 34)", 1)
     )
 
     defaults = LedgerRow(

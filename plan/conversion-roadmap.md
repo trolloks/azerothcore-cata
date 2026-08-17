@@ -184,3 +184,4 @@ disconnects.
 - [Plan 4: direction-safe opcode model](04-direction-safe-opcode-model.md)
 - [Plan 5: world authentication packet contract](05-world-authentication-packet-contract.md)
 - [Plan 6: build 15595 authentication handoff](06-build-15595-authentication-handoff.md)
+- [Plan 7: isolated build 15595 client authentication](07-isolated-build-15595-client-authentication.md)
