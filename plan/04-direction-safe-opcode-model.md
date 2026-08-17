@@ -1,6 +1,6 @@
 # Plan 4: direction-safe opcode model
 
-Status: ready for review. Execution has not started.
+Status: implemented and verified.
 
 ## Outcome
 
@@ -101,3 +101,32 @@ Plan 4 is complete when client and server opcode declarations, storage, validati
 logging are direction-distinct; every existing numeric value is preserved; active callers compile
 without the combined type; opposite-direction overlaps work independently; the focused proof and
 full audit are green; and no payload or client behavior changed.
+
+## Execution results
+
+Plan 4 started from merged `master` commit `3b110b2d80c7758d26e73a19571d45a74b140410` on
+`plan/04-direction-safe-opcode-model`. The implementation keeps the existing raw `WorldPacket`
+boundary and splits semantic ownership above it:
+
+- `OpcodeClient` owns 727 declarations and client handlers.
+- `OpcodeServer` owns 588 declarations and server metadata.
+- All 105 legacy `MSG_` names have one explicit opposite-direction typed alias and one shared name
+  registration. They do not gain a second handler.
+- Client dispatch can call only `ClientOpcodeHandler`. A server-only number received from a client
+  still follows the previous queue-and-drop path instead of disconnecting early.
+
+The immutable 1,315-row value manifest is `plan/04-opcode-values.tsv`, with SHA-256
+`895f39dda942c1e4bf7de2a9a80d9b3f4a4151745a52b36bf8e46b936fd26853`. It preserves all six zero
+registrations, both same-direction collisions, and all four valid opposite-direction overlaps.
+
+Verification used the isolated MySQL 8.0.46 client-header toolchain without a database process:
+
+- `game`, `worldserver`, and `unit_tests` compiled and linked.
+- `OpcodeTableTest.KeepsDirectionsIndependent` passed twice with the real `0x0014` overlap and the
+  existing `0x0205` duplicate.
+- The complete unit binary passed 11,396 tests; data-dependent cases kept their existing skips.
+- The checker self-check passed twice, and both C++ and SQL codestyle checks passed.
+
+No opcode value, payload parser, payload serializer, database, client file, Bottle, port, or running
+service changed. Real-client testing remains for a later vertical protocol slice because this plan
+changes type ownership and lookup only.

@@ -107,7 +107,7 @@ namespace WorldPackets
         class MinimapPing final : public ServerPacket
         {
         public:
-            MinimapPing() : ServerPacket(MSG_MINIMAP_PING, 8 + 4 + 4) { }
+            MinimapPing() : ServerPacket(MSG_MINIMAP_PING_SERVER, 8 + 4 + 4) { }
 
             WorldPacket const* Write() override;
 
@@ -130,7 +130,7 @@ namespace WorldPackets
         class RandomRoll final : public ServerPacket
         {
         public:
-            RandomRoll() : ServerPacket(MSG_RANDOM_ROLL, 4 + 4 + 4 + 8) { }
+            RandomRoll() : ServerPacket(MSG_RANDOM_ROLL_SERVER, 4 + 4 + 4 + 8) { }
 
             WorldPacket const* Write() override;
 

@@ -528,7 +528,7 @@ void WorldSession::HandleMoverRelocation(MovementInfo& movementInfo, Unit* mover
     }
 }
 
-bool WorldSession::VerifyMovementInfo(MovementInfo const& movementInfo, Player* plrMover, Unit* mover, Opcodes opcode) const
+bool WorldSession::VerifyMovementInfo(MovementInfo const& movementInfo, Player* plrMover, Unit* mover, OpcodeClient opcode) const
 {
     if (!movementInfo.pos.IsPositionValid())
     {
@@ -613,7 +613,7 @@ bool WorldSession::VerifyMovementInfo(MovementInfo const& movementInfo, Player* 
 
 bool WorldSession::ProcessMovementInfo(MovementInfo& movementInfo, Unit* mover, Player* plrMover, WorldPacket& recvData)
 {
-    Opcodes opcode = (Opcodes)recvData.GetOpcode();
+    OpcodeClient opcode = static_cast<OpcodeClient>(recvData.GetOpcode());
     if (!VerifyMovementInfo(movementInfo, plrMover, mover, opcode))
         return false;
 
@@ -996,7 +996,7 @@ void WorldSession::ComputeNewClockDelta()
 
 void WorldSession::HandleMoveRootAck(WorldPacket& recvData)
 {
-    Opcodes opcode = (Opcodes)recvData.GetOpcode();
+    OpcodeClient opcode = static_cast<OpcodeClient>(recvData.GetOpcode());
     LOG_DEBUG("network", "WORLD: {}", GetOpcodeNameForLogging(opcode));
 
     ObjectGuid guid;

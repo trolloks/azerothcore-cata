@@ -476,7 +476,7 @@ public:
     void WriteMovementInfo(WorldPacket* data, MovementInfo* mi);
     void SynchronizeMovement(MovementInfo& movementInfo);
     void HandleMoverRelocation(MovementInfo& movementInfo, Unit* mover);
-    bool VerifyMovementInfo(MovementInfo const& movementInfo, Player* plrMover, Unit* mover, Opcodes opcode) const;
+    bool VerifyMovementInfo(MovementInfo const& movementInfo, Player* plrMover, Unit* mover, OpcodeClient opcode) const;
     bool ProcessMovementInfo(MovementInfo& movementInfo, Unit* mover, Player* plrMover, WorldPacket& recvData);
 
     void SendPacket(WorldPacket const* packet);
@@ -705,7 +705,6 @@ public:
 public:                                                 // opcodes handlers
     void Handle_NULL(WorldPacket& null);                // not used
     void Handle_EarlyProccess(WorldPacket& recvPacket); // just mark packets processed in WorldSocket::OnRead
-    void Handle_ServerSide(WorldPacket& recvPacket);    // sever side only, can't be accepted from client
     void Handle_Deprecated(WorldPacket& recvPacket);    // never used anymore by client
 
     void HandleCharEnumOpcode(WorldPacket& recvPacket);
