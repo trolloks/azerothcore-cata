@@ -1084,6 +1084,11 @@ def real_client_authentication_issues(runner: str, fixture: str, plan_8: str) ->
         '"compare-last-two"',
         '"--server-dbc-root"',
         '"--purge-client-base"',
+        '"--purge-database-cache"',
+        "database_cache_key",
+        "reconcile_database_cache",
+        "DATABASE_CACHE_VERSION",
+        '"mysqldump"',
         "WRITABLE_CLIENT_DIRS",
         "127.0.0.1",
         "3724",
@@ -1952,7 +1957,9 @@ def self_check() -> None:
 
     client_runner = "\n".join((
         '"self-check"', '"prepare"', '"run"', '"verify"', '"replay"', '"reset"', '"compare-last-two"',
-        '"--server-dbc-root"', '"--purge-client-base"', "WRITABLE_CLIENT_DIRS",
+        '"--server-dbc-root"', '"--purge-client-base"', '"--purge-database-cache"',
+        "database_cache_key", "reconcile_database_cache", "DATABASE_CACHE_VERSION",
+        '"mysqldump"', "WRITABLE_CLIENT_DIRS",
         "127.0.0.1", "3724", "connection.log", "network.opcode", CLIENT_SHA256,
     ))
     client_fixture = stable_json({
@@ -1978,6 +1985,10 @@ def self_check() -> None:
     assert real_client_authentication_issues(client_runner, client_fixture, character_plan) == ()
     assert "real-client-authentication-runner-incomplete" in real_client_authentication_issues(
         client_runner.replace('"reset"', '"remove"', 1), client_fixture, character_plan
+    )
+    assert "real-client-authentication-runner-incomplete" in real_client_authentication_issues(
+        client_runner.replace('"--purge-database-cache"', '"--keep-database-cache"', 1),
+        client_fixture, character_plan,
     )
     assert "real-client-authentication-fixture-incomplete" in real_client_authentication_issues(
         client_runner, client_fixture.replace('"fresh_runs":2', '"fresh_runs":1', 1), character_plan

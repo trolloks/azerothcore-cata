@@ -23,6 +23,7 @@ import uuid
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MYSQL_IMAGE = "mysql:8.4"
+DATABASE_CACHE_VERSION = 1
 CLIENT_BUILD = 15595
 CLIENT_SHA256 = "0ea9cc0458cb137f4e0767e8a1896e2042480a4a22397480d7ee64c2e696192a"
 ACCOUNT = "PLAN6USER"
@@ -36,6 +37,10 @@ SRP_G = 7
 DEFAULT_MIGRATION = REPO_ROOT / "data/sql/updates/pending_db_auth/rev_1786964293354831242.sql"
 DEFAULT_FIXTURE = REPO_ROOT / "apps/cata/fixtures/plan7-client-authentication.json"
 PLAN6_RUNNER = REPO_ROOT / "apps/cata/run_authentication_handoff.py"
+DATABASE_SQL_DIRECTORIES = tuple(
+    (f"{kind}-{database}", REPO_ROOT / f"data/sql/{kind}/db_{database}")
+    for kind in ("base", "updates") for database in ("auth", "characters", "world")
+)
 
 State = Literal[
     "allocating", "prepared", "servers_ready", "client_running", "observed", "accepted",
@@ -72,6 +77,7 @@ class Generation(TypedDict, total=False):
     inputs: dict[str, object]
     paths: dict[str, str]
     released_updates: dict[str, list[str]]
+    database_cache: dict[str, str]
     evidence: dict[str, object] | None
     failure: dict[str, str] | None
     isolation_unchanged: bool
@@ -88,6 +94,7 @@ class Manifest(TypedDict, total=False):
     mysql_password: str
     baseline: dict[str, object]
     client_base: dict[str, object]
+    database_cache: dict[str, object]
     generations: list[Generation]
 
 
@@ -132,6 +139,18 @@ def sha256(path: Path) -> str:
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
+    return digest.hexdigest()
+
+
+def database_cache_key(image_id: str, directories: tuple[tuple[str, Path], ...]) -> str:
+    digest = hashlib.sha256(f"plan7-database-cache-v{DATABASE_CACHE_VERSION}\0{image_id}\0".encode())
+    for label, directory in directories:
+        paths = sorted(directory.glob("*.sql"))
+        if not paths:
+            raise RuntimeError(f"SQL directory contains no files: {directory}")
+        for path in paths:
+            digest.update(f"{label}/{path.name}\0".encode())
+            digest.update(bytes.fromhex(sha256(path)))
     return digest.hexdigest()
 
 
@@ -384,6 +403,9 @@ def assert_container_owned(manifest: Manifest, generation: Generation, schema: s
     volumes = {mount["Name"] for mount in details["Mounts"] if mount["Type"] == "volume"}
     if volumes != {docker["volume"]}:
         raise RuntimeError("owned MySQL volume attachment changed")
+    image_id = generation.get("inputs", {}).get("mysql_image_id")
+    if image_id and details["Image"] != image_id:
+        raise RuntimeError("owned MySQL container image changed")
     if schema is not None and schema not in generation["schemas"].values():
         raise RuntimeError(f"refusing unowned schema: {schema}")
     return details
@@ -450,6 +472,108 @@ def wait_for_mysql(manifest: Manifest, generation: Generation) -> None:
             return
         time.sleep(0.25)
     raise RuntimeError("owned MySQL did not become ready within 90 seconds")
+
+
+def database_cache_path(manifest: Manifest) -> Path:
+    return Path(manifest["root"]) / "database-cache.sql"
+
+
+def database_cache_staging_path(manifest: Manifest) -> Path:
+    return Path(manifest["root"]) / ".database-cache.sql.building"
+
+
+def remove_database_cache_files(manifest: Manifest) -> None:
+    for path in (database_cache_path(manifest), database_cache_staging_path(manifest)):
+        if path.is_symlink():
+            raise RuntimeError(f"refusing symlinked database cache path: {path}")
+        path.unlink(missing_ok=True)
+
+
+def reconcile_database_cache(manifest_path: Path, manifest: Manifest, key: str) -> Path | None:
+    record = manifest.get("database_cache")
+    if not record:
+        return None
+    path = Path(str(record["path"]))
+    if path != database_cache_path(manifest):
+        raise RuntimeError("cached database dump is outside the manifest root")
+    state = record.get("state")
+    if state in {"building", "purging"}:
+        remove_database_cache_files(manifest)
+        manifest.pop("database_cache")
+        save_manifest(manifest_path, manifest)
+        return None
+    if state != "ready":
+        raise RuntimeError("cached database dump has an unknown lifecycle state")
+    if path.is_symlink():
+        raise RuntimeError("refusing a symlinked database cache")
+    if record.get("key") != key or not path.is_file() or sha256(path) != record.get("sha256"):
+        record["state"] = "purging"
+        save_manifest(manifest_path, manifest)
+        remove_database_cache_files(manifest)
+        manifest.pop("database_cache")
+        save_manifest(manifest_path, manifest)
+        return None
+    return path
+
+
+def dump_database_cache(
+    manifest_path: Path, manifest: Manifest, generation: Generation, key: str,
+) -> Path:
+    assert_container_owned(manifest, generation)
+    path = database_cache_path(manifest)
+    temporary = database_cache_staging_path(manifest)
+    if path.exists() or path.is_symlink() or temporary.exists() or temporary.is_symlink():
+        raise RuntimeError("refusing to overwrite an unrecorded database cache file")
+    manifest["database_cache"] = {
+        "version": DATABASE_CACHE_VERSION,
+        "path": str(path),
+        "key": key,
+        "released_updates": generation["released_updates"],
+        "state": "building",
+    }
+    save_manifest(manifest_path, manifest)
+    command = [
+        "docker", "exec", str(generation["docker"]["container"]), "mysqldump",
+        "-uroot", f"-p{manifest['mysql_root_password']}", "--single-transaction",
+        "--set-gtid-purged=OFF", "--databases", *generation["schemas"].values(),
+    ]
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "wb") as handle:
+        result = subprocess.run(
+            command, stdout=handle, stderr=subprocess.PIPE, check=False, timeout=1800,
+        )
+        if result.returncode:
+            stderr = result.stderr.decode(errors="replace").strip()
+            raise RuntimeError(f"mysqldump failed with exit {result.returncode}: {stderr}")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
+    os.chmod(path, 0o600)
+    manifest["database_cache"]["sha256"] = sha256(path)
+    manifest["database_cache"]["state"] = "ready"
+    save_manifest(manifest_path, manifest)
+    return path
+
+
+def restore_database_cache(
+    manifest_path: Path, manifest: Manifest, generation: Generation, path: Path,
+) -> None:
+    assert_container_owned(manifest, generation)
+    command = [
+        "docker", "exec", "-i", str(generation["docker"]["container"]), "mysql",
+        "-uroot", f"-p{manifest['mysql_root_password']}",
+    ]
+    with path.open("rb") as handle:
+        result = subprocess.run(
+            command, stdin=handle, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            check=False, timeout=1800,
+        )
+    if result.returncode:
+        stderr = result.stderr.decode(errors="replace").strip()
+        manifest["database_cache"]["state"] = "purging"
+        save_manifest(manifest_path, manifest)
+        reconcile_database_cache(manifest_path, manifest, str(generation["inputs"]["database_cache_key"]))
+        raise RuntimeError(f"database cache restore failed with exit {result.returncode}: {stderr}")
 
 
 def replace_config(source: str, replacements: dict[str, str]) -> str:
@@ -750,8 +874,10 @@ def preflight_prepare(args: argparse.Namespace) -> dict[str, object]:
     if available < args.minimum_free_gib * 1024 ** 3:
         raise RuntimeError(f"run filesystem has {available} bytes free; need {args.minimum_free_gib} GiB")
     require_unused(AUTH_PORT)
-    if run_command(["docker", "image", "inspect", MYSQL_IMAGE], check=False).returncode:
+    image_result = run_command(["docker", "image", "inspect", MYSQL_IMAGE], check=False)
+    if image_result.returncode:
         raise RuntimeError(f"required local image is absent: {MYSQL_IMAGE}")
+    mysql_image_id = json.loads(image_result.stdout)[0]["Id"]
     for command in ("ss", "xprop", "wmctrl"):
         if shutil.which(command) is None:
             raise RuntimeError(f"required evidence command is absent: {command}")
@@ -796,6 +922,8 @@ def preflight_prepare(args: argparse.Namespace) -> dict[str, object]:
     return {
         "root": str(root),
         "repo_commit": head,
+        "mysql_image_id": mysql_image_id,
+        "database_cache_key": database_cache_key(mysql_image_id, DATABASE_SQL_DIRECTORIES),
         "authserver": authserver,
         "worldserver": worldserver,
         "unit_tests": unit_tests,
@@ -834,8 +962,6 @@ def prepare(args: argparse.Namespace) -> None:
                 return
             raise RuntimeError(f"cannot prepare after generation in state {latest['state']}")
         baseline = manifest["baseline"]
-        if manifest["repo_commit"] != inputs["repo_commit"]:
-            raise RuntimeError("repository HEAD changed between Plan 7 generations")
         current_protected = {
             "client_sha256": inputs["client_sha256"],
             "client_tree": inputs["client_tree"],
@@ -914,7 +1040,7 @@ def prepare(args: argparse.Namespace) -> None:
             "docker", "run", "-d", "--name", str(generation["docker"]["container"]), *labels,
             "-e", f"MYSQL_ROOT_PASSWORD={manifest['mysql_root_password']}",
             "-p", f"127.0.0.1:{generation['ports']['mysql']}:3306",
-            "-v", f"{generation['docker']['volume']}:/var/lib/mysql", MYSQL_IMAGE,
+            "-v", f"{generation['docker']['volume']}:/var/lib/mysql", str(inputs["mysql_image_id"]),
         ])
         generation["docker"]["container_id"] = result.stdout.decode().strip()
         save_manifest(manifest_path, manifest)
@@ -922,22 +1048,36 @@ def prepare(args: argparse.Namespace) -> None:
         auth = generation["schemas"]["auth"]
         characters = generation["schemas"]["characters"]
         world = generation["schemas"]["world"]
+        cache_key = str(inputs["database_cache_key"])
+        cache = reconcile_database_cache(manifest_path, manifest, cache_key)
+        if cache:
+            restore_database_cache(manifest_path, manifest, generation, cache)
+            generation["released_updates"] = dict(manifest["database_cache"]["released_updates"])
+            generation["database_cache"] = {"key": cache_key, "result": "restored"}
+        else:
+            mysql(
+                manifest, generation,
+                f"CREATE DATABASE `{auth}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+                f"CREATE DATABASE `{characters}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+                f"CREATE DATABASE `{world}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;",
+            )
+            released = {}
+            for key, schema in (("auth", auth), ("characters", characters), ("world", world)):
+                import_sql_directory(manifest, generation, REPO_ROOT / f"data/sql/base/db_{key}", schema)
+                released[key] = apply_released_updates(
+                    manifest, generation, REPO_ROOT / f"data/sql/updates/db_{key}", schema,
+                )
+            generation["released_updates"] = released
+            dump_database_cache(manifest_path, manifest, generation, cache_key)
+            generation["database_cache"] = {"key": cache_key, "result": "built"}
         mysql(
             manifest, generation,
-            f"CREATE DATABASE `{auth}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-            f"CREATE DATABASE `{characters}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-            f"CREATE DATABASE `{world}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-            f"CREATE USER '{manifest['mysql_user']}'@'%' IDENTIFIED BY '{manifest['mysql_password']}';"
+            f"CREATE USER IF NOT EXISTS '{manifest['mysql_user']}'@'%' "
+            f"IDENTIFIED BY '{manifest['mysql_password']}';"
             f"GRANT ALL ON `{auth}`.* TO '{manifest['mysql_user']}'@'%';"
             f"GRANT ALL ON `{characters}`.* TO '{manifest['mysql_user']}'@'%';"
             f"GRANT ALL ON `{world}`.* TO '{manifest['mysql_user']}'@'%';",
         )
-        released = {}
-        for key, schema in (("auth", auth), ("characters", characters), ("world", world)):
-            import_sql_directory(manifest, generation, REPO_ROOT / f"data/sql/base/db_{key}", schema)
-            released[key] = apply_released_updates(
-                manifest, generation, REPO_ROOT / f"data/sql/updates/db_{key}", schema,
-            )
         migration = Path(str(inputs["migration"]))
         mysql(manifest, generation, migration.read_bytes(), auth)
         build = mysql(
@@ -966,7 +1106,6 @@ def prepare(args: argparse.Namespace) -> None:
             f"VALUES ({REALM_ID},{ACCOUNT_ID},0);",
             auth,
         )
-        generation["released_updates"] = released
         data_destination = Path(paths["data"])
         data_destination.mkdir()
         copy_tree(Path(str(inputs["server_dbc_root"])), data_destination / "dbc")
@@ -1012,7 +1151,10 @@ def prepare(args: argparse.Namespace) -> None:
     except BaseException as error:
         record_failure(manifest_path, manifest, error)
         raise
-    print(f"prepared Plan 7 generation {number} in {generation_root}")
+    print(
+        f"prepared Plan 7 generation {number} in {generation_root} "
+        f"(database cache {generation['database_cache']['result']})"
+    )
 
 
 def start_server(
@@ -1257,6 +1399,23 @@ def purge_client_base(manifest: Manifest) -> None:
     record["purged"] = True
 
 
+def purge_database_cache(manifest_path: Path, manifest: Manifest) -> None:
+    record = manifest.get("database_cache")
+    if not record:
+        return
+    if any(generation["state"] != "reset" for generation in manifest["generations"]):
+        raise RuntimeError("all Plan 7 generations must be reset before purging the database cache")
+    path = Path(str(record["path"]))
+    if path != database_cache_path(manifest):
+        raise RuntimeError("refusing to purge a database cache outside the manifest root")
+    if record.get("state") != "purging":
+        record["state"] = "purging"
+        save_manifest(manifest_path, manifest)
+    remove_database_cache_files(manifest)
+    manifest.pop("database_cache")
+    save_manifest(manifest_path, manifest)
+
+
 def sanitized_evidence(
     generation: Generation, milestones: list[str], transcript: list[dict[str, str]],
 ) -> dict[str, object]:
@@ -1427,10 +1586,16 @@ def reset(args: argparse.Namespace) -> None:
     manifest = load_manifest(manifest_path)
     generation = active_generation(manifest)
     if generation["state"] == "reset":
+        purged = []
         if args.purge_client_base:
             purge_client_base(manifest)
+            purged.append("client base")
+        if args.purge_database_cache:
+            purge_database_cache(manifest_path, manifest)
+            purged.append("database cache")
+        if purged:
             save_manifest(manifest_path, manifest)
-            print("purged cached Plan 7 client base")
+            print(f"purged cached Plan 7 {' and '.join(purged)}")
             return
         print(f"generation {generation['number']} is already reset")
         return
@@ -1464,6 +1629,8 @@ def reset(args: argparse.Namespace) -> None:
     set_state(generation, "reset")
     if args.purge_client_base:
         purge_client_base(manifest)
+    if args.purge_database_cache:
+        purge_database_cache(manifest_path, manifest)
     save_manifest(manifest_path, manifest)
     for port in generation["ports"].values():
         require_unused(int(port))
@@ -1537,6 +1704,48 @@ four Initiating: COP_GET_CHARACTERS
     assert replace_config("# Key = old\nOther=1\n", {"Key": "new"}) == "Key = new\nOther=1\n"
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
+        sql_root = root / "sql"
+        sql_root.mkdir()
+        (sql_root / "one.sql").write_text("SELECT 1;\n")
+        cache_key = database_cache_key("mysql-image", (("auth-base", sql_root),))
+        assert cache_key == database_cache_key("mysql-image", (("auth-base", sql_root),))
+        assert cache_key != database_cache_key("other-image", (("auth-base", sql_root),))
+        (sql_root / "one.sql").write_text("SELECT 2;\n")
+        assert cache_key != database_cache_key("mysql-image", (("auth-base", sql_root),))
+        changed_key = database_cache_key("mysql-image", (("auth-base", sql_root),))
+        nested = sql_root / "nested"
+        nested.mkdir()
+        (nested / "ignored.sql").write_text("SELECT 3;\n")
+        assert changed_key == database_cache_key("mysql-image", (("auth-base", sql_root),))
+        dump = root / "database-cache.sql"
+        dump.write_bytes(b"database cache")
+        cache_manifest: Manifest = {
+            "root": str(root),
+            "generations": [{"state": "reset"}],
+            "database_cache": {
+                "path": str(dump), "sha256": sha256(dump), "purged": False,
+            },
+        }
+        cache_manifest["database_cache"]["state"] = "ready"
+        cache_manifest_path = root / "manifest.json"
+        save_manifest(cache_manifest_path, cache_manifest)
+        purge_database_cache(cache_manifest_path, cache_manifest)
+        assert not dump.exists() and "database_cache" not in cache_manifest
+        dump.write_bytes(b"partial final")
+        database_cache_staging_path(cache_manifest).write_bytes(b"partial staging")
+        cache_manifest["database_cache"] = {
+            "path": str(dump), "key": "cache-key", "state": "building",
+        }
+        save_manifest(cache_manifest_path, cache_manifest)
+        assert reconcile_database_cache(cache_manifest_path, cache_manifest, "cache-key") is None
+        assert not dump.exists() and not database_cache_staging_path(cache_manifest).exists()
+        dump.write_bytes(b"corrupt")
+        cache_manifest["database_cache"] = {
+            "path": str(dump), "key": "cache-key", "sha256": "0" * 64, "state": "ready",
+        }
+        save_manifest(cache_manifest_path, cache_manifest)
+        assert reconcile_database_cache(cache_manifest_path, cache_manifest, "cache-key") is None
+        assert not dump.exists() and "database_cache" not in cache_manifest
         base = root / "base"
         base.mkdir()
         (base / "Wow-64.exe").write_bytes(b"client")
@@ -1605,6 +1814,7 @@ def parser() -> argparse.ArgumentParser:
     reset_parser = subcommands.add_parser("reset")
     reset_parser.add_argument("--manifest", type=Path, required=True)
     reset_parser.add_argument("--purge-client-base", action="store_true")
+    reset_parser.add_argument("--purge-database-cache", action="store_true")
     compare_parser = subcommands.add_parser("compare-last-two")
     compare_parser.add_argument("--manifest", type=Path, required=True)
     return result
