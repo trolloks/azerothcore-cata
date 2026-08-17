@@ -1072,7 +1072,7 @@ def authentication_handoff_issues(socket_header: str, tests: str, runner: str) -
     return tuple(issues)
 
 
-def real_client_authentication_issues(runner: str, fixture: str, plan_8: str) -> tuple[str, ...]:
+def real_client_authentication_issues(runner: str, fixture: str, plan_index: str) -> tuple[str, ...]:
     issues: list[str] = []
     if any(token not in runner for token in (
         '"self-check"',
@@ -1125,17 +1125,15 @@ def real_client_authentication_issues(runner: str, fixture: str, plan_8: str) ->
     )):
         issues.append("real-client-authentication-fixture-incomplete")
 
-    if any(token not in plan_8 for token in (
-        "Status: ready for implementation",
-        "CMSG_CHAR_ENUM",
-        "SMSG_CHAR_ENUM",
-        "automatic character-creation screen",
-        "This plan does not prove a populated character row",
-        "or enter the world",
-        "Plan 7",
-        "Plan 9",
+    if any(row not in plan_index for row in (
+        "08\t18\topen\tPlan 8: typed empty character enumeration and stable build 15595 screen\t"
+        "https://github.com/trolloks/azerothcore-cata/issues/18",
+        "09\t19\topen\tPlan 9: one database-backed build 15595 character\t"
+        "https://github.com/trolloks/azerothcore-cata/issues/19",
+        "10\t20\topen\tPlan 10: select the enumerated build 15595 character\t"
+        "https://github.com/trolloks/azerothcore-cata/issues/20",
     )):
-        issues.append("character-screen-plan-incomplete")
+        issues.append("plan-issue-index-incomplete")
     return tuple(issues)
 
 
@@ -1372,8 +1370,8 @@ def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], 
     client_fixture = read_ref_file(
         inputs.repo_root, inputs.head_ref, "apps/cata/fixtures/plan7-client-authentication.json"
     )
-    character_plan = read_ref_file(inputs.repo_root, inputs.head_ref, "plan/08-build-15595-character-screen.md")
-    client_issues = real_client_authentication_issues(client_runner, client_fixture, character_plan)
+    plan_index = read_ref_file(inputs.repo_root, inputs.head_ref, "plan/github-issues.tsv")
+    client_issues = real_client_authentication_issues(client_runner, client_fixture, plan_index)
     client_row = ledger.anchors.get("protocol.real-client-authentication")
     if client_row is None:
         findings.append(Finding("error", "MISSING_ANCHOR", "protocol.real-client-authentication",
@@ -1980,27 +1978,30 @@ def self_check() -> None:
         "protected_inputs_unchanged": True,
         "reset": "PASS",
     })
-    character_plan = (
-        "Status: ready for implementation\nPlan 7\nPlan 9\nCMSG_CHAR_ENUM\nSMSG_CHAR_ENUM\n"
-        "automatic character-creation screen\nThis plan does not prove a populated character row\n"
-        "or enter the world\n"
+    plan_index = (
+        "08\t18\topen\tPlan 8: typed empty character enumeration and stable build 15595 screen\t"
+        "https://github.com/trolloks/azerothcore-cata/issues/18\n"
+        "09\t19\topen\tPlan 9: one database-backed build 15595 character\t"
+        "https://github.com/trolloks/azerothcore-cata/issues/19\n"
+        "10\t20\topen\tPlan 10: select the enumerated build 15595 character\t"
+        "https://github.com/trolloks/azerothcore-cata/issues/20\n"
     )
-    assert real_client_authentication_issues(client_runner, client_fixture, character_plan) == ()
+    assert real_client_authentication_issues(client_runner, client_fixture, plan_index) == ()
     assert "real-client-authentication-runner-incomplete" in real_client_authentication_issues(
-        client_runner.replace('"reset"', '"remove"', 1), client_fixture, character_plan
+        client_runner.replace('"reset"', '"remove"', 1), client_fixture, plan_index
     )
     assert "real-client-authentication-runner-incomplete" in real_client_authentication_issues(
         client_runner.replace('"--purge-database-cache"', '"--keep-database-cache"', 1),
-        client_fixture, character_plan,
+        client_fixture, plan_index,
     )
     assert "real-client-authentication-fixture-incomplete" in real_client_authentication_issues(
-        client_runner, client_fixture.replace('"fresh_runs":2', '"fresh_runs":1', 1), character_plan
+        client_runner, client_fixture.replace('"fresh_runs":2', '"fresh_runs":1', 1), plan_index
     )
     assert "real-client-authentication-fixture-incomplete" in real_client_authentication_issues(
-        client_runner, "", character_plan
+        client_runner, "", plan_index
     )
-    assert "character-screen-plan-incomplete" in real_client_authentication_issues(
-        client_runner, client_fixture, character_plan.replace("or enter the world", "or load a character", 1)
+    assert "plan-issue-index-incomplete" in real_client_authentication_issues(
+        client_runner, client_fixture, plan_index.replace("\t18\topen\t", "\t18\tclosed\t", 1)
     )
 
     defaults = LedgerRow(

@@ -72,7 +72,7 @@ The conversion is complete only when all of these statements are true:
 ## Plan families
 
 These are areas, not promised plan numbers. Each area will split into as many small plans as needed.
-A new numbered plan is written only when its predecessor is green and its inputs are known.
+Open a numbered GitHub issue only when its predecessor is green and its inputs are known.
 
 | Area | Exit condition before moving on |
 | --- | --- |
@@ -158,9 +158,9 @@ disconnects.
 
 ## Planning rules
 
-- One numbered plan owns one verifiable slice. Split it again when the real dependency graph is wider
-  than expected.
-- Give each numbered plan its own `plan/NN-short-name` branch. Create it from the latest `master`
+- One numbered GitHub issue owns one verifiable slice. Split it again when the real dependency graph
+  is wider than expected.
+- Give each numbered issue its own `plan/NN-short-name` branch. Create it from the latest `master`
   after the previous plan is merged; never stack plan branches.
 - Start each plan from updated upstream and end it with a repeatable check.
 - Port semantic differences into existing AzerothCore layers. Do not bulk-copy TrinityCore files.
@@ -176,18 +176,21 @@ disconnects.
 - Treat existing database data as immutable. A plan that needs a database must define its disposable
   Docker container, volume, unused-port check, ownership manifest, and bounded cleanup first.
 
-## Detailed plans
+## Plan issues
 
-- [Plan 1: conversion baseline and protocol contracts](01-conversion-baseline-and-protocol-contracts.md)
-- [Plan 2: deterministic bit-buffer contract](02-deterministic-bit-buffer-contract.md)
-- [Plan 3: world compression stream lifetime](03-world-compression-stream-lifetime.md)
-- [Plan 4: direction-safe opcode model](04-direction-safe-opcode-model.md)
-- [Plan 5: world authentication packet contract](05-world-authentication-packet-contract.md)
-- [Plan 6: build 15595 authentication handoff](06-build-15595-authentication-handoff.md)
-- [Plan 7: isolated build 15595 client authentication](07-isolated-build-15595-client-authentication.md)
-- [Plan 8: build 15595 character screen](08-build-15595-character-screen.md)
-- [Plan 9: one database-backed build 15595 character](09-build-15595-populated-character-list.md)
-- [Plan 10: select the enumerated build 15595 character](10-build-15595-character-selection.md)
+GitHub issues hold the complete plans and progress. `github-issues.tsv` is the repository index; the
+numbered Markdown files are stable-path stubs for historical ledger references.
+
+- [Plan 1: conversion baseline and protocol contracts](https://github.com/trolloks/azerothcore-cata/issues/11)
+- [Plan 2: deterministic bit-buffer contract](https://github.com/trolloks/azerothcore-cata/issues/12)
+- [Plan 3: world compression stream lifetime](https://github.com/trolloks/azerothcore-cata/issues/13)
+- [Plan 4: direction-safe opcode model](https://github.com/trolloks/azerothcore-cata/issues/14)
+- [Plan 5: world authentication packet contract](https://github.com/trolloks/azerothcore-cata/issues/15)
+- [Plan 6: build 15595 authentication handoff](https://github.com/trolloks/azerothcore-cata/issues/16)
+- [Plan 7: isolated build 15595 client authentication](https://github.com/trolloks/azerothcore-cata/issues/17)
+- [Plan 8: typed empty character enumeration](https://github.com/trolloks/azerothcore-cata/issues/18)
+- [Plan 9: one database-backed character](https://github.com/trolloks/azerothcore-cata/issues/19)
+- [Plan 10: select the enumerated character](https://github.com/trolloks/azerothcore-cata/issues/20)
 
 Plans 8-10 deliberately stop at three separate boundaries: typed empty enumeration, one populated
 enumeration, and real-client selection through the session legitimacy gate to the database-load callback.
