@@ -185,3 +185,4 @@ disconnects.
 - [Plan 5: world authentication packet contract](05-world-authentication-packet-contract.md)
 - [Plan 6: build 15595 authentication handoff](06-build-15595-authentication-handoff.md)
 - [Plan 7: isolated build 15595 client authentication](07-isolated-build-15595-client-authentication.md)
+- [Plan 8: build 15595 character screen](08-build-15595-character-screen.md)

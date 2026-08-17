@@ -84,7 +84,7 @@ namespace MMAP
 {
     static char const* const MAP_FILE_NAME_FORMAT  = "{}/{:03}{:02}{:02}.map";
 
-    uint32 const MAP_VERSION_MAGIC = 9;
+    uint32 const MAP_VERSION_MAGIC = 10;
 
     TerrainBuilder::TerrainBuilder(std::string const& dataDirPath, bool skipLiquid) :
                 m_skipLiquid (skipLiquid),
