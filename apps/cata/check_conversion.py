@@ -781,6 +781,82 @@ def byte_buffer_bit_issues(source: str) -> tuple[str, ...]:
     return tuple(issues)
 
 
+def world_socket_compression_issues(source: str) -> tuple[str, ...]:
+    issues: list[str] = []
+    constructor = re.search(
+        r"WorldSocket::WorldSocket\(IoContextTcpSocket&& socket\)\s*:(.*?)\n\s*\{",
+        source,
+        re.DOTALL,
+    )
+    initializer = re.search(
+        r"void WorldSocket::InitializeHandler\(.*?\)\s*\{(.*?)\n\s*\}\s*\n\s*bool WorldSocket::Update\(\)",
+        source,
+        re.DOTALL,
+    )
+    destructor = re.search(
+        r"WorldSocket::~WorldSocket\(\)\s*\{(.*?)\n\s*\}\s*\n\s*void WorldSocket::Start\(\)",
+        source,
+        re.DOTALL,
+    )
+
+    if constructor is None or "_compressionStream(nullptr)" not in constructor.group(1):
+        issues.append("compression-stream-default-state-not-null")
+
+    initialize_body = initializer.group(1) if initializer else ""
+    allocation_token = "std::make_unique<z_stream>()"
+    publication_token = "_compressionStream = compressionStream.release();"
+    allocation = initialize_body.find(allocation_token)
+    init_call = initialize_body.find("deflateInit(compressionStream.get(),")
+    publication = initialize_body.find(publication_token)
+    repeat_guard = re.search(
+        r"if\s*\(_compressionStream\)\s*\{\s*CloseSocket\(\);\s*return;\s*\}",
+        initialize_body,
+        re.DOTALL,
+    )
+    failure = re.search(
+        r"if\s*\(z_res != Z_OK\)\s*\{(.*?)\n\s*\}",
+        initialize_body,
+        re.DOTALL,
+    )
+
+    if repeat_guard is None or allocation < 0 or repeat_guard.start() > allocation:
+        issues.append("compression-stream-repeat-init-not-rejected")
+
+    failure_is_safe = (
+        failure is not None
+        and "CloseSocket();" in failure.group(1)
+        and "return;" in failure.group(1)
+        and 0 <= init_call < failure.start() < failure.end() < publication
+    )
+    if not failure_is_safe:
+        issues.append("compression-stream-init-failure-not-null")
+
+    publication_is_safe = (
+        initialize_body.count(allocation_token) == 1
+        and initialize_body.count(publication_token) == 1
+        and failure is not None
+        and 0 <= allocation < init_call < failure.start() < failure.end() < publication
+    )
+    if not publication_is_safe:
+        issues.append("compression-stream-success-not-owned")
+
+    destructor_body = destructor.group(1) if destructor else ""
+    cleanup_guard = re.search(
+        r"if\s*\(_compressionStream\)\s*\{(.*?)\n\s*\}",
+        destructor_body,
+        re.DOTALL,
+    )
+    cleanup_body = cleanup_guard.group(1) if cleanup_guard else ""
+    finalize = cleanup_body.find("deflateEnd(_compressionStream);")
+    release = cleanup_body.find("delete _compressionStream;")
+    if finalize < 0 or source.count("deflateEnd(_compressionStream);") != 1:
+        issues.append("compression-stream-not-finalized-once")
+    if release < 0 or release < finalize or source.count("delete _compressionStream;") != 1:
+        issues.append("compression-stream-not-released-once")
+
+    return tuple(issues)
+
+
 def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], ...], tuple[Finding, ...]]:
     anchors: list[dict[str, Any]] = []
     findings: list[Finding] = []
@@ -863,14 +939,21 @@ def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], 
     )
 
     world_socket = read_ref_file(inputs.repo_root, inputs.head_ref, "src/server/game/Server/WorldSocket.cpp")
-    compression_issues = []
-    if "_compressionStream = new z_stream()" in world_socket:
-        compression_issues.append("raw-stream-allocation")
-    if "WorldSocket::~WorldSocket() = default" in world_socket:
-        compression_issues.append("no-stream-finalizer")
+    compression_issues = world_socket_compression_issues(world_socket)
     compression_row = ledger.anchors.get("protocol.compression")
     if compression_row is None:
         findings.append(Finding("error", "MISSING_ANCHOR", "protocol.compression", "named anchor has no ledger row"))
+    elif (compression_row.state == "converted" or compression_row.implementation == "converted") and (
+        compression_issues or compression_row.fixture != "pass"
+    ):
+        findings.append(
+            Finding(
+                "error",
+                "CONVERTED_ANCHOR_WITHOUT_PROOF",
+                "protocol.compression",
+                "converted compression anchor lacks lifecycle-safe source or recorded checker proof",
+            )
+        )
     anchors.append(
         {
             "key": "protocol.compression",
@@ -1171,6 +1254,126 @@ def self_check() -> None:
     """
     assert byte_buffer_bit_issues(broken_byte_buffer)
     assert byte_buffer_bit_issues(fixed_byte_buffer) == ()
+
+    broken_world_socket = """
+    WorldSocket::WorldSocket(IoContextTcpSocket&& socket) : Socket(std::move(socket))
+    {
+    }
+
+    WorldSocket::~WorldSocket() = default;
+
+    void WorldSocket::Start()
+    {
+    }
+
+    void WorldSocket::InitializeHandler(boost::system::error_code error, std::size_t transferedBytes)
+    {
+        _compressionStream = new z_stream();
+        int32 z_res = deflateInit(_compressionStream, compressionLevel);
+        if (z_res != Z_OK)
+        {
+            CloseSocket();
+            return;
+        }
+    }
+
+    bool WorldSocket::Update()
+    {
+        return true;
+    }
+    """
+    fixed_world_socket = """
+    WorldSocket::WorldSocket(IoContextTcpSocket&& socket)
+        : Socket(std::move(socket)), _compressionStream(nullptr)
+    {
+    }
+
+    WorldSocket::~WorldSocket()
+    {
+        if (_compressionStream)
+        {
+            deflateEnd(_compressionStream);
+            delete _compressionStream;
+        }
+    }
+
+    void WorldSocket::Start()
+    {
+    }
+
+    void WorldSocket::InitializeHandler(boost::system::error_code error, std::size_t transferedBytes)
+    {
+        if (_compressionStream)
+        {
+            CloseSocket();
+            return;
+        }
+
+        auto compressionStream = std::make_unique<z_stream>();
+        int32 z_res = deflateInit(compressionStream.get(), compressionLevel);
+        if (z_res != Z_OK)
+        {
+            CloseSocket();
+            return;
+        }
+        _compressionStream = compressionStream.release();
+    }
+
+    bool WorldSocket::Update()
+    {
+        return true;
+    }
+    """
+    assert world_socket_compression_issues(broken_world_socket) == (
+        "compression-stream-default-state-not-null",
+        "compression-stream-repeat-init-not-rejected",
+        "compression-stream-init-failure-not-null",
+        "compression-stream-success-not-owned",
+        "compression-stream-not-finalized-once",
+        "compression-stream-not-released-once",
+    )
+    assert world_socket_compression_issues(fixed_world_socket) == ()
+    assert "compression-stream-default-state-not-null" in world_socket_compression_issues(
+        fixed_world_socket.replace("_compressionStream(nullptr)", "_compressionStream")
+    )
+    assert "compression-stream-repeat-init-not-rejected" in world_socket_compression_issues(
+        fixed_world_socket.replace(
+            """        if (_compressionStream)
+        {
+            CloseSocket();
+            return;
+        }
+
+""",
+            "",
+        )
+    )
+    assert "compression-stream-init-failure-not-null" in world_socket_compression_issues(
+        fixed_world_socket.replace(
+            """        if (z_res != Z_OK)
+        {
+            CloseSocket();
+            return;
+        }
+""",
+            "",
+        )
+    )
+    assert "compression-stream-success-not-owned" in world_socket_compression_issues(
+        fixed_world_socket.replace("        _compressionStream = compressionStream.release();\n", "")
+    )
+    assert "compression-stream-not-finalized-once" in world_socket_compression_issues(
+        fixed_world_socket.replace(
+            "            deflateEnd(_compressionStream);",
+            "            deflateEnd(_compressionStream);\n            deflateEnd(_compressionStream);",
+        )
+    )
+    assert "compression-stream-not-released-once" in world_socket_compression_issues(
+        fixed_world_socket.replace(
+            "            delete _compressionStream;",
+            "            delete _compressionStream;\n            delete _compressionStream;",
+        )
+    )
 
     defaults = LedgerRow(
         "defaults", "opcode", "*", "unverified-wip", "defer", "-", "wotlk", "wotlk",

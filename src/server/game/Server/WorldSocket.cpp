@@ -175,13 +175,21 @@ void EncryptableAndCompressiblePacket::Compress(void* dst, uint32 *dst_size, voi
 }
 
 WorldSocket::WorldSocket(IoContextTcpSocket&& socket)
-    : Socket(std::move(socket)), _OverSpeedPings(0), _worldSession(nullptr), _authed(false), _sendBufferSize(4096), _loggingPackets(false)
+    : Socket(std::move(socket)), _OverSpeedPings(0), _worldSession(nullptr), _authed(false),
+      _compressionStream(nullptr), _sendBufferSize(4096), _loggingPackets(false)
 {
     Acore::Crypto::GetRandomBytes(_authSeed);
     _headerBuffer.Resize(/*sizeof(ClientPktHeader)*/ 2);
 }
 
-WorldSocket::~WorldSocket() = default;
+WorldSocket::~WorldSocket()
+{
+    if (_compressionStream)
+    {
+        deflateEnd(_compressionStream);
+        delete _compressionStream;
+    }
+}
 
 void WorldSocket::Start()
 {
@@ -294,19 +302,26 @@ void WorldSocket::InitializeHandler(boost::system::error_code error, std::size_t
             return;
         }
 
-        _compressionStream = new z_stream();
-        _compressionStream->zalloc = (alloc_func)nullptr;
-        _compressionStream->zfree = (free_func)nullptr;
-        _compressionStream->opaque = (voidpf)nullptr;
-        _compressionStream->avail_in = 0;
-        _compressionStream->next_in = nullptr;
-        int32 z_res = deflateInit(_compressionStream, sWorld->getIntConfig(CONFIG_COMPRESSION));
+        if (_compressionStream)
+        {
+            CloseSocket();
+            return;
+        }
+
+        auto compressionStream = std::make_unique<z_stream>();
+        compressionStream->zalloc = (alloc_func)nullptr;
+        compressionStream->zfree = (free_func)nullptr;
+        compressionStream->opaque = (voidpf)nullptr;
+        compressionStream->avail_in = 0;
+        compressionStream->next_in = nullptr;
+        int32 z_res = deflateInit(compressionStream.get(), sWorld->getIntConfig(CONFIG_COMPRESSION));
         if (z_res != Z_OK)
         {
             LOG_ERROR("network", "Can't initialize packet compression (zlib: deflateInit) Error code: %i (%s)", z_res, zError(z_res));
             CloseSocket();
             return;
         }
+        _compressionStream = compressionStream.release();
 
         _headerBuffer.Resize(sizeof(ClientPktHeader));
         _headerBuffer.Reset();

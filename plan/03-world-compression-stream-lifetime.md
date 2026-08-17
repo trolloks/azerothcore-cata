@@ -1,6 +1,6 @@
 # Plan 3: world compression stream lifetime
 
-Status: ready for review. Execution has not started.
+Status: complete.
 
 ## Outcome
 
@@ -86,8 +86,35 @@ Read the repository C++ and build guidance before implementation. Do not build o
 user authorizes Plan 3 execution. No database is needed: do not inspect, start, stop, or modify any
 database, Docker database resource, client file, or Bottle.
 
+## Execution results
+
+- The plan branch starts exactly at merged `master` commit `491e22bee`; it is not stacked on the
+  Plan 2 branch.
+- `WorldSocket` now starts with a null compression pointer. Initializer handling rejects a second
+  stream, stages allocation in a local `std::unique_ptr`, and publishes ownership only after
+  `deflateInit` succeeds. A failed initialization therefore closes with the member still null.
+- Destruction calls `deflateEnd` and releases the stream only when initialization succeeded. Cleanup
+  remains in the destructor because queued packets may still be compressed after close is requested
+  and before the socket object is removed.
+- The executable checker distinguishes six lifecycle failures: missing null state, repeat overwrite,
+  unsafe init failure, missing successful ownership, repeated or missing finalization, and repeated or
+  missing release. Two consecutive self-check runs passed.
+- A direct `WorldSocket` lifecycle unit was not added. Its constructor needs a connected socket, the
+  private initializer reads global world configuration, and the existing full game target brings in
+  database linkage. Adding test-only seams would exceed this ownership-only plan.
+- `WorldSocket.cpp.o` compiled in the isolated Ubuntu 24.04 and MySQL 8.0.46 toolchain. No database
+  process was started.
+- The full conversion audit passed twice at commit `833c37999` with identical output: 0 errors and
+  457 known warnings.
+- The production diff does not change `NeedsCompression`, the `0x400` threshold, opcode masking,
+  original-size prefix, persistent `Z_SYNC_FLUSH` call, queue order, header creation, or close
+  sequencing.
+
 ## Completion predicate
 
 Plan 3 is complete when the persistent world compression stream has deterministic null, initialized,
 failure, and destruction states; every successful initialization is finalized and released exactly
 once; the audit is green; and all compression bytes and surrounding socket behavior remain unchanged.
+
+This predicate is achieved. The stream lifetime, focused proof, object compile, and repeatable full
+audit are complete without changing packet bytes or surrounding socket behavior.
