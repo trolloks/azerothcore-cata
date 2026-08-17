@@ -1,6 +1,6 @@
 # Plan 6: build 15595 authentication handoff
 
-Status: ready for review. Execution has not started.
+Status: complete. Verified on 2026-08-17.
 
 ## Outcome
 
@@ -99,8 +99,7 @@ Create `plan/06-build-15595-authentication-handoff` from updated `master` after 
 Before starting Docker, resolve and record unique resource names and confirm the chosen loopback port
 is unused. Never connect to any database endpoint not created by the Plan 6 harness.
 
-Do not launch
-`/mnt/f79365ff-6a68-45da-925e-b9ddc6d5da6c/Blizzard Games/Battle.NET/drive_c/Games/Cataclysm-4.3.4.15595-enUS-x64/Wow-64.exe`.
+Do not launch the source `Wow-64.exe` in the personal Cataclysm client tree.
 Real-client acceptance belongs to the next vertical plan after the server handoff is deterministic.
 
 ## Completion predicate
@@ -109,3 +108,19 @@ Plan 6 is complete when build 15595 is admitted through a pending auth update, a
 advertises 15595, the existing authserver session key authenticates one synthetic world session,
 negative policy paths remain intact, repeat runs produce the same sanitized logical transcript, and
 no existing database, Docker resource, port, client tree, or Bottle is modified.
+
+## Execution evidence
+
+- `authserver` and `unit_tests` compiled and linked against MySQL client 8.0.46.
+- The runner self-check, conversion-audit self-check, Python compilation, C++ style, SQL style, and
+  whitespace checks passed.
+- Two fresh `mysql:8.4` volumes completed `prepare`, `run`, `inspect`, and `reset`. Their normalized
+  logical transcripts matched, and reset restored the exact pre-run Docker inventory.
+- The real authserver rejected build 15596 with `000009`, admitted build 15595, emitted the
+  119-byte challenge and 32-byte proof response, verified M2, advertised the owned realm, and
+  persisted the same 40-byte session key consumed by the world query.
+- The world fixture produced
+  `unknown=0015:plain:closed,wrong-realm=0027:encrypted:closed,bad-digest=000D:encrypted:closed,`
+  `success=400000000003000000000300000000000C:encrypted:open` through the production callback and
+  natural session-manager `AUTH_OK` path.
+- Source-client and personal-Bottle metadata stayed unchanged. The client was not launched.

@@ -16,12 +16,30 @@
  */
 
 #include "AuthenticationPackets.h"
+#include "AccountScript.h"
+#include "AsyncCallbackProcessor.h"
+#include "CryptoHash.h"
+#include "DatabaseEnv.h"
+#include "MySQLThreading.h"
+#include "OpenSSLCrypto.h"
+#include "Realm.h"
 #include "SharedDefines.h"
+#include "ScriptMgr.h"
+#include "ServerScript.h"
 #include "Util.h"
+#include "World.h"
+#include "WorldMock.h"
+#include "WorldSessionMgr.h"
+#include "WorldSocket.h"
+#include "WorldScript.h"
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <chrono>
+#include <cstdlib>
 #include <numeric>
 #include <span>
+#include <thread>
 #include <string_view>
 #include <vector>
 
@@ -160,4 +178,256 @@ TEST(AuthenticationPacketsTest, WritesAuthResponses)
     WorldPackets::Auth::AuthResponse distinctExpansions(AUTH_OK);
     SetSuccessInfo(distinctExpansions, 3, 2);
     EXPECT_EQ(PayloadHex(distinctExpansions.Write()), "400000000003000000000200000000000C");
+}
+
+class WorldAuthenticationHandoffTest : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        OpenSSLCrypto::threadsSetup();
+        ScriptRegistry<AccountScript>::InitEnabledHooksIfNeeded(ACCOUNTHOOK_END);
+        ScriptRegistry<ServerScript>::InitEnabledHooksIfNeeded(SERVERHOOK_END);
+        ScriptRegistry<WorldScript>::InitEnabledHooksIfNeeded(WORLDHOOK_END);
+    }
+
+    void TearDown() override
+    {
+        if (_previousWorld)
+            sWorld = std::move(_previousWorld);
+        if (_mysqlInitialized)
+        {
+            CharacterDatabase.Close();
+            LoginDatabase.Close();
+            MySQL::Library_End();
+        }
+        OpenSSLCrypto::threadsCleanup();
+    }
+
+    struct CapturedPacket
+    {
+        uint32 Opcode;
+        std::string Payload;
+        bool Encrypted;
+    };
+
+    struct SocketPair
+    {
+        std::shared_ptr<WorldSocket> Server;
+        IoContextTcpSocket Client;
+    };
+
+    SocketPair MakeSocket()
+    {
+        tcp::acceptor acceptor(_ioContext, tcp::endpoint(boost::asio::ip::address_v4::loopback(), 0));
+        IoContextTcpSocket client(_ioContext);
+        client.connect(acceptor.local_endpoint());
+        IoContextTcpSocket server(_ioContext);
+        acceptor.accept(server);
+        return { std::make_shared<WorldSocket>(std::move(server)), std::move(client) };
+    }
+
+    PreparedQueryResult QueryAccount(std::string const& account)
+    {
+        PreparedQueryResult result;
+        bool ready = false;
+        QueryCallbackProcessor processor;
+        LoginDatabasePreparedStatement* statement = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_INFO_BY_NAME);
+        statement->SetData(0, int32(realm.Id.Realm));
+        statement->SetData(1, account);
+        processor.AddCallback(LoginDatabase.AsyncQuery(statement).WithPreparedCallback(
+            [&result, &ready](PreparedQueryResult queryResult)
+        {
+            result = std::move(queryResult);
+            ready = true;
+        }));
+
+        for (uint32 attempt = 0; attempt < 5000 && !ready; ++attempt)
+        {
+            processor.ProcessReadyCallbacks();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+
+        EXPECT_TRUE(ready);
+        return result;
+    }
+
+    std::shared_ptr<WorldPackets::Auth::AuthSession> MakeSession(std::string const& account, uint32 realmId,
+        SessionKey const& key, bool corruptDigest = false)
+    {
+        WorldPacket raw(CMSG_AUTH_SESSION, 0);
+        auto session = std::make_shared<WorldPackets::Auth::AuthSession>(std::move(raw));
+        session->Account = account;
+        session->Build = 15595;
+        session->RealmID = realmId;
+        session->LocalChallenge = { 0x10, 0x20, 0x30, 0x40 };
+
+        uint8 zero[4] = {};
+        Acore::Crypto::SHA1 digest;
+        digest.UpdateData(session->Account);
+        digest.UpdateData(zero);
+        digest.UpdateData(session->LocalChallenge);
+        digest.UpdateData(_authSeed);
+        digest.UpdateData(key);
+        digest.Finalize();
+        session->Digest = digest.GetDigest();
+        if (corruptDigest)
+            session->Digest[0] ^= 0xFF;
+
+        return session;
+    }
+
+    void Invoke(std::shared_ptr<WorldSocket> const& socket,
+        std::shared_ptr<WorldPackets::Auth::AuthSession> const& session, PreparedQueryResult result)
+    {
+        socket->_authSeed = _authSeed;
+        socket->HandleAuthSessionCallback(session, std::move(result));
+    }
+
+    std::vector<CapturedPacket> Drain(WorldSocket& socket)
+    {
+        std::vector<CapturedPacket> packets;
+        EncryptableAndCompressiblePacket* packet = nullptr;
+        while (socket._bufferQueue.Dequeue(packet))
+        {
+            std::string payload = ByteArrayToHexStr(
+                std::span<uint8 const>(packet->contents(), packet->size()));
+            packets.push_back({ packet->GetOpcode(), std::move(payload), packet->NeedsEncryption() });
+            delete packet;
+        }
+        return packets;
+    }
+
+    static CapturedPacket const* FindAuthResponse(std::vector<CapturedPacket> const& packets)
+    {
+        auto itr = std::find_if(packets.begin(), packets.end(), [](CapturedPacket const& packet)
+        {
+            return packet.Opcode == SMSG_AUTH_RESPONSE;
+        });
+        return itr == packets.end() ? nullptr : &*itr;
+    }
+
+    static bool HasSession(WorldSocket const& socket) { return socket._worldSession != nullptr; }
+    static bool IsAuthenticated(WorldSocket const& socket) { return socket._authed; }
+
+    boost::asio::io_context _ioContext;
+    std::array<uint8, 4> const _authSeed = { 0x01, 0x02, 0x03, 0x04 };
+    std::unique_ptr<IWorld> _previousWorld;
+    bool _mysqlInitialized = false;
+};
+
+TEST_F(WorldAuthenticationHandoffTest, UsesPersistedAuthserverKey)
+{
+    char const* loginInfo = std::getenv("AC_PLAN6_LOGIN_DATABASE_INFO");
+    char const* characterInfo = std::getenv("AC_PLAN6_CHARACTER_DATABASE_INFO");
+    char const* accountValue = std::getenv("AC_PLAN6_ACCOUNT");
+    char const* accountIdValue = std::getenv("AC_PLAN6_ACCOUNT_ID");
+    char const* realmIdValue = std::getenv("AC_PLAN6_REALM_ID");
+    char const* sessionKeyValue = std::getenv("AC_PLAN6_SESSION_KEY_HEX");
+    if (!loginInfo || !characterInfo || !accountValue || !accountIdValue || !realmIdValue || !sessionKeyValue)
+        GTEST_SKIP() << "Plan 6 disposable database environment is not configured";
+
+    uint32 accountId = uint32(std::stoul(accountIdValue));
+    uint32 realmId = uint32(std::stoul(realmIdValue));
+    ASSERT_EQ(std::string_view(sessionKeyValue).size(), SESSION_KEY_LENGTH * 2);
+    SessionKey expectedKey = HexStrToByteArray<SESSION_KEY_LENGTH>(sessionKeyValue);
+
+    MySQL::Library_Init();
+    _mysqlInitialized = true;
+    LoginDatabase.SetConnectionInfo(loginInfo, 1, 1);
+    CharacterDatabase.SetConnectionInfo(characterInfo, 1, 1);
+    ASSERT_EQ(LoginDatabase.Open(), 0u);
+    ASSERT_EQ(CharacterDatabase.Open(), 0u);
+    ASSERT_TRUE(LoginDatabase.PrepareStatements());
+    ASSERT_TRUE(CharacterDatabase.PrepareStatements());
+
+    _previousWorld = std::move(sWorld);
+    auto world = std::make_unique<::testing::NiceMock<WorldMock>>();
+    ON_CALL(*world, IsClosed()).WillByDefault(::testing::Return(false));
+    ON_CALL(*world, GetPlayerSecurityLimit()).WillByDefault(::testing::Return(SEC_PLAYER));
+    ON_CALL(*world, GetAvailableDbcLocale(::testing::_)).WillByDefault(::testing::Return(LOCALE_enUS));
+    ON_CALL(*world, getBoolConfig(::testing::_)).WillByDefault(::testing::Return(false));
+    ON_CALL(*world, getIntConfig(::testing::_)).WillByDefault(::testing::Return(0));
+    ON_CALL(*world, getIntConfig(CONFIG_EXPANSION)).WillByDefault(::testing::Return(3));
+    ON_CALL(*world, getIntConfig(CONFIG_SOCKET_TIMEOUTTIME)).WillByDefault(::testing::Return(60000));
+    ON_CALL(*world, getIntConfig(CONFIG_SOCKET_TIMEOUTTIME_ACTIVE)).WillByDefault(::testing::Return(60000));
+    sWorld = std::move(world);
+    realm.Id.Realm = realmId;
+    sWorldSessionMgr->SetPlayerAmountLimit(0);
+
+    std::vector<std::string> transcript;
+
+    SocketPair unknownSocket = MakeSocket();
+    auto unknownSession = MakeSession("PLAN6_MISSING", realmId, expectedKey);
+    Invoke(unknownSocket.Server, unknownSession, QueryAccount(unknownSession->Account));
+    std::vector<CapturedPacket> unknownPackets = Drain(*unknownSocket.Server);
+    CapturedPacket const* unknown = FindAuthResponse(unknownPackets);
+    ASSERT_NE(unknown, nullptr);
+    EXPECT_EQ(unknown->Payload, "0015");
+    EXPECT_FALSE(unknown->Encrypted);
+    EXPECT_FALSE(unknownSocket.Server->IsOpen());
+    EXPECT_FALSE(HasSession(*unknownSocket.Server));
+    transcript.push_back("unknown=0015:plain:closed");
+
+    PreparedQueryResult accountResult = QueryAccount(accountValue);
+    ASSERT_TRUE(accountResult);
+    SessionKey databaseKey = accountResult->Fetch()[1].Get<Binary, SESSION_KEY_LENGTH>();
+    EXPECT_EQ(databaseKey, expectedKey);
+
+    SocketPair realmSocket = MakeSocket();
+    auto realmSession = MakeSession(accountValue, realmId + 1, databaseKey);
+    Invoke(realmSocket.Server, realmSession, QueryAccount(accountValue));
+    std::vector<CapturedPacket> realmPackets = Drain(*realmSocket.Server);
+    CapturedPacket const* wrongRealm = FindAuthResponse(realmPackets);
+    ASSERT_NE(wrongRealm, nullptr);
+    EXPECT_EQ(wrongRealm->Payload, "0027");
+    EXPECT_TRUE(wrongRealm->Encrypted);
+    EXPECT_FALSE(realmSocket.Server->IsOpen());
+    EXPECT_FALSE(HasSession(*realmSocket.Server));
+    transcript.push_back("wrong-realm=0027:encrypted:closed");
+
+    SocketPair digestSocket = MakeSocket();
+    auto digestSession = MakeSession(accountValue, realmId, databaseKey, true);
+    Invoke(digestSocket.Server, digestSession, QueryAccount(accountValue));
+    std::vector<CapturedPacket> digestPackets = Drain(*digestSocket.Server);
+    CapturedPacket const* badDigest = FindAuthResponse(digestPackets);
+    ASSERT_NE(badDigest, nullptr);
+    EXPECT_EQ(badDigest->Payload, "000D");
+    EXPECT_TRUE(badDigest->Encrypted);
+    EXPECT_FALSE(digestSocket.Server->IsOpen());
+    EXPECT_FALSE(HasSession(*digestSocket.Server));
+    transcript.push_back("bad-digest=000D:encrypted:closed");
+
+    SocketPair successSocket = MakeSocket();
+    auto successSession = MakeSession(accountValue, realmId, databaseKey);
+    Invoke(successSocket.Server, successSession, QueryAccount(accountValue));
+    EXPECT_TRUE(IsAuthenticated(*successSocket.Server));
+    ASSERT_TRUE(HasSession(*successSocket.Server));
+
+    std::vector<CapturedPacket> successPackets;
+    for (uint32 attempt = 0; attempt < 5000 && !FindAuthResponse(successPackets); ++attempt)
+    {
+        sWorldSessionMgr->UpdateSessions(1);
+        std::vector<CapturedPacket> current = Drain(*successSocket.Server);
+        successPackets.insert(successPackets.end(), current.begin(), current.end());
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    CapturedPacket const* success = FindAuthResponse(successPackets);
+    ASSERT_NE(success, nullptr);
+    EXPECT_EQ(success->Payload, "400000000003000000000300000000000C");
+    EXPECT_TRUE(success->Encrypted);
+    ASSERT_NE(sWorldSessionMgr->FindSession(accountId), nullptr);
+    transcript.push_back("success=400000000003000000000300000000000C:encrypted:open");
+
+    std::cout << "PLAN6_WORLD_TRANSCRIPT ";
+    for (std::size_t i = 0; i < transcript.size(); ++i)
+        std::cout << (i ? "," : "") << transcript[i];
+    std::cout << std::endl;
+
+    successSocket.Server->CloseSocket();
+    for (uint32 attempt = 0; attempt < 100 && sWorldSessionMgr->FindSession(accountId); ++attempt)
+        sWorldSessionMgr->UpdateSessions(1);
+    EXPECT_EQ(sWorldSessionMgr->FindSession(accountId), nullptr);
+
 }
