@@ -49,7 +49,7 @@ namespace WorldPackets
         class SetDungeonDifficulty final : public ServerPacket
         {
         public:
-            SetDungeonDifficulty() : ServerPacket(MSG_SET_DUNGEON_DIFFICULTY, 12) {}
+            SetDungeonDifficulty() : ServerPacket(MSG_SET_DUNGEON_DIFFICULTY_SERVER, 12) {}
 
             WorldPacket const* Write() override;
 
@@ -81,7 +81,7 @@ namespace WorldPackets
         class SetRaidDifficulty final : public ServerPacket
         {
         public:
-            SetRaidDifficulty() : ServerPacket(MSG_SET_RAID_DIFFICULTY, 12) {}
+            SetRaidDifficulty() : ServerPacket(MSG_SET_RAID_DIFFICULTY_SERVER, 12) {}
 
             WorldPacket const* Write() override;
 

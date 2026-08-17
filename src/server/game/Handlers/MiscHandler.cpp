@@ -1503,9 +1503,9 @@ void WorldSession::HandleCancelMountAuraOpcode(WorldPacket& /*recv_data*/)
 
 void WorldSession::HandleMoveFlagChangeOpcode(WorldPacket& recv_data)
 {
-    LOG_DEBUG("network", "WORLD: {}", GetOpcodeNameForLogging((Opcodes)recv_data.GetOpcode()));
+    LOG_DEBUG("network", "WORLD: {}", GetOpcodeNameForLogging(static_cast<OpcodeClient>(recv_data.GetOpcode())));
 
-    Opcodes opcode = (Opcodes)recv_data.GetOpcode();
+    OpcodeClient opcode = static_cast<OpcodeClient>(recv_data.GetOpcode());
 
     ObjectGuid guid;
     uint32 counter;
@@ -1547,14 +1547,14 @@ void WorldSession::HandleMoveFlagChangeOpcode(WorldPacket& recv_data)
     if (_player->GetPendingFlightChange() == counter && opcode == CMSG_MOVE_SET_CAN_FLY_ACK)
         _player->SetPendingFlightChange(false);
 
-    Opcodes response;
+    OpcodeServer response;
 
     switch (recv_data.GetOpcode())
     {
         case CMSG_MOVE_HOVER_ACK: response = MSG_MOVE_HOVER; break;
-        case CMSG_MOVE_FEATHER_FALL_ACK: response = MSG_MOVE_FEATHER_FALL; break;
-        case CMSG_MOVE_WATER_WALK_ACK: response = MSG_MOVE_WATER_WALK; break;
-        case CMSG_MOVE_SET_CAN_FLY_ACK: response = MSG_MOVE_UPDATE_CAN_FLY; break;
+        case CMSG_MOVE_FEATHER_FALL_ACK: response = MSG_MOVE_FEATHER_FALL_SERVER; break;
+        case CMSG_MOVE_WATER_WALK_ACK: response = MSG_MOVE_WATER_WALK_SERVER; break;
+        case CMSG_MOVE_SET_CAN_FLY_ACK: response = MSG_MOVE_UPDATE_CAN_FLY_SERVER; break;
         case CMSG_MOVE_GRAVITY_DISABLE_ACK: response = MSG_MOVE_GRAVITY_CHNG; break;
         case CMSG_MOVE_GRAVITY_ENABLE_ACK: response = MSG_MOVE_GRAVITY_CHNG; break;
         default: return;

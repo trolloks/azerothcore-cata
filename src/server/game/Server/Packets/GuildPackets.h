@@ -231,7 +231,7 @@ namespace WorldPackets
         class GuildEventLogQueryResults final : public ServerPacket
         {
         public:
-            GuildEventLogQueryResults() : ServerPacket(MSG_GUILD_EVENT_LOG_QUERY, 4) { }
+            GuildEventLogQueryResults() : ServerPacket(MSG_GUILD_EVENT_LOG_QUERY_SERVER, 4) { }
 
             WorldPacket const* Write() override;
 
@@ -255,7 +255,7 @@ namespace WorldPackets
                 int32 WithdrawItemLimit = 0;
             };
 
-            GuildPermissionsQueryResults() : ServerPacket(MSG_GUILD_PERMISSIONS, 20) { }
+            GuildPermissionsQueryResults() : ServerPacket(MSG_GUILD_PERMISSIONS_SERVER, 20) { }
 
             WorldPacket const* Write() override;
 
@@ -435,7 +435,7 @@ namespace WorldPackets
         class GuildBankRemainingWithdrawMoney final : public ServerPacket
         {
         public:
-            GuildBankRemainingWithdrawMoney() : ServerPacket(MSG_GUILD_BANK_MONEY_WITHDRAWN, 8) { }
+            GuildBankRemainingWithdrawMoney() : ServerPacket(MSG_GUILD_BANK_MONEY_WITHDRAWN_SERVER, 8) { }
 
             WorldPacket const* Write() override;
 
@@ -545,7 +545,7 @@ namespace WorldPackets
         class GuildBankLogQueryResults final : public ServerPacket
         {
         public:
-            GuildBankLogQueryResults() : ServerPacket(MSG_GUILD_BANK_LOG_QUERY, 25) { }
+            GuildBankLogQueryResults() : ServerPacket(MSG_GUILD_BANK_LOG_QUERY_SERVER, 25) { }
 
             WorldPacket const* Write() override;
 
@@ -566,7 +566,7 @@ namespace WorldPackets
         class GuildBankTextQueryResult : public ServerPacket
         {
         public:
-            GuildBankTextQueryResult() : ServerPacket(MSG_QUERY_GUILD_BANK_TEXT, 4 + 2) { }
+            GuildBankTextQueryResult() : ServerPacket(MSG_QUERY_GUILD_BANK_TEXT_SERVER, 4 + 2) { }
 
             WorldPacket const* Write() override;
 
@@ -613,7 +613,7 @@ namespace WorldPackets
         class PlayerSaveGuildEmblem final : public ServerPacket
         {
         public:
-            PlayerSaveGuildEmblem() : ServerPacket(MSG_SAVE_GUILD_EMBLEM, 4) { }
+            PlayerSaveGuildEmblem() : ServerPacket(MSG_SAVE_GUILD_EMBLEM_SERVER, 4) { }
 
             WorldPacket const* Write() override;
 

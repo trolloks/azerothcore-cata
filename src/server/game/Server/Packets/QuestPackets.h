@@ -106,7 +106,7 @@ namespace WorldPackets
         class QuestPushResult final : public ServerPacket
         {
         public:
-            QuestPushResult() : ServerPacket(MSG_QUEST_PUSH_RESULT, 8 + 1) {}
+            QuestPushResult() : ServerPacket(MSG_QUEST_PUSH_RESULT_SERVER, 8 + 1) {}
 
             WorldPacket const* Write() override;
 

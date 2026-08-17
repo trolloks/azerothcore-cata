@@ -675,7 +675,7 @@ WorldSocket::ReadDataHandlerResult WorldSocket::ReadDataHandler()
         return ReadDataHandlerResult::Error;
     }
 
-    OpcodeHandler const* handler = opcodeTable[opcode];
+    OpcodeHandler const* handler = opcodeTable.GetIncomingOpcode(packetToQueue->GetOpcode());
     if (!handler)
     {
         LOG_ERROR("network.opcode", "No defined handler for opcode {} sent by {}", GetOpcodeNameForLogging(static_cast<OpcodeClient>(packetToQueue->GetOpcode())), _worldSession->GetPlayerInfo());

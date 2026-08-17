@@ -21,6 +21,7 @@ CATA_JS_PIN = "ab964a0e8dfe50a44fa92716ed05438f4a14dfd3"
 CLIENT_SHA256 = "0ea9cc0458cb137f4e0767e8a1896e2042480a4a22397480d7ee64c2e696192a"
 OPCODES_H = "src/server/game/Server/Protocol/Opcodes.h"
 OPCODES_CPP = "src/server/game/Server/Protocol/Opcodes.cpp"
+OPCODE_VALUES_MANIFEST = "plan/04-opcode-values.tsv"
 CATA_JS_OPCODES = "src/server/game/server/opcodes.ts"
 
 LEDGER_COLUMNS = (
@@ -202,8 +203,8 @@ ANCHOR_SPECS = (
     AnchorSpec(
         "protocol.opcode-model",
         OPCODES_H,
-        r"(typedef Opcodes OpcodeClient;)",
-        "separate client and server tables",
+        r"(enum OpcodeClient : uint16)",
+        "enum OpcodeClient : uint16",
         "Protocol foundation",
     ),
     AnchorSpec(
@@ -451,6 +452,89 @@ def parse_opcode_registrations(text: str) -> tuple[OpcodeRegistration, ...]:
     return tuple(sorted(registrations, key=lambda row: (row.line, row.name, row.direction)))
 
 
+def render_opcode_value_manifest(rows: Sequence[OpcodeDeclaration]) -> str:
+    values = declarations_by_name(rows)
+    return "".join(f"{name}\t0x{values[name].value:04X}\n" for name in sorted(values))
+
+
+def opcode_model_issues(header: str, source: str, manifest: str) -> tuple[str, ...]:
+    issues: list[str] = []
+    declarations = parse_opcode_declarations(
+        header,
+        {"OpcodeClient": ("c2s",), "OpcodeServer": ("s2c",)},
+    )
+    registrations = parse_opcode_registrations(source)
+    owners = {row.name: row.enum_name for row in declarations}
+
+    if re.search(r"enum\s+Opcodes\b|typedef\s+Opcodes\b", header):
+        issues.append("combined-opcode-type-remains")
+    if sum(row.enum_name == "OpcodeClient" for row in declarations) != 727:
+        issues.append("client-declaration-count-changed")
+    if sum(row.enum_name == "OpcodeServer" for row in declarations) != 588:
+        issues.append("server-declaration-count-changed")
+    if sum(row.direction == "c2s" for row in registrations) != 727:
+        issues.append("client-registration-count-changed")
+    if sum(row.direction == "s2c" for row in registrations) != 588:
+        issues.append("server-registration-count-changed")
+    if render_opcode_value_manifest(declarations) != manifest:
+        issues.append("opcode-value-manifest-changed")
+
+    aliases = {
+        (match.group(1), match.group(2), match.group(3), match.group(4))
+        for match in re.finditer(
+            r"inline\s+constexpr\s+(OpcodeClient|OpcodeServer)\s+([A-Z][A-Z0-9_]*)\s*=\s*"
+            r"static_cast<(OpcodeClient|OpcodeServer)>\(([A-Z][A-Z0-9_]*)\);",
+            header,
+            re.DOTALL,
+        )
+    }
+    expected_aliases: set[tuple[str, str, str, str]] = set()
+    expected_names: set[tuple[str, str, str]] = set()
+    for name, owner in owners.items():
+        if not name.startswith("MSG_"):
+            continue
+        if owner == "OpcodeClient":
+            expected_aliases.add(("OpcodeServer", f"{name}_SERVER", "OpcodeServer", name))
+            expected_names.add((name, name, f"{name}_SERVER"))
+        else:
+            expected_aliases.add(("OpcodeClient", f"{name}_CLIENT", "OpcodeClient", name))
+            expected_names.add((name, f"{name}_CLIENT", name))
+    if aliases != expected_aliases or len(aliases) != 105:
+        issues.append("bidirectional-opcode-aliases-incomplete")
+
+    names = {
+        match.groups()
+        for match in re.finditer(
+            r"DEFINE_BIDIRECTIONAL_OPCODE\(\s*([A-Z][A-Z0-9_]*)\s*,\s*"
+            r"([A-Z][A-Z0-9_]*)\s*,\s*([A-Z][A-Z0-9_]*)\s*\)",
+            source,
+        )
+    }
+    if names != expected_names or len(names) != 105:
+        issues.append("bidirectional-opcode-names-incomplete")
+
+    required_header = (
+        "operator[](OpcodeClient index)",
+        "operator[](OpcodeServer index)",
+        "ClientOpcodeHandler* _internalTableClient",
+        "ServerOpcodeHandler* _internalTableServer",
+        "char const* _internalTableClientNames",
+        "char const* _internalTableServerNames",
+        "GetIncomingOpcode(uint16 opcode)",
+        "GetOpcodeNameForLogging(OpcodeClient opcode)",
+        "GetOpcodeNameForLogging(OpcodeServer opcode)",
+    )
+    if any(token not in header for token in required_header):
+        issues.append("directional-opcode-storage-or-lookup-missing")
+    if "new ServerOpcodeHandler(name, status)" not in source or "Handle_ServerSide" in source:
+        issues.append("server-opcode-handler-not-directional")
+    client_name_fallback = "_internalTableClientNames[value] ? _internalTableClientNames[value] : _internalTableServerNames[value]"
+    if client_name_fallback not in source or "GetIncomingOpcode(uint16 opcode)" not in source:
+        issues.append("incoming-opcode-compatibility-path-missing")
+
+    return tuple(issues)
+
+
 def parse_cata_js_opcodes(text: str) -> tuple[OpcodeDeclaration, ...]:
     declarations: list[OpcodeDeclaration] = []
     pattern = re.compile(r"^\s*([A-Z][A-Z0-9_]+)\s*:\s*(0x[0-9A-Fa-f]+|\d+)\s*,", re.MULTILINE)
@@ -696,14 +780,14 @@ def materialize_opcodes(
                     f"no canonical declaration for {canonical_name}",
                 )
             )
-        declared_match = registration.direction in declaration.declared_directions
-        if not declared_match:
+        prefix_direction = prefix_directions(registration.name)
+        if len(prefix_direction) == 1 and registration.direction not in prefix_direction:
             findings.append(
                 Finding(
                     "warning",
                     "DIRECTION_CONTRADICTION",
                     registration.name,
-                    f"declared {declaration.declared_directions}, registered {registration.direction}",
+                    f"prefix implies {prefix_direction}, registered {registration.direction}",
                 )
             )
         materialized.append(
@@ -966,6 +1050,36 @@ def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], 
             "evidence": compression_row.evidence if compression_row else "-",
         }
     )
+
+    opcode_header = read_ref_file(inputs.repo_root, inputs.head_ref, OPCODES_H)
+    opcode_source = read_ref_file(inputs.repo_root, inputs.head_ref, OPCODES_CPP)
+    opcode_manifest = read_ref_file(inputs.repo_root, inputs.head_ref, OPCODE_VALUES_MANIFEST)
+    opcode_issues = opcode_model_issues(opcode_header, opcode_source, opcode_manifest)
+    opcode_row = ledger.anchors.get("protocol.opcode-model")
+    if opcode_row and (opcode_row.state == "converted" or opcode_row.implementation == "converted") and (
+        opcode_issues or opcode_row.fixture != "pass"
+    ):
+        findings.append(
+            Finding(
+                "error",
+                "CONVERTED_ANCHOR_WITHOUT_PROOF",
+                "protocol.opcode-model",
+                "converted opcode model lacks direction-safe source, the exact value manifest, or fixture proof",
+            )
+        )
+    anchors = [row for row in anchors if row["key"] != "protocol.opcode-model"]
+    anchors.append(
+        {
+            "key": "protocol.opcode-model",
+            "path": f"{OPCODES_H};{OPCODES_CPP};{OPCODE_VALUES_MANIFEST}",
+            "current": ",".join(opcode_issues) if opcode_issues else "direction-safe-registry",
+            "target": "direction-safe-registry",
+            "matched_target": not opcode_issues,
+            "plan": "Protocol foundation",
+            "state": opcode_row.state if opcode_row else "open",
+            "evidence": opcode_row.evidence if opcode_row else "-",
+        }
+    )
     return tuple(sorted(anchors, key=lambda row: row["key"])), tuple(findings)
 
 
@@ -1020,7 +1134,10 @@ def make_report(inputs: Inputs) -> dict[str, Any]:
     trinity_h = read_ref_file(inputs.trinity_repo, inputs.trinity_ref, OPCODES_H)
     cata_js_text = read_ref_file(inputs.cata_js_repo, inputs.cata_js_ref, CATA_JS_OPCODES)
 
-    current_declarations = parse_opcode_declarations(current_h, {"Opcodes": ()})
+    current_declarations = parse_opcode_declarations(
+        current_h,
+        {"OpcodeClient": ("c2s",), "OpcodeServer": ("s2c",)},
+    )
     upstream_declarations = parse_opcode_declarations(upstream_h, {"Opcodes": ()})
     canonical_declarations = parse_opcode_declarations(
         trinity_h,
@@ -1197,6 +1314,52 @@ def self_check() -> None:
     )
     assert len(collisions["same_direction"]) == 1
     assert len(collisions["opposite_direction"]) == 1
+
+    repo_root = Path(__file__).resolve().parents[2]
+    opcode_header = (repo_root / OPCODES_H).read_text(encoding="utf-8")
+    opcode_source = (repo_root / OPCODES_CPP).read_text(encoding="utf-8")
+    opcode_manifest = (repo_root / OPCODE_VALUES_MANIFEST).read_text(encoding="utf-8")
+    assert opcode_model_issues(opcode_header, opcode_source, opcode_manifest) == ()
+    assert "combined-opcode-type-remains" in opcode_model_issues(
+        opcode_header + "\nenum Opcodes : uint16\n{\n};\n", opcode_source, opcode_manifest
+    )
+    assert "opcode-value-manifest-changed" in opcode_model_issues(
+        opcode_header, opcode_source, opcode_manifest.replace("0x0205", "0x0206", 1)
+    )
+    assert "bidirectional-opcode-aliases-incomplete" in opcode_model_issues(
+        opcode_header.replace("inline constexpr OpcodeServer MSG_MOVE_START_FORWARD_SERVER", "broken", 1),
+        opcode_source,
+        opcode_manifest,
+    )
+    assert "bidirectional-opcode-names-incomplete" in opcode_model_issues(
+        opcode_header,
+        opcode_source.replace(
+            "DEFINE_BIDIRECTIONAL_OPCODE(MSG_MOVE_START_FORWARD, MSG_MOVE_START_FORWARD, "
+            "MSG_MOVE_START_FORWARD_SERVER);",
+            "",
+            1,
+        ),
+        opcode_manifest,
+    )
+    assert "directional-opcode-storage-or-lookup-missing" in opcode_model_issues(
+        opcode_header.replace("ServerOpcodeHandler* _internalTableServer", "OpcodeHandler* broken", 1),
+        opcode_source,
+        opcode_manifest,
+    )
+    assert "server-opcode-handler-not-directional" in opcode_model_issues(
+        opcode_header,
+        opcode_source.replace("new ServerOpcodeHandler(name, status)", "nullptr", 1),
+        opcode_manifest,
+    )
+    assert "incoming-opcode-compatibility-path-missing" in opcode_model_issues(
+        opcode_header,
+        opcode_source.replace(
+            "_internalTableClientNames[value] ? _internalTableClientNames[value] : _internalTableServerNames[value]",
+            "_internalTableClientNames[value]",
+            1,
+        ),
+        opcode_manifest,
+    )
 
     diff = """diff --git a/a.cpp b/a.cpp
 --- a/a.cpp

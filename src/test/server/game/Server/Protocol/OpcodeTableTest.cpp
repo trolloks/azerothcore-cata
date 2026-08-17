@@ -1,0 +1,47 @@
+/*
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "Opcodes.h"
+#include "gtest/gtest.h"
+
+TEST(OpcodeTableTest, KeepsDirectionsIndependent)
+{
+    OpcodeTable table;
+    table.Initialize();
+
+    OpcodeClient clientOverlap = static_cast<OpcodeClient>(0x0014);
+    OpcodeServer serverOverlap = static_cast<OpcodeServer>(0x0014);
+    ASSERT_NE(table[clientOverlap], nullptr);
+    ASSERT_NE(table[serverOverlap], nullptr);
+    EXPECT_STREQ(table[clientOverlap]->Name, "CMSG_CREATEGAMEOBJECT");
+    EXPECT_STREQ(table[serverOverlap]->Name, "SMSG_GAMETIME_SET");
+    EXPECT_EQ(table.GetOpcodeNameForLogging(clientOverlap), "[CMSG_CREATEGAMEOBJECT 0x0014 (20)]");
+    EXPECT_EQ(table.GetOpcodeNameForLogging(serverOverlap), "[SMSG_GAMETIME_SET 0x0014 (20)]");
+
+    ASSERT_NE(table[CMSG_GMTICKET_CREATE], nullptr);
+    EXPECT_EQ(table[CMSG_GMTICKET_CREATE], table[CMSG_ACCEPT_LEVEL_GRANT]);
+    EXPECT_STREQ(table[CMSG_GMTICKET_CREATE]->Name, "CMSG_GMTICKET_CREATE");
+
+    EXPECT_EQ(table.GetOpcodeNameForLogging(MSG_MINIMAP_PING_SERVER), "[MSG_MINIMAP_PING 0x01D5 (469)]");
+
+    uint16 serverOnly = uint16(SMSG_AUTH_RESPONSE);
+    EXPECT_NE(table.GetIncomingOpcode(serverOnly), nullptr);
+    EXPECT_EQ(table[static_cast<OpcodeClient>(serverOnly)], nullptr);
+
+    EXPECT_EQ(table.GetOpcodeNameForLogging(static_cast<OpcodeClient>(NUM_OPCODE_HANDLERS)),
+        "[INVALID OPCODE 0xFFFF (65535)]");
+}
