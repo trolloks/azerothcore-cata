@@ -1,6 +1,6 @@
 # Plan 2: deterministic bit-buffer contract
 
-Status: ready for review. Execution has not started.
+Status: complete. The first committed green checkpoint is `91cee3440`.
 
 ## Outcome
 
@@ -79,6 +79,32 @@ Gate:
   source and fixture proof both pass.
 - Formatting and diff checks pass.
 
+## Execution results
+
+- The plan branch starts exactly at merged `master` commit `fd79c7fe7`; no plan branch was stacked.
+- `ByteBuffer` now initializes its pending bit byte, preserves bit state across copies and moves,
+  leaves moved-from buffers empty, and resets bit state in both `clear()` and `resize()`.
+- `WriteBits` accepts 0 through 64 bits and `ReadBits` accepts 0 through 32 bits, matching their
+  existing value and return widths. Larger requests throw the existing invalid-value exception.
+- The focused `bytebuffer_tests` target has 11 exact contract tests covering auth bits, character
+  count bits, 0/1/7/8/9/32/64-bit writes, 0/1/7/8/9/32-bit reads, explicit alignment, construction,
+  copy/move/reset state, invalid widths, and packed GUID byte sequences.
+- Two consecutive focused runs passed 11/11 and produced byte-identical output. The registered
+  `ctest -R '^bytebuffer$'` target also passed.
+- `CharacterHandler.cpp` and `WorldSocket.cpp` compiled with the changed header. C++ and SQL style
+  checks and `git diff --check` passed.
+- The committed Plan 1 audit passed twice with identical JSON at `91cee3440`: 0 errors, 457 retained
+  inventory warnings, zero commits behind pinned upstream, and a converted
+  `protocol.byte-buffer-bits` anchor with source and fixture proof.
+
+The broad `unit_tests` target initially exposed a toolchain false positive: `FindMySQL.cmake`
+accepted MariaDB 10.11 as MySQL even though its headers lack `mysql_ssl_mode`, `MYSQL_OPT_SSL_MODE`,
+and `mysql_stmt_bind_named_param`. Configure now rejects MariaDB headers before applying the MySQL
+version check. The existing Compose service remains `mysql:8.4`; no database image or data was
+changed. In an isolated Ubuntu 24.04 build environment with MySQL 8.0.46, both `unit_tests` and
+`bytebuffer_tests` built and CTest passed 2/2. `ReadString` was unchanged because no fixture
+demonstrated valid embedded-NUL packet data.
+
 ## Safety and execution boundary
 
 Read the repository C++ and build guidance before implementation. Do not configure, build, or run the
@@ -91,3 +117,7 @@ the client or Bottle.
 Plan 2 is complete when all `ByteBuffer` construction, assignment, reset, bit-width, alignment, and
 packed-byte paths have deterministic exact-byte proof; the Plan 1 audit remains green; and no socket,
 opcode, handler, database, or client behavior changed.
+
+Achieved at `91cee3440`. The build-environment follow-up used a temporary isolated Docker image but
+did not start or modify any database container, volume, image, port, or data. No client file, Bottle,
+socket behavior, opcode, handler payload, compression behavior, or SQL data was changed.

@@ -86,8 +86,7 @@ public:
     ByteBuffer(ByteBuffer&& buf) noexcept :
         _rpos(buf._rpos), _wpos(buf._wpos), _bitpos(buf._bitpos), _curbitval(buf._curbitval), _storage(std::move(buf._storage))
     {
-        buf._rpos = 0;
-        buf._wpos = 0;
+        buf.clear();
     }
 
     ByteBuffer(ByteBuffer const& right) = default;
@@ -113,10 +112,11 @@ public:
         if (this != &right)
         {
             _rpos = right._rpos;
-            right._rpos = 0;
             _wpos = right._wpos;
-            right._wpos = 0;
+            _bitpos = right._bitpos;
+            _curbitval = right._curbitval;
             _storage = std::move(right._storage);
+            right.clear();
         }
 
         return *this;
@@ -126,6 +126,8 @@ public:
     {
         _storage.clear();
         _rpos = _wpos = 0;
+        _bitpos = InitialBitPos;
+        _curbitval = 0;
     }
 
     template <typename T>
@@ -182,52 +184,23 @@ public:
         return ((_curbitval >> (8 - ++_bitpos)) & 1) != 0;
     }
 
-    void WriteBits(uint64 value, int32 bits)
+    void WriteBits(uint64 value, uint32 bits)
     {
-        // remove bits that don't fit
-        value &= (1 << bits) - 1;
-        value &= (UI64LIT(1) << bits) - 1;
+        if (bits > 64)
+            throw ByteBufferInvalidValueException("bit count", std::to_string(bits).c_str());
 
-        if (bits > int32(_bitpos))
-        {
-            // first write to fill bit buffer
-            _curbitval |= value >> (bits - _bitpos);
-            bits -= _bitpos;
-            _bitpos = 8; // required "unneccessary" write to avoid double flushing
-            append(&_curbitval, sizeof(_curbitval));
-
-            // then append as many full bytes as possible
-            while (bits >= 8)
-            {
-                bits -= 8;
-                append<uint8>(value >> bits);
-            }
-
-            // store remaining bits in the bit buffer
-            _bitpos = 8 - bits;
-            _curbitval = (value & ((1 << bits) - 1)) << _bitpos;
-            _curbitval = (value & ((UI64LIT(1) << bits) - 1)) << _bitpos;
-        }
-        else
-        {
-            // entire value fits in the bit buffer
-            _bitpos -= bits;
-            _curbitval |= value << _bitpos;
-
-            if (_bitpos == 0)
-            {
-                _bitpos = 8;
-                append(&_curbitval, sizeof(_curbitval));
-                _curbitval = 0;
-            }
-        }
+        for (uint32 i = bits; i > 0; --i)
+            WriteBit((value >> (i - 1)) & 1);
     }
 
-    uint32 ReadBits(int32 bits)
+    uint32 ReadBits(uint32 bits)
     {
+        if (bits > 32)
+            throw ByteBufferInvalidValueException("bit count", std::to_string(bits).c_str());
+
         uint32 value = 0;
-        for (int32 i = bits - 1; i >= 0; --i)
-            value |= uint32(ReadBit()) << i;
+        for (uint32 i = bits; i > 0; --i)
+            value |= uint32(ReadBit()) << (i - 1);
 
         return value;
     }
@@ -570,6 +543,8 @@ public:
         _storage.resize(newsize, 0);
         _rpos = 0;
         _wpos = size();
+        _bitpos = InitialBitPos;
+        _curbitval = 0;
     }
 
     void reserve(std::size_t ressize)
@@ -650,7 +625,7 @@ public:
 
 protected:
     std::size_t _rpos{0}, _wpos{0}, _bitpos{InitialBitPos};
-    uint8 _curbitval;
+    uint8 _curbitval{0};
     std::vector<uint8> _storage;
 };
 
