@@ -250,7 +250,7 @@ void WorldSessionMgr::AddQueuedPlayer(WorldSession* session)
     _queuedPlayer.push_back(session);
 
     // The 1st SMSG_AUTH_RESPONSE needs to contain other info too.
-    session->SendAuthResponse(AUTH_WAIT_QUEUE, false, GetQueuePos(session));
+    session->SendAuthResponse(AUTH_OK, false, GetQueuePos(session));
 }
 
 bool WorldSessionMgr::RemoveQueuedPlayer(WorldSession* session)
