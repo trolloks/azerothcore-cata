@@ -40,8 +40,8 @@ Work:
 1. Add `AuthenticationPackets.h` and `.cpp` under the existing `WorldPackets` layer.
 2. Model the challenge seed, auth-session fields, digest, account name, addon bytes, success data,
    and optional queue data with their real widths.
-3. Implement the three build 15595 payload codecs once. Reject truncated fields, oversized addon
-   data, invalid account lengths, and trailing parser ambiguity at the packet boundary.
+3. Implement the three build 15595 payload codecs once. Reject truncated fields and addon or account
+   lengths larger than the remaining payload at the packet boundary.
 4. Do not copy dual-connection, redirect, RSA, or continued-session code from TrinityCore.
 
 Gate:
