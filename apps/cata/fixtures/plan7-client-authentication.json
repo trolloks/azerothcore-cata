@@ -1,0 +1,64 @@
+{
+  "build": 15595,
+  "client_build": 15595,
+  "client_milestones": [
+    "auth_login_ok",
+    "world_connected",
+    "world_auth_ok",
+    "characters_started"
+  ],
+  "client_sha256": "0ea9cc0458cb137f4e0767e8a1896e2042480a4a22397480d7ee64c2e696192a",
+  "fresh_runs": 2,
+  "matching_runs": true,
+  "milestones": [
+    "LOGIN_OK",
+    "WORLD_CONNECTED",
+    "COP_AUTHENTICATE_AUTH_OK_TRUE",
+    "COP_GET_CHARACTERS_INITIATING",
+    "CMSG_AUTH_SESSION",
+    "SMSG_AUTH_RESPONSE"
+  ],
+  "plan": 7,
+  "plan6_replay": {
+    "build": 15595,
+    "database_k_equals_world_query_k": true,
+    "m2_verified": true,
+    "peer_k_equals_database_k": true,
+    "world": "unknown=0015:plain:closed,wrong-realm=0027:encrypted:closed,bad-digest=000D:encrypted:closed,success=400000000003000000000300000000000C:encrypted:open"
+  },
+  "plan6_replay_status": "PASS",
+  "protected_inputs_unchanged": true,
+  "reset": "PASS",
+  "schema": 1,
+  "server_milestones": [
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_AUTH_CHALLENGE"
+    },
+    {
+      "direction": "c2s",
+      "opcode": "CMSG_AUTH_SESSION"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_AUTH_RESPONSE"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_CLIENTCACHE_VERSION"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_TUTORIAL_FLAGS"
+    },
+    {
+      "direction": "c2s",
+      "opcode": "CMSG_CHAR_ENUM"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_CHAR_ENUM"
+    }
+  ],
+  "verdict": "PASS"
+}

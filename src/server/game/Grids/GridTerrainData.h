@@ -51,7 +51,7 @@ union u_map_magic
 };
 
 const u_map_magic MapMagic        = { {'M', 'A', 'P', 'S'} };
-const uint32 MapVersionMagic      = 9;
+const uint32 MapVersionMagic      = 10;
 const u_map_magic MapAreaMagic    = { {'A', 'R', 'E', 'A'} };
 const u_map_magic MapHeightMagic  = { {'M', 'H', 'G', 'T'} };
 const u_map_magic MapLiquidMagic  = { {'M', 'L', 'I', 'Q'} };

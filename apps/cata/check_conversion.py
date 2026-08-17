@@ -1026,6 +1026,17 @@ def build_15595_admission_issues(migration: str) -> tuple[str, ...]:
     return tuple(issues)
 
 
+def cataclysm_map_format_issues(grid: str, extractor: str, terrain_builder: str) -> tuple[str, ...]:
+    issues: list[str] = []
+    if "const uint32 MapVersionMagic      = 10;" not in grid:
+        issues.append("world-map-format-is-not-cataclysm")
+    if "static uint32 const MAP_VERSION_MAGIC = 10;" not in extractor:
+        issues.append("map-extractor-format-is-not-cataclysm")
+    if "uint32 const MAP_VERSION_MAGIC = 10;" not in terrain_builder:
+        issues.append("mmap-generator-format-is-not-cataclysm")
+    return tuple(issues)
+
+
 def authentication_handoff_issues(socket_header: str, tests: str, runner: str) -> tuple[str, ...]:
     issues: list[str] = []
     if socket_header.count("friend class WorldAuthenticationHandoffTest;") != 1:
@@ -1058,6 +1069,66 @@ def authentication_handoff_issues(socket_header: str, tests: str, runner: str) -
         "args.compare_last_two",
     )):
         issues.append("authentication-handoff-runner-incomplete")
+    return tuple(issues)
+
+
+def real_client_authentication_issues(runner: str, fixture: str, plan_8: str) -> tuple[str, ...]:
+    issues: list[str] = []
+    if any(token not in runner for token in (
+        '"self-check"',
+        '"prepare"',
+        '"run"',
+        '"verify"',
+        '"replay"',
+        '"reset"',
+        '"compare-last-two"',
+        '"--server-dbc-root"',
+        '"--purge-client-base"',
+        "WRITABLE_CLIENT_DIRS",
+        "127.0.0.1",
+        "3724",
+        "connection.log",
+        "network.opcode",
+        CLIENT_SHA256,
+    )):
+        issues.append("real-client-authentication-runner-incomplete")
+
+    try:
+        proof = json.loads(fixture)
+    except (json.JSONDecodeError, TypeError):
+        proof = None
+    required_milestones = (
+        "LOGIN_OK",
+        "WORLD_CONNECTED",
+        "COP_AUTHENTICATE_AUTH_OK_TRUE",
+        "COP_GET_CHARACTERS_INITIATING",
+        "CMSG_AUTH_SESSION",
+        "SMSG_AUTH_RESPONSE",
+    )
+    if not isinstance(proof, dict) or any((
+        proof.get("schema") != 1,
+        proof.get("plan") != 7,
+        proof.get("client_build") != 15595,
+        proof.get("client_sha256") != CLIENT_SHA256,
+        proof.get("verdict") != "PASS",
+        proof.get("milestones") != list(required_milestones),
+        proof.get("fresh_runs") != 2,
+        proof.get("matching_runs") is not True,
+        proof.get("plan6_replay_status") != "PASS",
+        proof.get("protected_inputs_unchanged") is not True,
+        proof.get("reset") != "PASS",
+    )):
+        issues.append("real-client-authentication-fixture-incomplete")
+
+    if any(token not in plan_8 for token in (
+        "Status: draft",
+        "CMSG_CHAR_ENUM",
+        "SMSG_CHAR_ENUM",
+        "empty character list",
+        "does not enter the world",
+        "Plan 7",
+    )):
+        issues.append("character-screen-plan-incomplete")
     return tuple(issues)
 
 
@@ -1246,6 +1317,29 @@ def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], 
         "evidence": admission_row.evidence if admission_row else "-",
     })
 
+    grid_terrain = read_ref_file(inputs.repo_root, inputs.head_ref, "src/server/game/Grids/GridTerrainData.h")
+    map_extractor = read_ref_file(inputs.repo_root, inputs.head_ref, "src/tools/map_extractor/System.cpp")
+    terrain_builder = read_ref_file(inputs.repo_root, inputs.head_ref, "src/tools/mmaps_generator/TerrainBuilder.cpp")
+    map_issues = cataclysm_map_format_issues(grid_terrain, map_extractor, terrain_builder)
+    map_row = ledger.anchors.get("client-data.map-format")
+    if map_row is None:
+        findings.append(Finding("error", "MISSING_ANCHOR", "client-data.map-format", "named anchor has no ledger row"))
+    elif (map_row.state == "converted" or map_row.implementation == "converted") and (
+        map_issues or map_row.fixture != "pass"
+    ):
+        findings.append(Finding("error", "CONVERTED_ANCHOR_WITHOUT_PROOF", "client-data.map-format",
+                                "converted map format lacks matching server and extractor constants"))
+    anchors.append({
+        "key": "client-data.map-format",
+        "path": "src/server/game/Grids/GridTerrainData.h;src/tools/{map_extractor,mmaps_generator}",
+        "current": ",".join(map_issues) if map_issues else "cataclysm-map-format-10",
+        "target": "cataclysm-map-format-10",
+        "matched_target": not map_issues,
+        "plan": "Real client authentication",
+        "state": map_row.state if map_row else "open",
+        "evidence": map_row.evidence if map_row else "-",
+    })
+
     handoff_runner = read_ref_file(inputs.repo_root, inputs.head_ref, "apps/cata/run_authentication_handoff.py")
     handoff_issues = authentication_handoff_issues(world_socket_header, authentication_tests, handoff_runner)
     handoff_row = ledger.anchors.get("protocol.authentication-handoff")
@@ -1265,6 +1359,32 @@ def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], 
         "plan": "Authentication handoff",
         "state": handoff_row.state if handoff_row else "open",
         "evidence": handoff_row.evidence if handoff_row else "-",
+    })
+
+    client_runner = read_ref_file(inputs.repo_root, inputs.head_ref, "apps/cata/run_real_client_authentication.py")
+    client_fixture = read_ref_file(
+        inputs.repo_root, inputs.head_ref, "apps/cata/fixtures/plan7-client-authentication.json"
+    )
+    character_plan = read_ref_file(inputs.repo_root, inputs.head_ref, "plan/08-build-15595-character-screen.md")
+    client_issues = real_client_authentication_issues(client_runner, client_fixture, character_plan)
+    client_row = ledger.anchors.get("protocol.real-client-authentication")
+    if client_row is None:
+        findings.append(Finding("error", "MISSING_ANCHOR", "protocol.real-client-authentication",
+                                "named anchor has no ledger row"))
+    elif (client_row.state == "converted" or client_row.implementation == "converted") and (
+        client_issues or client_row.fixture != "pass" or client_row.client != "pass"
+    ):
+        findings.append(Finding("error", "CONVERTED_ANCHOR_WITHOUT_PROOF", "protocol.real-client-authentication",
+                                "converted real-client authentication lacks two-run client and replay proof"))
+    anchors.append({
+        "key": "protocol.real-client-authentication",
+        "path": "apps/cata/run_real_client_authentication.py",
+        "current": ",".join(client_issues) if client_issues else "real-client-authentication-accepted",
+        "target": "real-client-authentication-accepted",
+        "matched_target": not client_issues,
+        "plan": "Real client authentication",
+        "state": client_row.state if client_row else "open",
+        "evidence": client_row.evidence if client_row else "-",
     })
 
     opcode_header = read_ref_file(inputs.repo_root, inputs.head_ref, OPCODES_H)
@@ -1804,6 +1924,21 @@ def self_check() -> None:
     assert "build-15595-rewrites-existing-realm" in build_15595_admission_issues(
         admission + "\nUPDATE realmlist SET gamebuild=15595;\n"
     )
+    map_sources = (
+        "const uint32 MapVersionMagic      = 10;",
+        "static uint32 const MAP_VERSION_MAGIC = 10;",
+        "uint32 const MAP_VERSION_MAGIC = 10;",
+    )
+    assert cataclysm_map_format_issues(*map_sources) == ()
+    assert cataclysm_map_format_issues(map_sources[0].replace("= 10", "= 9"), *map_sources[1:]) == (
+        "world-map-format-is-not-cataclysm",
+    )
+    assert "map-extractor-format-is-not-cataclysm" in cataclysm_map_format_issues(
+        map_sources[0], map_sources[1].replace("= 10", "= 9"), map_sources[2]
+    )
+    assert "mmap-generator-format-is-not-cataclysm" in cataclysm_map_format_issues(
+        map_sources[0], map_sources[1], map_sources[2].replace("= 10", "= 9")
+    )
     assert authentication_handoff_issues(socket_header, auth_tests, handoff_runner) == ()
     assert "world-authentication-test-seam-missing" in authentication_handoff_issues(
         socket_header.replace("friend class WorldAuthenticationHandoffTest;", "", 1), auth_tests, handoff_runner
@@ -1813,6 +1948,45 @@ def self_check() -> None:
     )
     assert "authentication-handoff-runner-incomplete" in authentication_handoff_issues(
         socket_header, auth_tests, handoff_runner.replace("recv_exact(connection, 32)", "recv_exact(connection, 34)", 1)
+    )
+
+    client_runner = "\n".join((
+        '"self-check"', '"prepare"', '"run"', '"verify"', '"replay"', '"reset"', '"compare-last-two"',
+        '"--server-dbc-root"', '"--purge-client-base"', "WRITABLE_CLIENT_DIRS",
+        "127.0.0.1", "3724", "connection.log", "network.opcode", CLIENT_SHA256,
+    ))
+    client_fixture = stable_json({
+        "schema": 1,
+        "plan": 7,
+        "client_build": 15595,
+        "client_sha256": CLIENT_SHA256,
+        "verdict": "PASS",
+        "milestones": [
+            "LOGIN_OK", "WORLD_CONNECTED", "COP_AUTHENTICATE_AUTH_OK_TRUE",
+            "COP_GET_CHARACTERS_INITIATING", "CMSG_AUTH_SESSION", "SMSG_AUTH_RESPONSE",
+        ],
+        "fresh_runs": 2,
+        "matching_runs": True,
+        "plan6_replay_status": "PASS",
+        "protected_inputs_unchanged": True,
+        "reset": "PASS",
+    })
+    character_plan = (
+        "Status: draft\nPlan 7\nCMSG_CHAR_ENUM\nSMSG_CHAR_ENUM\n"
+        "empty character list\nPlan 8 does not enter the world\n"
+    )
+    assert real_client_authentication_issues(client_runner, client_fixture, character_plan) == ()
+    assert "real-client-authentication-runner-incomplete" in real_client_authentication_issues(
+        client_runner.replace('"reset"', '"remove"', 1), client_fixture, character_plan
+    )
+    assert "real-client-authentication-fixture-incomplete" in real_client_authentication_issues(
+        client_runner, client_fixture.replace('"fresh_runs":2', '"fresh_runs":1', 1), character_plan
+    )
+    assert "real-client-authentication-fixture-incomplete" in real_client_authentication_issues(
+        client_runner, "", character_plan
+    )
+    assert "character-screen-plan-incomplete" in real_client_authentication_issues(
+        client_runner, client_fixture, character_plan.replace("does not enter the world", "enters the world", 1)
     )
 
     defaults = LedgerRow(

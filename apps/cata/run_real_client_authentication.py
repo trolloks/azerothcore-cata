@@ -1,0 +1,1635 @@
+#!/usr/bin/env python3
+"""Run the isolated Plan 7 build-15595 real-client authentication proof."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import secrets
+import shutil
+import signal
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+from typing import Literal, TypedDict
+import uuid
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+MYSQL_IMAGE = "mysql:8.4"
+CLIENT_BUILD = 15595
+CLIENT_SHA256 = "0ea9cc0458cb137f4e0767e8a1896e2042480a4a22397480d7ee64c2e696192a"
+ACCOUNT = "PLAN6USER"
+PASSWORD = "PLAN6PASS"
+ACCOUNT_ID = 900000
+REALM_ID = 42
+AUTH_PORT = 3724
+WRITABLE_CLIENT_DIRS = ("WTF", "Cache", "Logs", "Errors", "Screenshots")
+SRP_N = int("894B645E89E1535BBDAD5B8B290650530801B18EBFBF5E8FAB3C82872A3E9BB7", 16)
+SRP_G = 7
+DEFAULT_MIGRATION = REPO_ROOT / "data/sql/updates/pending_db_auth/rev_1786964293354831242.sql"
+DEFAULT_FIXTURE = REPO_ROOT / "apps/cata/fixtures/plan7-client-authentication.json"
+PLAN6_RUNNER = REPO_ROOT / "apps/cata/run_authentication_handoff.py"
+
+State = Literal[
+    "allocating", "prepared", "servers_ready", "client_running", "observed", "accepted",
+    "failed", "inconclusive", "replayed", "reset",
+]
+
+
+class ProcessIdentity(TypedDict, total=False):
+    kind: str
+    pid: int
+    start_ticks: int
+    boot_id: str
+    exe: str
+    cmdline: list[str]
+    cwd: str
+    config: str
+    prefix: str
+    process_group: int
+    session: int
+    active: bool
+
+
+class Generation(TypedDict, total=False):
+    number: int
+    mode: str
+    state: State
+    completed_state: str
+    root: str
+    prefix: str
+    ports: dict[str, int]
+    docker: dict[str, str | None]
+    schemas: dict[str, str]
+    processes: list[ProcessIdentity]
+    inputs: dict[str, object]
+    paths: dict[str, str]
+    released_updates: dict[str, list[str]]
+    evidence: dict[str, object] | None
+    failure: dict[str, str] | None
+    isolation_unchanged: bool
+    replay_passed: bool
+
+
+class Manifest(TypedDict, total=False):
+    version: int
+    run_id: str
+    repo_commit: str
+    root: str
+    mysql_root_password: str
+    mysql_user: str
+    mysql_password: str
+    baseline: dict[str, object]
+    client_base: dict[str, object]
+    generations: list[Generation]
+
+
+TRANSITIONS: dict[str, set[str]] = {
+    "allocating": {"prepared", "failed", "inconclusive", "reset"},
+    "prepared": {"servers_ready", "failed", "inconclusive", "reset"},
+    "servers_ready": {"client_running", "failed", "inconclusive", "reset"},
+    "client_running": {"observed", "failed", "inconclusive", "reset"},
+    "observed": {"accepted", "failed", "inconclusive", "reset"},
+    "accepted": {"replayed", "failed", "inconclusive", "reset"},
+    "failed": {"reset"},
+    "inconclusive": {"reset"},
+    "replayed": {"reset"},
+    "reset": set(),
+}
+
+CLIENT_MILESTONES = (
+    ("auth_login_ok", re.compile(r"LOGIN_STATE_AUTHENTICATED.*LOGIN_OK", re.IGNORECASE)),
+    ("world_connected", re.compile(r"COP_CONNECT.*RESPONSE_CONNECTED.*TRUE", re.IGNORECASE)),
+    ("world_auth_ok", re.compile(r"COP_AUTHENTICATE.*AUTH_OK.*TRUE", re.IGNORECASE)),
+    ("characters_started", re.compile(r"Initiating: COP_GET_CHARACTERS", re.IGNORECASE)),
+)
+
+
+def run_command(
+    args: list[str], *, input_bytes: bytes | None = None, check: bool = True,
+    timeout: int = 120, env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[bytes]:
+    result = subprocess.run(
+        args, input=input_bytes, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        timeout=timeout, env=env,
+    )
+    if check and result.returncode:
+        stderr = result.stderr.decode(errors="replace").strip()
+        stdout = result.stdout.decode(errors="replace").strip()
+        raise RuntimeError(f"{args[0]} failed with exit {result.returncode}: {stderr or stdout}")
+    return result
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def srp_registration(username: str, password: str, salt: bytes) -> bytes:
+    identity = hashlib.sha1(f"{username}:{password}".encode()).digest()
+    exponent = int.from_bytes(hashlib.sha1(salt + identity).digest(), "little")
+    return pow(SRP_G, exponent, SRP_N).to_bytes(32, "little")
+
+
+def tree_metadata(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    digest = hashlib.sha256()
+    paths = [path]
+    if path.is_dir():
+        paths.extend(sorted(path.rglob("*")))
+    for entry in paths:
+        stat = entry.lstat()
+        relative = "." if entry == path else entry.relative_to(path).as_posix()
+        digest.update(
+            f"{relative}\0{stat.st_mode}\0{stat.st_uid}\0{stat.st_gid}\0{stat.st_size}\0"
+            f"{stat.st_ino}\0{stat.st_mtime_ns}\0{stat.st_ctime_ns}\n".encode()
+        )
+    return digest.hexdigest()
+
+
+def tree_content_hash(path: Path) -> str:
+    if not path.is_dir():
+        raise RuntimeError(f"data directory is absent: {path}")
+    digest = hashlib.sha256()
+    files = sorted(item for item in path.rglob("*") if item.is_file())
+    if not files:
+        raise RuntimeError(f"data directory contains no files: {path}")
+    for item in files:
+        relative = item.relative_to(path).as_posix()
+        digest.update(f"{relative}\0{item.stat().st_size}\0".encode())
+        digest.update(bytes.fromhex(sha256(item)))
+    return digest.hexdigest()
+
+
+def docker_inventory() -> dict[str, list[str]]:
+    containers = run_command(
+        ["docker", "ps", "-a", "--no-trunc", "--format", "{{.ID}} {{.Names}}"],
+    ).stdout.decode().splitlines()
+    volumes = run_command(["docker", "volume", "ls", "--format", "{{.Name}}"]).stdout.decode().splitlines()
+    return {"containers": sorted(containers), "volumes": sorted(volumes)}
+
+
+def unused_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+
+
+def require_unused(port: int) -> None:
+    with socket.socket() as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind(("127.0.0.1", port))
+        except OSError as error:
+            raise RuntimeError(f"loopback port {port} is already in use") from error
+
+
+def nearest_existing_parent(path: Path) -> Path:
+    current = path.resolve()
+    while not current.exists():
+        if current.parent == current:
+            raise RuntimeError(f"no existing parent for {path}")
+        current = current.parent
+    return current
+
+
+def require_external_root(path: Path) -> Path:
+    resolved = path.resolve()
+    if resolved == REPO_ROOT or REPO_ROOT in resolved.parents:
+        raise RuntimeError("the Plan 7 run root must be outside the Git worktree")
+    if resolved == Path("/") or resolved == Path.home().resolve():
+        raise RuntimeError(f"refusing broad run root: {resolved}")
+    return resolved
+
+
+def load_manifest(path: Path) -> Manifest:
+    if not path.is_file():
+        raise RuntimeError(f"manifest does not exist: {path}")
+    value = json.loads(path.read_text())
+    if value.get("version") != 1 or not isinstance(value.get("generations"), list):
+        raise RuntimeError("unsupported or malformed Plan 7 manifest")
+    if Path(value["root"]).resolve() != path.parent.resolve():
+        raise RuntimeError("manifest root does not match its parent directory")
+    return value
+
+
+def save_manifest(path: Path, manifest: Manifest) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(descriptor, "w") as handle:
+            json.dump(manifest, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        os.chmod(path, 0o600)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def active_generation(manifest: Manifest) -> Generation:
+    generations = manifest.get("generations", [])
+    if not generations:
+        raise RuntimeError("manifest has no generation")
+    return generations[-1]
+
+
+def set_state(generation: Generation, new_state: State) -> None:
+    old_state = generation["state"]
+    if new_state not in TRANSITIONS[old_state]:
+        raise RuntimeError(f"invalid Plan 7 state transition: {old_state} -> {new_state}")
+    generation["state"] = new_state
+
+
+def record_failure(manifest_path: Path, manifest: Manifest, error: BaseException) -> None:
+    generation = active_generation(manifest)
+    generation["failure"] = {"phase": generation["state"], "message": str(error)}
+    if generation["state"] not in ("failed", "inconclusive", "reset"):
+        set_state(generation, "failed")
+    save_manifest(manifest_path, manifest)
+
+
+def copy_tree(source: Path, destination: Path) -> None:
+    if destination.exists():
+        raise RuntimeError(f"copy destination already exists: {destination}")
+    shutil.copytree(source, destination, symlinks=False, copy_function=shutil.copy2)
+
+
+def make_tree_read_only(path: Path) -> None:
+    for entry in (path, *path.rglob("*")):
+        if not entry.is_symlink():
+            entry.chmod(entry.stat().st_mode & ~0o222)
+
+
+def make_tree_writable(path: Path) -> None:
+    for entry in (path, *path.rglob("*")):
+        if not entry.is_symlink():
+            entry.chmod(entry.stat().st_mode | 0o200)
+
+
+def link_client_base(base: Path, destination: Path) -> None:
+    if destination.exists():
+        raise RuntimeError(f"client link destination already exists: {destination}")
+    destination.mkdir()
+    for entry in base.iterdir():
+        if entry.name not in WRITABLE_CLIENT_DIRS:
+            (destination / entry.name).symlink_to(entry, target_is_directory=entry.is_dir())
+    for name in WRITABLE_CLIENT_DIRS:
+        (destination / name).mkdir()
+
+
+def write_client_config(client: Path) -> None:
+    (client / "Logs").mkdir(exist_ok=True)
+    (client / "WTF").mkdir(exist_ok=True)
+    (client / "WTF/Config.wtf").write_text(
+        'SET locale "enUS"\nSET realmlist "127.0.0.1"\nSET patchlist "127.0.0.1"\n'
+        'SET readTOS "1"\nSET readEULA "1"\nSET playIntroMovie "4"\nSET accounttype "CT"\n'
+        'SET gxWindow "1"\nSET gxMaximize "0"\n'
+    )
+
+
+def install_dxvk(generation: Generation) -> None:
+    inputs = generation["inputs"]
+    source = Path(str(inputs.get("dxvk_d3d9") or (
+        Path(str(inputs["wine_runner"])) / "lib/wine/dxvk/x86_64-windows/d3d9.dll"
+    )))
+    if not source.is_file():
+        raise RuntimeError(f"installed Wine runner has no bundled DXVK d3d9.dll: {source}")
+    destination = Path(generation["paths"]["client"]) / "d3d9.dll"
+    if destination.is_symlink():
+        raise RuntimeError("refusing to replace a linked client d3d9.dll")
+    destination.unlink(missing_ok=True)
+    shutil.copy2(source, destination)
+
+
+def ensure_client_base(manifest: Manifest, generation: Generation) -> None:
+    client = Path(generation["paths"]["client"])
+    base_record = manifest.get("client_base")
+    if base_record and not base_record.get("purged", False):
+        base = Path(str(base_record["path"]))
+        if base.resolve() != (Path(manifest["root"]) / "client-base").resolve():
+            raise RuntimeError("cached client base path is outside its manifest root")
+        if tree_metadata(base) != base_record["tree"]:
+            raise RuntimeError("cached client base changed between Plan 7 generations")
+        return
+    base = Path(manifest["root"]) / "client-base"
+    if base.exists():
+        raise RuntimeError(f"unowned cached client base already exists: {base}")
+    if not client.is_dir():
+        raise RuntimeError("the first generation has no full client copy to cache")
+    for name in WRITABLE_CLIENT_DIRS:
+        target = client / name
+        if target.exists():
+            remove_owned_path(target, generation)
+    client.rename(base)
+    make_tree_read_only(base)
+    manifest["client_base"] = {"path": str(base), "tree": tree_metadata(base), "purged": False}
+    link_client_base(base, client)
+    write_client_config(client)
+
+
+def require_owned_path(path: Path, generation: Generation) -> Path:
+    resolved = path.resolve()
+    root = Path(generation["root"]).resolve()
+    if resolved == root or root not in resolved.parents:
+        raise RuntimeError(f"refusing path outside owned generation: {resolved}")
+    return resolved
+
+
+def remove_owned_path(path: Path, generation: Generation) -> None:
+    resolved = require_owned_path(path, generation)
+    if resolved.is_dir() and not resolved.is_symlink():
+        shutil.rmtree(resolved)
+    else:
+        resolved.unlink(missing_ok=True)
+
+
+def container_details(name: str) -> dict:
+    result = run_command(["docker", "inspect", name], check=False)
+    if result.returncode:
+        raise RuntimeError(f"owned container is absent: {name}")
+    return json.loads(result.stdout)[0]
+
+
+def assert_container_owned(manifest: Manifest, generation: Generation, schema: str | None = None) -> dict:
+    docker = generation["docker"]
+    details = container_details(str(docker["container"]))
+    labels = details["Config"].get("Labels") or {}
+    expected = {
+        "org.azerothcore.plan": "7",
+        "org.azerothcore.run_id": manifest["run_id"],
+        "org.azerothcore.generation": str(generation["number"]),
+    }
+    if details["Id"] != docker["container_id"]:
+        raise RuntimeError("owned MySQL container ID changed")
+    if any(labels.get(key) != value for key, value in expected.items()):
+        raise RuntimeError("owned MySQL container labels changed")
+    binding = details["NetworkSettings"]["Ports"].get("3306/tcp")
+    mysql_port = generation["ports"]["mysql"]
+    if not binding or binding[0]["HostIp"] != "127.0.0.1" or int(binding[0]["HostPort"]) != mysql_port:
+        raise RuntimeError("owned MySQL loopback binding changed")
+    volumes = {mount["Name"] for mount in details["Mounts"] if mount["Type"] == "volume"}
+    if volumes != {docker["volume"]}:
+        raise RuntimeError("owned MySQL volume attachment changed")
+    if schema is not None and schema not in generation["schemas"].values():
+        raise RuntimeError(f"refusing unowned schema: {schema}")
+    return details
+
+
+def mysql(
+    manifest: Manifest, generation: Generation, sql: str | bytes, schema: str | None = None,
+    timeout: int = 600,
+) -> str:
+    assert_container_owned(manifest, generation, schema)
+    command = [
+        "docker", "exec", "-i", str(generation["docker"]["container"]), "mysql", "--batch",
+        "--skip-column-names", "-uroot", f"-p{manifest['mysql_root_password']}",
+    ]
+    if schema:
+        command.extend(["-D", schema])
+    payload = sql.encode() if isinstance(sql, str) else sql
+    return run_command(command, input_bytes=payload, timeout=timeout).stdout.decode().rstrip("\n")
+
+
+def import_sql_directory(
+    manifest: Manifest, generation: Generation, directory: Path, schema: str,
+) -> None:
+    paths = sorted(directory.glob("*.sql"))
+    if not paths:
+        raise RuntimeError(f"SQL base directory contains no files: {directory}")
+    for path in paths:
+        mysql(manifest, generation, path.read_bytes(), schema)
+
+
+def apply_released_updates(
+    manifest: Manifest, generation: Generation, directory: Path, schema: str,
+) -> list[str]:
+    applied = set(mysql(manifest, generation, "SELECT `name` FROM `updates`;", schema).splitlines())
+    added = []
+    for path in sorted(directory.glob("*.sql")):
+        if path.name in applied:
+            continue
+        contents = path.read_bytes()
+        mysql(manifest, generation, contents, schema)
+        file_hash = hashlib.sha1(contents).hexdigest().upper()
+        mysql(
+            manifest, generation,
+            "INSERT INTO `updates` (`name`,`hash`,`state`,`speed`) "
+            f"VALUES ('{path.name}','{file_hash}','RELEASED',0);",
+            schema,
+        )
+        added.append(path.name)
+    return added
+
+
+def wait_for_mysql(manifest: Manifest, generation: Generation) -> None:
+    deadline = time.monotonic() + 90
+    while time.monotonic() < deadline:
+        result = run_command(
+            [
+                "docker", "exec", str(generation["docker"]["container"]), "mysql", "--batch",
+                "--skip-column-names", "-uroot", f"-p{manifest['mysql_root_password']}",
+                "-e", "SELECT 1;",
+            ],
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip() == b"1":
+            return
+        time.sleep(0.25)
+    raise RuntimeError("owned MySQL did not become ready within 90 seconds")
+
+
+def replace_config(source: str, replacements: dict[str, str]) -> str:
+    lines = source.splitlines()
+    seen: set[str] = set()
+    for index, line in enumerate(lines):
+        for key, value in replacements.items():
+            if re.match(rf"^\s*#?\s*{re.escape(key)}\s*=", line):
+                if key not in seen:
+                    lines[index] = f"{key} = {value}"
+                    seen.add(key)
+                elif not line.lstrip().startswith("#"):
+                    lines[index] = f"# disabled duplicate for Plan 7: {line}"
+    missing = set(replacements) - seen
+    if missing:
+        raise RuntimeError(f"config template keys are missing: {sorted(missing)}")
+    return "\n".join(lines) + "\n"
+
+
+def write_configs(manifest: Manifest, generation: Generation) -> None:
+    paths = generation["paths"]
+    config_dir = Path(paths["config"])
+    log_dir = Path(paths["logs"])
+    config_dir.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    common = (
+        f"127.0.0.1;{generation['ports']['mysql']};{manifest['mysql_user']};"
+        f"{manifest['mysql_password']};"
+    )
+    auth_replacements = {
+        "RealmServerPort": str(AUTH_PORT),
+        "BindIP": '"127.0.0.1"',
+        "LogsDir": f'"{log_dir}"',
+        "PidFile": f'"{config_dir / "authserver.pid"}"',
+        "RealmsStateUpdateDelay": "1",
+        "LoginDatabaseInfo": f'"{common}{generation["schemas"]["auth"]}"',
+        "Updates.EnableDatabases": "0",
+        "Updates.AutoSetup": "0",
+        "StrictVersionCheck": "0",
+        "SourceDirectory": f'"{REPO_ROOT}"',
+        "Appender.Auth": '2,5,0,AuthServer.log,w',
+        "Logger.root": "4,Auth",
+    }
+    world_replacements = {
+        "RealmID": str(REALM_ID),
+        "WorldServerPort": str(generation["ports"]["world"]),
+        "BindIP": '"127.0.0.1"',
+        "LoginDatabaseInfo": f'"{common}{generation["schemas"]["auth"]}"',
+        "WorldDatabaseInfo": f'"{common}{generation["schemas"]["world"]}"',
+        "CharacterDatabaseInfo": f'"{common}{generation["schemas"]["characters"]}"',
+        "DataDir": f'"{Path(paths["data"])}"',
+        "LogsDir": f'"{log_dir}"',
+        "PidFile": f'"{config_dir / "worldserver.pid"}"',
+        "Console.Enable": "0",
+        "Updates.EnableDatabases": "0",
+        "Updates.AutoSetup": "0",
+        "Expansion": "3",
+        "MoveMaps.Enable": "0",
+        "vmap.enableLOS": "0",
+        "vmap.enableHeight": "0",
+        "Warden.Enabled": "0",
+        "Ra.Enable": "0",
+        "SOAP.Enabled": "0",
+        "Cluster.Enabled": "0",
+        "Appender.Server": '2,5,0,WorldServer.log,w',
+        "Logger.network": "4,Server",
+        "Logger.network.opcode": "4,Server",
+    }
+    auth_source = (REPO_ROOT / "src/server/apps/authserver/authserver.conf.dist").read_text()
+    world_source = (REPO_ROOT / "src/server/apps/worldserver/worldserver.conf.dist").read_text()
+    Path(paths["auth_config"]).write_text(replace_config(auth_source, auth_replacements))
+    Path(paths["world_config"]).write_text(replace_config(world_source, world_replacements))
+
+
+def proc_stat(pid: int) -> tuple[int, int, int]:
+    text = Path(f"/proc/{pid}/stat").read_text()
+    tail = text[text.rfind(")") + 2:].split()
+    return int(tail[19]), int(tail[2]), int(tail[3])
+
+
+def proc_environment(pid: int) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for field in Path(f"/proc/{pid}/environ").read_bytes().split(b"\0"):
+        if b"=" in field:
+            key, value = field.split(b"=", 1)
+            values[key.decode(errors="replace")] = value.decode(errors="replace")
+    return values
+
+
+def process_identity(pid: int, kind: str, *, config: Path | None = None, prefix: Path | None = None) -> ProcessIdentity:
+    start_ticks, process_group, session = proc_stat(pid)
+    record: ProcessIdentity = {
+        "kind": kind,
+        "pid": pid,
+        "start_ticks": start_ticks,
+        "boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
+        "exe": str(Path(f"/proc/{pid}/exe").resolve()),
+        "cmdline": [
+            part.decode(errors="replace")
+            for part in Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0") if part
+        ],
+        "cwd": str(Path(f"/proc/{pid}/cwd").resolve()),
+        "process_group": process_group,
+        "session": session,
+        "active": True,
+    }
+    if config is not None:
+        record["config"] = str(config.resolve())
+    if prefix is not None:
+        record["prefix"] = str(prefix.resolve())
+    return record
+
+
+def assert_process_owned(record: ProcessIdentity) -> None:
+    pid = int(record["pid"])
+    proc = Path(f"/proc/{pid}")
+    if not proc.exists():
+        raise RuntimeError(f"owned {record['kind']} PID {pid} is absent")
+    try:
+        current = process_identity(pid, record["kind"])
+    except FileNotFoundError as error:
+        raise RuntimeError(f"owned {record['kind']} PID {pid} exited during identity verification") from error
+    for key in ("start_ticks", "boot_id", "exe"):
+        if current[key] != record[key]:
+            raise RuntimeError(f"refusing changed {record['kind']} PID {pid}")
+    if "config" in record and str(record["config"]) not in current["cmdline"]:
+        raise RuntimeError(f"owned {record['kind']} config no longer matches PID {pid}")
+    if "prefix" in record:
+        environment = proc_environment(pid)
+        if Path(environment.get("WINEPREFIX", "")).resolve() != Path(record["prefix"]).resolve():
+            raise RuntimeError(f"owned Wine prefix no longer matches PID {pid}")
+
+
+def find_wine_processes(prefix: Path) -> list[ProcessIdentity]:
+    expected = prefix.resolve()
+    records = []
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            environment = proc_environment(int(proc.name))
+            value = environment.get("WINEPREFIX")
+            if value and Path(value).resolve() == expected:
+                records.append(process_identity(int(proc.name), "wine", prefix=prefix))
+        except (FileNotFoundError, PermissionError, ProcessLookupError, ValueError):
+            continue
+    return sorted(records, key=lambda item: int(item["pid"]))
+
+
+def add_processes(generation: Generation, records: list[ProcessIdentity]) -> None:
+    known = {(int(item["pid"]), int(item["start_ticks"])) for item in generation["processes"]}
+    for record in records:
+        identity = (int(record["pid"]), int(record["start_ticks"]))
+        if identity not in known:
+            generation["processes"].append(record)
+            known.add(identity)
+
+
+def stop_process(record: ProcessIdentity, process: subprocess.Popen[bytes] | None = None) -> None:
+    if not record.get("active", False):
+        return
+    pid = int(record["pid"])
+    if not Path(f"/proc/{pid}").exists():
+        record["active"] = False
+        return
+    assert_process_owned(record)
+    os.kill(pid, signal.SIGTERM)
+    deadline = time.monotonic() + 15
+    while Path(f"/proc/{pid}").exists() and time.monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            break
+        time.sleep(0.1)
+    if process is not None and process.poll() is None:
+        process.wait(timeout=1)
+    if Path(f"/proc/{pid}").exists() and (process is None or process.poll() is None):
+        raise RuntimeError(f"owned {record['kind']} PID {pid} did not stop")
+    record["active"] = False
+
+
+def stop_servers(generation: Generation, popens: dict[str, subprocess.Popen[bytes]] | None = None) -> None:
+    popens = popens or {}
+    for kind in ("worldserver", "authserver"):
+        for record in reversed(generation["processes"]):
+            if record["kind"] == kind and record.get("active", False):
+                stop_process(record, popens.get(kind))
+
+
+def wine_environment(generation: Generation) -> dict[str, str]:
+    paths = generation["paths"]
+    environment = os.environ.copy()
+    environment.update({
+        "WINEPREFIX": paths["wine_prefix"],
+        "WINEARCH": "win64",
+        "XDG_DATA_HOME": paths["xdg_data"],
+        "XDG_CONFIG_HOME": paths["xdg_config"],
+        "XDG_CACHE_HOME": paths["xdg_cache"],
+        "XDG_STATE_HOME": paths["xdg_state"],
+        "GSETTINGS_BACKEND": "memory",
+        "DISPLAY": str(generation["inputs"]["display"]),
+        "WINEDLLOVERRIDES": "d3d9=n,b",
+        "http_proxy": "http://127.0.0.1:9",
+        "https_proxy": "http://127.0.0.1:9",
+    })
+    xauthority = str(generation["inputs"].get("xauthority") or "")
+    if xauthority:
+        environment["XAUTHORITY"] = xauthority
+    else:
+        environment.pop("XAUTHORITY", None)
+    return environment
+
+
+def configure_wine_proxy(generation: Generation) -> None:
+    wine = str(generation["inputs"]["wine"])
+    key = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+    environment = wine_environment(generation)
+    run_command(
+        [wine, "reg", "add", key, "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "1", "/f"],
+        env=environment,
+    )
+    run_command(
+        [wine, "reg", "add", key, "/v", "ProxyServer", "/t", "REG_SZ", "/d", "127.0.0.1:9", "/f"],
+        env=environment,
+    )
+
+
+def stop_wine(generation: Generation) -> None:
+    prefix = Path(generation["paths"]["wine_prefix"])
+    current = find_wine_processes(prefix)
+    add_processes(generation, current)
+    for record in current:
+        assert_process_owned(record)
+    wineserver = Path(str(generation["inputs"]["wine_runner"])) / "bin/wineserver"
+    if current and wineserver.is_file():
+        run_command([str(wineserver), "-k"], check=False, timeout=30, env=wine_environment(generation))
+        deadline = time.monotonic() + 15
+        while find_wine_processes(prefix) and time.monotonic() < deadline:
+            time.sleep(0.1)
+    current_identities = {(int(item["pid"]), int(item["start_ticks"])): item for item in find_wine_processes(prefix)}
+    for record in reversed(generation["processes"]):
+        key = (int(record["pid"]), int(record["start_ticks"]))
+        if record["kind"] == "wine" and key in current_identities:
+            stop_process(record)
+        elif record["kind"] == "wine":
+            record["active"] = False
+
+
+def wait_for_port(port: int, record: ProcessIdentity, timeout: int) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        assert_process_owned(record)
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                return
+        except OSError:
+            time.sleep(0.1)
+    raise RuntimeError(f"owned server did not open loopback port {port} within {timeout} seconds")
+
+
+def wait_for_world(manifest: Manifest, generation: Generation, record: ProcessIdentity) -> None:
+    deadline = time.monotonic() + 300
+    while time.monotonic() < deadline:
+        assert_process_owned(record)
+        try:
+            with socket.create_connection(("127.0.0.1", generation["ports"]["world"]), timeout=0.2):
+                listening = True
+        except OSError:
+            listening = False
+        flag = mysql(
+            manifest, generation, f"SELECT `flag` FROM `realmlist` WHERE `id`={REALM_ID};",
+            generation["schemas"]["auth"],
+        )
+        if listening and flag == "0":
+            return
+        time.sleep(0.25)
+    raise RuntimeError("worldserver did not reach listener and realm-online readiness")
+
+
+def binary_identity(path: Path, head: str, *, reports_version: bool) -> dict[str, object]:
+    resolved = path.resolve()
+    if not resolved.is_file() or not os.access(resolved, os.X_OK):
+        raise RuntimeError(f"required executable is absent: {resolved}")
+    identity: dict[str, object] = {"path": str(resolved), "sha256": sha256(resolved)}
+    if reports_version:
+        output = run_command([str(resolved), "--version"], timeout=30)
+        version = (output.stdout + output.stderr).decode(errors="replace").strip()
+        if head[:12] not in version and head not in version:
+            raise RuntimeError(f"binary does not report current HEAD {head[:12]}: {resolved}")
+        identity["version"] = version
+    return identity
+
+
+def preflight_prepare(args: argparse.Namespace) -> dict[str, object]:
+    manifest_path = args.manifest.resolve()
+    root = require_external_root(manifest_path.parent)
+    if args.minimum_free_gib < 25:
+        raise RuntimeError("--minimum-free-gib cannot weaken the 25 GiB Plan 7 safety floor")
+    available = shutil.disk_usage(nearest_existing_parent(root)).free
+    if available < args.minimum_free_gib * 1024 ** 3:
+        raise RuntimeError(f"run filesystem has {available} bytes free; need {args.minimum_free_gib} GiB")
+    require_unused(AUTH_PORT)
+    if run_command(["docker", "image", "inspect", MYSQL_IMAGE], check=False).returncode:
+        raise RuntimeError(f"required local image is absent: {MYSQL_IMAGE}")
+    for command in ("ss", "xprop", "wmctrl"):
+        if shutil.which(command) is None:
+            raise RuntimeError(f"required evidence command is absent: {command}")
+    head = run_command(["git", "rev-parse", "HEAD"], timeout=30).stdout.decode().strip()
+    authserver = binary_identity(args.authserver, head, reports_version=True)
+    worldserver = binary_identity(args.worldserver, head, reports_version=True)
+    unit_tests = binary_identity(args.unit_tests, head, reports_version=False)
+    client_root = args.client_root.resolve()
+    client_executable = client_root / "Wow-64.exe"
+    if not client_executable.is_file() or sha256(client_executable) != CLIENT_SHA256:
+        raise RuntimeError("source Wow-64.exe does not match the pinned build-15595 SHA-256")
+    data_root = args.data_root.resolve()
+    dbc_root = args.server_dbc_root.resolve() if args.server_dbc_root else data_root / "dbc"
+    if not dbc_root.is_dir() or not (data_root / "maps").is_dir():
+        raise RuntimeError("data candidates must contain readable server DBC and Cataclysm maps directories")
+    wine_runner = args.wine_runner.resolve()
+    wine = next(
+        (path for path in (wine_runner / "bin/wine64", wine_runner / "bin/wine")
+         if path.is_file() and os.access(path, os.X_OK)),
+        None,
+    )
+    wineserver = wine_runner / "bin/wineserver"
+    dxvk_d3d9 = wine_runner / "lib/wine/dxvk/x86_64-windows/d3d9.dll"
+    if wine is None or not wineserver.is_file() or not os.access(wineserver, os.X_OK):
+        raise RuntimeError(f"installed Wine runner is incomplete: {wine_runner}")
+    if not dxvk_d3d9.is_file():
+        raise RuntimeError(f"installed Wine runner has no bundled DXVK d3d9.dll: {wine_runner}")
+    xauthority = args.xauthority.resolve() if args.xauthority else os.environ.get("XAUTHORITY", "")
+    display_env = os.environ.copy()
+    display_env["DISPLAY"] = args.display
+    if xauthority:
+        display_env["XAUTHORITY"] = str(xauthority)
+    display = run_command(["xprop", "-root", "_NET_SUPPORTING_WM_CHECK"], check=False, env=display_env)
+    if display.returncode:
+        raise RuntimeError(f"cannot access requested X display {args.display}")
+    migration = args.migration.resolve()
+    if migration != DEFAULT_MIGRATION.resolve() or not migration.is_file():
+        raise RuntimeError("--migration must name the Plan 6 build-15595 pending auth update")
+    personal_bottle = args.personal_bottle.resolve()
+    if not personal_bottle.exists():
+        raise RuntimeError(f"personal Bottle baseline path is absent: {personal_bottle}")
+    return {
+        "root": str(root),
+        "repo_commit": head,
+        "authserver": authserver,
+        "worldserver": worldserver,
+        "unit_tests": unit_tests,
+        "client_root": str(client_root),
+        "client_executable": str(client_executable),
+        "client_tree": tree_metadata(client_root),
+        "client_sha256": CLIENT_SHA256,
+        "data_root": str(data_root),
+        "server_dbc_root": str(dbc_root),
+        "data_dbc_hash": tree_content_hash(dbc_root),
+        "data_maps_hash": tree_content_hash(data_root / "maps"),
+        "wine_runner": str(wine_runner),
+        "wine": str(wine),
+        "wine_sha256": sha256(wine),
+        "wineserver_sha256": sha256(wineserver),
+        "dxvk_d3d9": str(dxvk_d3d9),
+        "dxvk_d3d9_sha256": sha256(dxvk_d3d9),
+        "personal_bottle": str(personal_bottle),
+        "personal_bottle_tree": tree_metadata(personal_bottle),
+        "migration": str(migration),
+        "migration_sha256": sha256(migration),
+        "display": args.display,
+        "xauthority": str(xauthority),
+    }
+
+
+def prepare(args: argparse.Namespace) -> None:
+    inputs = preflight_prepare(args)
+    manifest_path = args.manifest.resolve()
+    if manifest_path.exists():
+        manifest = load_manifest(manifest_path)
+        latest = active_generation(manifest)
+        if latest["state"] != "reset":
+            if latest["state"] == "prepared":
+                print(f"generation {latest['number']} is already prepared")
+                return
+            raise RuntimeError(f"cannot prepare after generation in state {latest['state']}")
+        baseline = manifest["baseline"]
+        if manifest["repo_commit"] != inputs["repo_commit"]:
+            raise RuntimeError("repository HEAD changed between Plan 7 generations")
+        current_protected = {
+            "client_sha256": inputs["client_sha256"],
+            "client_tree": inputs["client_tree"],
+            "personal_bottle_tree": inputs["personal_bottle_tree"],
+        }
+        if any(baseline[key] != value for key, value in current_protected.items()):
+            raise RuntimeError("protected client or personal Bottle changed between generations")
+    else:
+        manifest = {
+            "version": 1,
+            "run_id": uuid.uuid4().hex[:12],
+            "repo_commit": str(inputs["repo_commit"]),
+            "root": str(inputs["root"]),
+            "mysql_root_password": secrets.token_hex(16),
+            "mysql_user": "plan7",
+            "mysql_password": secrets.token_hex(16),
+            "baseline": {
+                "docker": docker_inventory(),
+                "client_sha256": inputs["client_sha256"],
+                "client_tree": inputs["client_tree"],
+                "personal_bottle_tree": inputs["personal_bottle_tree"],
+            },
+            "generations": [],
+        }
+    number = len(manifest["generations"]) + 1
+    generation_root = Path(str(inputs["root"])) / f"generation-{number}"
+    prefix = f"acore-cata-plan7-{manifest['run_id']}-g{number}"
+    paths = {
+        "client": str(generation_root / "client"),
+        "data": str(generation_root / "data"),
+        "config": str(generation_root / "config"),
+        "logs": str(generation_root / "logs"),
+        "raw_evidence": str(generation_root / "evidence/raw"),
+        "sanitized_evidence": str(generation_root / "evidence/sanitized.json"),
+        "xdg_data": str(generation_root / "xdg/data"),
+        "xdg_config": str(generation_root / "xdg/config"),
+        "xdg_cache": str(generation_root / "xdg/cache"),
+        "xdg_state": str(generation_root / "xdg/state"),
+        "wine_prefix": str(generation_root / "wine-prefix"),
+        "auth_config": str(generation_root / "config/authserver.conf"),
+        "world_config": str(generation_root / "config/worldserver.conf"),
+    }
+    generation: Generation = {
+        "number": number,
+        "mode": args.mode,
+        "state": "allocating",
+        "completed_state": "",
+        "root": str(generation_root),
+        "prefix": prefix,
+        "ports": {"mysql": unused_port(), "auth": AUTH_PORT, "world": unused_port()},
+        "docker": {
+            "container": f"{prefix}-mysql", "container_id": None, "volume": f"{prefix}-mysql-data",
+        },
+        "schemas": {"auth": "acore_auth", "characters": "acore_characters", "world": "acore_world"},
+        "processes": [],
+        "inputs": inputs,
+        "paths": paths,
+        "released_updates": {},
+        "evidence": None,
+        "failure": None,
+        "isolation_unchanged": False,
+        "replay_passed": False,
+    }
+    manifest["generations"].append(generation)
+    generation_root.mkdir(parents=True, exist_ok=False)
+    save_manifest(manifest_path, manifest)
+    try:
+        labels = [
+            "--label", "org.azerothcore.plan=7",
+            "--label", f"org.azerothcore.run_id={manifest['run_id']}",
+            "--label", f"org.azerothcore.generation={number}",
+        ]
+        require_unused(generation["ports"]["mysql"])
+        run_command(["docker", "volume", "create", *labels, str(generation["docker"]["volume"])])
+        result = run_command([
+            "docker", "run", "-d", "--name", str(generation["docker"]["container"]), *labels,
+            "-e", f"MYSQL_ROOT_PASSWORD={manifest['mysql_root_password']}",
+            "-p", f"127.0.0.1:{generation['ports']['mysql']}:3306",
+            "-v", f"{generation['docker']['volume']}:/var/lib/mysql", MYSQL_IMAGE,
+        ])
+        generation["docker"]["container_id"] = result.stdout.decode().strip()
+        save_manifest(manifest_path, manifest)
+        wait_for_mysql(manifest, generation)
+        auth = generation["schemas"]["auth"]
+        characters = generation["schemas"]["characters"]
+        world = generation["schemas"]["world"]
+        mysql(
+            manifest, generation,
+            f"CREATE DATABASE `{auth}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+            f"CREATE DATABASE `{characters}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+            f"CREATE DATABASE `{world}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+            f"CREATE USER '{manifest['mysql_user']}'@'%' IDENTIFIED BY '{manifest['mysql_password']}';"
+            f"GRANT ALL ON `{auth}`.* TO '{manifest['mysql_user']}'@'%';"
+            f"GRANT ALL ON `{characters}`.* TO '{manifest['mysql_user']}'@'%';"
+            f"GRANT ALL ON `{world}`.* TO '{manifest['mysql_user']}'@'%';",
+        )
+        released = {}
+        for key, schema in (("auth", auth), ("characters", characters), ("world", world)):
+            import_sql_directory(manifest, generation, REPO_ROOT / f"data/sql/base/db_{key}", schema)
+            released[key] = apply_released_updates(
+                manifest, generation, REPO_ROOT / f"data/sql/updates/db_{key}", schema,
+            )
+        migration = Path(str(inputs["migration"]))
+        mysql(manifest, generation, migration.read_bytes(), auth)
+        build = mysql(
+            manifest, generation,
+            "SELECT CONCAT(`majorVersion`,'.',`minorVersion`,'.',`bugfixVersion`) "
+            "FROM `build_info` WHERE `build`=15595;",
+            auth,
+        )
+        if build != "4.3.4":
+            raise RuntimeError(f"owned auth database reports unexpected build 15595 version: {build}")
+        salt = bytes(range(1, 33))
+        verifier = srp_registration(ACCOUNT, PASSWORD, salt)
+        mysql(
+            manifest, generation,
+            f"DELETE FROM `realmcharacters` WHERE `acctid`={ACCOUNT_ID} OR `realmid`={REALM_ID};"
+            f"DELETE FROM `account` WHERE `id`={ACCOUNT_ID} OR `username`='{ACCOUNT}';"
+            f"DELETE FROM `realmlist` WHERE `id`={REALM_ID} OR `name`='Plan 7 Realm';"
+            "INSERT INTO `account` (`id`,`username`,`salt`,`verifier`,`email`,`reg_mail`,`expansion`,`Flags`) "
+            f"VALUES ({ACCOUNT_ID},'{ACCOUNT}',UNHEX('{salt.hex()}'),UNHEX('{verifier.hex()}'),"
+            "'plan7@example.invalid','plan7@example.invalid',3,0);"
+            "INSERT INTO `realmlist` (`id`,`name`,`address`,`localAddress`,`localSubnetMask`,`port`,`icon`,"
+            "`flag`,`timezone`,`allowedSecurityLevel`,`population`,`gamebuild`) "
+            f"VALUES ({REALM_ID},'Plan 7 Realm','127.0.0.1','127.0.0.1','255.255.255.0',"
+            f"{generation['ports']['world']},0,0,1,0,0,{CLIENT_BUILD});"
+            f"INSERT INTO `realmcharacters` (`realmid`,`acctid`,`numchars`) "
+            f"VALUES ({REALM_ID},{ACCOUNT_ID},0);",
+            auth,
+        )
+        generation["released_updates"] = released
+        data_destination = Path(paths["data"])
+        data_destination.mkdir()
+        copy_tree(Path(str(inputs["server_dbc_root"])), data_destination / "dbc")
+        copy_tree(Path(str(inputs["data_root"])) / "maps", data_destination / "maps")
+        if tree_content_hash(data_destination / "dbc") != inputs["data_dbc_hash"]:
+            raise RuntimeError("run-owned DBC copy differs from its candidate input")
+        if tree_content_hash(data_destination / "maps") != inputs["data_maps_hash"]:
+            raise RuntimeError("run-owned maps copy differs from its candidate input")
+        client_destination = Path(paths["client"])
+        base_record = manifest.get("client_base")
+        using_client_base = bool(base_record and not base_record.get("purged", False))
+        if using_client_base:
+            base = Path(str(base_record["path"]))
+            if tree_metadata(base) != base_record["tree"]:
+                raise RuntimeError("cached client base changed between Plan 7 generations")
+            link_client_base(base, client_destination)
+        else:
+            copy_tree(Path(str(inputs["client_root"])), client_destination)
+        if sha256(client_destination / "Wow-64.exe") != CLIENT_SHA256:
+            raise RuntimeError("run-owned Wow-64.exe differs after copy")
+        for name in WRITABLE_CLIENT_DIRS:
+            target = client_destination / name
+            if target.exists():
+                remove_owned_path(target, generation)
+        write_client_config(client_destination)
+        if not using_client_base:
+            realmlist = client_destination / "Data/enUS/realmlist.wtf"
+            realmlist.parent.mkdir(parents=True, exist_ok=True)
+            realmlist.write_text("set realmlist 127.0.0.1\nset patchlist 127.0.0.1\n")
+        install_dxvk(generation)
+        for key in ("xdg_data", "xdg_config", "xdg_cache", "xdg_state", "raw_evidence"):
+            Path(paths[key]).mkdir(parents=True, exist_ok=True)
+        write_configs(manifest, generation)
+        run_command(
+            [str(inputs["wine"]), "wineboot", "-u"], timeout=300, env=wine_environment(generation),
+        )
+        configure_wine_proxy(generation)
+        stop_wine(generation)
+        if find_wine_processes(Path(paths["wine_prefix"])):
+            raise RuntimeError("fresh-prefix initialization left owned Wine processes running")
+        set_state(generation, "prepared")
+        save_manifest(manifest_path, manifest)
+    except BaseException as error:
+        record_failure(manifest_path, manifest, error)
+        raise
+    print(f"prepared Plan 7 generation {number} in {generation_root}")
+
+
+def start_server(
+    generation: Generation, kind: str, binary: Path, config: Path, stdout_path: Path,
+) -> tuple[subprocess.Popen[bytes], ProcessIdentity, object]:
+    output = stdout_path.open("wb")
+    process = subprocess.Popen([str(binary), "-c", str(config)], stdout=output, stderr=subprocess.STDOUT)
+    record = process_identity(process.pid, kind, config=config)
+    generation["processes"].append(record)
+    return process, record, output
+
+
+def connection_log(generation: Generation) -> str:
+    path = Path(generation["paths"]["client"]) / "Logs/connection.log"
+    return path.read_text(errors="replace") if path.is_file() else ""
+
+
+def matched_milestones(text: str) -> list[str]:
+    offset = 0
+    found = []
+    for name, pattern in CLIENT_MILESTONES:
+        match = pattern.search(text, offset)
+        if match is None:
+            break
+        found.append(name)
+        offset = match.end()
+    return found
+
+
+def capture_runtime(generation: Generation) -> None:
+    raw = Path(generation["paths"]["raw_evidence"])
+    raw.mkdir(parents=True, exist_ok=True)
+    network = run_command(["ss", "-tpn"], check=False).stdout
+    with (raw / "network.log").open("ab") as handle:
+        handle.write(network)
+        handle.write(b"\n")
+    window = run_command(["wmctrl", "-lpGx"], check=False, env=wine_environment(generation))
+    (raw / "windows.log").write_bytes(window.stdout + window.stderr)
+
+
+def capture_owned_window(generation: Generation) -> None:
+    if shutil.which("wmctrl") is None or shutil.which("xprop") is None or shutil.which("xwd") is None:
+        return
+    raw = Path(generation["paths"]["raw_evidence"])
+    owned_pids = {int(item["pid"]) for item in generation["processes"] if item["kind"] == "wine"}
+    result = run_command(["wmctrl", "-lpGx"], check=False, env=wine_environment(generation))
+    for line in result.stdout.decode(errors="replace").splitlines():
+        fields = line.split(None, 8)
+        if len(fields) < 3 or not fields[2].isdigit() or int(fields[2]) not in owned_pids:
+            continue
+        window_id = fields[0]
+        metadata = run_command(
+            ["xprop", "-id", window_id, "_NET_WM_PID", "WM_CLASS", "WM_NAME"],
+            check=False, env=wine_environment(generation),
+        )
+        (raw / "window.xprop").write_bytes(metadata.stdout + metadata.stderr)
+        run_command(
+            ["xwd", "-silent", "-id", window_id, "-out", str(raw / "window.xwd")],
+            check=False, env=wine_environment(generation), timeout=30,
+        )
+        return
+
+
+def run_client(args: argparse.Namespace) -> None:
+    manifest_path = args.manifest.resolve()
+    manifest = load_manifest(manifest_path)
+    generation = active_generation(manifest)
+    retryable = (
+        generation["state"] == "failed" and generation.get("failure", {}).get("phase") == "prepared"
+    ) or generation["state"] == "inconclusive"
+    if retryable:
+        if any(process.get("active", False) for process in generation["processes"]):
+            raise RuntimeError("cannot retry a diagnostic generation with active processes")
+        for path in (
+            Path(generation["paths"]["raw_evidence"]),
+            Path(generation["paths"]["client"]) / "Logs",
+        ):
+            if path.exists():
+                remove_owned_path(path, generation)
+            path.mkdir(parents=True)
+        generation["state"] = "prepared"
+        generation["failure"] = None
+        generation["evidence"] = None
+    if generation["state"] != "prepared":
+        raise RuntimeError(f"cannot run from state {generation['state']}")
+    assert_container_owned(manifest, generation)
+    ensure_client_base(manifest, generation)
+    write_client_config(Path(generation["paths"]["client"]))
+    install_dxvk(generation)
+    configure_wine_proxy(generation)
+    stop_wine(generation)
+    save_manifest(manifest_path, manifest)
+    require_unused(AUTH_PORT)
+    require_unused(generation["ports"]["world"])
+    paths = generation["paths"]
+    popens: dict[str, subprocess.Popen[bytes]] = {}
+    outputs: list[object] = []
+    try:
+        auth_process, auth_record, auth_output = start_server(
+            generation, "authserver", Path(str(generation["inputs"]["authserver"]["path"])),
+            Path(paths["auth_config"]), Path(paths["logs"]) / "authserver.stdout.log",
+        )
+        popens["authserver"] = auth_process
+        outputs.append(auth_output)
+        save_manifest(manifest_path, manifest)
+        wait_for_port(AUTH_PORT, auth_record, 60)
+        world_process, world_record, world_output = start_server(
+            generation, "worldserver", Path(str(generation["inputs"]["worldserver"]["path"])),
+            Path(paths["world_config"]), Path(paths["logs"]) / "worldserver.stdout.log",
+        )
+        popens["worldserver"] = world_process
+        outputs.append(world_output)
+        save_manifest(manifest_path, manifest)
+        wait_for_world(manifest, generation, world_record)
+        set_state(generation, "servers_ready")
+        save_manifest(manifest_path, manifest)
+        wine = Path(str(generation["inputs"]["wine"]))
+        client = Path(paths["client"]) / "Wow-64.exe"
+        client_output = (Path(paths["logs"]) / "client.stdout.log").open("wb")
+        outputs.append(client_output)
+        launcher = subprocess.Popen(
+            [str(wine), str(client)], stdout=client_output, stderr=subprocess.STDOUT,
+            cwd=client.parent, env=wine_environment(generation), start_new_session=True,
+        )
+        try:
+            generation["processes"].append(process_identity(launcher.pid, "wine", prefix=Path(paths["wine_prefix"])))
+        except FileNotFoundError:
+            pass
+        set_state(generation, "client_running")
+        save_manifest(manifest_path, manifest)
+        print(f"owned client launched on {generation['inputs']['display']}")
+        if generation["mode"] == "authentication":
+            print(f"enter synthetic credentials manually: {ACCOUNT} / {PASSWORD}")
+        deadline = time.monotonic() + (args.no_login_seconds if generation["mode"] == "no-login" else args.timeout)
+        while time.monotonic() < deadline:
+            add_processes(generation, find_wine_processes(Path(paths["wine_prefix"])))
+            capture_runtime(generation)
+            if generation["mode"] == "authentication" and len(matched_milestones(connection_log(generation))) == 4:
+                break
+            if generation["mode"] == "no-login" and time.monotonic() + 0.5 >= deadline:
+                break
+            if launcher.poll() is not None and not find_wine_processes(Path(paths["wine_prefix"])):
+                break
+            time.sleep(0.5)
+        capture_runtime(generation)
+        capture_owned_window(generation)
+        raw = Path(paths["raw_evidence"])
+        source_log = Path(paths["client"]) / "Logs/connection.log"
+        if source_log.is_file():
+            shutil.copy2(source_log, raw / "connection.log")
+        for name in ("WorldServer.log", "AuthServer.log"):
+            source = Path(paths["logs"]) / name
+            if source.is_file():
+                shutil.copy2(source, raw / name)
+        set_state(generation, "observed")
+    except BaseException as error:
+        record_failure(manifest_path, manifest, error)
+        raise
+    finally:
+        cleanup_error: BaseException | None = None
+        try:
+            stop_wine(generation)
+            stop_servers(generation, popens)
+        except BaseException as error:
+            cleanup_error = error
+        finally:
+            for output in outputs:
+                output.close()
+            save_manifest(manifest_path, manifest)
+        if cleanup_error is not None:
+            if generation["state"] not in ("failed", "inconclusive", "reset"):
+                record_failure(manifest_path, manifest, cleanup_error)
+            raise cleanup_error
+    print(f"observed Plan 7 generation {generation['number']}; run verify next")
+
+
+def server_transcript(generation: Generation) -> list[dict[str, str]]:
+    paths = generation["paths"]
+    candidates = [
+        Path(paths["raw_evidence"]) / "WorldServer.log",
+        Path(paths["logs"]) / "WorldServer.log",
+        Path(paths["logs"]) / "worldserver.stdout.log",
+    ]
+    source = next((path for path in candidates if path.is_file()), None)
+    text = source.read_text(errors="replace") if source else ""
+    transcript = []
+    pattern = re.compile(r"\b(C->S|S->C):\s+.*?\b((?:CMSG|SMSG|MSG)_[A-Z0-9_]+)\b")
+    for direction, opcode in pattern.findall(text):
+        transcript.append({"direction": "c2s" if direction == "C->S" else "s2c", "opcode": opcode})
+    return transcript
+
+
+def owned_established_lines(generation: Generation) -> list[str]:
+    path = Path(generation["paths"]["raw_evidence"]) / "network.log"
+    if not path.is_file():
+        return []
+    lines = path.read_text(errors="replace").splitlines()
+    wine_pids = [str(item["pid"]) for item in generation["processes"] if item["kind"] == "wine"]
+    return [
+        line for line in lines
+        if "ESTAB" in line and any(f"pid={pid}," in line for pid in wine_pids)
+    ]
+
+
+def endpoint_evidence(generation: Generation) -> bool:
+    owned = owned_established_lines(generation)
+    ports = (AUTH_PORT, generation["ports"]["world"])
+    if not all(any(len(line.split()) > 4 and line.split()[4].endswith(f":{port}") for line in owned) for port in ports):
+        return False
+    allowed = {f":{port}" for port in ports}
+    return all(len(line.split()) > 4 and any(line.split()[4].endswith(suffix) for suffix in allowed) for line in owned)
+
+
+def protected_inputs_unchanged(manifest: Manifest, generation: Generation) -> bool:
+    inputs = generation["inputs"]
+    baseline = manifest["baseline"]
+    client_root = Path(str(inputs["client_root"]))
+    personal_bottle = Path(str(inputs["personal_bottle"]))
+    base_record = manifest.get("client_base")
+    base_unchanged = not base_record or base_record.get("purged", False) or (
+        tree_metadata(Path(str(base_record["path"]))) == base_record["tree"]
+    )
+    return base_unchanged and (
+        sha256(client_root / "Wow-64.exe") == baseline["client_sha256"]
+        and tree_metadata(client_root) == baseline["client_tree"]
+        and tree_metadata(personal_bottle) == baseline["personal_bottle_tree"]
+    )
+
+
+def purge_client_base(manifest: Manifest) -> None:
+    record = manifest.get("client_base")
+    if not record or record.get("purged", False):
+        return
+    if any(generation["state"] != "reset" for generation in manifest["generations"]):
+        raise RuntimeError("all Plan 7 generations must be reset before purging the cached client")
+    base = Path(str(record["path"]))
+    expected = (Path(manifest["root"]) / "client-base").resolve()
+    if base.resolve() != expected or tree_metadata(base) != record["tree"]:
+        raise RuntimeError("refusing to purge a changed or unowned cached client base")
+    make_tree_writable(base)
+    shutil.rmtree(base)
+    record["purged"] = True
+
+
+def sanitized_evidence(
+    generation: Generation, milestones: list[str], transcript: list[dict[str, str]],
+) -> dict[str, object]:
+    auth_index = next(
+        (index for index, item in enumerate(transcript) if item["opcode"] == "SMSG_AUTH_RESPONSE"), None,
+    )
+    candidate = None
+    if auth_index is not None:
+        candidate = next(
+            (item["opcode"] for item in transcript[auth_index + 1:] if item["direction"] == "s2c"), None,
+        )
+    allowlisted = [
+        item for item in transcript
+        if item["opcode"] in {
+            "SMSG_AUTH_CHALLENGE", "CMSG_AUTH_SESSION", "SMSG_AUTH_RESPONSE",
+            "CMSG_CHAR_ENUM", "SMSG_CHAR_ENUM", "SMSG_TUTORIAL_FLAGS", "SMSG_CLIENTCACHE_VERSION",
+        }
+    ]
+    owned_window = (Path(generation["paths"]["raw_evidence"]) / "window.xprop").is_file()
+    return {
+        "schema": 1,
+        "build": CLIENT_BUILD,
+        "mode": generation["mode"],
+        "outcome": "world_auth_ok" if "world_auth_ok" in milestones else "not_accepted",
+        "client_milestones": milestones,
+        "server_milestones": allowlisted,
+        "endpoint_ownership": endpoint_evidence(generation),
+        "network_scope": "owned-auth-and-world-only" if endpoint_evidence(generation) else "inconclusive",
+        "owned_window": owned_window,
+        "next_server_packet": {
+            "opcode": candidate or "unknown",
+            "status": "candidate/inconclusive" if candidate else "not-observed/inconclusive",
+        },
+        "payload_shape": "typed-auth-success; no raw payload retained",
+        "inputs": {
+            "client_sha256": CLIENT_SHA256,
+            "authserver_sha256": generation["inputs"]["authserver"]["sha256"],
+            "worldserver_sha256": generation["inputs"]["worldserver"]["sha256"],
+            "dbc_tree_sha256": generation["inputs"]["data_dbc_hash"],
+            "maps_tree_sha256": generation["inputs"]["data_maps_hash"],
+        },
+    }
+
+
+def verify(args: argparse.Namespace) -> None:
+    manifest_path = args.manifest.resolve()
+    manifest = load_manifest(manifest_path)
+    generation = active_generation(manifest)
+    if generation["state"] not in {"observed", "accepted"}:
+        raise RuntimeError(f"cannot verify from state {generation['state']}")
+    raw_log = Path(generation["paths"]["raw_evidence"]) / "connection.log"
+    text = raw_log.read_text(errors="replace") if raw_log.is_file() else ""
+    milestones = matched_milestones(text)
+    transcript = server_transcript(generation)
+    evidence = sanitized_evidence(generation, milestones, transcript)
+    unchanged = protected_inputs_unchanged(manifest, generation)
+    generation["isolation_unchanged"] = unchanged
+    server_ok = (
+        any(item == {"direction": "c2s", "opcode": "CMSG_AUTH_SESSION"} for item in transcript)
+        and any(item == {"direction": "s2c", "opcode": "SMSG_AUTH_RESPONSE"} for item in transcript)
+    )
+    if generation["mode"] == "no-login":
+        started = any(item["kind"] == "wine" for item in generation["processes"])
+        started = started and bool(evidence["owned_window"])
+        network_safe = not owned_established_lines(generation)
+        evidence["network_scope"] = "no-established-tcp" if network_safe else "unexpected-connection"
+        evidence["outcome"] = "no_login_isolation_ok" if unchanged and started and network_safe else "inconclusive"
+        if unchanged and started and network_safe:
+            set_state(generation, "accepted")
+        elif not unchanged:
+            set_state(generation, "failed")
+        else:
+            set_state(generation, "inconclusive")
+    elif len(milestones) == 4 and server_ok and evidence["endpoint_ownership"] and unchanged:
+        if generation["state"] == "observed":
+            set_state(generation, "accepted")
+    else:
+        evidence["outcome"] = "inconclusive"
+        set_state(generation, "inconclusive")
+    generation["evidence"] = evidence
+    evidence_path = Path(generation["paths"]["sanitized_evidence"])
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+    save_manifest(manifest_path, manifest)
+    print(json.dumps(evidence, indent=2, sort_keys=True))
+    if generation["state"] != "accepted":
+        raise RuntimeError("Plan 7 evidence is incomplete; verdict is INCONCLUSIVE")
+
+
+def normalized_replay(evidence: dict[str, object]) -> dict[str, object]:
+    auth = evidence.get("auth", {})
+    return {
+        "build": evidence.get("build"),
+        "m2_verified": auth.get("m2_verified") if isinstance(auth, dict) else None,
+        "peer_k_equals_database_k": evidence.get("peer_k_equals_database_k"),
+        "database_k_equals_world_query_k": evidence.get("database_k_equals_world_query_k"),
+        "world": evidence.get("world"),
+    }
+
+
+def replay(args: argparse.Namespace) -> None:
+    manifest_path = args.manifest.resolve()
+    manifest = load_manifest(manifest_path)
+    generation = active_generation(manifest)
+    if generation.get("replay_passed", False):
+        print(json.dumps(generation["evidence"], indent=2, sort_keys=True))
+        return
+    accepted_state = generation["state"] == "accepted"
+    accepted_reset = generation["state"] == "reset" and generation.get("completed_state") in {
+        "accepted", "replayed",
+    }
+    if (not accepted_state and not accepted_reset) or generation["mode"] != "authentication":
+        raise RuntimeError("replay requires an accepted authentication generation")
+    fixture_path = args.fixture.resolve()
+    if not fixture_path.is_file():
+        raise RuntimeError(f"sanitized Plan 7 fixture is absent: {fixture_path}")
+    fixture = json.loads(fixture_path.read_text())
+    if fixture.get("schema") != 1 or fixture.get("build") != CLIENT_BUILD:
+        raise RuntimeError("sanitized Plan 7 fixture has the wrong schema or build")
+    expected_client = fixture.get("client_milestones")
+    expected_server = fixture.get("server_milestones")
+    if generation["evidence"].get("client_milestones") != expected_client:
+        raise RuntimeError("real-client milestones differ from the sanitized fixture")
+    if generation["evidence"].get("server_milestones") != expected_server:
+        raise RuntimeError("real-server milestones differ from the sanitized fixture")
+    replay_root = Path(generation["root"]) / "evidence/plan6-replay"
+    replay_root.mkdir(parents=True, exist_ok=True)
+    replay_manifest = replay_root / "manifest.json"
+    inputs = generation["inputs"]
+    prepare_command = [
+        sys.executable, str(PLAN6_RUNNER), "prepare", "--manifest", str(replay_manifest),
+        "--migration", str(inputs["migration"]), "--client", str(Path(str(inputs["client_root"])) / "Wow-64.exe"),
+        "--bottle", str(inputs["personal_bottle"]),
+    ]
+    normalized: dict[str, object] | None = None
+    try:
+        run_command(prepare_command, timeout=1200)
+        run_command([
+            sys.executable, str(PLAN6_RUNNER), "run", "--manifest", str(replay_manifest),
+            "--authserver", str(inputs["authserver"]["path"]),
+            "--unit-tests", str(inputs["unit_tests"]["path"]),
+        ], timeout=600)
+        replay_manifest_value = json.loads(replay_manifest.read_text())
+        replay_evidence = replay_manifest_value["generations"][-1]["evidence"]
+        normalized = normalized_replay(replay_evidence)
+        if normalized != fixture.get("plan6_replay"):
+            raise RuntimeError("Plan 6 semantic replay differs from the sanitized fixture")
+    finally:
+        if replay_manifest.is_file():
+            run_command(
+                [sys.executable, str(PLAN6_RUNNER), "reset", "--manifest", str(replay_manifest)],
+                timeout=180,
+            )
+    if normalized is None:
+        raise RuntimeError("Plan 6 semantic replay produced no normalized evidence")
+    generation["evidence"]["plan6_replay"] = normalized
+    generation["replay_passed"] = True
+    if accepted_state:
+        set_state(generation, "replayed")
+    else:
+        generation["completed_state"] = "replayed"
+    save_manifest(manifest_path, manifest)
+    print("Plan 7 semantic replay passed")
+
+
+def reset(args: argparse.Namespace) -> None:
+    manifest_path = args.manifest.resolve()
+    manifest = load_manifest(manifest_path)
+    generation = active_generation(manifest)
+    if generation["state"] == "reset":
+        if args.purge_client_base:
+            purge_client_base(manifest)
+            save_manifest(manifest_path, manifest)
+            print("purged cached Plan 7 client base")
+            return
+        print(f"generation {generation['number']} is already reset")
+        return
+    completed_state = generation["state"]
+    stop_wine(generation)
+    stop_servers(generation)
+    docker = generation["docker"]
+    container = run_command(["docker", "inspect", str(docker["container"])], check=False)
+    if container.returncode == 0:
+        details = assert_container_owned(manifest, generation)
+        run_command(["docker", "rm", "-f", details["Name"].removeprefix("/")])
+    volume_result = run_command(["docker", "volume", "inspect", str(docker["volume"])], check=False)
+    if volume_result.returncode == 0:
+        volume = json.loads(volume_result.stdout)[0]
+        labels = volume.get("Labels") or {}
+        expected = {
+            "org.azerothcore.plan": "7",
+            "org.azerothcore.run_id": manifest["run_id"],
+            "org.azerothcore.generation": str(generation["number"]),
+        }
+        if any(labels.get(key) != value for key, value in expected.items()):
+            raise RuntimeError("refusing to remove a volume whose ownership labels changed")
+        run_command(["docker", "volume", "rm", str(docker["volume"])])
+    for key in ("client", "data", "xdg_data", "xdg_config", "xdg_cache", "xdg_state", "wine_prefix"):
+        path = Path(generation["paths"][key])
+        if path.exists():
+            remove_owned_path(path, generation)
+    unchanged = protected_inputs_unchanged(manifest, generation)
+    generation["isolation_unchanged"] = unchanged
+    generation["completed_state"] = completed_state
+    set_state(generation, "reset")
+    if args.purge_client_base:
+        purge_client_base(manifest)
+    save_manifest(manifest_path, manifest)
+    for port in generation["ports"].values():
+        require_unused(int(port))
+    if not unchanged:
+        raise RuntimeError("protected client or personal Bottle metadata changed during Plan 7")
+    print(f"reset generation {generation['number']}; evidence remains under {generation['root']}")
+
+
+def comparison_projection(evidence: dict[str, object]) -> dict[str, object]:
+    return {
+        "schema": evidence.get("schema"),
+        "build": evidence.get("build"),
+        "outcome": evidence.get("outcome"),
+        "client_milestones": evidence.get("client_milestones"),
+        "server_milestones": evidence.get("server_milestones"),
+        "payload_shape": evidence.get("payload_shape"),
+        "inputs": evidence.get("inputs"),
+    }
+
+
+def compare_last_two(args: argparse.Namespace) -> None:
+    manifest = load_manifest(args.manifest.resolve())
+    candidates = [
+        item for item in manifest["generations"]
+        if item.get("mode") == "authentication" and item.get("state") == "reset"
+        and item.get("completed_state") in {"accepted", "replayed"} and item.get("isolation_unchanged")
+        and item.get("evidence")
+    ]
+    if len(candidates) < 2:
+        raise RuntimeError("two reset, replayed authentication generations are required")
+    left, right = candidates[-2:]
+    if left["number"] == right["number"]:
+        raise RuntimeError("repeatability comparison requires distinct generations")
+    if comparison_projection(left["evidence"]) != comparison_projection(right["evidence"]):
+        raise RuntimeError("the last two sanitized Plan 7 results differ")
+    print(json.dumps({
+        "generations": [left["number"], right["number"]],
+        "repeatable": True,
+        "replay_passed": bool(left.get("replay_passed") or right.get("replay_passed")),
+    }, sort_keys=True))
+
+
+def self_check() -> None:
+    sample = """one LOGIN_STATE_AUTHENTICATED LOGIN_OK
+two COP_CONNECT RESPONSE_CONNECTED TRUE
+three COP_AUTHENTICATE AUTH_OK TRUE
+four Initiating: COP_GET_CHARACTERS
+"""
+    assert matched_milestones(sample) == [name for name, _ in CLIENT_MILESTONES]
+    assert matched_milestones(sample.replace("AUTH_OK", "AUTH_FAILED")) == ["auth_login_ok", "world_connected"]
+    assert len(srp_registration(ACCOUNT, PASSWORD, bytes(range(1, 33)))) == 32
+    generation: Generation = {
+        "mode": "authentication",
+        "ports": {"world": 18085},
+        "processes": [],
+        "paths": {"raw_evidence": "/abs/private"},
+        "inputs": {
+            "authserver": {"sha256": "a" * 64}, "worldserver": {"sha256": "b" * 64},
+            "data_dbc_hash": "c" * 64, "data_maps_hash": "d" * 64,
+        },
+    }
+    transcript = [
+        {"direction": "c2s", "opcode": "CMSG_AUTH_SESSION"},
+        {"direction": "s2c", "opcode": "SMSG_AUTH_RESPONSE"},
+        {"direction": "s2c", "opcode": "SMSG_CHAR_ENUM"},
+    ]
+    evidence = sanitized_evidence(generation, [name for name, _ in CLIENT_MILESTONES], transcript)
+    encoded = json.dumps(evidence, sort_keys=True)
+    assert "/abs/private" not in encoded and ACCOUNT not in encoded and PASSWORD not in encoded
+    assert evidence["next_server_packet"] == {"opcode": "SMSG_CHAR_ENUM", "status": "candidate/inconclusive"}
+    assert replace_config("# Key = old\nOther=1\n", {"Key": "new"}) == "Key = new\nOther=1\n"
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        base = root / "base"
+        base.mkdir()
+        (base / "Wow-64.exe").write_bytes(b"client")
+        link_client_base(base, root / "client")
+        assert (root / "client/Wow-64.exe").is_symlink()
+        assert not (root / "client/WTF").is_symlink()
+    auth_keys = (
+        "RealmServerPort", "BindIP", "LogsDir", "PidFile", "RealmsStateUpdateDelay",
+        "LoginDatabaseInfo", "Updates.EnableDatabases", "Updates.AutoSetup", "StrictVersionCheck",
+        "SourceDirectory", "Appender.Auth", "Logger.root",
+    )
+    world_keys = (
+        "RealmID", "WorldServerPort", "BindIP", "LoginDatabaseInfo", "WorldDatabaseInfo",
+        "CharacterDatabaseInfo", "DataDir", "LogsDir", "PidFile", "Console.Enable",
+        "Updates.EnableDatabases", "Updates.AutoSetup", "Expansion", "MoveMaps.Enable",
+        "vmap.enableLOS", "vmap.enableHeight", "Warden.Enabled", "Ra.Enable", "SOAP.Enabled",
+        "Cluster.Enabled", "Appender.Server", "Logger.network", "Logger.network.opcode",
+    )
+    replace_config(
+        (REPO_ROOT / "src/server/apps/authserver/authserver.conf.dist").read_text(),
+        {key: "test" for key in auth_keys},
+    )
+    replace_config(
+        (REPO_ROOT / "src/server/apps/worldserver/worldserver.conf.dist").read_text(),
+        {key: "test" for key in world_keys},
+    )
+    state: Generation = {"state": "allocating"}
+    set_state(state, "prepared")
+    try:
+        set_state(state, "accepted")
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("invalid state transition was accepted")
+    print("Plan 7 runner self-check passed")
+
+
+def parser() -> argparse.ArgumentParser:
+    result = argparse.ArgumentParser(description=__doc__)
+    subcommands = result.add_subparsers(dest="command", required=True)
+    subcommands.add_parser("self-check")
+    prepare_parser = subcommands.add_parser("prepare")
+    prepare_parser.add_argument("--manifest", type=Path, required=True)
+    prepare_parser.add_argument("--authserver", type=Path, required=True)
+    prepare_parser.add_argument("--worldserver", type=Path, required=True)
+    prepare_parser.add_argument("--unit-tests", type=Path, required=True)
+    prepare_parser.add_argument("--client-root", type=Path, required=True)
+    prepare_parser.add_argument("--data-root", type=Path, required=True)
+    prepare_parser.add_argument("--server-dbc-root", type=Path)
+    prepare_parser.add_argument("--wine-runner", type=Path, required=True)
+    prepare_parser.add_argument("--personal-bottle", type=Path, required=True)
+    prepare_parser.add_argument("--migration", type=Path, default=DEFAULT_MIGRATION)
+    prepare_parser.add_argument("--display", required=True)
+    prepare_parser.add_argument("--xauthority", type=Path)
+    prepare_parser.add_argument("--mode", choices=("no-login", "authentication"), default="authentication")
+    prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)
+    run_parser = subcommands.add_parser("run")
+    run_parser.add_argument("--manifest", type=Path, required=True)
+    run_parser.add_argument("--timeout", type=int, default=300)
+    run_parser.add_argument("--no-login-seconds", type=int, default=20)
+    verify_parser = subcommands.add_parser("verify")
+    verify_parser.add_argument("--manifest", type=Path, required=True)
+    replay_parser = subcommands.add_parser("replay")
+    replay_parser.add_argument("--manifest", type=Path, required=True)
+    replay_parser.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
+    reset_parser = subcommands.add_parser("reset")
+    reset_parser.add_argument("--manifest", type=Path, required=True)
+    reset_parser.add_argument("--purge-client-base", action="store_true")
+    compare_parser = subcommands.add_parser("compare-last-two")
+    compare_parser.add_argument("--manifest", type=Path, required=True)
+    return result
+
+
+def main() -> int:
+    args = parser().parse_args()
+    actions = {
+        "prepare": prepare,
+        "run": run_client,
+        "verify": verify,
+        "replay": replay,
+        "reset": reset,
+        "compare-last-two": compare_last_two,
+    }
+    try:
+        if args.command == "self-check":
+            self_check()
+        else:
+            actions[args.command](args)
+        return 0
+    except (OSError, RuntimeError, subprocess.SubprocessError, AssertionError, ValueError, KeyError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
