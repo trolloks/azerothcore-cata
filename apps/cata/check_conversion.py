@@ -1126,12 +1126,14 @@ def real_client_authentication_issues(runner: str, fixture: str, plan_8: str) ->
         issues.append("real-client-authentication-fixture-incomplete")
 
     if any(token not in plan_8 for token in (
-        "Status: draft",
+        "Status: ready for implementation",
         "CMSG_CHAR_ENUM",
         "SMSG_CHAR_ENUM",
-        "empty character list",
-        "does not enter the world",
+        "automatic character-creation screen",
+        "This plan does not prove a populated character row",
+        "or enter the world",
         "Plan 7",
+        "Plan 9",
     )):
         issues.append("character-screen-plan-incomplete")
     return tuple(issues)
@@ -1979,8 +1981,9 @@ def self_check() -> None:
         "reset": "PASS",
     })
     character_plan = (
-        "Status: draft\nPlan 7\nCMSG_CHAR_ENUM\nSMSG_CHAR_ENUM\n"
-        "empty character list\nPlan 8 does not enter the world\n"
+        "Status: ready for implementation\nPlan 7\nPlan 9\nCMSG_CHAR_ENUM\nSMSG_CHAR_ENUM\n"
+        "automatic character-creation screen\nThis plan does not prove a populated character row\n"
+        "or enter the world\n"
     )
     assert real_client_authentication_issues(client_runner, client_fixture, character_plan) == ()
     assert "real-client-authentication-runner-incomplete" in real_client_authentication_issues(
@@ -1997,7 +2000,7 @@ def self_check() -> None:
         client_runner, "", character_plan
     )
     assert "character-screen-plan-incomplete" in real_client_authentication_issues(
-        client_runner, client_fixture, character_plan.replace("does not enter the world", "enters the world", 1)
+        client_runner, client_fixture, character_plan.replace("or enter the world", "or load a character", 1)
     )
 
     defaults = LedgerRow(

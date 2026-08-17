@@ -76,7 +76,7 @@ A new numbered plan is written only when its predecessor is green and its inputs
 
 | Area | Exit condition before moving on |
 | --- | --- |
-| Protocol foundation | Direction-safe opcodes, wire primitives, auth, and character list are proven |
+| Protocol foundation | Direction-safe opcodes, wire primitives, auth, enumeration, and selection admission are proven |
 | Client data extraction | Build 15595 DBC, DB2, map, VMAP, and MMAP inputs are reproducible |
 | Client data stores | Cata layouts and loaders replace active WotLK contracts |
 | Database strategy | Auth, character, and world schemas have a legal, repeatable Cata migration path |
@@ -186,3 +186,10 @@ disconnects.
 - [Plan 6: build 15595 authentication handoff](06-build-15595-authentication-handoff.md)
 - [Plan 7: isolated build 15595 client authentication](07-isolated-build-15595-client-authentication.md)
 - [Plan 8: build 15595 character screen](08-build-15595-character-screen.md)
+- [Plan 9: one database-backed build 15595 character](09-build-15595-populated-character-list.md)
+- [Plan 10: select the enumerated build 15595 character](10-build-15595-character-selection.md)
+
+Plans 8-10 deliberately stop at three separate boundaries: typed empty enumeration, one populated
+enumeration, and real-client selection through the session legitimacy gate to the database-load callback.
+They do not prove character creation, successful player loading, initial packet correctness, map entry, or
+world control. Do not assign later plan numbers until Plan 10 records the first honest downstream boundary.
