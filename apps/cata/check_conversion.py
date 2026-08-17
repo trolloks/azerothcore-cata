@@ -672,6 +672,7 @@ def validate_ledger(
     ledger: Ledger,
     hunks: Sequence[DiffHunk],
     ledger_relative_path: str,
+    file_hashes: Mapping[str, str],
     active_opcode_keys: set[tuple[str, str]],
     canonical: Mapping[tuple[str, str], OpcodeDeclaration],
 ) -> tuple[Finding, ...]:
@@ -691,9 +692,11 @@ def validate_ledger(
         if not matching:
             findings.append(Finding("error", "STALE_FILE", path, "ledger file row is not in the current diff"))
         elif path != ledger_relative_path:
-            findings.append(
-                Finding("error", "COARSE_FILE_COVERAGE", path, "file coverage is allowed only for the ledger itself")
-            )
+            expected = ledger.files[path].evidence.removeprefix("sha256:")
+            if not ledger.files[path].evidence.startswith("sha256:"):
+                findings.append(Finding("error", "UNPINNED_FILE_COVERAGE", path, "file coverage needs a SHA-256"))
+            elif file_hashes.get(path) != expected:
+                findings.append(Finding("error", "STALE_FILE_HASH", path, "file coverage hash does not match HEAD"))
 
     aliases: defaultdict[tuple[str, str], list[str]] = defaultdict(list)
     for key, row in sorted(ledger.opcodes.items()):
@@ -1160,7 +1163,14 @@ def make_report(inputs: Inputs) -> dict[str, Any]:
         ledger_relative = inputs.ledger_path.relative_to(inputs.repo_root).as_posix()
     except ValueError:
         ledger_relative = str(inputs.ledger_path)
-    findings.extend(validate_ledger(ledger, hunks, ledger_relative, active_keys, canonical_by_direction))
+    file_hashes = {
+        path: hashlib.sha256(read_ref_file(inputs.repo_root, inputs.head_ref, path).encode()).hexdigest()
+        for path in ledger.files
+        if path != ledger_relative
+    }
+    findings.extend(
+        validate_ledger(ledger, hunks, ledger_relative, file_hashes, active_keys, canonical_by_direction)
+    )
     opcodes, opcode_findings = materialize_opcodes(
         current_declarations,
         registrations,
