@@ -229,15 +229,15 @@ bool LoginQueryHolder::Initialize()
 
 void WorldSession::HandleCharEnum(PreparedQueryResult result)
 {
+    WorldPackets::Character::EnumCharactersResult charEnum;
+    charEnum.Success = true;
     _legitCharacters.clear();
-    // create a list of characters for this account
-    std::vector<CharacterInfo> Characters;
 
     if (result)
     {
         do
         {
-            std::shared_ptr<CharacterInfo> charInfo = std::make_shared<CharacterInfo>();
+            WorldPackets::Character::EnumCharactersResult::CharacterInfo charInfo;
             Field* fields = result->Fetch();
 
             //             0               1                2                3                 4                  5                 6               7
@@ -250,32 +250,32 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
             //    characters.extra_flags, character_declinedname.genitive
 
             // print all fields as flat long string
-            charInfo->Guid              = ObjectGuid::Create<HighGuid::Player>(fields[0].Get<uint32>());
-            charInfo->Name              = fields[1].Get<std::string>();
-            charInfo->RaceID            = fields[2].Get<uint8>();
-            charInfo->ClassID           = fields[3].Get<uint8>();
-            charInfo->SexID             = fields[4].Get<uint8>();
-            charInfo->SkinID            = fields[5].Get<uint8>();
-            charInfo->FaceID            = fields[6].Get<uint8>();
-            charInfo->HairStyle         = fields[7].Get<uint8>();
-            charInfo->HairColor         = fields[8].Get<uint8>();
-            charInfo->FacialHair        = fields[9].Get<uint8>();
-            charInfo->ExperienceLevel   = fields[10].Get<uint8>();
-            charInfo->MapID             = int32(fields[12].Get<uint16>());
-            charInfo->PreloadPos        = Position(fields[13].Get<float>(), fields[14].Get<float>(), fields[15].Get<float>());
+            charInfo.Guid              = ObjectGuid::Create<HighGuid::Player>(fields[0].Get<uint32>());
+            charInfo.Name              = fields[1].Get<std::string>();
+            charInfo.RaceID            = fields[2].Get<uint8>();
+            charInfo.ClassID           = fields[3].Get<uint8>();
+            charInfo.SexID             = fields[4].Get<uint8>();
+            charInfo.SkinID            = fields[5].Get<uint8>();
+            charInfo.FaceID            = fields[6].Get<uint8>();
+            charInfo.HairStyle         = fields[7].Get<uint8>();
+            charInfo.HairColor         = fields[8].Get<uint8>();
+            charInfo.FacialHair        = fields[9].Get<uint8>();
+            charInfo.ExperienceLevel   = fields[10].Get<uint8>();
+            charInfo.MapID             = int32(fields[12].Get<uint16>());
+            charInfo.PreloadPos        = Position(fields[13].Get<float>(), fields[14].Get<float>(), fields[15].Get<float>());
 
             if (ObjectGuid::LowType guildId = fields[16].Get<uint32>())
-                charInfo->GuildGUID = ObjectGuid::Create<HighGuid::Guild>(guildId);
+                charInfo.GuildGUID = ObjectGuid::Create<HighGuid::Guild>(guildId);
 
-            PlayerInfo const* info = sObjectMgr->GetPlayerInfo(charInfo->RaceID, charInfo->ClassID);
+            PlayerInfo const* info = sObjectMgr->GetPlayerInfo(charInfo.RaceID, charInfo.ClassID);
             if (!info)
             {
-                LOG_ERROR("entities.player", "Player {} has incorrect race/class pair. Don't build enum.", charInfo->Guid.ToString());
+                LOG_ERROR("entities.player", "Player {} has incorrect race/class pair. Don't build enum.", charInfo.Guid.ToString());
                 continue;
             }
-            else if (charInfo->SexID > GENDER_FEMALE)
+            else if (charInfo.SexID > GENDER_FEMALE)
             {
-                LOG_ERROR("entities.player", "Player ({}) has incorrect gender ({}), Don't build enum.", charInfo->Guid.ToString(), charInfo->SexID);
+                LOG_ERROR("entities.player", "Player ({}) has incorrect gender ({}), Don't build enum.", charInfo.Guid.ToString(), charInfo.SexID);
                 continue;
             }
 
@@ -283,7 +283,7 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
             uint32 atLoginFlags = fields[18].Get<uint16>();
 
             if (playerFlags & PLAYER_FLAGS_RESTING)
-                charInfo->Flags |= CHARACTER_FLAG_RESTING;
+                charInfo.Flags |= CHARACTER_FLAG_RESTING;
 
             /*if (atLoginFlags & AT_LOGIN_RESET_TALENTS)
                 charInfo->Flags |= CHARACTER_FLAG_RESET_TALENTS_ON_LOGIN;*/
@@ -292,25 +292,25 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
                 playerFlags &= ~PLAYER_FLAGS_GHOST;
 
             if (playerFlags & PLAYER_FLAGS_GHOST)
-                charInfo->Flags |= CHARACTER_FLAG_GHOST;
+                charInfo.Flags |= CHARACTER_FLAG_GHOST;
 
             if (atLoginFlags & AT_LOGIN_RENAME)
-                charInfo->Flags |= CHARACTER_FLAG_RENAME;
+                charInfo.Flags |= CHARACTER_FLAG_RENAME;
 
             if (fields[23].Get<uint32>())
-                charInfo->Flags |= CHARACTER_FLAG_LOCKED_BY_BILLING;
+                charInfo.Flags |= CHARACTER_FLAG_LOCKED_BY_BILLING;
 
             /*if (sWorld->getBoolConfig(CONFIG_DECLINED_NAMES_USED) && !fields[22].Get<std::string>().empty())
                 charInfo->Flags |= CHARACTER_FLAG_DECLINED;*/
 
             if (atLoginFlags & AT_LOGIN_CUSTOMIZE)
-                charInfo->Flags2 = CHAR_CUSTOMIZE_FLAG_CUSTOMIZE;
+                charInfo.Flags2 = CHAR_CUSTOMIZE_FLAG_CUSTOMIZE;
             else if (atLoginFlags & AT_LOGIN_CHANGE_FACTION)
-                charInfo->Flags2 = CHAR_CUSTOMIZE_FLAG_FACTION;
+                charInfo.Flags2 = CHAR_CUSTOMIZE_FLAG_FACTION;
             else if (atLoginFlags & AT_LOGIN_CHANGE_RACE)
-                charInfo->Flags2 = CHAR_CUSTOMIZE_FLAG_RACE;
+                charInfo.Flags2 = CHAR_CUSTOMIZE_FLAG_RACE;
             else
-                charInfo->Flags2 = CHAR_CUSTOMIZE_FLAG_NONE;
+                charInfo.Flags2 = CHAR_CUSTOMIZE_FLAG_NONE;
 
             /*if (playerFlags & PLAYER_FLAGS_NO_XP_GAIN)
                 charInfo->Flags2 |= CHARACTER_FLAG_2_NO_XP_GAIN;
@@ -321,29 +321,29 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
             if (playerFlags & PLAYER_FLAGS_AUTO_DECLINE_GUILD)
                 charInfo->Flags2 |= CHARACTER_FLAG_2_AUTO_DECLINE_GUILD;*/
 
-            charInfo->FirstLogin = (atLoginFlags & AT_LOGIN_FIRST) != 0;
-            charInfo->ZoneID = charInfo->FirstLogin ? 0 : int32(fields[11].Get<uint16>()); // if first login do not show the zone
+            charInfo.FirstLogin = (atLoginFlags & AT_LOGIN_FIRST) != 0;
+            charInfo.ZoneID = charInfo.FirstLogin ? 0 : int32(fields[11].Get<uint16>()); // if first login do not show the zone
 
             if (playerFlags & PLAYER_FLAGS_HIDE_HELM)
-                charInfo->Flags |= CHARACTER_FLAG_HIDE_HELM;
+                charInfo.Flags |= CHARACTER_FLAG_HIDE_HELM;
 
             if (playerFlags & PLAYER_FLAGS_HIDE_CLOAK)
-                charInfo->Flags |= CHARACTER_FLAG_HIDE_CLOAK;
+                charInfo.Flags |= CHARACTER_FLAG_HIDE_CLOAK;
 
             // show pet at selection character in character list only for non-ghost character
-            if (!(playerFlags & PLAYER_FLAGS_GHOST) && (charInfo->ClassID == CLASS_WARLOCK || charInfo->ClassID == CLASS_HUNTER || charInfo->ClassID == CLASS_DEATH_KNIGHT))
+            if (!(playerFlags & PLAYER_FLAGS_GHOST) && (charInfo.ClassID == CLASS_WARLOCK || charInfo.ClassID == CLASS_HUNTER || charInfo.ClassID == CLASS_DEATH_KNIGHT))
             {
                 if (CreatureTemplate const* creatureInfo = sObjectMgr->GetCreatureTemplate(fields[19].Get<uint32>()))
                 {
-                    charInfo->PetCreatureDisplayID = fields[20].Get<uint32>();
-                    charInfo->PetExperienceLevel = fields[21].Get<uint16>();
-                    charInfo->PetCreatureFamilyID = creatureInfo->family;
+                    charInfo.PetCreatureDisplayID = fields[20].Get<uint32>();
+                    charInfo.PetExperienceLevel = fields[21].Get<uint16>();
+                    charInfo.PetCreatureFamilyID = creatureInfo->family;
                 }
             }
 
             std::vector<std::string_view> equipment = Acore::Tokenize(fields[22].Get<std::string_view>(), ' ', false);
             // NOTE: This still works for some reason, but it is not getting the correct info. Need to grab playerslot (the order in which chars show) correctly
-            charInfo->ListPosition = fields[24].Get<uint8>();
+            charInfo.ListPosition = fields[24].Get<uint8>();
 
             for (uint8 slot = 0; slot < INVENTORY_SLOT_BAG_END; ++slot)
             {
@@ -361,7 +361,7 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
                     if (!itemId || *itemId)
                     {
                         LOG_WARN("entities.player.loading", "Player %u has invalid equipment '%s' in `equipmentcache` at index %u. Skipped.",
-                            charInfo->Guid.GetCounter(), (visualBase < equipment.size()) ? std::string(equipment[visualBase]).c_str() : "<none>", visualBase);
+                            charInfo.Guid.GetCounter(), (visualBase < equipment.size()) ? std::string(equipment[visualBase]).c_str() : "<none>", visualBase);
                     }
                     continue;
                 }
@@ -374,7 +374,7 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
                 if (!enchants)
                 {
                     LOG_WARN("entities.player.loading", "Player %u has invalid enchantment info '%s' in `equipmentcache` at index %u. Skipped.",
-                        charInfo->Guid.GetCounter(), ((visualBase+1) < equipment.size()) ? std::string(equipment[visualBase + 1]).c_str() : "<none>", visualBase + 1);
+                        charInfo.Guid.GetCounter(), ((visualBase+1) < equipment.size()) ? std::string(equipment[visualBase + 1]).c_str() : "<none>", visualBase + 1);
                     enchants = 0;
                 }
                 for (uint8 enchantSlot = PERM_ENCHANTMENT_SLOT; enchantSlot <= TEMP_ENCHANTMENT_SLOT; ++enchantSlot)
@@ -389,109 +389,21 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
                         break;
                 }
 
-                charInfo->VisualItems[slot].InvType = proto->InventoryType;
-                charInfo->VisualItems[slot].DisplayID = proto->DisplayInfoID;
-                charInfo->VisualItems[slot].DisplayEnchantID = enchant ? enchant->aura_id : 0;
+                charInfo.VisualItems[slot].InvType = proto->InventoryType;
+                charInfo.VisualItems[slot].DisplayID = proto->DisplayInfoID;
+                charInfo.VisualItems[slot].DisplayEnchantID = enchant ? enchant->aura_id : 0;
             }
 
-            LOG_INFO("network.opcode", "Loading char {} from account {}.", charInfo->Guid.ToString(), GetAccountId());
-            LOG_INFO("network.opcode", "Character is level {}, {} {}, in zone {}, map {}.", charInfo->ExperienceLevel, charInfo->SexID, charInfo->ClassID, charInfo->ZoneID, charInfo->MapID);
-            LOG_INFO("network.opcode", "Character has {} visual item(s).", charInfo->VisualItems.size());
-            LOG_INFO("network.opcode", "Character has pet with display {}, level {}, family {}.", charInfo->PetCreatureDisplayID, charInfo->PetExperienceLevel, charInfo->PetCreatureFamilyID);
-            LOG_INFO("network.opcode", "Character has flags {} and at login flags {}.", playerFlags, atLoginFlags);
-            LOG_INFO("network.opcode", "Character has equipment cache '{}'.", fields[22].Get<std::string>());
-            LOG_INFO("network.opcode", "Character has list position {}.", charInfo->ListPosition);
-            _legitCharacters.insert(charInfo->Guid);
-
-            // add character info to list
-            Characters.push_back(*charInfo);
+            _legitCharacters.insert(charInfo.Guid);
+            charEnum.Characters.push_back(std::move(charInfo));
         } while (result->NextRow());
     }
 
-    WorldPacket data(SMSG_CHAR_ENUM, 6 + Characters.size() * sizeof(CharacterInfo));
-    data.WriteBits(0, 23); // FactionChangeRestrictions
-    data.WriteBit(true); // Success
-    data.WriteBits(Characters.size(), 17);
-    LOG_INFO("network.opcode", "Account {} has {} character(s).", GetAccountId(), Characters.size());
-
-    for (CharacterInfo const& charInfo : Characters)
-    {
-        data.WriteBit(charInfo.Guid[3]);
-        data.WriteBit(charInfo.GuildGUID[1]);
-        data.WriteBit(charInfo.GuildGUID[7]);
-        data.WriteBit(charInfo.GuildGUID[2]);
-        data.WriteBits(charInfo.Name.length(), 7);
-        data.WriteBit(charInfo.Guid[4]);
-        data.WriteBit(charInfo.Guid[7]);
-        data.WriteBit(charInfo.GuildGUID[3]);
-        data.WriteBit(charInfo.Guid[5]);
-        data.WriteBit(charInfo.GuildGUID[6]);
-        data.WriteBit(charInfo.Guid[1]);
-        data.WriteBit(charInfo.GuildGUID[5]);
-        data.WriteBit(charInfo.GuildGUID[4]);
-        data.WriteBit(charInfo.FirstLogin);
-        data.WriteBit(charInfo.Guid[0]);
-        data.WriteBit(charInfo.Guid[2]);
-        data.WriteBit(charInfo.Guid[6]);
-        data.WriteBit(charInfo.GuildGUID[0]);
-    }
-
-    data.FlushBits();
-
-    for (CharacterInfo const& charInfo : Characters)
-    {
-        data << uint8(charInfo.ClassID);
-
-        LOG_INFO("network", "Character has {} visual item(s).", charInfo.VisualItems.size());
-        for (CharacterInfo::VisualItemInfo const& visualItem : charInfo.VisualItems)
-        {
-            data << uint8(visualItem.InvType);
-            data << uint32(visualItem.DisplayID);
-            data << uint32(visualItem.DisplayEnchantID);
-        }
-
-        data << uint32(charInfo.PetCreatureFamilyID);
-        data.WriteByteSeq(charInfo.GuildGUID[2]);
-        data << uint8(charInfo.ListPosition);
-        data << uint8(charInfo.HairStyle);
-        data.WriteByteSeq(charInfo.GuildGUID[3]);
-        data << uint32(charInfo.PetCreatureDisplayID);
-        data << uint32(charInfo.Flags);
-        data << uint8(charInfo.HairColor);
-        data.WriteByteSeq(charInfo.Guid[4]);
-        data << int32(charInfo.MapID);
-        data.WriteByteSeq(charInfo.GuildGUID[5]);
-        data << float(charInfo.PreloadPos.GetPositionZ());
-        data.WriteByteSeq(charInfo.GuildGUID[6]);
-        data << uint32(charInfo.PetExperienceLevel);
-        data.WriteByteSeq(charInfo.Guid[3]);
-        data << float(charInfo.PreloadPos.GetPositionY());
-        data << uint32(charInfo.Flags2);
-        data << uint8(charInfo.FacialHair);
-        data.WriteByteSeq(charInfo.Guid[7]);
-        data << uint8(charInfo.SexID);
-        data.WriteString(charInfo.Name);
-        data << uint8(charInfo.FaceID);
-        data.WriteByteSeq(charInfo.Guid[0]);
-        data.WriteByteSeq(charInfo.Guid[2]);
-        data.WriteByteSeq(charInfo.GuildGUID[1]);
-        data.WriteByteSeq(charInfo.GuildGUID[7]);
-        data << float(charInfo.PreloadPos.GetPositionX());
-        data << uint8(charInfo.SkinID);
-        data << uint8(charInfo.RaceID);
-        data << uint8(charInfo.ExperienceLevel);
-        data.WriteByteSeq(charInfo.Guid[6]);
-        data.WriteByteSeq(charInfo.GuildGUID[4]);
-        data.WriteByteSeq(charInfo.GuildGUID[0]);
-        data.WriteByteSeq(charInfo.Guid[5]);
-        data.WriteByteSeq(charInfo.Guid[1]);
-        data << int32(charInfo.ZoneID);
-    }
-
-    SendPacket(&data);
+    LOG_INFO("network.opcode", "Account {} has {} character(s).", GetAccountId(), charEnum.Characters.size());
+    SendPacket(charEnum.Write());
 }
 
-void WorldSession::HandleCharEnumOpcode(WorldPacket& /*recvData*/)
+void WorldSession::HandleCharEnumOpcode(WorldPackets::Character::EnumCharacters& /*packet*/)
 {
     CharacterDatabasePreparedStatement* stmt = nullptr;
 
