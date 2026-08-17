@@ -97,10 +97,13 @@ Gate:
   inventory warnings, zero commits behind pinned upstream, and a converted
   `protocol.byte-buffer-bits` anchor with source and fixture proof.
 
-The broad `unit_tests` target did not reach tests because this host's MariaDB headers lack
-`mysql_ssl_mode`, `MYSQL_OPT_SSL_MODE`, and `mysql_stmt_bind_named_param`. That unrelated toolchain
-failure is recorded as inconclusive; the focused target deliberately compiles without the database
-layer. `ReadString` was unchanged because no fixture demonstrated valid embedded-NUL packet data.
+The broad `unit_tests` target initially exposed a toolchain false positive: `FindMySQL.cmake`
+accepted MariaDB 10.11 as MySQL even though its headers lack `mysql_ssl_mode`, `MYSQL_OPT_SSL_MODE`,
+and `mysql_stmt_bind_named_param`. Configure now rejects MariaDB headers before applying the MySQL
+version check. The existing Compose service remains `mysql:8.4`; no database image or data was
+changed. In an isolated Ubuntu 24.04 build environment with MySQL 8.0.46, both `unit_tests` and
+`bytebuffer_tests` built and CTest passed 2/2. `ReadString` was unchanged because no fixture
+demonstrated valid embedded-NUL packet data.
 
 ## Safety and execution boundary
 
@@ -115,5 +118,6 @@ Plan 2 is complete when all `ByteBuffer` construction, assignment, reset, bit-wi
 packed-byte paths have deterministic exact-byte proof; the Plan 1 audit remains green; and no socket,
 opcode, handler, database, or client behavior changed.
 
-Achieved at `91cee3440`. No database, Docker resource, client file, Bottle, socket behavior, opcode,
-handler payload, compression behavior, or SQL data was changed.
+Achieved at `91cee3440`. The build-environment follow-up used a temporary isolated Docker image but
+did not start or modify any database container, volume, image, port, or data. No client file, Bottle,
+socket behavior, opcode, handler payload, compression behavior, or SQL data was changed.

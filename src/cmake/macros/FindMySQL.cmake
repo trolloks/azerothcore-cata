@@ -53,6 +53,28 @@ set(_MYSQL_ROOT_HINTS
 
 set(MYSQL_MINIMUM_VERSION "8.0")
 
+function(check_mysql_vendor)
+  include(CheckCXXSourceCompiles)
+  set(CMAKE_REQUIRED_INCLUDES "${MYSQL_INCLUDE_DIR}")
+  unset(MYSQL_HEADERS_ARE_MARIADB CACHE)
+  check_cxx_source_compiles(
+    [=[
+#include <mysql.h>
+#ifndef MARIADB_VERSION_ID
+#error Not MariaDB
+#endif
+int main() { return 0; }
+]=]
+    MYSQL_HEADERS_ARE_MARIADB
+  )
+
+  if(MYSQL_HEADERS_ARE_MARIADB)
+    message(FATAL_ERROR
+      "MariaDB client libraries are not supported. Install the MySQL client development libraries instead."
+    )
+  endif()
+endfunction()
+
 function(check_mysql_version)
   if(MYSQL_CONFIG)
     execute_process(
@@ -315,6 +337,7 @@ if(MYSQL_FOUND)
   endif()
   mark_as_advanced(MYSQL_FOUND MYSQL_LIBRARY MYSQL_EXTRA_LIBRARIES MYSQL_INCLUDE_DIR MYSQL_EXECUTABLE)
 
+  check_mysql_vendor()
   check_mysql_version()
 
   if(NOT TARGET MySQL::MySQL AND MySQL_lib_WANTED AND MySQL_lib_FOUND)
