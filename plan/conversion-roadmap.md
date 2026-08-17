@@ -181,3 +181,4 @@ disconnects.
 - [Plan 1: conversion baseline and protocol contracts](01-conversion-baseline-and-protocol-contracts.md)
 - [Plan 2: deterministic bit-buffer contract](02-deterministic-bit-buffer-contract.md)
 - [Plan 3: world compression stream lifetime](03-world-compression-stream-lifetime.md)
+- [Plan 4: direction-safe opcode model](04-direction-safe-opcode-model.md)
