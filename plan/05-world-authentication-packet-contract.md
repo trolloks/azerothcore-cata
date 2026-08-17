@@ -1,6 +1,6 @@
 # Plan 5: world authentication packet contract
 
-Status: ready for review. Execution has not started.
+Status: complete.
 
 ## Outcome
 
@@ -99,3 +99,29 @@ Plan 5 is complete when the three world-auth payloads have one typed implementat
 fails before account lookup, all existing account and crypto policy stays in place, exact local wire
 vectors pass twice, affected targets compile and link, the Plan 4 opcode manifest is unchanged, and
 the committed conversion audit is green twice.
+
+## Execution results
+
+Plan 5 started from updated `master` commit `d5216f198` on
+`plan/05-world-authentication-packet-contract`.
+
+- `SMSG_AUTH_CHALLENGE`, `CMSG_AUTH_SESSION`, and `SMSG_AUTH_RESPONSE` now have one typed
+  implementation under `WorldPackets::Auth`.
+- The auth-session parser keeps the canonical digest permutation, uses all 12 account-length bits,
+  checks declared lengths before allocation, and rejects trailing bytes before account lookup.
+- Pre-session errors, normal success, queue admission, queue release, and queue refresh all use the
+  same response serializer. Account checks, prepared statements, digest policy, `AuthCrypt`, Warden,
+  hooks, and queue ownership remain in place.
+- Five focused packet tests passed twice, covering exact challenge, auth-session, error, success,
+  queued-success, queued-error, queue-refresh, malformed, and 300-byte account vectors.
+- Every affected production translation unit compiled with the existing MySQL 8.0.46 toolchain.
+  A temporary rebuilt game archive linked both `worldserver` and the updated `unit_tests` target.
+  The database-free focused executable ran successfully; the manually relinked broad test binary
+  could not start against the host MariaDB client and reported that environment mismatch before
+  test discovery.
+- The checker self-check, C++ codestyle, `git diff --check`, and the unchanged Plan 4 opcode manifest
+  passed. The committed conversion audit passed twice against current upstream with zero errors and
+  457 retained inventory warnings.
+
+No database process, Docker volume, port, client file, or Bottle was read or modified. The remaining
+authserver build admission and session-key handoff are isolated in Plan 6.
