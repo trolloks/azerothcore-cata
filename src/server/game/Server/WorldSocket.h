@@ -56,6 +56,11 @@ private:
 
 namespace WorldPackets
 {
+    namespace Auth
+    {
+        class AuthSession;
+    }
+
     class ServerPacket;
 }
 
@@ -69,8 +74,6 @@ struct ClientPktHeader
     bool IsValidOpcode() const { return cmd < NUM_OPCODE_HANDLERS; }
 };
 #pragma pack(pop)
-
-struct ClientAuthSession;
 
 class AC_GAME_API WorldSocket final : public Socket<WorldSocket>
 {
@@ -122,7 +125,7 @@ private:
     /// sends and logs network.opcode without accessing WorldSession
     void HandleSendAuthSession();
     void HandleAuthSession(WorldPacket& recvPacket);
-    void HandleAuthSessionCallback(std::shared_ptr<ClientAuthSession> authSession, PreparedQueryResult result);
+    void HandleAuthSessionCallback(std::shared_ptr<WorldPackets::Auth::AuthSession> authSession, PreparedQueryResult result);
     void LoadSessionPermissionsCallback(PreparedQueryResult result);
     void SendAuthResponseError(uint8 code);
 

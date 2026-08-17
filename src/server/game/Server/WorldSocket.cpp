@@ -18,6 +18,7 @@
 #include "TC9Sidecar.h"
 #include "WorldSocket.h"
 #include "AccountMgr.h"
+#include "AuthenticationPackets.h"
 #include "Config.h"
 #include "CryptoHash.h"
 #include "CryptoRandom.h"
@@ -397,12 +398,11 @@ bool WorldSocket::Update()
 
 void WorldSocket::HandleSendAuthSession()
 {
-    WorldPacket packet(SMSG_AUTH_CHALLENGE, 32 + 4 + 1);
-    packet.append(Acore::Crypto::GetRandomBytes<32>());
-    packet.append(_authSeed);
-    packet << uint8(1);
+    WorldPackets::Auth::AuthChallenge packet;
+    packet.DosChallenge = Acore::Crypto::GetRandomBytes<32>();
+    packet.Challenge = _authSeed;
 
-    SendPacketAndLogOpcode(packet);
+    SendPacketAndLogOpcode(*packet.Write());
 }
 
 void WorldSocket::OnClose()
@@ -507,23 +507,6 @@ bool WorldSocket::ReadHeaderHandler(bool initialized)
 
     return true;
 }
-
-struct ClientAuthSession
-{
-    uint32 BattlegroupID = 0;
-    uint8 LoginServerType = 0;
-    int8 BuildType = 0;
-    uint32 RealmID = 0;
-    uint16 Build = 0;
-    std::array<uint8, 4> LocalChallenge = {};
-    uint32 LoginServerID = 0;
-    uint32 RegionID = 0;
-    uint64 DosResponse = 0;
-    Acore::Crypto::SHA1::Digest Digest = {};
-    std::string Account;
-    ByteBuffer AddonInfo;
-    bool UseIPv6 = false;
-};
 
 struct AccountInfo
 {
@@ -727,83 +710,9 @@ void WorldSocket::SendPacket(WorldPacket const& packet)
 
 void WorldSocket::HandleAuthSession(WorldPacket & recvPacket)
 {
-    std::shared_ptr<ClientAuthSession> authSession = std::make_shared<ClientAuthSession>();
-
-    // Read the content of the packet
-    /*recvPacket >> authSession->Build;
-    recvPacket >> authSession->LoginServerID;
-    recvPacket >> authSession->Account;
-    recvPacket >> authSession->LoginServerType;
-    recvPacket.read(authSession->LocalChallenge);
-    recvPacket >> authSession->RegionID;
-    recvPacket >> authSession->BattlegroupID;
-    recvPacket >> authSession->RealmID;               // realmId from auth_database.realmlist table
-    recvPacket >> authSession->DosResponse;
-    recvPacket.read(authSession->Digest);
-    authSession->AddonInfo.resize(recvPacket.size() - recvPacket.rpos());
-    recvPacket.read(authSession->AddonInfo.contents(), authSession->AddonInfo.size()); // .contents will throw if empty, thats what we want
-    */
-
-    uint32 addonDataSize;
-
-    LOG_INFO ("network", "Reading CMSG_AUTH_SESSION packet from client.");
-
-    recvPacket >> authSession->LoginServerID;
-    recvPacket >> authSession->BattlegroupID;
-    recvPacket >> authSession->LoginServerType;
-    recvPacket >> authSession->Digest[10];
-    recvPacket >> authSession->Digest[18];
-    recvPacket >> authSession->Digest[12];
-    recvPacket >> authSession->Digest[5];
-
-    recvPacket >> authSession->DosResponse;
-
-    recvPacket >> authSession->Digest[15];
-    recvPacket >> authSession->Digest[9];
-    recvPacket >> authSession->Digest[19];
-    recvPacket >> authSession->Digest[4];
-    recvPacket >> authSession->Digest[7];
-    recvPacket >> authSession->Digest[16];
-    recvPacket >> authSession->Digest[3];
-
-    recvPacket >> authSession->Build;
-
-    recvPacket >> authSession->Digest[8];
-
-    recvPacket >> authSession->RealmID;
-    recvPacket >> authSession->BuildType;
-
-    recvPacket >> authSession->Digest[17];
-    recvPacket >> authSession->Digest[6];
-    recvPacket >> authSession->Digest[0];
-    recvPacket >> authSession->Digest[1];
-    recvPacket >> authSession->Digest[11];
-
-    recvPacket.read(authSession->LocalChallenge);
-
-    recvPacket >> authSession->Digest[2];
-
-    recvPacket >> authSession->RegionID;
-
-    recvPacket >> authSession->Digest[14];
-    recvPacket >> authSession->Digest[13];
-
-    recvPacket >> addonDataSize;
-
-    if (addonDataSize)
-    {
-        authSession->AddonInfo.resize(addonDataSize);
-        recvPacket.read(authSession->AddonInfo.contents(), addonDataSize);
-    }
-
-    authSession->UseIPv6 = recvPacket.ReadBit(); // UseIPv6
-    uint8 accountNameLength = recvPacket.ReadBits(12);
-    authSession->Account = recvPacket.ReadString(accountNameLength);
-
-    LOG_INFO ("network", "WorldSocket::HandleAuthSession: Received CMSG_AUTH_SESSION from account '{}', build {}, region {}, battlegroup {}, realm id {}.",
-        authSession->Account, authSession->Build, authSession->RegionID, authSession->BattlegroupID, authSession->RealmID);
-    // Log realm.Id.Realm
-    LOG_INFO("network", "WorldSocket::HandleAuthSession: Realm ID: {}.", realm.Id.Realm);
+    std::shared_ptr<WorldPackets::Auth::AuthSession> authSession =
+        std::make_shared<WorldPackets::Auth::AuthSession>(std::move(recvPacket));
+    authSession->Read();
 
     // Get the account information from the auth database
     LoginDatabasePreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_INFO_BY_NAME);
@@ -813,7 +722,7 @@ void WorldSocket::HandleAuthSession(WorldPacket & recvPacket)
     _queryProcessor.AddCallback(LoginDatabase.AsyncQuery(stmt).WithPreparedCallback(std::bind(&WorldSocket::HandleAuthSessionCallback, this, authSession, std::placeholders::_1)));
 }
 
-void WorldSocket::HandleAuthSessionCallback(std::shared_ptr<ClientAuthSession> authSession, PreparedQueryResult result)
+void WorldSocket::HandleAuthSessionCallback(std::shared_ptr<WorldPackets::Auth::AuthSession> authSession, PreparedQueryResult result)
 {
     LOG_INFO("network", "WorldSocket::HandleAuthSessionCallback: Received account information for account '{}'.", authSession->Account);
     // Stop if the account is not found
@@ -996,10 +905,9 @@ void WorldSocket::HandleAuthSessionCallback(std::shared_ptr<ClientAuthSession> a
 void WorldSocket::SendAuthResponseError(uint8 code)
 {
     LOG_INFO("network", "WorldSocket::SendAuthResponseError: Sending Auth Response (code {}) to client {}.", code, GetRemoteIpAddress().to_string());
-    WorldPacket packet(SMSG_AUTH_RESPONSE, 1);
-    packet << uint8(code);
+    WorldPackets::Auth::AuthResponse packet(code);
 
-    SendPacketAndLogOpcode(packet);
+    SendPacketAndLogOpcode(*packet.Write());
 }
 
 bool WorldSocket::HandlePing(WorldPacket& recvPacket)

@@ -944,6 +944,72 @@ def world_socket_compression_issues(source: str) -> tuple[str, ...]:
     return tuple(issues)
 
 
+def authentication_codec_issues(
+    header: str,
+    source: str,
+    socket_header: str,
+    socket_source: str,
+    auth_handler: str,
+    session_source: str,
+    session_mgr: str,
+    tests: str,
+) -> tuple[str, ...]:
+    issues: list[str] = []
+
+    if any(token not in header for token in (
+        "class AuthChallenge final : public ServerPacket",
+        "class AuthSession final : public ClientPacket",
+        "class AuthResponse final : public ServerPacket",
+        "std::optional<AuthSuccessInfo> SuccessInfo",
+        "std::optional<AuthWaitInfo> WaitInfo",
+    )):
+        issues.append("authentication-packet-types-missing")
+
+    if any(token not in source for token in (
+        "uint32 accountLength = _worldPacket.ReadBits(12);",
+        "addonInfoSize > _worldPacket.size() - _worldPacket.rpos()",
+        "accountLength > _worldPacket.size() - _worldPacket.rpos()",
+        "_worldPacket.rpos() != _worldPacket.size()",
+    )):
+        issues.append("auth-session-boundary-checks-missing")
+
+    query = socket_source.find("LOGIN_SEL_ACCOUNT_INFO_BY_NAME")
+    read = socket_source.find("authSession->Read();")
+    if (
+        "std::shared_ptr<WorldPackets::Auth::AuthSession>" not in socket_header
+        or "std::make_shared<WorldPackets::Auth::AuthSession>" not in socket_source
+        or not 0 <= read < query
+    ):
+        issues.append("auth-session-typed-ownership-missing")
+
+    raw_sources = "\n".join((socket_source, auth_handler, session_source))
+    if "struct ClientAuthSession" in socket_source or re.search(
+        r"WorldPacket\s+\w+\s*\(SMSG_AUTH_(?:CHALLENGE|RESPONSE)", raw_sources
+    ):
+        issues.append("raw-authentication-codec-remains")
+
+    if any(token not in raw_sources + session_mgr for token in (
+        "WorldPackets::Auth::AuthChallenge packet;",
+        "WorldPackets::Auth::AuthResponse packet(code);",
+        "SendAuthResponse(position == 0 ? AUTH_OK : AUTH_WAIT_QUEUE, position == 0, position);",
+        "SendAuthResponse(AUTH_SYSTEM_ERROR, true);",
+        "SendAuthResponse(AUTH_OK, false, GetQueuePos(session));",
+    )):
+        issues.append("auth-response-routing-incomplete")
+
+    if any(token not in tests for token in (
+        "WritesAuthChallenge",
+        "ReadsAuthSession",
+        "RejectsMalformedAuthSession",
+        "KeepsAllTwelveAccountLengthBits",
+        "WritesAuthResponses",
+        "A00000000003000000000300000000000C07000000",
+    )):
+        issues.append("authentication-fixtures-incomplete")
+
+    return tuple(issues)
+
+
 def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], ...], tuple[Finding, ...]]:
     anchors: list[dict[str, Any]] = []
     findings: list[Finding] = []
@@ -1051,6 +1117,58 @@ def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], 
             "plan": "Protocol foundation",
             "state": compression_row.state if compression_row else "open",
             "evidence": compression_row.evidence if compression_row else "-",
+        }
+    )
+
+    authentication_header = read_ref_file(
+        inputs.repo_root, inputs.head_ref, "src/server/game/Server/Packets/AuthenticationPackets.h"
+    )
+    authentication_source = read_ref_file(
+        inputs.repo_root, inputs.head_ref, "src/server/game/Server/Packets/AuthenticationPackets.cpp"
+    )
+    world_socket_header = read_ref_file(inputs.repo_root, inputs.head_ref, "src/server/game/Server/WorldSocket.h")
+    auth_handler = read_ref_file(inputs.repo_root, inputs.head_ref, "src/server/game/Handlers/AuthHandler.cpp")
+    world_session = read_ref_file(inputs.repo_root, inputs.head_ref, "src/server/game/Server/WorldSession.cpp")
+    world_session_mgr = read_ref_file(inputs.repo_root, inputs.head_ref, "src/server/game/Server/WorldSessionMgr.cpp")
+    authentication_tests = read_ref_file(
+        inputs.repo_root, inputs.head_ref, "src/test/server/game/Server/Packets/AuthenticationPacketsTest.cpp"
+    )
+    authentication_issues = authentication_codec_issues(
+        authentication_header,
+        authentication_source,
+        world_socket_header,
+        world_socket,
+        auth_handler,
+        world_session,
+        world_session_mgr,
+        authentication_tests,
+    )
+    authentication_row = ledger.anchors.get("protocol.authentication-codecs")
+    if authentication_row is None:
+        findings.append(
+            Finding("error", "MISSING_ANCHOR", "protocol.authentication-codecs", "named anchor has no ledger row")
+        )
+    elif (authentication_row.state == "converted" or authentication_row.implementation == "converted") and (
+        authentication_issues or authentication_row.fixture != "pass"
+    ):
+        findings.append(
+            Finding(
+                "error",
+                "CONVERTED_ANCHOR_WITHOUT_PROOF",
+                "protocol.authentication-codecs",
+                "converted authentication anchor lacks typed routing or exact fixture proof",
+            )
+        )
+    anchors.append(
+        {
+            "key": "protocol.authentication-codecs",
+            "path": "src/server/game/Server/Packets/AuthenticationPackets.{h,cpp}",
+            "current": ",".join(authentication_issues) if authentication_issues else "typed-authentication-codecs",
+            "target": "typed-authentication-codecs",
+            "matched_target": not authentication_issues,
+            "plan": "World authentication",
+            "state": authentication_row.state if authentication_row else "open",
+            "evidence": authentication_row.evidence if authentication_row else "-",
         }
     )
 
@@ -1546,6 +1664,40 @@ def self_check() -> None:
             "            delete _compressionStream;",
             "            delete _compressionStream;\n            delete _compressionStream;",
         )
+    )
+
+    auth_header = (repo_root / "src/server/game/Server/Packets/AuthenticationPackets.h").read_text(encoding="utf-8")
+    auth_source = (repo_root / "src/server/game/Server/Packets/AuthenticationPackets.cpp").read_text(encoding="utf-8")
+    socket_header = (repo_root / "src/server/game/Server/WorldSocket.h").read_text(encoding="utf-8")
+    socket_source = (repo_root / "src/server/game/Server/WorldSocket.cpp").read_text(encoding="utf-8")
+    auth_handler = (repo_root / "src/server/game/Handlers/AuthHandler.cpp").read_text(encoding="utf-8")
+    session_source = (repo_root / "src/server/game/Server/WorldSession.cpp").read_text(encoding="utf-8")
+    session_mgr = (repo_root / "src/server/game/Server/WorldSessionMgr.cpp").read_text(encoding="utf-8")
+    auth_tests = (repo_root / "src/test/server/game/Server/Packets/AuthenticationPacketsTest.cpp").read_text(
+        encoding="utf-8"
+    )
+    auth_inputs = (auth_header, auth_source, socket_header, socket_source, auth_handler, session_source, session_mgr, auth_tests)
+    assert authentication_codec_issues(*auth_inputs) == ()
+    assert "authentication-packet-types-missing" in authentication_codec_issues(
+        auth_header.replace("class AuthChallenge final", "class BrokenAuthChallenge final", 1), *auth_inputs[1:]
+    )
+    assert "auth-session-boundary-checks-missing" in authentication_codec_issues(
+        auth_header, auth_source.replace("ReadBits(12)", "ReadBits(8)", 1), *auth_inputs[2:]
+    )
+    assert "auth-session-typed-ownership-missing" in authentication_codec_issues(
+        auth_header,
+        auth_source,
+        socket_header.replace("std::shared_ptr<WorldPackets::Auth::AuthSession>", "std::shared_ptr<void>", 1),
+        *auth_inputs[3:],
+    )
+    assert "raw-authentication-codec-remains" in authentication_codec_issues(
+        auth_header, auth_source, socket_header, socket_source + "\nWorldPacket packet(SMSG_AUTH_RESPONSE);", *auth_inputs[4:]
+    )
+    assert "auth-response-routing-incomplete" in authentication_codec_issues(
+        *auth_inputs[:6], session_mgr.replace("SendAuthResponse(AUTH_OK, false", "SendAuthResponse(AUTH_WAIT_QUEUE, false", 1), auth_tests
+    )
+    assert "authentication-fixtures-incomplete" in authentication_codec_issues(
+        *auth_inputs[:-1], auth_tests.replace("KeepsAllTwelveAccountLengthBits", "BrokenAccountLengthTest", 1)
     )
 
     defaults = LedgerRow(

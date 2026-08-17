@@ -15,35 +15,25 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "Opcodes.h"
-#include "WorldPacket.h"
+#include "AuthenticationPackets.h"
+#include "World.h"
 #include "WorldSession.h"
 
 void WorldSession::SendAuthResponse(uint8 code, bool shortForm, uint32 queuePos)
 {
-    WorldPacket packet(SMSG_AUTH_RESPONSE);
-    packet.WriteBit(!shortForm);
-    if (!shortForm)
-        packet.WriteBit(false); // FCM
-    packet.WriteBit(code == AUTH_OK);
-    packet.FlushBits();
+    WorldPackets::Auth::AuthResponse packet(code);
 
     if (code == AUTH_OK)
     {
-        packet << uint32(0); // TimeRemain
-        packet << uint8(Expansion()); // ActiveExpansionLevel
-        packet << uint32(0); // TimeSecondsUntilPCKick
-        packet << uint8(Expansion()); // AccountExpansionLevel
-        packet << uint32(0); // TimeRested
-        packet << uint8(0); // TimeOptions
+        WorldPackets::Auth::AuthSuccessInfo& successInfo = packet.SuccessInfo.emplace();
+        successInfo.ActiveExpansionLevel = uint8(sWorld->getIntConfig(CONFIG_EXPANSION));
+        successInfo.AccountExpansionLevel = Expansion();
     }
 
-    packet << uint8(code);
-
     if (!shortForm)
-        packet << uint32(queuePos); // QueuePosition
+        packet.WaitInfo.emplace(WorldPackets::Auth::AuthWaitInfo{ queuePos, false });
 
-    SendPacket(&packet);
+    SendPacket(packet.Write());
 }
 
 void WorldSession::SendClientCacheVersion(uint32 version)

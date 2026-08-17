@@ -957,20 +957,7 @@ void WorldSession::Handle_Deprecated(WorldPacket& recvPacket)
 
 void WorldSession::SendAuthWaitQueue(uint32 position)
 {
-    if (position == 0)
-    {
-        WorldPacket packet(SMSG_AUTH_RESPONSE, 1);
-        packet << uint8(AUTH_OK);
-        SendPacket(&packet);
-    }
-    else
-    {
-        WorldPacket packet(SMSG_AUTH_RESPONSE, 6);
-        packet << uint8(AUTH_WAIT_QUEUE);
-        packet << uint32(position);
-        packet << uint8(0);                                 // unk
-        SendPacket(&packet);
-    }
+    SendAuthResponse(position == 0 ? AUTH_OK : AUTH_WAIT_QUEUE, position == 0, position);
 }
 
 void WorldSession::LoadAccountData(PreparedQueryResult result, uint32 mask)
@@ -1572,7 +1559,7 @@ void WorldSession::InitializeSession()
     std::shared_ptr<AccountInfoQueryHolderPerRealm> realmHolder = std::make_shared<AccountInfoQueryHolderPerRealm>();
     if (!realmHolder->Initialize(GetAccountId()))
     {
-        SendAuthResponse(AUTH_SYSTEM_ERROR, false);
+        SendAuthResponse(AUTH_SYSTEM_ERROR, true);
         return;
     }
 
