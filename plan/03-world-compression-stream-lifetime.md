@@ -1,6 +1,6 @@
 # Plan 3: world compression stream lifetime
 
-Status: implementation complete. The committed conversion audit is pending.
+Status: complete.
 
 ## Outcome
 
@@ -104,6 +104,8 @@ database, Docker database resource, client file, or Bottle.
   database linkage. Adding test-only seams would exceed this ownership-only plan.
 - `WorldSocket.cpp.o` compiled in the isolated Ubuntu 24.04 and MySQL 8.0.46 toolchain. No database
   process was started.
+- The full conversion audit passed twice at commit `833c37999` with identical output: 0 errors and
+  457 known warnings.
 - The production diff does not change `NeedsCompression`, the `0x400` threshold, opcode masking,
   original-size prefix, persistent `Z_SYNC_FLUSH` call, queue order, header creation, or close
   sequencing.
@@ -114,5 +116,5 @@ Plan 3 is complete when the persistent world compression stream has deterministi
 failure, and destruction states; every successful initialization is finalized and released exactly
 once; the audit is green; and all compression bytes and surrounding socket behavior remain unchanged.
 
-Implementation and focused proof are complete. The final committed ledger and repeatable full audit
-remain before this predicate is achieved.
+This predicate is achieved. The stream lifetime, focused proof, object compile, and repeatable full
+audit are complete without changing packet bytes or surrounding socket behavior.
