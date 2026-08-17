@@ -33,8 +33,13 @@ The executable interface is `apps/cata/run_real_client_authentication.py` with `
 `prepare`, `run`, `verify`, `replay`, `compare-last-two`, and `reset` commands. Its run root must be
 outside the worktree. Every generation owns a linked client view, fresh Wine prefix, three
 disposable databases, server processes, Docker resources, configs, and evidence directory through
-one atomic mode-0600 manifest. Reset may act only after the recorded resource identity still
-matches; the final reset explicitly purges the cached base.
+one atomic mode-0600 manifest. The first generation caches the immutable base and released database
+state as a mode-0600 logical dump. Later generations restore that dump into a new labeled MySQL
+volume, then reapply the pending migration and generation-specific account and realm seed. The cache
+key covers the immutable MySQL image ID and the exact immediate SQL files read from all six base and
+released directories, so unrelated source changes do not repeat hundreds of imports. Reset may act
+only after the recorded resource identity still matches; the final reset may explicitly purge both
+the cached client base and database dump.
 
 The current worldserver still requires WotLK-shaped DBC records during startup. Plan 7 therefore
 accepts a separate, read-only `--server-dbc-root` containing exactly the bootstrap data understood
@@ -54,6 +59,8 @@ Work:
 
 - Make one full run-owned base copy, mark it read-only, and prove per-generation writable state does
   not change either that base or the source client.
+- Build or restore the manifest-owned database cache while retaining a fresh container and volume
+  for every generation. Never cache pending migrations or synthetic runtime rows.
 - Generate a run-owned `realmlist.wtf` pointing only to the isolated authserver.
 - Start authserver and the minimum worldserver configuration against disposable databases. Do not
   connect either server to an operator database.
