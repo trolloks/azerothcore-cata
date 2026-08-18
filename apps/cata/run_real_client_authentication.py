@@ -1415,16 +1415,17 @@ def automate_client_login(generation: Generation) -> None:
         if movie_seen or time.monotonic() >= no_movie_deadline:
             break
         time.sleep(1)
-    account_point, _, _ = client_login_points(x, y, width, height)
+    account_point, password_point, login_point = client_login_points(x, y, width, height)
+    connection.sync()
     click(account_point)
     press("a", control)
     press("BackSpace")
     enter(ACCOUNT)
-    press("Tab")
+    click(password_point)
     press("a", control)
     press("BackSpace")
     enter(PASSWORD)
-    press("Return")
+    click(login_point)
     connection.sync()
     connection.close()
 
