@@ -11,12 +11,40 @@
 #include "Util.h"
 #include <gtest/gtest.h>
 #include <span>
+#include <string_view>
 
 namespace
 {
+    constexpr std::string_view PopulatedCharacterPayload =
+        "0000010000C08046000100000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        "000000000000000000000000000000000000000000070000000000000000000000000000F90FA7420000000000357E04C300"
+        "000000000043617461706C616E000503CDD70BC6000101020C000000";
+
     std::string PayloadHex(ByteBuffer const* packet)
     {
         return ByteArrayToHexStr(std::span<uint8 const>(packet->contents(), packet->size()));
+    }
+
+    std::string PopulatedPayload(uint32 guid = 0x01020304, std::string name = "Cataplan", uint8 listPosition = 7)
+    {
+        WorldPackets::Character::EnumCharactersResult packet;
+        packet.Success = true;
+
+        WorldPackets::Character::EnumCharactersResult::CharacterInfo& character = packet.Characters.emplace_back();
+        character.Guid = ObjectGuid::Create<HighGuid::Player>(guid);
+        character.Name = std::move(name);
+        character.RaceID = 1;
+        character.ClassID = 1;
+        character.ExperienceLevel = 1;
+        character.MapID = 0;
+        character.ZoneID = 12;
+        character.PreloadPos = Position(-8949.95f, -132.493f, 83.5312f);
+        character.ListPosition = listPosition;
+
+        return PayloadHex(packet.Write());
     }
 }
 
@@ -52,4 +80,26 @@ TEST(CharacterPacketsTest, WritesFailedEmptyEnumCharacters)
 
     EXPECT_EQ(packet.GetOpcode(), SMSG_CHAR_ENUM);
     EXPECT_EQ(PayloadHex(packet.Write()), "000000000000");
+}
+
+TEST(CharacterPacketsTest, WritesSuccessfulPopulatedEnumCharacters)
+{
+    std::string const payload = PopulatedPayload();
+
+    EXPECT_EQ(payload.size(), 278 * 2);
+    EXPECT_EQ(payload, PopulatedCharacterPayload);
+}
+
+TEST(CharacterPacketsTest, PopulatedEnumFixtureRejectsWireMutations)
+{
+    EXPECT_NE(PopulatedPayload(0x00020304), PopulatedCharacterPayload);
+    for (uint32 byte = 0; byte < 4; ++byte)
+        EXPECT_NE(PopulatedPayload(0x01020304 ^ (uint32(1) << (byte * 8))), PopulatedCharacterPayload);
+    EXPECT_NE(PopulatedPayload(0x01020304, "Catapla"), PopulatedCharacterPayload);
+    EXPECT_NE(PopulatedPayload(0x01020304, "Cataplam"), PopulatedCharacterPayload);
+    EXPECT_NE(PopulatedPayload(0x01020304, "Cataplan", 6), PopulatedCharacterPayload);
+
+    WorldPackets::Character::EnumCharactersResult empty;
+    empty.Success = true;
+    EXPECT_NE(PayloadHex(empty.Write()), PopulatedCharacterPayload);
 }

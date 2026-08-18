@@ -1210,6 +1210,76 @@ def character_enumeration_issues(
     return tuple(issues)
 
 
+def populated_character_list_issues(
+    character_database: str, handler: str, tests: str, runner: str, fixture: str,
+) -> tuple[str, ...]:
+    issues: list[str] = []
+    if character_database.count("COALESCE(c.order, 0)") != 2 or any(token in character_database for token in (
+        "cb.guid, c.extra_flags ", "cb.guid, c.extra_flags, cd.genitive",
+    )):
+        issues.append("populated-character-list-query-mapping-missing")
+    if any(token not in handler for token in (
+        "COALESCE(characters.order, 0)",
+        'LOG_INFO("network.opcode", "Enumerated account {} character {} at list position {}.",',
+        "charInfo.ListPosition = fields[24].Get<uint8>();",
+    )):
+        issues.append("populated-character-list-handler-evidence-missing")
+    if any(token not in tests for token in (
+        "WritesSuccessfulPopulatedEnumCharacters",
+        "PopulatedEnumFixtureRejectsWireMutations",
+        "PopulatedCharacterPayload",
+        "278 * 2",
+        "0000010000C080460001",
+        "43617461706C616E000503CDD70BC6000101020C000000",
+    )):
+        issues.append("populated-character-list-packet-fixture-missing")
+    if any(token not in runner for token in (
+        'POPULATED_MODE = "populated-character-list"',
+        "populated_character_seed_sql",
+        "verify_populated_character_seed",
+        "realm_character_count",
+        "enumerated_characters",
+        "POPULATED_CHARACTER_ENUM_PAYLOAD",
+        '"populated_character_list_pass"',
+        "CHARACTER_GUID = 0x01020304",
+        "CHARACTER_LIST_POSITION = 7",
+    )):
+        issues.append("populated-character-list-runner-missing")
+    try:
+        proof = json.loads(fixture)
+    except (json.JSONDecodeError, TypeError):
+        proof = None
+    expected_character = {
+        "guid_low": 16909060, "name": "Cataplan", "race": 1, "class": 1, "gender": 0,
+        "level": 1, "map": 0, "zone": 12, "list_position": 7, "flags": 0, "flags2": 0,
+        "visual_items_nonzero": 0,
+    }
+    if not isinstance(proof, dict) or any((
+        proof.get("schema") != 1,
+        proof.get("plan") != 9,
+        proof.get("client_build") != 15595,
+        proof.get("verdict") != "PASS",
+        proof.get("mode") != "populated-character-list",
+        proof.get("response_body") != runner_populated_payload(runner),
+        proof.get("character_rows") != 1,
+        proof.get("realm_character_count") != 1,
+        proof.get("enumerated") != expected_character,
+        proof.get("fresh_runs") != 2,
+        proof.get("matching_runs") is not True,
+        proof.get("protected_inputs_unchanged") is not True,
+        proof.get("reset") != "PASS",
+    )):
+        issues.append("populated-character-list-live-fixture-missing")
+    return tuple(issues)
+
+
+def runner_populated_payload(runner: str) -> str | None:
+    match = re.search(
+        r"POPULATED_CHARACTER_ENUM_PAYLOAD\s*=\s*\((.*?)\)\s*\nPOPULATED_MODE",
+        runner, re.DOTALL,
+    )
+    return "".join(re.findall(r'"([0-9a-fA-F]+)"', match.group(1))) if match else None
+
 def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], ...], tuple[Finding, ...]]:
     anchors: list[dict[str, Any]] = []
     findings: list[Finding] = []
@@ -1511,6 +1581,42 @@ def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], 
         "plan": "Build 15595 character screen",
         "state": character_row.state if character_row else "open",
         "evidence": character_row.evidence if character_row else "-",
+    })
+
+    character_database = read_ref_file(
+        inputs.repo_root, inputs.head_ref,
+        "src/server/database/Database/Implementation/CharacterDatabase.cpp",
+    )
+    try:
+        populated_fixture = read_ref_file(
+            inputs.repo_root, inputs.head_ref, "apps/cata/fixtures/plan9-populated-character-list.json"
+        )
+    except AuditError:
+        populated_fixture = ""
+    populated_issues = populated_character_list_issues(
+        character_database, character_handler, character_tests, client_runner, populated_fixture,
+    )
+    populated_row = ledger.anchors.get("protocol.populated-character-list")
+    if populated_row is None:
+        findings.append(Finding(
+            "error", "MISSING_ANCHOR", "protocol.populated-character-list", "named anchor has no ledger row",
+        ))
+    elif populated_row.state == "converted" and (
+        populated_issues or populated_row.fixture != "pass" or populated_row.client != "pass"
+    ):
+        findings.append(Finding(
+            "error", "CONVERTED_ANCHOR_WITHOUT_PROOF", "protocol.populated-character-list",
+            "converted populated character list lacks query, packet, runner, and two-run client proof",
+        ))
+    anchors.append({
+        "key": "protocol.populated-character-list",
+        "path": "CharacterDatabase.cpp;CharacterHandler.cpp;CharacterPacketsTest.cpp;run_real_client_authentication.py",
+        "current": ",".join(populated_issues) if populated_issues else "populated-character-list-accepted",
+        "target": "populated-character-list-accepted",
+        "matched_target": not populated_issues,
+        "plan": "Build 15595 populated character list",
+        "state": populated_row.state if populated_row else "open",
+        "evidence": populated_row.evidence if populated_row else "-",
     })
 
     opcode_header = read_ref_file(inputs.repo_root, inputs.head_ref, OPCODES_H)
@@ -2057,6 +2163,40 @@ def self_check() -> None:
         character_header, character_source, character_handler, character_session, character_tests,
         client_runner.replace('"--stability-seconds"', '"--hold-seconds"', 1), "",
     )
+
+    character_database = (
+        repo_root / "src/server/database/Database/Implementation/CharacterDatabase.cpp"
+    ).read_text(encoding="utf-8")
+    populated_inputs = (character_database, character_handler, character_tests, client_runner)
+    assert "populated-character-list-live-fixture-missing" in populated_character_list_issues(
+        *populated_inputs, "",
+    )
+    assert "populated-character-list-query-mapping-missing" in populated_character_list_issues(
+        character_database.replace("COALESCE(c.order, 0)", "c.extra_flags", 1),
+        character_handler, character_tests, client_runner, "",
+    )
+    assert "populated-character-list-packet-fixture-missing" in populated_character_list_issues(
+        character_database, character_handler,
+        character_tests.replace("WritesSuccessfulPopulatedEnumCharacters", "BrokenPopulatedFixture", 1),
+        client_runner, "",
+    )
+    assert "populated-character-list-runner-missing" in populated_character_list_issues(
+        character_database, character_handler, character_tests,
+        client_runner.replace('POPULATED_MODE = "populated-character-list"', 'POPULATED_MODE = "broken"', 1),
+        "",
+    )
+    populated_fixture = json.dumps({
+        "schema": 1, "plan": 9, "client_build": 15595, "verdict": "PASS",
+        "mode": "populated-character-list", "response_body": runner_populated_payload(client_runner),
+        "character_rows": 1, "realm_character_count": 1,
+        "enumerated": {
+            "guid_low": 16909060, "name": "Cataplan", "race": 1, "class": 1, "gender": 0,
+            "level": 1, "map": 0, "zone": 12, "list_position": 7, "flags": 0, "flags2": 0,
+            "visual_items_nonzero": 0,
+        },
+        "fresh_runs": 2, "matching_runs": True, "protected_inputs_unchanged": True, "reset": "PASS",
+    })
+    assert populated_character_list_issues(*populated_inputs, populated_fixture) == ()
 
     admission = (repo_root / "data/sql/updates/pending_db_auth/rev_1786964293354831242.sql").read_text()
     handoff_runner = (repo_root / "apps/cata/run_authentication_handoff.py").read_text()
