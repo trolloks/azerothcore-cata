@@ -8,4 +8,7 @@ plan	issue	state	title	url
 07	17	closed	Plan 7: isolated build 15595 client authentication	https://github.com/trolloks/azerothcore-cata/issues/17
 08	18	closed	Plan 8: typed empty character enumeration and stable build 15595 screen	https://github.com/trolloks/azerothcore-cata/issues/18
 09	19	closed	Plan 9: one database-backed build 15595 character	https://github.com/trolloks/azerothcore-cata/issues/19
-10	20	open	Plan 10: select the enumerated build 15595 character	https://github.com/trolloks/azerothcore-cata/issues/20
+10	20	closed	Plan 10: select the enumerated build 15595 character	https://github.com/trolloks/azerothcore-cata/issues/20
+11	25	open	Plan 11: build 15595 initial post-load packet contract	https://github.com/trolloks/azerothcore-cata/issues/25
+12	26	open	Plan 12: build 15595 map insertion and object bootstrap	https://github.com/trolloks/azerothcore-cata/issues/26
+13	27	open	Plan 13: build 15595 in-world control bootstrap	https://github.com/trolloks/azerothcore-cata/issues/27

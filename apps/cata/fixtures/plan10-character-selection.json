@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "plan": 10,
+  "client_build": 15595,
+  "verdict": "PASS",
+  "mode": "character-selection",
+  "request_payload": "E203050002",
+  "selection": {
+    "action": "enter",
+    "seeded_guid_low": 16909060,
+    "enumerated_guid_low": 16909060,
+    "request_guid_low": 16909060,
+    "callback_guid_low": 16909060,
+    "legit_characters_admission": true
+  },
+  "downstream_diagnostic": "load-returned-true",
+  "fresh_runs": 2,
+  "matching_runs": true,
+  "protected_inputs_unchanged": true,
+  "reset": "PASS"
+}

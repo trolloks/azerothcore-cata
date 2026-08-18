@@ -10,6 +10,7 @@
 #include "CharacterPackets.h"
 #include "Util.h"
 #include <gtest/gtest.h>
+#include <array>
 #include <span>
 #include <string_view>
 
@@ -45,6 +46,13 @@ namespace
         character.ListPosition = listPosition;
 
         return PayloadHex(packet.Write());
+    }
+
+    WorldPacket PlayerLoginPayload(std::span<uint8 const> payload)
+    {
+        WorldPacket packet(CMSG_PLAYER_LOGIN, payload.size());
+        packet.append(payload.data(), payload.size());
+        return packet;
     }
 }
 
@@ -102,4 +110,56 @@ TEST(CharacterPacketsTest, PopulatedEnumFixtureRejectsWireMutations)
     WorldPackets::Character::EnumCharactersResult empty;
     empty.Success = true;
     EXPECT_NE(PayloadHex(empty.Write()), PopulatedCharacterPayload);
+}
+
+TEST(CharacterPacketsTest, ReadsBuild15595PlayerLoginGuid)
+{
+    std::array<uint8, 5> const payload = { 0xE2, 0x03, 0x05, 0x00, 0x02 };
+    WorldPackets::Character::PlayerLogin packet(PlayerLoginPayload(payload));
+    packet.Read();
+
+    ObjectGuid const expected = ObjectGuid::Create<HighGuid::Player>(0x01020304);
+    EXPECT_EQ(packet.Guid, expected);
+    EXPECT_TRUE(packet.Guid.IsPlayer());
+    EXPECT_EQ(packet.Guid.GetCounter(), 16909060u);
+}
+
+TEST(CharacterPacketsTest, RejectsTruncatedBuild15595PlayerLoginGuid)
+{
+    auto expectsTruncation = [](std::span<uint8 const> payload)
+    {
+        WorldPacket raw(CMSG_PLAYER_LOGIN, payload.size());
+        if (!payload.empty())
+            raw.append(payload.data(), payload.size());
+        WorldPackets::Character::PlayerLogin packet(std::move(raw));
+        EXPECT_THROW(packet.Read(), ByteBufferException);
+    };
+    std::array<uint8, 0> const empty = {};
+    std::array<uint8, 1> const firstBitByte = { 0xE2 };
+    std::array<uint8, 4> const missingByte = { 0xE2, 0x03, 0x05, 0x00 };
+
+    expectsTruncation(empty);
+    expectsTruncation(firstBitByte);
+    expectsTruncation(missingByte);
+}
+
+TEST(CharacterPacketsTest, Build15595PlayerLoginGuidRejectsWireMutations)
+{
+    std::array<uint8, 5> const payload = { 0xE2, 0x03, 0x05, 0x00, 0x02 };
+    ObjectGuid const expected = ObjectGuid::Create<HighGuid::Player>(0x01020304);
+
+    for (uint8 index = 0; index < payload.size(); ++index)
+    {
+        std::array<uint8, 5> mutated = payload;
+        mutated[index] ^= 0x01;
+        WorldPackets::Character::PlayerLogin packet(PlayerLoginPayload(mutated));
+        try
+        {
+            packet.Read();
+            EXPECT_NE(packet.Guid, expected);
+        }
+        catch (ByteBufferException const&)
+        {
+        }
+    }
 }

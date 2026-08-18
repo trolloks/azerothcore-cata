@@ -134,7 +134,9 @@ POPULATED_CHARACTER_ENUM_PAYLOAD = (
     "000000000043617461706C616E000503CDD70BC6000101020C000000"
 )
 POPULATED_MODE = "populated-character-list"
-CHARACTER_MODES = frozenset({"character-screen", POPULATED_MODE})
+CHARACTER_SELECTION_MODE = "character-selection"
+POPULATED_CHARACTER_MODES = frozenset({POPULATED_MODE, CHARACTER_SELECTION_MODE})
+CHARACTER_MODES = frozenset({"character-screen", *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
 CHARACTER_NAME = "Cataplan"
 CHARACTER_LIST_POSITION = 7
@@ -142,6 +144,8 @@ CHARACTER_POSITION = (-8949.95, -132.493, 83.5312)
 
 
 def plan_number(mode: str) -> str:
+    if mode == CHARACTER_SELECTION_MODE:
+        return "10"
     if mode == POPULATED_MODE:
         return "9"
     return "8" if mode == "character-screen" else "7"
@@ -485,6 +489,23 @@ def verify_populated_character_seed(manifest: Manifest, generation: Generation) 
     )
     if matches != "1":
         raise RuntimeError(f"owned populated character seed matched {matches!r} rows instead of one")
+    return {
+        "guid_low": CHARACTER_GUID, "name": CHARACTER_NAME, "race": 1, "class": 1, "gender": 0,
+        "level": 1, "map": 0, "zone": 12, "list_position": CHARACTER_LIST_POSITION,
+        "flags": 0, "flags2": 0, "visual_items_nonzero": 0,
+    }
+
+
+def verify_populated_character_identity(manifest: Manifest, generation: Generation) -> dict[str, object]:
+    matches = mysql(
+        manifest, generation,
+        "SELECT COUNT(*) FROM `characters` WHERE "
+        f"`guid`={CHARACTER_GUID} AND `account`={ACCOUNT_ID} AND `name`='{CHARACTER_NAME}' "
+        "AND `deleteDate` IS NULL;",
+        generation["schemas"]["characters"],
+    )
+    if matches != "1":
+        raise RuntimeError(f"owned selected character matched {matches!r} rows instead of one")
     return {
         "guid_low": CHARACTER_GUID, "name": CHARACTER_NAME, "race": 1, "class": 1, "gender": 0,
         "level": 1, "map": 0, "zone": 12, "list_position": CHARACTER_LIST_POSITION,
@@ -1155,7 +1176,7 @@ def prepare(args: argparse.Namespace) -> None:
             generation["released_updates"] = released
             dump_database_cache(manifest_path, manifest, generation, cache_key)
             generation["database_cache"] = {"key": cache_key, "result": "built"}
-        realm_count = 1 if args.mode == POPULATED_MODE else 0
+        realm_count = 1 if args.mode in POPULATED_CHARACTER_MODES else 0
         mysql(
             manifest, generation,
             f"CREATE USER IF NOT EXISTS '{manifest['mysql_user']}'@'%' "
@@ -1192,7 +1213,7 @@ def prepare(args: argparse.Namespace) -> None:
             f"VALUES ({REALM_ID},{ACCOUNT_ID},{realm_count});",
             auth,
         )
-        if args.mode == POPULATED_MODE:
+        if args.mode in POPULATED_CHARACTER_MODES:
             mysql(manifest, generation, populated_character_seed_sql(), characters)
             verify_populated_character_seed(manifest, generation)
             if character_row_count(manifest, generation) != 1 or realm_character_count(manifest, generation) != 1:
@@ -1443,6 +1464,42 @@ def automate_client_login(generation: Generation) -> None:
     connection.close()
 
 
+def automate_character_selection(generation: Generation) -> None:
+    try:
+        from Xlib import X, XK, display
+        from Xlib.ext import xtest
+    except ImportError as error:
+        raise RuntimeError("character selection requires the installed python3-xlib package") from error
+
+    deadline = time.monotonic() + 30
+    window: tuple[str, int, int, int, int] | None = None
+    while time.monotonic() < deadline:
+        add_processes(generation, find_wine_processes(Path(generation["paths"]["wine_prefix"])))
+        owned_pids = {int(item["pid"]) for item in generation["processes"] if item["kind"] == "wine"}
+        output = run_command(
+            ["wmctrl", "-lpGx"], check=False, env=wine_environment(generation),
+        ).stdout.decode(errors="replace")
+        window = owned_wow_window(output, owned_pids)
+        if window:
+            break
+        time.sleep(0.5)
+    if not window:
+        raise RuntimeError("owned WoW window did not appear for character selection")
+
+    window_id = window[0]
+    connection = display.Display(str(generation["inputs"]["display"]))
+    target = connection.create_resource_object("window", int(window_id, 16))
+    run_command(["wmctrl", "-i", "-a", window_id])
+    target.set_input_focus(X.RevertToParent, X.CurrentTime)
+    connection.sync()
+    time.sleep(1)
+    keycode = connection.keysym_to_keycode(XK.string_to_keysym("Return"))
+    xtest.fake_input(connection, X.KeyPress, keycode)
+    xtest.fake_input(connection, X.KeyRelease, keycode)
+    connection.sync()
+    connection.close()
+
+
 def character_row_count(manifest: Manifest, generation: Generation) -> int:
     output = mysql(
         manifest, generation,
@@ -1533,6 +1590,7 @@ def run_client(args: argparse.Namespace) -> None:
             print(f"enter synthetic credentials manually: {ACCOUNT} / {PASSWORD}")
         deadline = time.monotonic() + (args.no_login_seconds if generation["mode"] == "no-login" else args.timeout)
         character_hold_started: float | None = None
+        selection_sent = False
         milestone_definition = CHARACTER_MILESTONES if generation["mode"] in CHARACTER_MODES else CLIENT_MILESTONES
         while time.monotonic() < deadline:
             add_processes(generation, find_wine_processes(Path(paths["wine_prefix"])))
@@ -1543,7 +1601,23 @@ def run_client(args: argparse.Namespace) -> None:
             if generation["mode"] in CHARACTER_MODES:
                 if len(milestones) == len(CHARACTER_MILESTONES) and character_hold_started is None:
                     character_hold_started = time.monotonic()
-                if character_hold_started is not None and time.monotonic() - character_hold_started >= args.stability_seconds:
+                if (
+                    generation["mode"] == CHARACTER_SELECTION_MODE
+                    and character_hold_started is not None and not selection_sent
+                ):
+                    automate_character_selection(generation)
+                    generation["selection_action"] = "enter"
+                    save_manifest(manifest_path, manifest)
+                    selection_sent = True
+                if (
+                    generation["mode"] == CHARACTER_SELECTION_MODE and selection_sent
+                    and player_login_callbacks(generation)
+                ):
+                    break
+                if (
+                    generation["mode"] != CHARACTER_SELECTION_MODE and character_hold_started is not None
+                    and time.monotonic() - character_hold_started >= args.stability_seconds
+                ):
                     break
             if generation["mode"] == "no-login" and time.monotonic() + 0.5 >= deadline:
                 break
@@ -1612,6 +1686,50 @@ def enumerated_characters(generation: Generation) -> list[dict[str, int]]:
         {"account_id": int(account), "guid_low": int(guid), "list_position": int(position)}
         for account, guid, position in pattern.findall(world_log_text(generation))
     ]
+
+
+def player_login_requests(generation: Generation) -> list[int]:
+    pattern = re.compile(r"Account \(\d+\) is trying to login with character \(.*? Low: (\d+)\)")
+    return [int(guid) for guid in pattern.findall(world_log_text(generation))]
+
+
+def player_login_callbacks(generation: Generation) -> list[int]:
+    pattern = re.compile(r"Player login callback for account \d+ character .*? Low: (\d+)")
+    return [int(guid) for guid in pattern.findall(world_log_text(generation))]
+
+
+def player_login_diagnostic(generation: Generation) -> str:
+    text = world_log_text(generation)
+    callback = text.rfind("Player login callback for account ")
+    if callback < 0:
+        return "not-observed"
+    later = text[callback:]
+    if "Player::LoadFromDB failed" in later:
+        return "load-returned-false"
+    if "logged in with character" in later:
+        return "load-returned-true"
+    return "not-observed"
+
+
+def selection_proof_is_complete(
+    selection: dict[str, object] | None, transcript: list[dict[str, str]],
+    enum_events: list[dict[str, int]],
+) -> bool:
+    expected_enum = {
+        "account_id": ACCOUNT_ID, "guid_low": CHARACTER_GUID, "list_position": CHARACTER_LIST_POSITION,
+    }
+    return (
+        enum_events == [expected_enum]
+        and selection == {
+            "action": "enter",
+            "seeded_guid_low": CHARACTER_GUID,
+            "enumerated_guid_low": CHARACTER_GUID,
+            "request_guid_low": CHARACTER_GUID,
+            "callback_guid_low": CHARACTER_GUID,
+            "legit_characters_admission": True,
+        }
+        and sum(item == {"direction": "c2s", "opcode": "CMSG_PLAYER_LOGIN"} for item in transcript) == 1
+    )
 
 
 def owned_established_lines(generation: Generation) -> list[str]:
@@ -1687,6 +1805,7 @@ def sanitized_evidence(
     generation: Generation, milestones: list[str], transcript: list[dict[str, str]],
     *, character_rows: int | None = None, realm_count: int | None = None,
     enumerated: dict[str, object] | None = None, screen_confirmed: bool = False,
+    selection: dict[str, object] | None = None, downstream_diagnostic: str | None = None,
 ) -> dict[str, object]:
     auth_index = next(
         (index for index, item in enumerate(transcript) if item["opcode"] == "SMSG_AUTH_RESPONSE"), None,
@@ -1704,17 +1823,20 @@ def sanitized_evidence(
         }
     ]
     character_mode = generation["mode"] in CHARACTER_MODES
-    populated_mode = generation["mode"] == POPULATED_MODE
+    populated_mode = generation["mode"] in POPULATED_CHARACTER_MODES
+    selection_mode = generation["mode"] == CHARACTER_SELECTION_MODE
     owned_window = owned_window_evidence(generation) if character_mode else (
         Path(generation["paths"]["raw_evidence"]) / "window.xprop"
     ).is_file()
-    forbidden = sorted({item["opcode"] for item in transcript if item["opcode"] in FORBIDDEN_CHARACTER_OPCODES})
+    forbidden_opcodes = FORBIDDEN_CHARACTER_OPCODES - ({"CMSG_PLAYER_LOGIN"} if selection_mode else set())
+    forbidden = sorted({item["opcode"] for item in transcript if item["opcode"] in forbidden_opcodes})
     return {
         "schema": 1,
         "build": CLIENT_BUILD,
         "mode": generation["mode"],
         "outcome": (
-            "populated_character_list_candidate" if populated_mode and "characters_completed" in milestones
+            "character_selection_candidate" if selection_mode and "characters_completed" in milestones
+            else "populated_character_list_candidate" if populated_mode and "characters_completed" in milestones
             else "character_screen_candidate" if character_mode and "characters_completed" in milestones
             else "world_auth_ok" if "world_auth_ok" in milestones else "not_accepted"
         ),
@@ -1727,6 +1849,8 @@ def sanitized_evidence(
         "character_rows": character_rows if character_mode else None,
         "realm_character_count": realm_count if populated_mode else None,
         "enumerated": enumerated if populated_mode else None,
+        "selection": selection if selection_mode else None,
+        "downstream_diagnostic": downstream_diagnostic if selection_mode else None,
         "empty_response_payload": EMPTY_CHARACTER_ENUM_PAYLOAD if generation["mode"] == "character-screen" else None,
         "response_body": POPULATED_CHARACTER_ENUM_PAYLOAD if populated_mode else None,
         "stability_seconds": generation.get("stability_seconds", 0) if character_mode else None,
@@ -1758,17 +1882,32 @@ def verify(args: argparse.Namespace) -> None:
     milestones = matched_milestones(text, milestone_definition)
     transcript = server_transcript(generation)
     character_mode = generation["mode"] in CHARACTER_MODES
-    populated_mode = generation["mode"] == POPULATED_MODE
+    populated_mode = generation["mode"] in POPULATED_CHARACTER_MODES
+    selection_mode = generation["mode"] == CHARACTER_SELECTION_MODE
     rows = character_row_count(manifest, generation) if character_mode else None
     realm_count = realm_character_count(manifest, generation) if populated_mode else None
-    seed = verify_populated_character_seed(manifest, generation) if populated_mode else None
+    seed = (
+        verify_populated_character_identity(manifest, generation) if selection_mode
+        else verify_populated_character_seed(manifest, generation) if populated_mode else None
+    )
     enum_events = enumerated_characters(generation) if populated_mode else []
     enumerated = None
     if seed is not None:
         enumerated = seed
+    requests = player_login_requests(generation) if selection_mode else []
+    callbacks = player_login_callbacks(generation) if selection_mode else []
+    selection = {
+        "action": generation.get("selection_action"),
+        "seeded_guid_low": seed["guid_low"] if seed is not None else None,
+        "enumerated_guid_low": enum_events[0]["guid_low"] if len(enum_events) == 1 else None,
+        "request_guid_low": requests[0] if len(requests) == 1 else None,
+        "callback_guid_low": callbacks[0] if len(callbacks) == 1 else None,
+        "legit_characters_admission": len(callbacks) == 1,
+    } if selection_mode else None
     evidence = sanitized_evidence(
         generation, milestones, transcript, character_rows=rows, realm_count=realm_count, enumerated=enumerated,
-        screen_confirmed=bool(args.confirm_expected_screen),
+        screen_confirmed=bool(args.confirm_expected_screen), selection=selection,
+        downstream_diagnostic=player_login_diagnostic(generation) if selection_mode else None,
     )
     unchanged = protected_inputs_unchanged(manifest, generation)
     generation["isolation_unchanged"] = unchanged
@@ -1796,8 +1935,13 @@ def verify(args: argparse.Namespace) -> None:
                 "account_id": ACCOUNT_ID, "guid_low": CHARACTER_GUID,
                 "list_position": CHARACTER_LIST_POSITION,
             }]
+        if selection_mode:
+            character_ok = character_ok and selection_proof_is_complete(selection, transcript, enum_events)
         if character_ok:
-            evidence["outcome"] = "populated_character_list_pass" if populated_mode else "character_screen_pass"
+            evidence["outcome"] = (
+                "character_selection_pass" if selection_mode
+                else "populated_character_list_pass" if populated_mode else "character_screen_pass"
+            )
             set_state(generation, "accepted")
         elif not unchanged:
             set_state(generation, "failed")
@@ -1922,7 +2066,7 @@ def reset(args: argparse.Namespace) -> None:
             purged.append("database cache")
         if purged:
             save_manifest(manifest_path, manifest)
-            print(f"purged cached Plan 7 {' and '.join(purged)}")
+            print(f"purged cached real-client {' and '.join(purged)}")
             return
         print(f"generation {generation['number']} is already reset")
         return
@@ -1984,6 +2128,7 @@ def comparison_projection(evidence: dict[str, object]) -> dict[str, object]:
         "enumerated": evidence.get("enumerated"),
         "empty_response_payload": evidence.get("empty_response_payload"),
         "response_body": evidence.get("response_body"),
+        "selection": evidence.get("selection"),
         "stability_seconds": evidence.get("stability_seconds"),
         "endpoint_ownership": evidence.get("endpoint_ownership"),
         "owned_window": evidence.get("owned_window"),
@@ -2101,6 +2246,23 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert populated_evidence["realm_character_count"] == 1
     assert populated_evidence["enumerated"] == expected_character
     assert plan_number(POPULATED_MODE) == "9"
+    selection_generation = dict(populated_generation)
+    selection_generation["mode"] = CHARACTER_SELECTION_MODE
+    selection_evidence = sanitized_evidence(
+        selection_generation, [name for name, _ in CHARACTER_MILESTONES],
+        [{"direction": "c2s", "opcode": "CMSG_CHAR_ENUM"},
+         {"direction": "s2c", "opcode": "SMSG_CHAR_ENUM"},
+         {"direction": "c2s", "opcode": "CMSG_PLAYER_LOGIN"}],
+        character_rows=1, realm_count=1, enumerated=expected_character, screen_confirmed=True,
+        selection={
+            "action": "enter", "seeded_guid_low": CHARACTER_GUID,
+            "enumerated_guid_low": CHARACTER_GUID, "request_guid_low": CHARACTER_GUID,
+            "callback_guid_low": CHARACTER_GUID, "legit_characters_admission": True,
+        }, downstream_diagnostic="not-observed",
+    )
+    assert selection_evidence["forbidden_opcodes"] == []
+    assert plan_number(CHARACTER_SELECTION_MODE) == "10"
+    assert not selection_proof_is_complete(selection_evidence["selection"], [], [])
     seed_sql = populated_character_seed_sql()
     assert "INSERT INTO `characters`" in seed_sql and "`order`,`innTriggerId`" in seed_sql
     assert "INSERT INTO `characters` VALUES" not in seed_sql
@@ -2198,7 +2360,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         pass
     else:
         raise AssertionError("invalid state transition was accepted")
-    print("Plan 7 runner self-check passed")
+    print("Plan 7-10 runner self-check passed")
 
 
 def stability_seconds(value: str) -> int:
@@ -2229,7 +2391,7 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--display", required=True)
     prepare_parser.add_argument("--xauthority", type=Path)
     prepare_parser.add_argument(
-        "--mode", choices=("no-login", "authentication", "character-screen", POPULATED_MODE),
+        "--mode", choices=("no-login", "authentication", "character-screen", POPULATED_MODE, CHARACTER_SELECTION_MODE),
         default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)

@@ -2,5 +2,6 @@
 
 Canonical issue: [#20](https://github.com/trolloks/azerothcore-cata/issues/20)
 
-Status: open. The issue is the implementation plan and progress record. This stub preserves the path
-used by the conversion ledger.
+Status: complete. Two fresh build 15595 selections sent `E203050002`; seeded, enumerated, selected, and
+callback GUIDs were all `16909060`. Both resets passed. The diagnostic `Player::LoadFromDB` returned true;
+post-load packet and map behavior remain outside this plan.

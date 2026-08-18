@@ -191,8 +191,12 @@ numbered Markdown files are stable-path stubs for historical ledger references.
 - [Plan 8: typed empty character enumeration](https://github.com/trolloks/azerothcore-cata/issues/18)
 - [Plan 9: one database-backed character](https://github.com/trolloks/azerothcore-cata/issues/19)
 - [Plan 10: select the enumerated character](https://github.com/trolloks/azerothcore-cata/issues/20)
+- [Plan 11: build 15595 initial post-load packet contract](https://github.com/trolloks/azerothcore-cata/issues/25)
+- [Plan 12: build 15595 map insertion and object bootstrap](https://github.com/trolloks/azerothcore-cata/issues/26)
+- [Plan 13: build 15595 in-world control bootstrap](https://github.com/trolloks/azerothcore-cata/issues/27)
 
 Plans 8-10 deliberately stop at three separate boundaries: typed empty enumeration, one populated
 enumeration, and real-client selection through the session legitimacy gate to the database-load callback.
 They do not prove character creation, successful player loading, initial packet correctness, map entry, or
-world control. Do not assign later plan numbers until Plan 10 records the first honest downstream boundary.
+world control. Plan 10 proved `Player::LoadFromDB` returned true as a diagnostic; Plan 11 starts with the
+pre-map packet contract. Plans 12-13 remain blocked by their predecessors' client-acceptance evidence.
