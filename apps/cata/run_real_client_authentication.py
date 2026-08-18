@@ -893,6 +893,11 @@ def wine_environment(generation: Generation) -> dict[str, str]:
         "WINEDLLOVERRIDES": "d3d9=n,b",
         "http_proxy": "http://127.0.0.1:9",
         "https_proxy": "http://127.0.0.1:9",
+        # +seh is cheap and is what surfaced the deterministic post-map-insertion
+        # stack overflow this fork is currently blocked on (see issue #32); +tid/
+        # +module are far too verbose/slow for routine runs, only useful for a
+        # one-off manual diagnostic session.
+        "WINEDEBUG": "+seh",
     })
     xauthority = str(generation["inputs"].get("xauthority") or "")
     if xauthority:
