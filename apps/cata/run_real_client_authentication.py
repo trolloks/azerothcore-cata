@@ -1373,8 +1373,15 @@ def automate_client_login(generation: Generation) -> None:
     else:
         raise RuntimeError("owned WoW window did not receive focus")
     connection = display.Display(str(generation["inputs"]["display"]))
+    target = connection.create_resource_object("window", int(window_id, 16))
     shift = connection.keysym_to_keycode(XK.string_to_keysym("Shift_L"))
     control = connection.keysym_to_keycode(XK.string_to_keysym("Control_L"))
+
+    def focus() -> None:
+        run_command(["wmctrl", "-i", "-a", window_id])
+        target.set_input_focus(X.RevertToParent, X.CurrentTime)
+        connection.sync()
+        time.sleep(0.2)
 
     def press(value: str, modifier: int | None = None) -> None:
         symbol = XK.string_to_keysym(x_keysym_name(value))
@@ -1387,6 +1394,7 @@ def automate_client_login(generation: Generation) -> None:
             xtest.fake_input(connection, X.KeyRelease, modifier)
 
     def click(point: tuple[int, int]) -> None:
+        focus()
         connection.screen().root.warp_pointer(*point)
         xtest.fake_input(connection, X.ButtonPress, 1)
         xtest.fake_input(connection, X.ButtonRelease, 1)
@@ -1408,10 +1416,15 @@ def automate_client_login(generation: Generation) -> None:
         )
         if movie_active:
             movie_seen = True
+        # Fresh prefixes can render the cinematic without exposing MovieProxy.exe
+        # in the process list. Escape is harmless on the login screen, so keep
+        # dismissing it during the initial window instead of trusting detection.
+        if movie_active or not movie_seen:
             press("Escape")
             connection.sync()
             time.sleep(1)
-            continue
+            if movie_active or time.monotonic() < no_movie_deadline:
+                continue
         if movie_seen or time.monotonic() >= no_movie_deadline:
             break
         time.sleep(1)
