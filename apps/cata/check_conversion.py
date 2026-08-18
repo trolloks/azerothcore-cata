@@ -1130,7 +1130,7 @@ def real_client_authentication_issues(runner: str, fixture: str, plan_index: str
         "https://github.com/trolloks/azerothcore-cata/issues/18",
         "09\t19\tclosed\tPlan 9: one database-backed build 15595 character\t"
         "https://github.com/trolloks/azerothcore-cata/issues/19",
-        "10\t20\topen\tPlan 10: select the enumerated build 15595 character\t"
+        "10\t20\tclosed\tPlan 10: select the enumerated build 15595 character\t"
         "https://github.com/trolloks/azerothcore-cata/issues/20",
     )):
         issues.append("plan-issue-index-incomplete")
@@ -1279,6 +1279,72 @@ def runner_populated_payload(runner: str) -> str | None:
         runner, re.DOTALL,
     )
     return "".join(re.findall(r'"([0-9a-fA-F]+)"', match.group(1))) if match else None
+
+
+def player_login_admission_issues(
+    packet_source: str, handler: str, tests: str, runner: str, fixture: str,
+) -> tuple[str, ...]:
+    issues: list[str] = []
+    if any(token not in packet_source for token in (
+        "Guid[2] = _worldPacket.ReadBit();",
+        "Guid[7] = _worldPacket.ReadBit();",
+        "_worldPacket.ReadByteSeq(Guid[2]);",
+        "_worldPacket.ReadByteSeq(Guid[4]);",
+    )):
+        issues.append("player-login-parser-order-missing")
+    if not re.search(
+        r"void WorldSession::HandlePlayerLoginFromDB\(LoginQueryHolder const& holder\)\n"
+        r"\{\n    LOG_INFO\(\"network\.opcode\", \"Player login callback for account \{\} character \{\}\.\",\n"
+        r"        GetAccountId\(\), holder\.GetGuid\(\)\.ToString\(\)\);",
+        handler,
+    ):
+        issues.append("player-login-callback-boundary-missing")
+    if any(token not in tests for token in (
+        "ReadsBuild15595PlayerLoginGuid",
+        "RejectsTruncatedBuild15595PlayerLoginGuid",
+        "Build15595PlayerLoginGuidRejectsWireMutations",
+        "0xE2, 0x03, 0x05, 0x00, 0x02",
+        "16909060u",
+    )):
+        issues.append("player-login-packet-tests-missing")
+    if any(token not in runner for token in (
+        'CHARACTER_SELECTION_MODE = "character-selection"',
+        "automate_character_selection",
+        "player_login_callbacks",
+        "selection_proof_is_complete",
+        '"seeded_guid_low"',
+        '"callback_guid_low"',
+        '"load-returned-false"',
+    )):
+        issues.append("player-login-selection-runner-missing")
+    try:
+        proof = json.loads(fixture)
+    except (json.JSONDecodeError, TypeError):
+        proof = None
+    expected_selection = {
+        "action": "enter",
+        "seeded_guid_low": 16909060,
+        "enumerated_guid_low": 16909060,
+        "request_guid_low": 16909060,
+        "callback_guid_low": 16909060,
+        "legit_characters_admission": True,
+    }
+    if not isinstance(proof, dict) or any((
+        proof.get("schema") != 1,
+        proof.get("plan") != 10,
+        proof.get("client_build") != 15595,
+        proof.get("verdict") != "PASS",
+        proof.get("mode") != "character-selection",
+        proof.get("request_payload") != "E203050002",
+        proof.get("selection") != expected_selection,
+        proof.get("fresh_runs") != 2,
+        proof.get("matching_runs") is not True,
+        proof.get("protected_inputs_unchanged") is not True,
+        proof.get("reset") != "PASS",
+        proof.get("downstream_diagnostic") not in {"load-returned-false", "load-returned-true", "not-observed"},
+    )):
+        issues.append("player-login-live-fixture-missing")
+    return tuple(issues)
 
 def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], ...], tuple[Finding, ...]]:
     anchors: list[dict[str, Any]] = []
@@ -1617,6 +1683,38 @@ def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], 
         "plan": "Build 15595 populated character list",
         "state": populated_row.state if populated_row else "open",
         "evidence": populated_row.evidence if populated_row else "-",
+    })
+
+    try:
+        player_login_fixture = read_ref_file(
+            inputs.repo_root, inputs.head_ref, "apps/cata/fixtures/plan10-character-selection.json"
+        )
+    except AuditError:
+        player_login_fixture = ""
+    player_login_issues = player_login_admission_issues(
+        character_source, character_handler, character_tests, client_runner, player_login_fixture,
+    )
+    player_login_row = ledger.anchors.get("protocol.player-login-admission")
+    if player_login_row is None:
+        findings.append(Finding(
+            "error", "MISSING_ANCHOR", "protocol.player-login-admission", "named anchor has no ledger row",
+        ))
+    elif player_login_row.state == "converted" and (
+        player_login_issues or player_login_row.fixture != "pass" or player_login_row.client != "pass"
+    ):
+        findings.append(Finding(
+            "error", "CONVERTED_ANCHOR_WITHOUT_PROOF", "protocol.player-login-admission",
+            "converted player login admission lacks parser, callback, runner, or two-run client proof",
+        ))
+    anchors.append({
+        "key": "protocol.player-login-admission",
+        "path": "CharacterPackets.cpp;CharacterHandler.cpp;CharacterPacketsTest.cpp;run_real_client_authentication.py",
+        "current": ",".join(player_login_issues) if player_login_issues else "player-login-admission-accepted",
+        "target": "player-login-admission-accepted",
+        "matched_target": not player_login_issues,
+        "plan": "Build 15595 character selection",
+        "state": player_login_row.state if player_login_row else "open",
+        "evidence": player_login_row.evidence if player_login_row else "-",
     })
 
     opcode_header = read_ref_file(inputs.repo_root, inputs.head_ref, OPCODES_H)
@@ -2198,6 +2296,28 @@ def self_check() -> None:
     })
     assert populated_character_list_issues(*populated_inputs, populated_fixture) == ()
 
+    player_login_inputs = (character_source, character_handler, character_tests, client_runner)
+    assert "player-login-live-fixture-missing" in player_login_admission_issues(*player_login_inputs, "")
+    assert "player-login-packet-tests-missing" in player_login_admission_issues(
+        character_source, character_handler,
+        character_tests.replace("ReadsBuild15595PlayerLoginGuid", "BrokenPlayerLogin", 1), client_runner, "",
+    )
+    assert "player-login-callback-boundary-missing" in player_login_admission_issues(
+        character_source, character_handler.replace("Player login callback", "Broken callback", 1),
+        character_tests, client_runner, "",
+    )
+    player_login_fixture = json.dumps({
+        "schema": 1, "plan": 10, "client_build": 15595, "verdict": "PASS",
+        "mode": "character-selection", "request_payload": "E203050002",
+        "selection": {
+            "action": "enter", "seeded_guid_low": 16909060, "enumerated_guid_low": 16909060,
+            "request_guid_low": 16909060, "callback_guid_low": 16909060, "legit_characters_admission": True,
+        },
+        "fresh_runs": 2, "matching_runs": True, "protected_inputs_unchanged": True,
+        "reset": "PASS", "downstream_diagnostic": "load-returned-false",
+    })
+    assert player_login_admission_issues(*player_login_inputs, player_login_fixture) == ()
+
     admission = (repo_root / "data/sql/updates/pending_db_auth/rev_1786964293354831242.sql").read_text()
     handoff_runner = (repo_root / "apps/cata/run_authentication_handoff.py").read_text()
     assert build_15595_admission_issues(admission) == ()
@@ -2261,7 +2381,7 @@ def self_check() -> None:
         "https://github.com/trolloks/azerothcore-cata/issues/18\n"
         "09\t19\tclosed\tPlan 9: one database-backed build 15595 character\t"
         "https://github.com/trolloks/azerothcore-cata/issues/19\n"
-        "10\t20\topen\tPlan 10: select the enumerated build 15595 character\t"
+        "10\t20\tclosed\tPlan 10: select the enumerated build 15595 character\t"
         "https://github.com/trolloks/azerothcore-cata/issues/20\n"
     )
     assert real_client_authentication_issues(client_runner, client_fixture, plan_index) == ()

@@ -955,6 +955,8 @@ void WorldSession::HandlePlayerLoginOpcode(WorldPackets::Character::PlayerLogin&
 
 void WorldSession::HandlePlayerLoginFromDB(LoginQueryHolder const& holder)
 {
+    LOG_INFO("network.opcode", "Player login callback for account {} character {}.",
+        GetAccountId(), holder.GetGuid().ToString());
     ObjectGuid playerGuid = holder.GetGuid();
 
     Player* pCurrChar = new Player(this);
