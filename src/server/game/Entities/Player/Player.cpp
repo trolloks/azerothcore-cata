@@ -59,6 +59,7 @@
 #include "LootItemStorage.h"
 #include "MapMgr.h"
 #include "MiscPackets.h"
+#include "MovementPackets.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "OutdoorPvP.h"
@@ -77,6 +78,7 @@
 #include "SpellAuraEffects.h"
 #include "SpellAuras.h"
 #include "SpellMgr.h"
+#include "SpellPackets.h"
 #include "StringConvert.h"
 #include "TicketMgr.h"
 #include "Tokenize.h"
@@ -95,6 +97,7 @@
 #include "WorldStateDefines.h"
 #include "WorldStatePackets.h"
 #include <cmath>
+#include <limits>
 #include <queue>
 
 /// @todo: this import is not necessary for compilation and marked as unused by the IDE
@@ -2741,18 +2744,11 @@ bool Player::HasActivePowerType(Powers power)
         return (getPowerType() == power);
 }
 
-void Player::SendInitialSpells()
+void Player::SendKnownSpells(bool firstLogin)
 {
-    uint32 curTime = GameTime::GetGameTimeMS().count();
-    uint32 infTime = GameTime::GetGameTimeMS().count() + infinityCooldownDelayCheck;
-
-    uint16 spellCount = 0;
-
-    WorldPacket data(SMSG_INITIAL_SPELLS, (1 + 2 + 4 * m_spells.size() + 2 + m_spellCooldowns.size() * (4 + 2 + 2 + 4 + 4)));
-    data << uint8(0);
-
-    std::size_t countPos = data.wpos();
-    data << uint16(spellCount);                             // spell count placeholder
+    WorldPackets::Spells::SendKnownSpells packet;
+    packet.InitialLogin = firstLogin;
+    packet.KnownSpells.reserve(m_spells.size());
 
     for (PlayerSpellMap::const_iterator itr = m_spells.begin(); itr != m_spells.end(); ++itr)
     {
@@ -2762,88 +2758,42 @@ void Player::SendInitialSpells()
         if (!itr->second->Active || !itr->second->IsInSpec(GetActiveSpec()))
             continue;
 
-        data << uint32(itr->first);
-        data << uint16(0);                                  // it's not slot id
-
-        ++spellCount;
+        packet.KnownSpells.push_back(itr->first);
     }
 
-    // Added spells from glyphs too (needed by spell tooltips)
-    for (uint8 i = 0; i < MAX_GLYPH_SLOT_INDEX; ++i)
+    uint32 const currentTime = GameTime::GetGameTimeMS().count();
+    uint32 const infinityTime = currentTime + infinityCooldownDelayCheck;
+    packet.SpellHistoryEntries.reserve(m_spellCooldowns.size());
+    for (auto const& [spellID, cooldown] : m_spellCooldowns)
     {
-        if (uint32 glyph = GetGlyph(i))
-        {
-            if (GlyphPropertiesEntry const* glyphEntry = sGlyphPropertiesStore.LookupEntry(glyph))
-            {
-                data << uint32(glyphEntry->SpellId);
-                data << uint16(0); // it's not slot id
+        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellID);
+        if (!cooldown.needSendToClient || !spellInfo)
+            continue;
 
-                ++spellCount;
-            }
+        WorldPackets::Spells::SpellHistoryEntry& entry = packet.SpellHistoryEntries.emplace_back();
+        entry.SpellID = spellID;
+        entry.ItemID = cooldown.itemid;
+        entry.Category = cooldown.category;
+        if (cooldown.end >= infinityTime)
+        {
+            entry.RecoveryTime = 1;
+            entry.CategoryRecoveryTime = std::numeric_limits<int32>::min();
+        }
+        else
+        {
+            int32 const remaining = cooldown.end > currentTime ? cooldown.end - currentTime : 0;
+            entry.RecoveryTime = cooldown.category ? 0 : remaining;
+            entry.CategoryRecoveryTime = cooldown.category ? remaining : 0;
         }
     }
 
-    // xinef: we have to send talents, but not those on m_spells list
-    for (PlayerTalentMap::iterator itr = m_talents.begin(); itr != m_talents.end(); ++itr)
-    {
-        if (itr->second->State == PLAYERSPELL_REMOVED)
-            continue;
-
-        // xinef: remove all active talent auras
-        if (!(itr->second->specMask & GetActiveSpecMask()))
-            continue;
-
-        // xinef: already sent from m_spells
-        if (itr->second->inSpellBook)
-            continue;
-
-        data << uint32(itr->first);
-        data << uint16(0);                                  // it's not slot id
-
-        ++spellCount;
-    }
-
-    data.put<uint16>(countPos, spellCount);                  // write real count value
-
-    uint16 spellCooldowns = m_spellCooldowns.size();
-    data << uint16(spellCooldowns);
-    for (SpellCooldowns::const_iterator itr = m_spellCooldowns.begin(); itr != m_spellCooldowns.end(); ++itr)
-    {
-        if (!itr->second.needSendToClient)
-            continue;
-
-        SpellInfo const* sEntry = sSpellMgr->GetSpellInfo(itr->first);
-        if (!sEntry)
-            continue;
-
-        data << uint32(itr->first);
-
-        data << uint16(itr->second.itemid);                 // cast item id
-        data << uint16(itr->second.category);               // spell category
-
-        // send infinity cooldown in special format
-        if (itr->second.end >= infTime)
-        {
-            data << uint32(1);                              // cooldown
-            data << uint32(0x80000000);                     // category cooldown
-            continue;
-        }
-
-        uint32 cooldown = itr->second.end > curTime ? itr->second.end - curTime : 0;
-        data << uint32(itr->second.category ? 0 : cooldown);    // cooldown
-        data << uint32(itr->second.category ? cooldown : 0);    // category cooldown
-    }
-
-    SendDirectMessage(&data);
+    SendDirectMessage(packet.Write());
 }
 
 void Player::SendUnlearnSpells()
 {
-    WorldPacket data(SMSG_SEND_UNLEARN_SPELLS, 4 + 4 * m_spells.size());
-
-    uint32 spellCount = 0;
-    size_t countPos = data.wpos();
-    data << uint32(spellCount);
+    WorldPackets::Spells::SendUnlearnSpells packet;
+    packet.Spells.reserve(m_spells.size());
 
     for (auto const& itr : m_spells)
     {
@@ -2871,12 +2821,10 @@ void Player::SendUnlearnSpells()
         if (!nextRank || !HasSpell(nextRank))
             continue;
 
-        data << uint32(itr.first);
-        ++spellCount;
+        packet.Spells.push_back(itr.first);
     }
 
-    data.put<uint32>(countPos, spellCount);
-    SendDirectMessage(&data);
+    SendDirectMessage(packet.Write());
 }
 
 bool Player::IsUnlearnNeededForSpell(uint32 spellId)
@@ -5669,27 +5617,18 @@ void Player::SendActionButtons(uint32 state) const
 {
     LOG_DEBUG("entities.player", "Sending Action Buttons for {} spec {}", GetGUID().ToString(), m_activeSpec);
 
-    WorldPacket data(SMSG_ACTION_BUTTONS, 1 + (MAX_ACTION_BUTTONS * 4));
-    data << uint8(state);
-    /*
-        state can be 0, 1, 2
-        0 - Looks to be sent when initial action buttons get sent, however on Trinity we use 1 since 0 had some difficulties
-        1 - Used in any SMSG_ACTION_BUTTONS packet with button data on Trinity. Only used after spec swaps on retail.
-        2 - Clears the action bars client sided. This is sent during spec swap before unlearning and before sending the new buttons
-    */
+    WorldPackets::Spells::UpdateActionButtons packet;
     if (state != 2)
     {
-        for (uint8 button = 0; button < MAX_ACTION_BUTTONS; ++button)
+        for (auto const& [button, action] : m_actionButtons)
         {
-            ActionButtonList::const_iterator itr = m_actionButtons.find(button);
-            if (itr != m_actionButtons.end() && itr->second.uState != ACTIONBUTTON_DELETED)
-                data << uint32(itr->second.packedData);
-            else
-                data << uint32(0);
+            if (button < packet.ActionButtons.size() && action.uState != ACTIONBUTTON_DELETED)
+                packet.ActionButtons[button] = action.packedData;
         }
     }
+    packet.Reason = state;
 
-    SendDirectMessage(&data);
+    SendDirectMessage(packet.Write());
     LOG_DEBUG("entities.player", "Action Buttons for {} spec {} Sent", GetGUID().ToString(), m_activeSpec);
 }
 
@@ -10035,33 +9974,6 @@ template AC_GAME_API void Player::ApplySpellMod(uint32 spellId, SpellModOp op, f
 void Player::AddSpellMod(SpellModifier* mod, bool apply)
 {
     LOG_DEBUG("spells.aura", "Player::AddSpellMod {}", mod->spellId);
-    uint16 Opcode = (mod->type == SPELLMOD_FLAT) ? SMSG_SET_FLAT_SPELL_MODIFIER : SMSG_SET_PCT_SPELL_MODIFIER;
-
-    int i = 0;
-    flag96 _mask = 0;
-    for (int eff = 0; eff < 96; ++eff)
-    {
-        if (eff != 0 && eff % 32 == 0)
-            _mask[i++] = 0;
-
-        _mask[i] = uint32(1) << (eff - (32 * i));
-        if (mod->mask & _mask)
-        {
-            int32 val = 0;
-            for (SpellModContainer::iterator itr = m_spellMods[mod->op].begin(); itr != m_spellMods[mod->op].end(); ++itr)
-            {
-                if ((*itr)->type == mod->type && (*itr)->mask & _mask)
-                    val += (*itr)->value;
-            }
-            val += apply ? mod->value : -(mod->value);
-            WorldPacket data(Opcode, (1 + 1 + 4));
-            data << uint8(eff);
-            data << uint8(mod->op);
-            data << int32(val);
-            SendDirectMessage(&data);
-        }
-    }
-
     if (apply)
     {
         m_spellMods[mod->op].insert(mod);
@@ -10073,6 +9985,42 @@ void Player::AddSpellMod(SpellModifier* mod, bool apply)
         if (!mod->ownerAura)
             delete mod;
     }
+
+    SendSpellModifiers();
+}
+
+void Player::SendSpellModifiers() const
+{
+    auto sendModifiers = [this](SpellModType type, OpcodeServer opcode)
+    {
+        WorldPackets::Spells::SetSpellModifier packet(opcode);
+        for (uint8 op = 0; op < MAX_SPELLMOD; ++op)
+        {
+            WorldPackets::Spells::SpellModifier modifier;
+            modifier.ModIndex = op;
+            for (uint8 classIndex = 0; classIndex < 96; ++classIndex)
+            {
+                flag96 mask = 0;
+                mask[classIndex / 32] = uint32(1) << (classIndex % 32);
+                float value = 0.0f;
+                for (SpellModifier const* spellModifier : m_spellMods[op])
+                    if (spellModifier->type == type && (spellModifier->mask & mask))
+                        value += spellModifier->value;
+
+                if (value != 0.0f)
+                    modifier.ModifierData.push_back({ value, classIndex });
+            }
+
+            if (!modifier.ModifierData.empty())
+                packet.Modifiers.push_back(std::move(modifier));
+        }
+
+        if (!packet.Modifiers.empty())
+            SendDirectMessage(packet.Write());
+    };
+
+    sendModifiers(SPELLMOD_FLAT, SMSG_SET_FLAT_SPELL_MODIFIER);
+    sendModifiers(SPELLMOD_PCT, SMSG_SET_PCT_SPELL_MODIFIER);
 }
 
 // Restore spellmods in case of failed cast
@@ -10227,6 +10175,22 @@ void Player::SendProficiency(ItemClass itemClass, uint32 itemSubclassMask)
     WorldPacket data(SMSG_SET_PROFICIENCY, 1 + 4);
     data << uint8(itemClass) << uint32(itemSubclassMask);
     SendDirectMessage(&data);
+}
+
+void Player::SendCurrencies() const
+{
+    SendDirectMessage(WorldPackets::Misc::SetupCurrency().Write());
+}
+
+void Player::SendBindPointUpdate() const
+{
+    WorldPackets::Misc::BindPointUpdate packet;
+    packet.X = m_homebindX;
+    packet.Y = m_homebindY;
+    packet.Z = m_homebindZ;
+    packet.MapID = m_homebindMapId;
+    packet.AreaID = m_homebindAreaId;
+    SendDirectMessage(packet.Write());
 }
 
 void Player::RemovePetitionsAndSigns(ObjectGuid guid, uint32 type)
@@ -11708,56 +11672,46 @@ void Player::SetGroup(Group* group, int8 subgroup)
     UpdateObjectVisibility(false);
 }
 
-void Player::SendInitialPacketsBeforeAddToMap()
+void Player::SendInitialPacketsBeforeAddToMap(bool firstLogin)
 {
-    /// Pass 'this' as argument because we're not stored in ObjectAccessor yet
-    GetSocial()->SendSocialList(this, SOCIAL_FLAG_ALL);
+    SetClientControl(this, true);
+    SendBindPointUpdate();
 
-    // guild bank list?
+    WorldPackets::Misc::WorldServerInfo worldServerInfo;
+    worldServerInfo.DifficultyID = GetMap()->GetDifficulty();
+    worldServerInfo.WeeklyReset = (sWorld->GetNextWeeklyQuestsResetTime() - Seconds(WEEK)).count();
+    SendDirectMessage(worldServerInfo.Write());
 
-    // Homebind
-    WorldPacket data(SMSG_BINDPOINTUPDATE, 5 * 4);
-    data << m_homebindX << m_homebindY << m_homebindZ;
-    data << (uint32) m_homebindMapId;
-    data << (uint32) m_homebindAreaId;
-    SendDirectMessage(&data);
-
-    // SMSG_SET_PROFICIENCY
-    // SMSG_SET_PCT_SPELL_MODIFIER
-    // SMSG_SET_FLAT_SPELL_MODIFIER
-    // SMSG_UPDATE_AURA_DURATION
-
-    SendTalentsInfoData(false);
-
-    // SMSG_INSTANCE_DIFFICULTY
-    data.Initialize(SMSG_INSTANCE_DIFFICULTY, 4 + 4);
-    data << uint32(GetMap()->GetDifficulty());
-    data << uint32(GetMap()->GetEntry()->IsDynamicDifficultyMap() && GetMap()->IsHeroic()); // Raid dynamic difficulty
-    SendDirectMessage(&data);
-
-    SendInitialSpells();
+    SendProficiency(ITEM_CLASS_WEAPON, m_WeaponProficiency);
+    SendProficiency(ITEM_CLASS_ARMOR, m_ArmorProficiency);
+    SendKnownSpells(firstLogin);
     SendUnlearnSpells();
 
+    SendTalentsInfoData(false);
     SendInitialActionButtons();
     m_reputationMgr->SendInitialReputations();
+
+    /// Pass 'this' as argument because we're not stored in ObjectAccessor yet
+    GetSocial()->SendSocialList(this, SOCIAL_FLAG_ALL);
+    if (getClass() == CLASS_DEATH_KNIGHT)
+        ResyncRunes(MAX_RUNES);
+    SendSpellModifiers();
+    GetReputationMgr().SendForceReactions();
+    SendCurrencies();
     m_achievementMgr->SendAllAchievementData();
 
-    SendEquipmentSetList();
-
-    data.Initialize(SMSG_LOGIN_SETTIMESPEED, 4 + 4 + 4);
-    data.AppendPackedTime(GameTime::GetGameTime().count());
-    data << float(0.01666667f);                             // game speed
-    data << uint32(0);                                      // added in 3.1.2
+    WorldPackets::Misc::LoginSetTimeSpeed loginSetTimeSpeed;
+    loginSetTimeSpeed.GameTime = GameTime::GetGameTime().count();
+    loginSetTimeSpeed.NewSpeed = 0.01666667f;
+    WorldPacket data(*loginSetTimeSpeed.Write());
     SendDirectMessage(&data);
 
-    GetReputationMgr().SendForceReactions();                // SMSG_SET_FORCED_REACTIONS
+    SendEquipmentSetList();
 
     // SMSG_TALENTS_INFO x 2 for pet (unspent points and talents in separate packets...)
     // SMSG_PET_GUIDS
     // SMSG_UPDATE_WORLD_STATE
     // SMSG_POWER_UPDATE
-
-    SetMover(this);
 
     sScriptMgr->OnPlayerSendInitialPacketsBeforeAddToMap(this, data);
 }
@@ -13119,7 +13073,10 @@ void Player::SetClientControl(Unit* target, bool allowMove, bool packetOnly /*= 
         SetViewpoint(target, allowMove);
 
     if (allowMove)
+    {
         SetMover(target);
+        SendDirectMessage(WorldPackets::Movement::MoveSetActiveMover(target->GetGUID()).Write());
+    }
 
     // Xinef: disable moving if target has disable move flag
     if (!target->IsCreature())
