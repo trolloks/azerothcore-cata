@@ -137,8 +137,10 @@ POPULATED_MODE = "populated-character-list"
 CHARACTER_SELECTION_MODE = "character-selection"
 INITIAL_POST_LOAD_PACKETS_MODE = "initial-post-load-packets"
 MAP_INSERTION_MODE = "map-insertion-object-bootstrap"
+IN_WORLD_CONTROL_MODE = "in-world-control-bootstrap"
 POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
+    IN_WORLD_CONTROL_MODE,
 })
 CHARACTER_MODES = frozenset({"character-screen", *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
@@ -148,6 +150,8 @@ CHARACTER_POSITION = (-8949.95, -132.493, 83.5312)
 
 
 def plan_number(mode: str) -> str:
+    if mode == IN_WORLD_CONTROL_MODE:
+        return "13"
     if mode == MAP_INSERTION_MODE:
         return "12"
     if mode == INITIAL_POST_LOAD_PACKETS_MODE:
@@ -1750,10 +1754,39 @@ def map_insertion_packet_prefix(generation: Generation) -> list[str]:
     return prefix
 
 
-POST_MARKER_MODES = frozenset({INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE})
+IN_WORLD_CONTROL_MARKER = "Resolved client time sync response, first in-world control liveness signal"
+
+
+def in_world_control_marker_count(generation: Generation) -> int:
+    return world_log_text(generation).count(IN_WORLD_CONTROL_MARKER)
+
+
+def in_world_control_packet_prefix(generation: Generation) -> list[str]:
+    """Packets from the Plan 12 post-bootstrap marker through the first resolved
+    CMSG_TIME_SYNC_RESP: whatever the server sends while waiting, plus the first
+    client-initiated packet, proving the client is alive and ticking. Movement or
+    other player-control packets are not awaited here; that is the Movement plan
+    family, not this boundary."""
+    packet = re.compile(r"\b(C->S|S->C):\s+.*?\b((?:CMSG|SMSG|MSG)_[A-Z0-9_]+)\b")
+    prefix: list[str] = []
+    selected = False
+    for line in world_log_text(generation).splitlines():
+        if "Finished object update bootstrap after adding to map" in line:
+            selected = True
+            continue
+        if IN_WORLD_CONTROL_MARKER in line:
+            break
+        match = packet.search(line)
+        if selected and match:
+            prefix.append(f"{match.group(1)}:{match.group(2)}")
+    return prefix
+
+
+POST_MARKER_MODES = frozenset({INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE})
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
     MAP_INSERTION_MODE: map_insertion_marker_count,
+    IN_WORLD_CONTROL_MODE: in_world_control_marker_count,
 }
 
 
@@ -1867,6 +1900,7 @@ def sanitized_evidence(
     selection: dict[str, object] | None = None, downstream_diagnostic: str | None = None,
     initial_packet_prefix_value: list[str] | None = None, pre_map_marker_count: int | None = None,
     map_insertion_prefix_value: list[str] | None = None, map_insertion_marker_count_value: int | None = None,
+    in_world_control_prefix_value: list[str] | None = None, in_world_control_marker_count_value: int | None = None,
 ) -> dict[str, object]:
     auth_index = next(
         (index for index, item in enumerate(transcript) if item["opcode"] == "SMSG_AUTH_RESPONSE"), None,
@@ -1888,7 +1922,8 @@ def sanitized_evidence(
     selection_mode = generation["mode"] == CHARACTER_SELECTION_MODE
     initial_packets_mode = generation["mode"] == INITIAL_POST_LOAD_PACKETS_MODE
     map_insertion_mode = generation["mode"] == MAP_INSERTION_MODE
-    login_mode = selection_mode or initial_packets_mode or map_insertion_mode
+    in_world_control_mode = generation["mode"] == IN_WORLD_CONTROL_MODE
+    login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
         Path(generation["paths"]["raw_evidence"]) / "window.xprop"
     ).is_file()
@@ -1899,7 +1934,8 @@ def sanitized_evidence(
         "build": CLIENT_BUILD,
         "mode": generation["mode"],
         "outcome": (
-            "map_insertion_object_bootstrap_candidate" if map_insertion_mode and "characters_completed" in milestones
+            "in_world_control_bootstrap_candidate" if in_world_control_mode and "characters_completed" in milestones
+            else "map_insertion_object_bootstrap_candidate" if map_insertion_mode and "characters_completed" in milestones
             else "initial_post_load_packets_candidate" if initial_packets_mode and "characters_completed" in milestones
             else "character_selection_candidate" if selection_mode and "characters_completed" in milestones
             else "populated_character_list_candidate" if populated_mode and "characters_completed" in milestones
@@ -1921,6 +1957,8 @@ def sanitized_evidence(
         "pre_map_marker_count": pre_map_marker_count if initial_packets_mode else None,
         "map_insertion_packet_prefix": map_insertion_prefix_value if map_insertion_mode else None,
         "map_insertion_marker_count": map_insertion_marker_count_value if map_insertion_mode else None,
+        "in_world_control_packet_prefix": in_world_control_prefix_value if in_world_control_mode else None,
+        "in_world_control_marker_count": in_world_control_marker_count_value if in_world_control_mode else None,
         "post_marker_hold_seconds": (
             generation.get("post_marker_hold_seconds", 0) if generation["mode"] in POST_MARKER_MODES else None
         ),
@@ -1962,7 +2000,8 @@ def verify(args: argparse.Namespace) -> None:
     selection_mode = generation["mode"] == CHARACTER_SELECTION_MODE
     initial_packets_mode = generation["mode"] == INITIAL_POST_LOAD_PACKETS_MODE
     map_insertion_mode = generation["mode"] == MAP_INSERTION_MODE
-    login_mode = selection_mode or initial_packets_mode or map_insertion_mode
+    in_world_control_mode = generation["mode"] == IN_WORLD_CONTROL_MODE
+    login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode
     rows = character_row_count(manifest, generation) if character_mode else None
     realm_count = realm_character_count(manifest, generation) if populated_mode else None
     seed = (
@@ -1991,6 +2030,12 @@ def verify(args: argparse.Namespace) -> None:
         pre_map_marker_count=initial_packets_marker_count(generation) if initial_packets_mode else None,
         map_insertion_prefix_value=map_insertion_packet_prefix(generation) if map_insertion_mode else None,
         map_insertion_marker_count_value=map_insertion_marker_count(generation) if map_insertion_mode else None,
+        in_world_control_prefix_value=(
+            in_world_control_packet_prefix(generation) if in_world_control_mode else None
+        ),
+        in_world_control_marker_count_value=(
+            in_world_control_marker_count(generation) if in_world_control_mode else None
+        ),
     )
     unchanged = protected_inputs_unchanged(manifest, generation)
     generation["isolation_unchanged"] = unchanged
@@ -2035,9 +2080,18 @@ def verify(args: argparse.Namespace) -> None:
                 and evidence["post_marker_hold_seconds"] >= 5
                 and evidence["post_marker_snapshots"] == 2
             )
+        if in_world_control_mode:
+            character_ok = character_ok and selection_proof_is_complete(selection, transcript, enum_events) and (
+                evidence["in_world_control_marker_count"] == 1
+                and bool(evidence["in_world_control_packet_prefix"])
+                and "C->S:CMSG_TIME_SYNC_RESP" in evidence["in_world_control_packet_prefix"]
+                and evidence["post_marker_hold_seconds"] >= 5
+                and evidence["post_marker_snapshots"] == 2
+            )
         if character_ok:
             evidence["outcome"] = (
-                "map_insertion_object_bootstrap_pass" if map_insertion_mode
+                "in_world_control_bootstrap_pass" if in_world_control_mode
+                else "map_insertion_object_bootstrap_pass" if map_insertion_mode
                 else "initial_post_load_packets_pass" if initial_packets_mode
                 else "character_selection_pass" if selection_mode
                 else "populated_character_list_pass" if populated_mode else "character_screen_pass"
@@ -2233,6 +2287,8 @@ def comparison_projection(evidence: dict[str, object]) -> dict[str, object]:
         "pre_map_marker_count": evidence.get("pre_map_marker_count"),
         "map_insertion_packet_prefix": evidence.get("map_insertion_packet_prefix"),
         "map_insertion_marker_count": evidence.get("map_insertion_marker_count"),
+        "in_world_control_packet_prefix": evidence.get("in_world_control_packet_prefix"),
+        "in_world_control_marker_count": evidence.get("in_world_control_marker_count"),
         "post_marker_hold_seconds": evidence.get("post_marker_hold_seconds"),
         "post_marker_snapshots": evidence.get("post_marker_snapshots"),
         "stability_seconds": evidence.get("stability_seconds"),
@@ -2408,6 +2464,29 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert map_insertion_evidence["forbidden_opcodes"] == []
     assert map_insertion_evidence["map_insertion_packet_prefix"] == ["SMSG_LOGIN_VERIFY_WORLD", "SMSG_UPDATE_OBJECT"]
     assert plan_number(MAP_INSERTION_MODE) == "12"
+    in_world_control_generation = dict(selection_generation)
+    in_world_control_generation["mode"] = IN_WORLD_CONTROL_MODE
+    in_world_control_generation["post_marker_hold_seconds"] = 5
+    in_world_control_generation["post_marker_snapshots"] = 2
+    in_world_control_evidence = sanitized_evidence(
+        in_world_control_generation, [name for name, _ in CHARACTER_MILESTONES],
+        [{"direction": "c2s", "opcode": "CMSG_CHAR_ENUM"},
+         {"direction": "s2c", "opcode": "SMSG_CHAR_ENUM"},
+         {"direction": "c2s", "opcode": "CMSG_PLAYER_LOGIN"}],
+        character_rows=1, realm_count=1, enumerated=expected_character, screen_confirmed=True,
+        selection={
+            "action": "enter", "seeded_guid_low": CHARACTER_GUID,
+            "enumerated_guid_low": CHARACTER_GUID, "request_guid_low": CHARACTER_GUID,
+            "callback_guid_low": CHARACTER_GUID, "legit_characters_admission": True,
+        },
+        in_world_control_prefix_value=["S->C:SMSG_TIME_SYNC_REQ", "C->S:CMSG_TIME_SYNC_RESP"],
+        in_world_control_marker_count_value=1,
+    )
+    assert in_world_control_evidence["forbidden_opcodes"] == []
+    assert in_world_control_evidence["in_world_control_packet_prefix"] == [
+        "S->C:SMSG_TIME_SYNC_REQ", "C->S:CMSG_TIME_SYNC_RESP",
+    ]
+    assert plan_number(IN_WORLD_CONTROL_MODE) == "13"
     assert not selection_proof_is_complete(selection_evidence["selection"], [], [])
     seed_sql = populated_character_seed_sql()
     assert "INSERT INTO `characters`" in seed_sql and "`order`,`innTriggerId`" in seed_sql
@@ -2512,7 +2591,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         pass
     else:
         raise AssertionError("invalid state transition was accepted")
-    print("Plan 7-12 runner self-check passed")
+    print("Plan 7-13 runner self-check passed")
 
 
 def stability_seconds(value: str) -> int:
@@ -2545,7 +2624,7 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument(
         "--mode", choices=(
             "no-login", "authentication", "character-screen", POPULATED_MODE, CHARACTER_SELECTION_MODE,
-            INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
+            INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE,
         ), default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)

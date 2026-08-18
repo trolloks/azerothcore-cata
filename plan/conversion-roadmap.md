@@ -195,10 +195,18 @@ numbered Markdown files are stable-path stubs for historical ledger references.
 - [Plan 11: build 15595 pre-map initial-packet contract](https://github.com/trolloks/azerothcore-cata/issues/25)
 - [Plan 12: build 15595 map insertion and object bootstrap](https://github.com/trolloks/azerothcore-cata/issues/26)
 - [Plan 13: build 15595 in-world control bootstrap](https://github.com/trolloks/azerothcore-cata/issues/27)
+- [Plan 14: build 15595 post-map-insertion client survival](https://github.com/trolloks/azerothcore-cata/issues/32)
+- [Plan 15: build 15595 basic movement packet contract](https://github.com/trolloks/azerothcore-cata/issues/33)
+- [Plan 16: build 15595 movement acknowledgement and speed contract](https://github.com/trolloks/azerothcore-cata/issues/34)
 
 Plans 8-10 deliberately stop at three separate boundaries: typed empty enumeration, one populated
 enumeration, and real-client selection through the session legitimacy gate to the database-load callback.
 They do not prove character creation, successful player loading, initial packet correctness, map entry, or
-world control. Plan 10 proved `Player::LoadFromDB` returned true as a diagnostic; Plan 11 owns the pre-map
-packet contract. Pinned Cataclysm sends `SMSG_LOGIN_VERIFY_WORLD` after map insertion, so it belongs to Plan 12.
-Plans 12-13 remain blocked by their predecessors' client-acceptance evidence.
+world control. Plan 10 proved `Player::LoadFromDB` returned true as a diagnostic; Plan 11 proved the
+pre-map packet contract; Plan 12 proved map insertion and object bootstrap, moving `SMSG_LOGIN_VERIFY_WORLD`
+to fire after map insertion per the pinned Cataclysm reference. Plan 13 (in-world control bootstrap) is
+blocked mid-flight: its own opcode/handler work is done and evidence-proven correct, but real-client runs
+surfaced that the client process reliably exits ~30s after world entry for reasons unrelated to time-sync.
+Plan 14 owns diagnosing and fixing that exit; Plan 13 resumes once Plan 14 is green. Plans 15-16 open the
+"Movement" plan family and are blocked by both, with their exact wire-format scope deliberately left to be
+derived from the pinned reference at implementation time rather than assumed now.
