@@ -6,6 +6,6 @@ plan	issue	state	title	url
 05	15	closed	Plan 5: world authentication packet contract	https://github.com/trolloks/azerothcore-cata/issues/15
 06	16	closed	Plan 6: build 15595 authentication handoff	https://github.com/trolloks/azerothcore-cata/issues/16
 07	17	closed	Plan 7: isolated build 15595 client authentication	https://github.com/trolloks/azerothcore-cata/issues/17
-08	18	open	Plan 8: typed empty character enumeration and stable build 15595 screen	https://github.com/trolloks/azerothcore-cata/issues/18
-09	19	open	Plan 9: one database-backed build 15595 character	https://github.com/trolloks/azerothcore-cata/issues/19
+08	18	closed	Plan 8: typed empty character enumeration and stable build 15595 screen	https://github.com/trolloks/azerothcore-cata/issues/18
+09	19	closed	Plan 9: one database-backed build 15595 character	https://github.com/trolloks/azerothcore-cata/issues/19
 10	20	open	Plan 10: select the enumerated build 15595 character	https://github.com/trolloks/azerothcore-cata/issues/20
