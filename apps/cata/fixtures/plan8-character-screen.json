@@ -7,6 +7,11 @@
   "verdict": "PASS",
   "response_body": "000001000000",
   "character_rows": 0,
+  "screen_confirmed": true,
+  "endpoint_ownership": true,
+  "owned_window": true,
+  "stability_seconds": 10,
+  "forbidden_opcodes": [],
   "fresh_runs": 2,
   "matching_runs": true,
   "protected_inputs_unchanged": true,
@@ -28,5 +33,5 @@
     {"direction": "c2s", "opcode": "CMSG_CHAR_ENUM"},
     {"direction": "s2c", "opcode": "SMSG_CHAR_ENUM"}
   ],
-  "authentication_replay": "PASS"
+  "plan7_authentication_replay": "PASS"
 }
