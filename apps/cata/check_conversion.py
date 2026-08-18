@@ -1229,8 +1229,8 @@ def populated_character_list_issues(
         "PopulatedEnumFixtureRejectsWireMutations",
         "PopulatedCharacterPayload",
         "278 * 2",
-        "0000010000c080460001",
-        "43617461706c616e000503cdd70bc6000101020c000000",
+        "0000010000C080460001",
+        "43617461706C616E000503CDD70BC6000101020C000000",
     )):
         issues.append("populated-character-list-packet-fixture-missing")
     if any(token not in runner for token in (
@@ -1278,7 +1278,7 @@ def runner_populated_payload(runner: str) -> str | None:
         r"POPULATED_CHARACTER_ENUM_PAYLOAD\s*=\s*\((.*?)\)\s*\nPOPULATED_MODE",
         runner, re.DOTALL,
     )
-    return "".join(re.findall(r'"([0-9a-f]+)"', match.group(1))) if match else None
+    return "".join(re.findall(r'"([0-9a-fA-F]+)"', match.group(1))) if match else None
 
 def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], ...], tuple[Finding, ...]]:
     anchors: list[dict[str, Any]] = []
