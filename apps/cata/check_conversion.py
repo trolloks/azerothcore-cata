@@ -1126,9 +1126,9 @@ def real_client_authentication_issues(runner: str, fixture: str, plan_index: str
         issues.append("real-client-authentication-fixture-incomplete")
 
     if any(row not in plan_index for row in (
-        "08\t18\topen\tPlan 8: typed empty character enumeration and stable build 15595 screen\t"
+        "08\t18\tclosed\tPlan 8: typed empty character enumeration and stable build 15595 screen\t"
         "https://github.com/trolloks/azerothcore-cata/issues/18",
-        "09\t19\topen\tPlan 9: one database-backed build 15595 character\t"
+        "09\t19\tclosed\tPlan 9: one database-backed build 15595 character\t"
         "https://github.com/trolloks/azerothcore-cata/issues/19",
         "10\t20\topen\tPlan 10: select the enumerated build 15595 character\t"
         "https://github.com/trolloks/azerothcore-cata/issues/20",
@@ -2257,9 +2257,9 @@ def self_check() -> None:
         "reset": "PASS",
     })
     plan_index = (
-        "08\t18\topen\tPlan 8: typed empty character enumeration and stable build 15595 screen\t"
+        "08\t18\tclosed\tPlan 8: typed empty character enumeration and stable build 15595 screen\t"
         "https://github.com/trolloks/azerothcore-cata/issues/18\n"
-        "09\t19\topen\tPlan 9: one database-backed build 15595 character\t"
+        "09\t19\tclosed\tPlan 9: one database-backed build 15595 character\t"
         "https://github.com/trolloks/azerothcore-cata/issues/19\n"
         "10\t20\topen\tPlan 10: select the enumerated build 15595 character\t"
         "https://github.com/trolloks/azerothcore-cata/issues/20\n"
@@ -2279,7 +2279,7 @@ def self_check() -> None:
         client_runner, "", plan_index
     )
     assert "plan-issue-index-incomplete" in real_client_authentication_issues(
-        client_runner, client_fixture, plan_index.replace("\t18\topen\t", "\t18\tclosed\t", 1)
+        client_runner, client_fixture, plan_index.replace("\t18\tclosed\t", "\t18\topen\t", 1)
     )
 
     defaults = LedgerRow(
