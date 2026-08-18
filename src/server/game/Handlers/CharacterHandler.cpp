@@ -1075,8 +1075,18 @@ void WorldSession::HandlePlayerLoginFromDB(LoginQueryHolder const& holder)
         // Probably a hackfix, but currently the best workaround to prevent character names showing as Unknown after teleport out from instances at login.
         pCurrChar->GetSession()->SendNameQueryOpcode(pCurrChar->GetGUID());
     }
+
+    // Pinned Cataclysm sends SMSG_LOGIN_VERIFY_WORLD only after AddPlayerToMap, using
+    // wherever the player actually ended up (original position, or the teleport-out
+    // fallback above). It does not belong in SendInitialPacketsBeforeAddToMap.
+    WorldPackets::Character::LoginVerifyWorld loginVerifyWorld;
+    loginVerifyWorld.MapID = pCurrChar->GetMapId();
+    loginVerifyWorld.Pos = pCurrChar->GetPosition();
+    SendPacket(loginVerifyWorld.Write());
+
     LOG_INFO("network", "Finished sending initial packets after going to map");
     pCurrChar->SendInitialPacketsAfterAddToMap();
+    LOG_INFO("network", "Finished object update bootstrap after adding to map");
 
     if (!sToCloud9Sidecar->ClusterModeEnabled())
     {

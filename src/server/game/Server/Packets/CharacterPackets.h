@@ -191,6 +191,20 @@ namespace WorldPackets
             uint32 LevelTime = 0;
             bool TriggerScriptEvent = false;
         };
+
+        // Sent once, immediately after the player is added to its map (never before);
+        // field order is int32 MapID, then Position X/Y/Z/O, matching the pinned
+        // Cataclysm reference and this fork's existing raw writer.
+        class LoginVerifyWorld final : public ServerPacket
+        {
+        public:
+            LoginVerifyWorld() : ServerPacket(SMSG_LOGIN_VERIFY_WORLD, 20) { }
+
+            WorldPacket const* Write() override;
+
+            int32 MapID = 0;
+            Position Pos;
+        };
     }
 }
 

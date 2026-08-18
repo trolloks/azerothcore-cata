@@ -7,6 +7,7 @@
  * option) any later version.
  */
 
+#include "CharacterPackets.h"
 #include "MiscPackets.h"
 #include "MovementPackets.h"
 #include "QueryPackets.h"
@@ -93,4 +94,14 @@ TEST(InitialPacketsTest, WritesRuneModifierAndMoverPackets)
 
     WorldPackets::Movement::MoveSetActiveMover mover(ObjectGuid::Empty);
     EXPECT_EQ(PayloadHex(mover.Write()), "00");
+}
+
+TEST(InitialPacketsTest, WritesLoginVerifyWorld)
+{
+    WorldPackets::Character::LoginVerifyWorld loginVerifyWorld;
+    loginVerifyWorld.MapID = 4;
+    loginVerifyWorld.Pos = Position(1.0f, 2.0f, 3.0f, 4.0f);
+    WorldPacket const* payload = loginVerifyWorld.Write();
+    EXPECT_EQ(payload->size(), 20u);
+    EXPECT_EQ(PayloadHex(payload), "040000000000803F000000400000404000008040");
 }
