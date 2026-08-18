@@ -1137,7 +1137,7 @@ public:
     [[nodiscard]] bool IsFalling() const;
     bool IsInAreaTriggerRadius(AreaTrigger const* trigger, float delta = 0.f) const;
 
-    void SendInitialPacketsBeforeAddToMap();
+    void SendInitialPacketsBeforeAddToMap(bool firstLogin = false);
     void SendInitialPacketsAfterAddToMap();
     void SendTransferAborted(uint32 mapid, TransferAbortReason reason, uint8 arg = 0);
     void SendInstanceResetWarning(uint32 mapid, Difficulty difficulty, uint32 time, bool onEnterMap);
@@ -1720,7 +1720,9 @@ public:
     bool IsNeedCastPassiveSpellAtLearn(SpellInfo const* spellInfo) const;
 
     void SendProficiency(ItemClass itemClass, uint32 itemSubclassMask);
-    void SendInitialSpells();
+    void SendCurrencies() const;
+    void SendKnownSpells(bool firstLogin = false);
+    void SendSpellModifiers() const;
     void SendLearnPacket(uint32 spellId, bool learn);
     bool addSpell(uint32 spellId, uint8 addSpecMask, bool updateActive, bool temporary = false, bool learnFromSkill = false);
     bool _addSpell(uint32 spellId, uint8 addSpecMask, bool temporary, bool learnFromSkill = false);
@@ -1868,7 +1870,7 @@ public:
     ActionButton* addActionButton(uint8 button, uint32 action, uint8 type);
     void removeActionButton(uint8 button);
     ActionButton const* GetActionButton(uint8 button);
-    void SendInitialActionButtons() const { SendActionButtons(1); }
+    void SendInitialActionButtons() const { SendActionButtons(0); }
     void SendActionButtons(uint32 state) const;
     bool IsActionButtonDataValid(uint8 button, uint32 action, uint8 type);
 
@@ -2414,6 +2416,7 @@ public:
     void   SaveRecallPosition();
 
     void SetHomebind(WorldLocation const& loc, uint32 areaId);
+    void SendBindPointUpdate() const;
 
     // Homebind coordinates
     uint32 m_homebindMapId;

@@ -17,6 +17,82 @@
 
 #include "MiscPackets.h"
 
+WorldPacket const* WorldPackets::Misc::SetupCurrency::Write()
+{
+    _worldPacket.WriteBits(Data.size(), 23);
+
+    for (Record const& record : Data)
+    {
+        _worldPacket.WriteBit(record.WeeklyQuantity.has_value());
+        _worldPacket.WriteBits(record.Flags, 4);
+        _worldPacket.WriteBit(record.MaxWeeklyQuantity.has_value());
+        _worldPacket.WriteBit(record.TrackedQuantity.has_value());
+    }
+
+    _worldPacket.FlushBits();
+
+    for (Record const& record : Data)
+    {
+        _worldPacket << uint32(record.Quantity);
+
+        if (record.MaxWeeklyQuantity)
+            _worldPacket << uint32(*record.MaxWeeklyQuantity);
+        if (record.TrackedQuantity)
+            _worldPacket << uint32(*record.TrackedQuantity);
+
+        _worldPacket << uint32(record.Type);
+
+        if (record.WeeklyQuantity)
+            _worldPacket << uint32(*record.WeeklyQuantity);
+    }
+
+    return &_worldPacket;
+}
+
+WorldPacket const* WorldPackets::Misc::BindPointUpdate::Write()
+{
+    _worldPacket << X;
+    _worldPacket << Y;
+    _worldPacket << Z;
+    _worldPacket << MapID;
+    _worldPacket << AreaID;
+
+    return &_worldPacket;
+}
+
+WorldPacket const* WorldPackets::Misc::WorldServerInfo::Write()
+{
+    _worldPacket.WriteBit(RestrictedAccountMaxLevel.has_value());
+    _worldPacket.WriteBit(RestrictedAccountMaxMoney.has_value());
+    _worldPacket.WriteBit(IneligibleForLootMask.has_value());
+    _worldPacket.FlushBits();
+
+    if (IneligibleForLootMask)
+        _worldPacket << *IneligibleForLootMask;
+
+    _worldPacket << IsTournamentRealm;
+
+    if (RestrictedAccountMaxMoney)
+        _worldPacket << *RestrictedAccountMaxMoney;
+
+    if (RestrictedAccountMaxLevel)
+        _worldPacket << *RestrictedAccountMaxLevel;
+
+    _worldPacket << WeeklyReset;
+    _worldPacket << DifficultyID;
+
+    return &_worldPacket;
+}
+
+WorldPacket const* WorldPackets::Misc::LoginSetTimeSpeed::Write()
+{
+    _worldPacket.AppendPackedTime(GameTime);
+    _worldPacket << NewSpeed;
+    _worldPacket << GameTimeHolidayOffset;
+
+    return &_worldPacket;
+}
+
 WorldPackets::Misc::Weather::Weather() : ServerPacket(SMSG_WEATHER, 4 + 4 + 1) { }
 
 WorldPackets::Misc::Weather::Weather(WeatherState weatherID, float intensity /*= 0.0f*/, bool abrupt /*= false*/)

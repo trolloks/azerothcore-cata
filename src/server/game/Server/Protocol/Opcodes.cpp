@@ -223,7 +223,7 @@ void OpcodeTable::Initialize()
     /*0x03F*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_TRANSFER_PENDING,                                   STATUS_NEVER);
     /*0x040*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_TRANSFER_ABORTED,                                   STATUS_NEVER);
     /*0x041*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_CHARACTER_LOGIN_FAILED,                             STATUS_NEVER);
-    /*0x042*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_LOGIN_SETTIMESPEED,                                 STATUS_NEVER);
+    /*0x042*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_LOGIN_SET_TIME_SPEED,                               STATUS_NEVER);
     /*0x043*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_GAMETIME_UPDATE,                                    STATUS_NEVER);
     /*0x044*/ DEFINE_HANDLER(CMSG_GAMETIME_SET,                                                     STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x045*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_GAMETIME_SET,                                       STATUS_NEVER);
@@ -498,9 +498,10 @@ void OpcodeTable::Initialize()
     /*0x125*/ DEFINE_HANDLER(CMSG_SET_FACTION_ATWAR,                                                STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleSetFactionAtWar                    );
     /*0x126*/ DEFINE_HANDLER(CMSG_SET_FACTION_CHEAT,                                                STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleSetFactionCheat                    );
     /*0x127*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_SET_PROFICIENCY,                                    STATUS_NEVER);
+    DEFINE_SERVER_OPCODE_HANDLER(SMSG_SETUP_CURRENCY,                                                STATUS_NEVER);
     /*0x128*/ DEFINE_HANDLER(CMSG_SET_ACTION_BUTTON,                                                STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleSetActionButtonOpcode              );
-    /*0x129*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_ACTION_BUTTONS,                                     STATUS_NEVER);
-    /*0x12A*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_INITIAL_SPELLS,                                     STATUS_NEVER);
+    /*0x129*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_UPDATE_ACTION_BUTTONS,                              STATUS_NEVER);
+    /*0x12A*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_SEND_KNOWN_SPELLS,                                  STATUS_NEVER);
     /*0x12B*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_LEARNED_SPELL,                                      STATUS_NEVER);
     /*0x12C*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_SUPERCEDED_SPELL,                                   STATUS_NEVER);
     /*0x12D*/ DEFINE_HANDLER(CMSG_NEW_SPELL_SLOT,                                                   STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
@@ -545,7 +546,7 @@ void OpcodeTable::Initialize()
     /*0x152*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_BREAK_TARGET,                                       STATUS_NEVER);
     /*0x153*/ DEFINE_HANDLER(CMSG_SAVE_PLAYER,                                                      STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x154*/ DEFINE_HANDLER(CMSG_SETDEATHBINDPOINT,                                                STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
-    /*0x155*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_BINDPOINTUPDATE,                                    STATUS_NEVER);
+    /*0x155*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_BIND_POINT_UPDATE,                                  STATUS_NEVER);
     /*0x156*/ DEFINE_HANDLER(CMSG_GETDEATHBINDZONE,                                                 STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x157*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_BINDZONEREPLY,                                      STATUS_NEVER);
     /*0x158*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_PLAYERBOUND,                                        STATUS_NEVER);
@@ -701,6 +702,7 @@ void OpcodeTable::Initialize()
     /*0x1EA*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_ITEM_TIME_UPDATE,                                   STATUS_NEVER);
     /*0x1EB*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_ITEM_ENCHANT_TIME_UPDATE,                           STATUS_NEVER);
     /*0x1EC*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_AUTH_CHALLENGE,                                     STATUS_NEVER);
+    DEFINE_SERVER_OPCODE_HANDLER(SMSG_HOTFIX_NOTIFY_BLOB,                                           STATUS_NEVER);
     /*0x1ED*/ DEFINE_HANDLER(CMSG_AUTH_SESSION,                                                     STATUS_NEVER,      PROCESS_THREADUNSAFE,   &WorldSession::Handle_EarlyProccess                     );
     /*0x1EE*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_AUTH_RESPONSE,                                      STATUS_NEVER);
     /*0x1EF*/ DEFINE_HANDLER(MSG_GM_SHOWLABEL,                                                      STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
@@ -762,6 +764,7 @@ void OpcodeTable::Initialize()
     /*0x222*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_SPIRIT_HEALER_CONFIRM,                              STATUS_NEVER);
     /*0x223*/ DEFINE_HANDLER(CMSG_CHARACTER_POINT_CHEAT,                                            STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x224*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_GOSSIP_POI,                                         STATUS_NEVER);
+    DEFINE_SERVER_OPCODE_HANDLER(SMSG_MOVE_SET_ACTIVE_MOVER,                                        STATUS_NEVER);
     /*0x225*/ DEFINE_HANDLER(CMSG_CHAT_IGNORED,                                                     STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleChatIgnoredOpcode                  );
     /*0x226*/ DEFINE_HANDLER(CMSG_GM_VISION,                                                        STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x227*/ DEFINE_HANDLER(CMSG_SERVER_COMMAND,                                                   STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
@@ -1059,7 +1062,7 @@ void OpcodeTable::Initialize()
     /*0x338*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_CHARACTER_PROFILE,                                  STATUS_NEVER);
     /*0x339*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_CHARACTER_PROFILE_REALM_CONNECTED,                  STATUS_NEVER);
     /*0x33A*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_DEFENSE_MESSAGE,                                    STATUS_NEVER);
-    /*0x33B*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_INSTANCE_DIFFICULTY,                                STATUS_NEVER);
+    /*0x33B*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_WORLD_SERVER_INFO,                                  STATUS_NEVER);
     /*0x33C*/ DEFINE_HANDLER(MSG_GM_RESETINSTANCELIMIT,                                             STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     DEFINE_BIDIRECTIONAL_OPCODE(MSG_GM_RESETINSTANCELIMIT, MSG_GM_RESETINSTANCELIMIT, MSG_GM_RESETINSTANCELIMIT_SERVER);
     /*0x33D*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_MOTD,                                               STATUS_NEVER);

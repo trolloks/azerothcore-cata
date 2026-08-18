@@ -470,11 +470,11 @@ def opcode_model_issues(header: str, source: str, manifest: str) -> tuple[str, .
         issues.append("combined-opcode-type-remains")
     if sum(row.enum_name == "OpcodeClient" for row in declarations) != 727:
         issues.append("client-declaration-count-changed")
-    if sum(row.enum_name == "OpcodeServer" for row in declarations) != 588:
+    if sum(row.enum_name == "OpcodeServer" for row in declarations) != 591:
         issues.append("server-declaration-count-changed")
     if sum(row.direction == "c2s" for row in registrations) != 727:
         issues.append("client-registration-count-changed")
-    if sum(row.direction == "s2c" for row in registrations) != 588:
+    if sum(row.direction == "s2c" for row in registrations) != 591:
         issues.append("server-registration-count-changed")
     if render_opcode_value_manifest(declarations) != manifest:
         issues.append("opcode-value-manifest-changed")
@@ -1346,6 +1346,71 @@ def player_login_admission_issues(
         issues.append("player-login-live-fixture-missing")
     return tuple(issues)
 
+
+def initial_pre_map_packet_issues(
+    handler: str, player: str, packet_headers: str, packet_sources: str, tests: str, runner: str, fixture: str,
+) -> tuple[str, ...]:
+    issues: list[str] = []
+    if any(token not in handler for token in (
+        "WorldPackets::Query::HotfixNotifyBlob",
+        "pCurrChar->SendInitialPacketsBeforeAddToMap(true);",
+        "WorldPackets::System::FeatureSystemStatus",
+    )) or "WorldPacket data(SMSG_LOGIN_VERIFY_WORLD" in handler:
+        issues.append("pre-map-session-order-missing")
+    if any(token not in player for token in (
+        "SetClientControl(this, true);",
+        "SendBindPointUpdate();",
+        "WorldPackets::Misc::WorldServerInfo",
+        "SendKnownSpells(firstLogin);",
+        "ResyncRunes(MAX_RUNES);",
+        "SendSpellModifiers();",
+        "WorldPackets::Misc::LoginSetTimeSpeed",
+    )):
+        issues.append("pre-map-player-order-missing")
+    if any(token not in packet_headers + packet_sources for token in (
+        "class FeatureSystemStatus final : public ServerPacket",
+        "class SetupCurrency final : public ServerPacket",
+        "class SendKnownSpells final : public ServerPacket",
+        "class MoveSetActiveMover final : public ServerPacket",
+        "class ResyncRunes final : public ServerPacket",
+    )):
+        issues.append("pre-map-packet-types-missing")
+    if any(token not in tests for token in (
+        "WritesEmptyOptionalInitialPackets",
+        "WritesFeatureStatusAndBindPoint",
+        "WritesSpellsAndActionButtons",
+        "WritesRuneModifierAndMoverPackets",
+    )):
+        issues.append("pre-map-packet-tests-missing")
+    if any(token not in runner for token in (
+        'INITIAL_POST_LOAD_PACKETS_MODE = "initial-post-load-packets"',
+        "initial_packets_marker_count",
+        "initial_packet_prefix",
+        '"post_marker_snapshots"',
+    )):
+        issues.append("pre-map-runner-missing")
+    try:
+        proof = json.loads(fixture)
+    except (json.JSONDecodeError, TypeError):
+        proof = None
+    if not isinstance(proof, dict) or any((
+        proof.get("schema") != 1,
+        proof.get("plan") != 11,
+        proof.get("client_build") != 15595,
+        proof.get("verdict") != "PASS",
+        proof.get("mode") != "initial-post-load-packets",
+        not isinstance(proof.get("pre_map_packet_prefix"), list),
+        proof.get("pre_map_marker_count") != 1,
+        proof.get("post_marker_hold_seconds") < 5,
+        proof.get("post_marker_snapshots") != 2,
+        proof.get("fresh_runs") != 2,
+        proof.get("matching_runs") is not True,
+        proof.get("protected_inputs_unchanged") is not True,
+        proof.get("reset") != "PASS",
+    )):
+        issues.append("pre-map-live-fixture-missing")
+    return tuple(issues)
+
 def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], ...], tuple[Finding, ...]]:
     anchors: list[dict[str, Any]] = []
     findings: list[Finding] = []
@@ -1715,6 +1780,55 @@ def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], 
         "plan": "Build 15595 character selection",
         "state": player_login_row.state if player_login_row else "open",
         "evidence": player_login_row.evidence if player_login_row else "-",
+    })
+
+    initial_packets_player = read_ref_file(inputs.repo_root, inputs.head_ref, "src/server/game/Entities/Player/Player.cpp")
+    initial_packets_headers = "\n".join(read_ref_file(inputs.repo_root, inputs.head_ref, path) for path in (
+        "src/server/game/Server/Packets/SystemPackets.h",
+        "src/server/game/Server/Packets/MiscPackets.h",
+        "src/server/game/Server/Packets/SpellPackets.h",
+        "src/server/game/Server/Packets/MovementPackets.h",
+    ))
+    initial_packets_sources = "\n".join(read_ref_file(inputs.repo_root, inputs.head_ref, path) for path in (
+        "src/server/game/Server/Packets/SystemPackets.cpp",
+        "src/server/game/Server/Packets/MiscPackets.cpp",
+        "src/server/game/Server/Packets/SpellPackets.cpp",
+        "src/server/game/Server/Packets/MovementPackets.cpp",
+    ))
+    initial_packets_tests = read_ref_file(
+        inputs.repo_root, inputs.head_ref, "src/test/server/game/Server/Packets/InitialPacketsTest.cpp"
+    )
+    try:
+        initial_packets_fixture = read_ref_file(
+            inputs.repo_root, inputs.head_ref, "apps/cata/fixtures/plan11-initial-post-load-packets.json"
+        )
+    except AuditError:
+        initial_packets_fixture = ""
+    initial_packets_issues = initial_pre_map_packet_issues(
+        character_handler, initial_packets_player, initial_packets_headers, initial_packets_sources,
+        initial_packets_tests, client_runner, initial_packets_fixture,
+    )
+    initial_packets_row = ledger.anchors.get("protocol.initial-pre-map-packets")
+    if initial_packets_row is None:
+        findings.append(Finding(
+            "error", "MISSING_ANCHOR", "protocol.initial-pre-map-packets", "named anchor has no ledger row",
+        ))
+    elif initial_packets_row.state == "converted" and (
+        initial_packets_issues or initial_packets_row.fixture != "pass" or initial_packets_row.client != "pass"
+    ):
+        findings.append(Finding(
+            "error", "CONVERTED_ANCHOR_WITHOUT_PROOF", "protocol.initial-pre-map-packets",
+            "converted pre-map packet contract lacks packet, runner, or two-run client proof",
+        ))
+    anchors.append({
+        "key": "protocol.initial-pre-map-packets",
+        "path": "CharacterHandler.cpp;Player.cpp;Server/Packets;InitialPacketsTest.cpp",
+        "current": ",".join(initial_packets_issues) if initial_packets_issues else "pre-map-packet-contract-accepted",
+        "target": "pre-map-packet-contract-accepted",
+        "matched_target": not initial_packets_issues,
+        "plan": "Build 15595 pre-map initial-packet contract",
+        "state": initial_packets_row.state if initial_packets_row else "open",
+        "evidence": initial_packets_row.evidence if initial_packets_row else "-",
     })
 
     opcode_header = read_ref_file(inputs.repo_root, inputs.head_ref, OPCODES_H)
@@ -2317,6 +2431,38 @@ def self_check() -> None:
         "reset": "PASS", "downstream_diagnostic": "load-returned-false",
     })
     assert player_login_admission_issues(*player_login_inputs, player_login_fixture) == ()
+
+    initial_packets_player = (repo_root / "src/server/game/Entities/Player/Player.cpp").read_text(encoding="utf-8")
+    initial_packets_headers = "\n".join((repo_root / path).read_text(encoding="utf-8") for path in (
+        "src/server/game/Server/Packets/SystemPackets.h",
+        "src/server/game/Server/Packets/MiscPackets.h",
+        "src/server/game/Server/Packets/SpellPackets.h",
+        "src/server/game/Server/Packets/MovementPackets.h",
+    ))
+    initial_packets_sources = "\n".join((repo_root / path).read_text(encoding="utf-8") for path in (
+        "src/server/game/Server/Packets/SystemPackets.cpp",
+        "src/server/game/Server/Packets/MiscPackets.cpp",
+        "src/server/game/Server/Packets/SpellPackets.cpp",
+        "src/server/game/Server/Packets/MovementPackets.cpp",
+    ))
+    initial_packets_tests = (repo_root / "src/test/server/game/Server/Packets/InitialPacketsTest.cpp").read_text(
+        encoding="utf-8"
+    )
+    initial_packets_inputs = (
+        character_handler, initial_packets_player, initial_packets_headers, initial_packets_sources,
+        initial_packets_tests, client_runner,
+    )
+    assert "pre-map-live-fixture-missing" in initial_pre_map_packet_issues(*initial_packets_inputs, "")
+    assert "pre-map-packet-types-missing" in initial_pre_map_packet_issues(
+        character_handler, initial_packets_player,
+        initial_packets_headers.replace("class ResyncRunes final", "class BrokenRunes final", 1),
+        initial_packets_sources, initial_packets_tests, client_runner, "",
+    )
+    assert "pre-map-runner-missing" in initial_pre_map_packet_issues(
+        *initial_packets_inputs[:-1], client_runner.replace(
+            'INITIAL_POST_LOAD_PACKETS_MODE = "initial-post-load-packets"', "BROKEN_PLAN11_MODE", 1
+        ), "",
+    )
 
     admission = (repo_root / "data/sql/updates/pending_db_auth/rev_1786964293354831242.sql").read_text()
     handoff_runner = (repo_root / "apps/cata/run_authentication_handoff.py").read_text()

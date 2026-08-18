@@ -21,6 +21,7 @@
 #include "ObjectGuid.h"
 #include "Packet.h"
 #include "Weather.h"
+#include <optional>
 
 enum WeatherState : uint32;
 
@@ -28,6 +29,68 @@ namespace WorldPackets
 {
     namespace Misc
     {
+        class SetupCurrency final : public ServerPacket
+        {
+        public:
+            struct Record
+            {
+                int32 Type = 0;
+                int32 Quantity = 0;
+                std::optional<int32> WeeklyQuantity;
+                std::optional<int32> MaxWeeklyQuantity;
+                std::optional<int32> TrackedQuantity;
+                std::optional<int32> MaxQuantity;
+                uint8 Flags = 0;
+            };
+
+            SetupCurrency() : ServerPacket(SMSG_SETUP_CURRENCY, 22) { }
+
+            WorldPacket const* Write() override;
+
+            std::vector<Record> Data;
+        };
+
+        class BindPointUpdate final : public ServerPacket
+        {
+        public:
+            BindPointUpdate() : ServerPacket(SMSG_BIND_POINT_UPDATE, 20) { }
+
+            WorldPacket const* Write() override;
+
+            float X = 0.0f;
+            float Y = 0.0f;
+            float Z = 0.0f;
+            uint32 MapID = 0;
+            uint32 AreaID = 0;
+        };
+
+        class WorldServerInfo final : public ServerPacket
+        {
+        public:
+            WorldServerInfo() : ServerPacket(SMSG_WORLD_SERVER_INFO, 10) { }
+
+            WorldPacket const* Write() override;
+
+            uint32 DifficultyID = 0;
+            uint32 WeeklyReset = 0;
+            uint8 IsTournamentRealm = 0;
+            std::optional<uint32> IneligibleForLootMask;
+            std::optional<uint32> RestrictedAccountMaxLevel;
+            std::optional<uint32> RestrictedAccountMaxMoney;
+        };
+
+        class LoginSetTimeSpeed final : public ServerPacket
+        {
+        public:
+            LoginSetTimeSpeed() : ServerPacket(SMSG_LOGIN_SET_TIME_SPEED, 12) { }
+
+            WorldPacket const* Write() override;
+
+            float NewSpeed = 0.0f;
+            uint32 GameTime = 0;
+            uint32 GameTimeHolidayOffset = 0;
+        };
+
         class AC_GAME_API Weather final : public ServerPacket
         {
         public:

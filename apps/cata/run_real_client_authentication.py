@@ -135,7 +135,8 @@ POPULATED_CHARACTER_ENUM_PAYLOAD = (
 )
 POPULATED_MODE = "populated-character-list"
 CHARACTER_SELECTION_MODE = "character-selection"
-POPULATED_CHARACTER_MODES = frozenset({POPULATED_MODE, CHARACTER_SELECTION_MODE})
+INITIAL_POST_LOAD_PACKETS_MODE = "initial-post-load-packets"
+POPULATED_CHARACTER_MODES = frozenset({POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE})
 CHARACTER_MODES = frozenset({"character-screen", *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
 CHARACTER_NAME = "Cataplan"
@@ -144,6 +145,8 @@ CHARACTER_POSITION = (-8949.95, -132.493, 83.5312)
 
 
 def plan_number(mode: str) -> str:
+    if mode == INITIAL_POST_LOAD_PACKETS_MODE:
+        return "11"
     if mode == CHARACTER_SELECTION_MODE:
         return "10"
     if mode == POPULATED_MODE:
@@ -336,10 +339,28 @@ def link_client_base(base: Path, destination: Path) -> None:
         raise RuntimeError(f"client link destination already exists: {destination}")
     destination.mkdir()
     for entry in base.iterdir():
+        if entry.name == "Data":
+            link_client_data(entry, destination / entry.name)
+            continue
         if entry.name not in WRITABLE_CLIENT_DIRS:
             (destination / entry.name).symlink_to(entry, target_is_directory=entry.is_dir())
     for name in WRITABLE_CLIENT_DIRS:
         (destination / name).mkdir()
+
+
+def link_client_data(source: Path, destination: Path) -> None:
+    destination.mkdir()
+    for entry in source.iterdir():
+        if entry.name == "enUS":
+            continue
+        (destination / entry.name).symlink_to(entry, target_is_directory=entry.is_dir())
+
+    locale_source = source / "enUS"
+    locale_destination = destination / "enUS"
+    locale_destination.mkdir()
+    for entry in locale_source.iterdir():
+        if entry.name != "realmlist.wtf":
+            (locale_destination / entry.name).symlink_to(entry, target_is_directory=entry.is_dir())
 
 
 def write_client_config(client: Path) -> None:
@@ -368,28 +389,10 @@ def install_dxvk(generation: Generation) -> None:
 
 def ensure_client_base(manifest: Manifest, generation: Generation) -> None:
     client = Path(generation["paths"]["client"])
-    base_record = manifest.get("client_base")
-    if base_record and not base_record.get("purged", False):
-        base = Path(str(base_record["path"]))
-        if base.resolve() != (Path(manifest["root"]) / "client-base").resolve():
-            raise RuntimeError("cached client base path is outside its manifest root")
-        if tree_metadata(base) != base_record["tree"]:
-            raise RuntimeError("cached client base changed between Plan 7 generations")
-        return
-    base = Path(manifest["root"]) / "client-base"
-    if base.exists():
-        raise RuntimeError(f"unowned cached client base already exists: {base}")
-    if not client.is_dir():
-        raise RuntimeError("the first generation has no full client copy to cache")
-    for name in WRITABLE_CLIENT_DIRS:
-        target = client / name
-        if target.exists():
-            remove_owned_path(target, generation)
-    client.rename(base)
-    make_tree_read_only(base)
-    manifest["client_base"] = {"path": str(base), "tree": tree_metadata(base), "purged": False}
-    link_client_base(base, client)
-    write_client_config(client)
+    source = Path(str(generation["inputs"]["client_root"]))
+    executable = client / "Wow-64.exe"
+    if not executable.is_symlink() or executable.resolve() != source / "Wow-64.exe":
+        raise RuntimeError("run client is not the expected read-only source-client symlink overlay")
 
 
 def require_owned_path(path: Path, generation: Generation) -> Path:
@@ -1227,26 +1230,16 @@ def prepare(args: argparse.Namespace) -> None:
         if tree_content_hash(data_destination / "maps") != inputs["data_maps_hash"]:
             raise RuntimeError("run-owned maps copy differs from its candidate input")
         client_destination = Path(paths["client"])
-        base_record = manifest.get("client_base")
-        using_client_base = bool(base_record and not base_record.get("purged", False))
-        if using_client_base:
-            base = Path(str(base_record["path"]))
-            if tree_metadata(base) != base_record["tree"]:
-                raise RuntimeError("cached client base changed between Plan 7 generations")
-            link_client_base(base, client_destination)
-        else:
-            copy_tree(Path(str(inputs["client_root"])), client_destination)
+        link_client_base(Path(str(inputs["client_root"])), client_destination)
         if sha256(client_destination / "Wow-64.exe") != CLIENT_SHA256:
-            raise RuntimeError("run-owned Wow-64.exe differs after copy")
+            raise RuntimeError("run client differs from the pinned source executable")
         for name in WRITABLE_CLIENT_DIRS:
             target = client_destination / name
             if target.exists():
                 remove_owned_path(target, generation)
         write_client_config(client_destination)
-        if not using_client_base:
-            realmlist = client_destination / "Data/enUS/realmlist.wtf"
-            realmlist.parent.mkdir(parents=True, exist_ok=True)
-            realmlist.write_text("set realmlist 127.0.0.1\nset patchlist 127.0.0.1\n")
+        realmlist = client_destination / "Data/enUS/realmlist.wtf"
+        realmlist.write_text("set realmlist 127.0.0.1\nset patchlist 127.0.0.1\n")
         install_dxvk(generation)
         for key in ("xdg_data", "xdg_config", "xdg_cache", "xdg_state", "raw_evidence"):
             Path(paths[key]).mkdir(parents=True, exist_ok=True)
@@ -1264,7 +1257,7 @@ def prepare(args: argparse.Namespace) -> None:
         record_failure(manifest_path, manifest, error)
         raise
     print(
-        f"prepared Plan 7 generation {number} in {generation_root} "
+        f"prepared Plan {plan_number(args.mode)} generation {number} in {generation_root} "
         f"(database cache {generation['database_cache']['result']})"
     )
 
@@ -1383,26 +1376,34 @@ def automate_client_login(generation: Generation) -> None:
         raise RuntimeError("owned WoW window did not appear within 90 seconds")
 
     window_id, x, y, width, height = window
-    focus_deadline = time.monotonic() + 5
-    while time.monotonic() < focus_deadline:
-        run_command(["wmctrl", "-i", "-a", window_id])
-        active = run_command(["xprop", "-root", "_NET_ACTIVE_WINDOW"], check=False)
-        active_id = re.search(rb"0x[0-9a-fA-F]+", active.stdout)
-        if active_id is not None and int(active_id.group(), 16) == int(window_id, 16):
-            break
-        time.sleep(0.25)
-    else:
-        raise RuntimeError("owned WoW window did not receive focus")
     connection = display.Display(str(generation["inputs"]["display"]))
     target = connection.create_resource_object("window", int(window_id, 16))
     shift = connection.keysym_to_keycode(XK.string_to_keysym("Shift_L"))
     control = connection.keysym_to_keycode(XK.string_to_keysym("Control_L"))
 
-    def focus() -> None:
-        run_command(["wmctrl", "-i", "-a", window_id])
-        target.set_input_focus(X.RevertToParent, X.CurrentTime)
-        connection.sync()
-        time.sleep(0.2)
+    def focus() -> bool:
+        if run_command(["wmctrl", "-i", "-a", window_id], check=False).returncode:
+            return False
+        try:
+            target.set_input_focus(X.RevertToParent, X.CurrentTime)
+            connection.sync()
+            return connection.get_input_focus().focus.id == target.id
+        except Exception:
+            return False
+
+    focus_deadline = time.monotonic() + 5
+    while time.monotonic() < focus_deadline:
+        if focus():
+            break
+        output = run_command(["wmctrl", "-lpGx"], check=False, env=wine_environment(generation))
+        refreshed = owned_wow_window(output.stdout.decode(errors="replace"), owned_pids)
+        if refreshed and refreshed[0] != window_id:
+            window_id, x, y, width, height = refreshed
+            target = connection.create_resource_object("window", int(window_id, 16))
+        time.sleep(0.25)
+    else:
+        connection.close()
+        raise RuntimeError("owned WoW window did not receive X input focus")
 
     def press(value: str, modifier: int | None = None) -> None:
         symbol = XK.string_to_keysym(x_keysym_name(value))
@@ -1415,7 +1416,8 @@ def automate_client_login(generation: Generation) -> None:
             xtest.fake_input(connection, X.KeyRelease, modifier)
 
     def click(point: tuple[int, int]) -> None:
-        focus()
+        if not focus():
+            raise RuntimeError("owned WoW window lost X input focus")
         connection.screen().root.warp_pointer(*point)
         xtest.fake_input(connection, X.ButtonPress, 1)
         xtest.fake_input(connection, X.ButtonRelease, 1)
@@ -1518,9 +1520,7 @@ def run_client(args: argparse.Namespace) -> None:
     generation = active_generation(manifest)
     if generation["mode"] in CHARACTER_MODES and args.stability_seconds < 5:
         raise RuntimeError("--stability-seconds must be at least 5")
-    retryable = (
-        generation["state"] == "failed" and generation.get("failure", {}).get("phase") == "prepared"
-    ) or generation["state"] == "inconclusive"
+    retryable = generation["state"] in {"failed", "inconclusive"}
     if retryable:
         if any(process.get("active", False) for process in generation["processes"]):
             raise RuntimeError("cannot retry a diagnostic generation with active processes")
@@ -1591,6 +1591,7 @@ def run_client(args: argparse.Namespace) -> None:
         deadline = time.monotonic() + (args.no_login_seconds if generation["mode"] == "no-login" else args.timeout)
         character_hold_started: float | None = None
         selection_sent = False
+        post_marker_hold_started: float | None = None
         milestone_definition = CHARACTER_MILESTONES if generation["mode"] in CHARACTER_MODES else CLIENT_MILESTONES
         while time.monotonic() < deadline:
             add_processes(generation, find_wine_processes(Path(paths["wine_prefix"])))
@@ -1602,7 +1603,7 @@ def run_client(args: argparse.Namespace) -> None:
                 if len(milestones) == len(CHARACTER_MILESTONES) and character_hold_started is None:
                     character_hold_started = time.monotonic()
                 if (
-                    generation["mode"] == CHARACTER_SELECTION_MODE
+                    generation["mode"] in {CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE}
                     and character_hold_started is not None and not selection_sent
                 ):
                     automate_character_selection(generation)
@@ -1614,8 +1615,22 @@ def run_client(args: argparse.Namespace) -> None:
                     and player_login_callbacks(generation)
                 ):
                     break
+                if generation["mode"] == INITIAL_POST_LOAD_PACKETS_MODE and selection_sent:
+                    if initial_packets_marker_count(generation) and post_marker_hold_started is None:
+                        capture_runtime(generation)
+                        generation["post_marker_snapshots"] = 1
+                        post_marker_hold_started = time.monotonic()
+                    if (
+                        post_marker_hold_started is not None
+                        and time.monotonic() - post_marker_hold_started >= args.stability_seconds
+                    ):
+                        capture_runtime(generation)
+                        generation["post_marker_snapshots"] = 2
+                        generation["post_marker_hold_seconds"] = args.stability_seconds
+                        break
                 if (
-                    generation["mode"] != CHARACTER_SELECTION_MODE and character_hold_started is not None
+                    generation["mode"] not in {CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE}
+                    and character_hold_started is not None
                     and time.monotonic() - character_hold_started >= args.stability_seconds
                 ):
                     break
@@ -1696,6 +1711,26 @@ def player_login_requests(generation: Generation) -> list[int]:
 def player_login_callbacks(generation: Generation) -> list[int]:
     pattern = re.compile(r"Player login callback for account \d+ character .*? Low: (\d+)")
     return [int(guid) for guid in pattern.findall(world_log_text(generation))]
+
+
+def initial_packets_marker_count(generation: Generation) -> int:
+    return world_log_text(generation).count("Finished sending initial packets before going to map")
+
+
+def initial_packet_prefix(generation: Generation) -> list[str]:
+    packet = re.compile(r"\b(C->S|S->C):\s+.*?\b((?:CMSG|SMSG|MSG)_[A-Z0-9_]+)\b")
+    prefix: list[str] = []
+    selected = False
+    for line in world_log_text(generation).splitlines():
+        match = packet.search(line)
+        if match and match.group(1) == "C->S" and match.group(2) == "CMSG_PLAYER_LOGIN":
+            selected = True
+            continue
+        if "Finished sending initial packets before going to map" in line:
+            break
+        if selected and match and match.group(1) == "S->C":
+            prefix.append(match.group(2))
+    return prefix
 
 
 def player_login_diagnostic(generation: Generation) -> str:
@@ -1806,6 +1841,7 @@ def sanitized_evidence(
     *, character_rows: int | None = None, realm_count: int | None = None,
     enumerated: dict[str, object] | None = None, screen_confirmed: bool = False,
     selection: dict[str, object] | None = None, downstream_diagnostic: str | None = None,
+    initial_packet_prefix_value: list[str] | None = None, pre_map_marker_count: int | None = None,
 ) -> dict[str, object]:
     auth_index = next(
         (index for index, item in enumerate(transcript) if item["opcode"] == "SMSG_AUTH_RESPONSE"), None,
@@ -1825,17 +1861,22 @@ def sanitized_evidence(
     character_mode = generation["mode"] in CHARACTER_MODES
     populated_mode = generation["mode"] in POPULATED_CHARACTER_MODES
     selection_mode = generation["mode"] == CHARACTER_SELECTION_MODE
+    initial_packets_mode = generation["mode"] == INITIAL_POST_LOAD_PACKETS_MODE
+    login_mode = selection_mode or initial_packets_mode
+    initial_packets_mode = generation["mode"] == INITIAL_POST_LOAD_PACKETS_MODE
+    login_mode = selection_mode or initial_packets_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
         Path(generation["paths"]["raw_evidence"]) / "window.xprop"
     ).is_file()
-    forbidden_opcodes = FORBIDDEN_CHARACTER_OPCODES - ({"CMSG_PLAYER_LOGIN"} if selection_mode else set())
+    forbidden_opcodes = FORBIDDEN_CHARACTER_OPCODES - ({"CMSG_PLAYER_LOGIN"} if login_mode else set())
     forbidden = sorted({item["opcode"] for item in transcript if item["opcode"] in forbidden_opcodes})
     return {
         "schema": 1,
         "build": CLIENT_BUILD,
         "mode": generation["mode"],
         "outcome": (
-            "character_selection_candidate" if selection_mode and "characters_completed" in milestones
+            "initial_post_load_packets_candidate" if initial_packets_mode and "characters_completed" in milestones
+            else "character_selection_candidate" if selection_mode and "characters_completed" in milestones
             else "populated_character_list_candidate" if populated_mode and "characters_completed" in milestones
             else "character_screen_candidate" if character_mode and "characters_completed" in milestones
             else "world_auth_ok" if "world_auth_ok" in milestones else "not_accepted"
@@ -1849,8 +1890,12 @@ def sanitized_evidence(
         "character_rows": character_rows if character_mode else None,
         "realm_character_count": realm_count if populated_mode else None,
         "enumerated": enumerated if populated_mode else None,
-        "selection": selection if selection_mode else None,
+        "selection": selection if login_mode else None,
         "downstream_diagnostic": downstream_diagnostic if selection_mode else None,
+        "pre_map_packet_prefix": initial_packet_prefix_value if initial_packets_mode else None,
+        "pre_map_marker_count": pre_map_marker_count if initial_packets_mode else None,
+        "post_marker_hold_seconds": generation.get("post_marker_hold_seconds", 0) if initial_packets_mode else None,
+        "post_marker_snapshots": generation.get("post_marker_snapshots", 0) if initial_packets_mode else None,
         "empty_response_payload": EMPTY_CHARACTER_ENUM_PAYLOAD if generation["mode"] == "character-screen" else None,
         "response_body": POPULATED_CHARACTER_ENUM_PAYLOAD if populated_mode else None,
         "stability_seconds": generation.get("stability_seconds", 0) if character_mode else None,
@@ -1887,15 +1932,15 @@ def verify(args: argparse.Namespace) -> None:
     rows = character_row_count(manifest, generation) if character_mode else None
     realm_count = realm_character_count(manifest, generation) if populated_mode else None
     seed = (
-        verify_populated_character_identity(manifest, generation) if selection_mode
+        verify_populated_character_identity(manifest, generation) if login_mode
         else verify_populated_character_seed(manifest, generation) if populated_mode else None
     )
     enum_events = enumerated_characters(generation) if populated_mode else []
     enumerated = None
     if seed is not None:
         enumerated = seed
-    requests = player_login_requests(generation) if selection_mode else []
-    callbacks = player_login_callbacks(generation) if selection_mode else []
+    requests = player_login_requests(generation) if login_mode else []
+    callbacks = player_login_callbacks(generation) if login_mode else []
     selection = {
         "action": generation.get("selection_action"),
         "seeded_guid_low": seed["guid_low"] if seed is not None else None,
@@ -1903,11 +1948,13 @@ def verify(args: argparse.Namespace) -> None:
         "request_guid_low": requests[0] if len(requests) == 1 else None,
         "callback_guid_low": callbacks[0] if len(callbacks) == 1 else None,
         "legit_characters_admission": len(callbacks) == 1,
-    } if selection_mode else None
+    } if login_mode else None
     evidence = sanitized_evidence(
         generation, milestones, transcript, character_rows=rows, realm_count=realm_count, enumerated=enumerated,
         screen_confirmed=bool(args.confirm_expected_screen), selection=selection,
         downstream_diagnostic=player_login_diagnostic(generation) if selection_mode else None,
+        initial_packet_prefix_value=initial_packet_prefix(generation) if initial_packets_mode else None,
+        pre_map_marker_count=initial_packets_marker_count(generation) if initial_packets_mode else None,
     )
     unchanged = protected_inputs_unchanged(manifest, generation)
     generation["isolation_unchanged"] = unchanged
@@ -1937,9 +1984,17 @@ def verify(args: argparse.Namespace) -> None:
             }]
         if selection_mode:
             character_ok = character_ok and selection_proof_is_complete(selection, transcript, enum_events)
+        if initial_packets_mode:
+            character_ok = character_ok and selection_proof_is_complete(selection, transcript, enum_events) and (
+                evidence["pre_map_marker_count"] == 1
+                and bool(evidence["pre_map_packet_prefix"])
+                and evidence["post_marker_hold_seconds"] >= 5
+                and evidence["post_marker_snapshots"] == 2
+            )
         if character_ok:
             evidence["outcome"] = (
-                "character_selection_pass" if selection_mode
+                "initial_post_load_packets_pass" if initial_packets_mode
+                else "character_selection_pass" if selection_mode
                 else "populated_character_list_pass" if populated_mode else "character_screen_pass"
             )
             set_state(generation, "accepted")
@@ -2129,6 +2184,10 @@ def comparison_projection(evidence: dict[str, object]) -> dict[str, object]:
         "empty_response_payload": evidence.get("empty_response_payload"),
         "response_body": evidence.get("response_body"),
         "selection": evidence.get("selection"),
+        "pre_map_packet_prefix": evidence.get("pre_map_packet_prefix"),
+        "pre_map_marker_count": evidence.get("pre_map_marker_count"),
+        "post_marker_hold_seconds": evidence.get("post_marker_hold_seconds"),
+        "post_marker_snapshots": evidence.get("post_marker_snapshots"),
         "stability_seconds": evidence.get("stability_seconds"),
         "endpoint_ownership": evidence.get("endpoint_ownership"),
         "owned_window": evidence.get("owned_window"),
@@ -2262,6 +2321,25 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     )
     assert selection_evidence["forbidden_opcodes"] == []
     assert plan_number(CHARACTER_SELECTION_MODE) == "10"
+    initial_packets_generation = dict(selection_generation)
+    initial_packets_generation["mode"] = INITIAL_POST_LOAD_PACKETS_MODE
+    initial_packets_generation["post_marker_hold_seconds"] = 5
+    initial_packets_generation["post_marker_snapshots"] = 2
+    initial_packets_evidence = sanitized_evidence(
+        initial_packets_generation, [name for name, _ in CHARACTER_MILESTONES],
+        [{"direction": "c2s", "opcode": "CMSG_CHAR_ENUM"},
+         {"direction": "s2c", "opcode": "SMSG_CHAR_ENUM"},
+         {"direction": "c2s", "opcode": "CMSG_PLAYER_LOGIN"}],
+        character_rows=1, realm_count=1, enumerated=expected_character, screen_confirmed=True,
+        selection={
+            "action": "enter", "seeded_guid_low": CHARACTER_GUID,
+            "enumerated_guid_low": CHARACTER_GUID, "request_guid_low": CHARACTER_GUID,
+            "callback_guid_low": CHARACTER_GUID, "legit_characters_admission": True,
+        }, initial_packet_prefix_value=["SMSG_SETUP_CURRENCY"], pre_map_marker_count=1,
+    )
+    assert initial_packets_evidence["forbidden_opcodes"] == []
+    assert initial_packets_evidence["pre_map_packet_prefix"] == ["SMSG_SETUP_CURRENCY"]
+    assert plan_number(INITIAL_POST_LOAD_PACKETS_MODE) == "11"
     assert not selection_proof_is_complete(selection_evidence["selection"], [], [])
     seed_sql = populated_character_seed_sql()
     assert "INSERT INTO `characters`" in seed_sql and "`order`,`innTriggerId`" in seed_sql
@@ -2314,9 +2392,15 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         base = root / "base"
         base.mkdir()
         (base / "Wow-64.exe").write_bytes(b"client")
+        (base / "Data/enUS").mkdir(parents=True)
+        (base / "Data/enUS/realmlist.wtf").write_text("source realm\n")
+        (base / "Data/enUS/locale-enUS.MPQ").write_bytes(b"locale")
         link_client_base(base, root / "client")
         assert (root / "client/Wow-64.exe").is_symlink()
         assert not (root / "client/WTF").is_symlink()
+        assert not (root / "client/Data").is_symlink()
+        assert (root / "client/Data/enUS/locale-enUS.MPQ").is_symlink()
+        assert not (root / "client/Data/enUS/realmlist.wtf").exists()
         raw = root / "raw"
         raw.mkdir()
         (raw / "WorldServer.log").write_text(
@@ -2360,7 +2444,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         pass
     else:
         raise AssertionError("invalid state transition was accepted")
-    print("Plan 7-10 runner self-check passed")
+    print("Plan 7-11 runner self-check passed")
 
 
 def stability_seconds(value: str) -> int:
@@ -2391,8 +2475,10 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--display", required=True)
     prepare_parser.add_argument("--xauthority", type=Path)
     prepare_parser.add_argument(
-        "--mode", choices=("no-login", "authentication", "character-screen", POPULATED_MODE, CHARACTER_SELECTION_MODE),
-        default="authentication",
+        "--mode", choices=(
+            "no-login", "authentication", "character-screen", POPULATED_MODE, CHARACTER_SELECTION_MODE,
+            INITIAL_POST_LOAD_PACKETS_MODE,
+        ), default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)
     run_parser = subcommands.add_parser("run")

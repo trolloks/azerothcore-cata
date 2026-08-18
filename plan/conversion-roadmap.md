@@ -111,8 +111,9 @@ only after the relevant plan has explicit build/test authorization and all of th
 are met:
 
 - Create a fully run-owned Bottles prefix. Never launch through the personal `Battle.NET` Bottle.
-- Use a fully run-owned client copy or a copy-on-write view whose isolation has been proven first.
-  Never launch the source client tree directly.
+- Use a fully run-owned client copy or a run-owned symlink/copy-on-write overlay whose isolation has
+  been proven first. An overlay may link only read-only source files; its writable directories and
+  locale `realmlist.wtf` must be local. Never launch the source client tree directly.
 - Capture pre-run and post-run manifests for the source client and personal Bottle, and require no
   changes.
 - Store logs, screenshots, manifests, and packet evidence outside the Git worktree. Sanitize them
@@ -191,12 +192,13 @@ numbered Markdown files are stable-path stubs for historical ledger references.
 - [Plan 8: typed empty character enumeration](https://github.com/trolloks/azerothcore-cata/issues/18)
 - [Plan 9: one database-backed character](https://github.com/trolloks/azerothcore-cata/issues/19)
 - [Plan 10: select the enumerated character](https://github.com/trolloks/azerothcore-cata/issues/20)
-- [Plan 11: build 15595 initial post-load packet contract](https://github.com/trolloks/azerothcore-cata/issues/25)
+- [Plan 11: build 15595 pre-map initial-packet contract](https://github.com/trolloks/azerothcore-cata/issues/25)
 - [Plan 12: build 15595 map insertion and object bootstrap](https://github.com/trolloks/azerothcore-cata/issues/26)
 - [Plan 13: build 15595 in-world control bootstrap](https://github.com/trolloks/azerothcore-cata/issues/27)
 
 Plans 8-10 deliberately stop at three separate boundaries: typed empty enumeration, one populated
 enumeration, and real-client selection through the session legitimacy gate to the database-load callback.
 They do not prove character creation, successful player loading, initial packet correctness, map entry, or
-world control. Plan 10 proved `Player::LoadFromDB` returned true as a diagnostic; Plan 11 starts with the
-pre-map packet contract. Plans 12-13 remain blocked by their predecessors' client-acceptance evidence.
+world control. Plan 10 proved `Player::LoadFromDB` returned true as a diagnostic; Plan 11 owns the pre-map
+packet contract. Pinned Cataclysm sends `SMSG_LOGIN_VERIFY_WORLD` after map insertion, so it belongs to Plan 12.
+Plans 12-13 remain blocked by their predecessors' client-acceptance evidence.

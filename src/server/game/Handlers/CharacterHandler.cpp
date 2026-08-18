@@ -45,6 +45,7 @@
 #include "Player.h"
 #include "PlayerDump.h"
 #include "QueryHolder.h"
+#include "QueryPackets.h"
 #include "RaceMgr.h"
 #include "Realm.h"
 #include "ReputationMgr.h"
@@ -54,6 +55,7 @@
 #include "SpellAuraEffects.h"
 #include "SpellAuras.h"
 #include "StringConvert.h"
+#include "SystemPackets.h"
 #include "TC9Sidecar.h"
 #include "Tokenize.h"
 #include "Transport.h"
@@ -978,31 +980,10 @@ void WorldSession::HandlePlayerLoginFromDB(LoginQueryHolder const& holder)
 
     LOG_INFO("network", "Account ({}) logged in with character ({}).", GetAccountId(), playerGuid.ToString());
     LOG_INFO("network", "Character in zone {}, map {}, x {}, y {}, z {}.", pCurrChar->GetZoneId(), pCurrChar->GetMapId(), pCurrChar->GetPositionX(), pCurrChar->GetPositionY(), pCurrChar->GetPositionZ());
-    WorldPacket data(SMSG_LOGIN_VERIFY_WORLD, 20);
-    data << pCurrChar->GetMapId();
-    data << pCurrChar->GetPositionX();
-    data << pCurrChar->GetPositionY();
-    data << pCurrChar->GetPositionZ();
-    data << pCurrChar->GetOrientation();
-    SendPacket(&data);
 
     // load player specific part before send times
     LoadAccountData(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_ACCOUNT_DATA), PER_CHARACTER_CACHE_MASK);
     SendAccountDataTimes(PER_CHARACTER_CACHE_MASK);
-
-    data.Initialize(SMSG_FEATURE_SYSTEM_STATUS, 2);         // added in 2.2.0
-    data << uint8(2);                                       // 2 - COMPLAINT_ENABLED_WITH_AUTO_IGNORE
-    data << uint8(0);                                       // enable(1)/disable(0) voice chat interface in client
-    SendPacket(&data);
-
-    // Send MOTD
-    {
-        SendPacket(sMotdMgr->GetMotdPacket(pCurrChar->GetSession()->GetSessionDbLocaleIndex()));
-
-        // send server info
-        if (sWorld->getIntConfig(CONFIG_ENABLE_SINFO_LOGIN) == 1)
-            chH.PSendSysMessage("{}", GitRevision::GetFullVersion());
-    }
 
     if (!sToCloud9Sidecar->ClusterModeEnabled())
     {
@@ -1036,12 +1017,24 @@ void WorldSession::HandlePlayerLoginFromDB(LoginQueryHolder const& holder)
         pCurrChar->SetRank(0);
     }
 
-    data.Initialize(SMSG_LEARNED_DANCE_MOVES, 4 + 4);
-    data << uint32(0);
-    data << uint32(0);
+    WorldPacket data(SMSG_LEARNED_DANCE_MOVES, 8);
+    data << uint64(0);
     SendPacket(&data);
 
-    pCurrChar->SendInitialPacketsBeforeAddToMap();
+    SendPacket(WorldPackets::Query::HotfixNotifyBlob().Write());
+    pCurrChar->SendInitialPacketsBeforeAddToMap(true);
+
+    SendPacket(sMotdMgr->GetMotdPacket(pCurrChar->GetSession()->GetSessionDbLocaleIndex()));
+    if (sWorld->getIntConfig(CONFIG_ENABLE_SINFO_LOGIN) == 1)
+        chH.PSendSysMessage("{}", GitRevision::GetFullVersion());
+
+    WorldPackets::System::FeatureSystemStatus features;
+    features.ComplaintStatus = 2;
+    features.ScrollOfResurrectionRequestsRemaining = 1;
+    features.ScrollOfResurrectionMaxRequestsPerDay = 1;
+    features.CfgRealmID = realm.Id.Realm;
+    SendPacket(features.Write());
+
     LOG_INFO("network", "Finished sending initial packets before going to map");
     //Show cinematic at the first time that player login
     if (!pCurrChar->getCinematic())

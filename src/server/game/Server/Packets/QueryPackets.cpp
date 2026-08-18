@@ -17,6 +17,21 @@
 
 #include "QueryPackets.h"
 
+WorldPacket const* WorldPackets::Query::HotfixNotifyBlob::Write()
+{
+    _worldPacket.WriteBits(Hotfixes.size(), 22);
+    _worldPacket.FlushBits();
+
+    for (Record const& hotfix : Hotfixes)
+    {
+        _worldPacket << hotfix.TableHash;
+        _worldPacket << hotfix.Timestamp;
+        _worldPacket << hotfix.Entry;
+    }
+
+    return &_worldPacket;
+}
+
 void WorldPackets::Query::NameQuery::Read()
 {
     _worldPacket >> Guid;

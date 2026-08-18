@@ -25,6 +25,23 @@ namespace WorldPackets
 {
     namespace Query
     {
+        class HotfixNotifyBlob final : public ServerPacket
+        {
+        public:
+            struct Record
+            {
+                uint32 TableHash = 0;
+                uint32 Timestamp = 0;
+                int32 Entry = 0;
+            };
+
+            HotfixNotifyBlob() : ServerPacket(SMSG_HOTFIX_NOTIFY_BLOB, 3) { }
+
+            WorldPacket const* Write() override;
+
+            std::vector<Record> Hotfixes;
+        };
+
         class NameQuery final : public ClientPacket
         {
         public:
