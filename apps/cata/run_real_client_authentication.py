@@ -1376,34 +1376,29 @@ def automate_client_login(generation: Generation) -> None:
         raise RuntimeError("owned WoW window did not appear within 90 seconds")
 
     window_id, x, y, width, height = window
-    connection = display.Display(str(generation["inputs"]["display"]))
-    target = connection.create_resource_object("window", int(window_id, 16))
-    shift = connection.keysym_to_keycode(XK.string_to_keysym("Shift_L"))
-    control = connection.keysym_to_keycode(XK.string_to_keysym("Control_L"))
-
-    def focus() -> bool:
-        if run_command(["wmctrl", "-i", "-a", window_id], check=False).returncode:
-            return False
-        try:
-            target.set_input_focus(X.RevertToParent, X.CurrentTime)
-            connection.sync()
-            return connection.get_input_focus().focus.id == target.id
-        except Exception:
-            return False
-
+    # Measured live: an explicit XSetInputFocus (bypassing the window manager's own
+    # activation protocol), especially repeated once per field click, makes the
+    # client tear down its window and never recreate it -- almost certainly DXVK
+    # treating that as an unexpected focus-loss/gain pattern and resetting the
+    # device. wmctrl's `-a` (an EWMH _NET_ACTIVE_WINDOW request the WM handles
+    # itself) plus reading the WM's own _NET_ACTIVE_WINDOW root property back is the
+    # combination proven stable across Plans 7-10: acquire focus once, verify it via
+    # the WM's own bookkeeping, then drive the rest of the login by keyboard
+    # (Tab/Return) rather than by re-clicking (and thus re-activating) each field.
     focus_deadline = time.monotonic() + 5
     while time.monotonic() < focus_deadline:
-        if focus():
+        run_command(["wmctrl", "-i", "-a", window_id])
+        active = run_command(["xprop", "-root", "_NET_ACTIVE_WINDOW"], check=False)
+        active_id = re.search(rb"0x[0-9a-fA-F]+", active.stdout)
+        if active_id is not None and int(active_id.group(), 16) == int(window_id, 16):
             break
-        output = run_command(["wmctrl", "-lpGx"], check=False, env=wine_environment(generation))
-        refreshed = owned_wow_window(output.stdout.decode(errors="replace"), owned_pids)
-        if refreshed and refreshed[0] != window_id:
-            window_id, x, y, width, height = refreshed
-            target = connection.create_resource_object("window", int(window_id, 16))
         time.sleep(0.25)
     else:
-        connection.close()
-        raise RuntimeError("owned WoW window did not receive X input focus")
+        raise RuntimeError("owned WoW window did not receive focus")
+
+    connection = display.Display(str(generation["inputs"]["display"]))
+    shift = connection.keysym_to_keycode(XK.string_to_keysym("Shift_L"))
+    control = connection.keysym_to_keycode(XK.string_to_keysym("Control_L"))
 
     def press(value: str, modifier: int | None = None) -> None:
         symbol = XK.string_to_keysym(x_keysym_name(value))
@@ -1416,8 +1411,6 @@ def automate_client_login(generation: Generation) -> None:
             xtest.fake_input(connection, X.KeyRelease, modifier)
 
     def click(point: tuple[int, int]) -> None:
-        if not focus():
-            raise RuntimeError("owned WoW window lost X input focus")
         connection.screen().root.warp_pointer(*point)
         xtest.fake_input(connection, X.ButtonPress, 1)
         xtest.fake_input(connection, X.ButtonRelease, 1)
@@ -1439,29 +1432,23 @@ def automate_client_login(generation: Generation) -> None:
         )
         if movie_active:
             movie_seen = True
-        # Fresh prefixes can render the cinematic without exposing MovieProxy.exe
-        # in the process list. Escape is harmless on the login screen, so keep
-        # dismissing it during the initial window instead of trusting detection.
-        if movie_active or not movie_seen:
             press("Escape")
             connection.sync()
             time.sleep(1)
-            if movie_active or time.monotonic() < no_movie_deadline:
-                continue
+            continue
         if movie_seen or time.monotonic() >= no_movie_deadline:
             break
         time.sleep(1)
-    account_point, password_point, login_point = client_login_points(x, y, width, height)
-    connection.sync()
+    account_point, _, _ = client_login_points(x, y, width, height)
     click(account_point)
     press("a", control)
     press("BackSpace")
     enter(ACCOUNT)
-    click(password_point)
+    press("Tab")
     press("a", control)
     press("BackSpace")
     enter(PASSWORD)
-    click(login_point)
+    press("Return")
     connection.sync()
     connection.close()
 
@@ -1929,6 +1916,8 @@ def verify(args: argparse.Namespace) -> None:
     character_mode = generation["mode"] in CHARACTER_MODES
     populated_mode = generation["mode"] in POPULATED_CHARACTER_MODES
     selection_mode = generation["mode"] == CHARACTER_SELECTION_MODE
+    initial_packets_mode = generation["mode"] == INITIAL_POST_LOAD_PACKETS_MODE
+    login_mode = selection_mode or initial_packets_mode
     rows = character_row_count(manifest, generation) if character_mode else None
     realm_count = realm_character_count(manifest, generation) if populated_mode else None
     seed = (
