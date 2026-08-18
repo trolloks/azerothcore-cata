@@ -11,6 +11,11 @@ depart from upstream only where Cataclysm protocol, data, or gameplay difference
 
 ## Branch workflow
 
+GitHub issues in `trolloks/azerothcore-cata` are the canonical numbered plans and progress records.
+Keep `plan/github-issues.tsv` as the repository index. Numbered Markdown files may retain short
+issue-reference stubs for stable historical paths, but must not duplicate complete issue bodies.
+Close a plan issue only after its completion predicate and recorded checks pass.
+
 Each numbered plan uses its own `plan/NN-short-name` branch. Create that branch from the latest
 `master`, never from the previous plan branch. Merge the completed plan into `master` before creating
 the next plan branch. Do not implement numbered plans directly on `master` or `feature/cata`.

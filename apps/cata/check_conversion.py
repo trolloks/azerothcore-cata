@@ -1072,7 +1072,7 @@ def authentication_handoff_issues(socket_header: str, tests: str, runner: str) -
     return tuple(issues)
 
 
-def real_client_authentication_issues(runner: str, fixture: str, plan_8: str) -> tuple[str, ...]:
+def real_client_authentication_issues(runner: str, fixture: str, plan_index: str) -> tuple[str, ...]:
     issues: list[str] = []
     if any(token not in runner for token in (
         '"self-check"',
@@ -1125,15 +1125,88 @@ def real_client_authentication_issues(runner: str, fixture: str, plan_8: str) ->
     )):
         issues.append("real-client-authentication-fixture-incomplete")
 
-    if any(token not in plan_8 for token in (
-        "Status: draft",
-        "CMSG_CHAR_ENUM",
-        "SMSG_CHAR_ENUM",
-        "empty character list",
-        "does not enter the world",
-        "Plan 7",
+    if any(row not in plan_index for row in (
+        "08\t18\topen\tPlan 8: typed empty character enumeration and stable build 15595 screen\t"
+        "https://github.com/trolloks/azerothcore-cata/issues/18",
+        "09\t19\topen\tPlan 9: one database-backed build 15595 character\t"
+        "https://github.com/trolloks/azerothcore-cata/issues/19",
+        "10\t20\topen\tPlan 10: select the enumerated build 15595 character\t"
+        "https://github.com/trolloks/azerothcore-cata/issues/20",
     )):
-        issues.append("character-screen-plan-incomplete")
+        issues.append("plan-issue-index-incomplete")
+    return tuple(issues)
+
+
+def character_enumeration_issues(
+    packet_header: str, packet_source: str, handler: str, session_header: str,
+    tests: str, runner: str, fixture: str,
+) -> tuple[str, ...]:
+    issues: list[str] = []
+    if any(token not in packet_header for token in (
+        "class EnumCharacters final : public ClientPacket",
+        "class EnumCharactersResult final : public ServerPacket",
+        "struct RestrictedFactionChangeRuleInfo",
+        "std::array<VisualItemInfo, 23>",
+        '#include "Position.h"',
+        "#include <array>",
+    )) or "void WorldPackets::Character::EnumCharacters::Read()" not in packet_source:
+        issues.append("character-enumeration-packet-types-missing")
+    if any(token not in packet_source for token in (
+        'ByteBufferInvalidValueException("character enumeration", "trailing bytes")',
+        "_worldPacket.WriteBits(FactionChangeRestrictions.size(), 23);",
+        "_worldPacket.WriteBit(Success);",
+        "_worldPacket.WriteBits(Characters.size(), 17);",
+        "_worldPacket.FlushBits();",
+    )):
+        issues.append("character-enumeration-wire-shape-missing")
+    if "WorldPackets::Character::EnumCharacters&" not in handler or "SendPacket(charEnum.Write());" not in handler:
+        issues.append("character-enumeration-typed-handler-missing")
+    if "void HandleCharEnumOpcode(WorldPackets::Character::EnumCharacters& packet);" not in session_header:
+        issues.append("character-enumeration-session-declaration-missing")
+    if any(token in handler for token in (
+        "WorldPacket data(SMSG_CHAR_ENUM",
+        "std::vector<CharacterInfo>",
+    )) or "struct CharacterInfo" in session_header:
+        issues.append("character-enumeration-raw-model-remains")
+    if any(token not in tests for token in (
+        "ReadsEmptyEnumCharacters",
+        "RejectsTrailingEnumCharactersBody",
+        "WritesSuccessfulEmptyEnumCharacters",
+        "WritesFailedEmptyEnumCharacters",
+        '"000001000000"',
+        '"000000000000"',
+    )):
+        issues.append("character-enumeration-fixtures-incomplete")
+    if any(token not in runner for token in (
+        '"character-screen"',
+        '"--stability-seconds"',
+        '"--confirm-expected-screen"',
+        "CHARACTER_MILESTONES",
+        "characters_completed",
+        "character_row_count",
+        "FORBIDDEN_CHARACTER_OPCODES",
+        "EMPTY_CHARACTER_ENUM_PAYLOAD",
+        "compare-last-two",
+    )):
+        issues.append("character-screen-runner-incomplete")
+    try:
+        proof = json.loads(fixture)
+    except (json.JSONDecodeError, TypeError):
+        proof = None
+    if not isinstance(proof, dict) or any((
+        proof.get("schema") != 1,
+        proof.get("plan") != 8,
+        proof.get("client_build") != 15595,
+        proof.get("verdict") != "PASS",
+        proof.get("mode") != "character-screen",
+        proof.get("response_body") != "000001000000",
+        proof.get("character_rows") != 0,
+        proof.get("fresh_runs") != 2,
+        proof.get("matching_runs") is not True,
+        proof.get("protected_inputs_unchanged") is not True,
+        proof.get("reset") != "PASS",
+    )):
+        issues.append("character-screen-live-fixture-missing")
     return tuple(issues)
 
 
@@ -1370,8 +1443,8 @@ def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], 
     client_fixture = read_ref_file(
         inputs.repo_root, inputs.head_ref, "apps/cata/fixtures/plan7-client-authentication.json"
     )
-    character_plan = read_ref_file(inputs.repo_root, inputs.head_ref, "plan/08-build-15595-character-screen.md")
-    client_issues = real_client_authentication_issues(client_runner, client_fixture, character_plan)
+    plan_index = read_ref_file(inputs.repo_root, inputs.head_ref, "plan/github-issues.tsv")
+    client_issues = real_client_authentication_issues(client_runner, client_fixture, plan_index)
     client_row = ledger.anchors.get("protocol.real-client-authentication")
     if client_row is None:
         findings.append(Finding("error", "MISSING_ANCHOR", "protocol.real-client-authentication",
@@ -1390,6 +1463,54 @@ def scan_anchors(inputs: Inputs, ledger: Ledger) -> tuple[tuple[dict[str, Any], 
         "plan": "Real client authentication",
         "state": client_row.state if client_row else "open",
         "evidence": client_row.evidence if client_row else "-",
+    })
+
+    character_header = read_ref_file(
+        inputs.repo_root, inputs.head_ref, "src/server/game/Server/Packets/CharacterPackets.h"
+    )
+    character_source = read_ref_file(
+        inputs.repo_root, inputs.head_ref, "src/server/game/Server/Packets/CharacterPackets.cpp"
+    )
+    character_handler = read_ref_file(
+        inputs.repo_root, inputs.head_ref, "src/server/game/Handlers/CharacterHandler.cpp"
+    )
+    character_session = read_ref_file(
+        inputs.repo_root, inputs.head_ref, "src/server/game/Server/WorldSession.h"
+    )
+    character_tests = read_ref_file(
+        inputs.repo_root, inputs.head_ref, "src/test/server/game/Server/Packets/CharacterPacketsTest.cpp"
+    )
+    try:
+        character_fixture = read_ref_file(
+            inputs.repo_root, inputs.head_ref, "apps/cata/fixtures/plan8-character-screen.json"
+        )
+    except AuditError:
+        character_fixture = ""
+    character_issues = character_enumeration_issues(
+        character_header, character_source, character_handler, character_session,
+        character_tests, client_runner, character_fixture,
+    )
+    character_row = ledger.anchors.get("protocol.character-enumeration")
+    if character_row is None:
+        findings.append(Finding("error", "MISSING_ANCHOR", "protocol.character-enumeration", "named anchor has no ledger row"))
+    elif character_row.state == "converted" and (
+        character_issues or character_row.fixture != "pass" or character_row.client != "pass"
+    ):
+        findings.append(
+            Finding(
+                "error", "CONVERTED_ANCHOR_WITHOUT_PROOF", "protocol.character-enumeration",
+                "converted character enumeration lacks typed packet, runner, and two-run screen proof",
+            )
+        )
+    anchors.append({
+        "key": "protocol.character-enumeration",
+        "path": "src/server/game/Server/Packets/CharacterPackets.{h,cpp};apps/cata/run_real_client_authentication.py",
+        "current": ",".join(character_issues) if character_issues else "typed-character-enumeration",
+        "target": "typed-character-enumeration",
+        "matched_target": not character_issues,
+        "plan": "Build 15595 character screen",
+        "state": character_row.state if character_row else "open",
+        "evidence": character_row.evidence if character_row else "-",
     })
 
     opcode_header = read_ref_file(inputs.repo_root, inputs.head_ref, OPCODES_H)
@@ -1920,6 +2041,23 @@ def self_check() -> None:
         *auth_inputs[:-1], auth_tests.replace("KeepsAllTwelveAccountLengthBits", "BrokenAccountLengthTest", 1)
     )
 
+    character_header = (repo_root / "src/server/game/Server/Packets/CharacterPackets.h").read_text(encoding="utf-8")
+    character_source = (repo_root / "src/server/game/Server/Packets/CharacterPackets.cpp").read_text(encoding="utf-8")
+    character_handler = (repo_root / "src/server/game/Handlers/CharacterHandler.cpp").read_text(encoding="utf-8")
+    character_session = (repo_root / "src/server/game/Server/WorldSession.h").read_text(encoding="utf-8")
+    character_tests = (repo_root / "src/test/server/game/Server/Packets/CharacterPacketsTest.cpp").read_text(encoding="utf-8")
+    client_runner = (repo_root / "apps/cata/run_real_client_authentication.py").read_text(encoding="utf-8")
+    character_inputs = (character_header, character_source, character_handler, character_session, character_tests, client_runner)
+    assert "character-screen-live-fixture-missing" in character_enumeration_issues(*character_inputs, "")
+    assert "character-enumeration-wire-shape-missing" in character_enumeration_issues(
+        character_header, character_source.replace("_worldPacket.WriteBit(Success);", "", 1),
+        character_handler, character_session, character_tests, client_runner, "",
+    )
+    assert "character-screen-runner-incomplete" in character_enumeration_issues(
+        character_header, character_source, character_handler, character_session, character_tests,
+        client_runner.replace('"--stability-seconds"', '"--hold-seconds"', 1), "",
+    )
+
     admission = (repo_root / "data/sql/updates/pending_db_auth/rev_1786964293354831242.sql").read_text()
     handoff_runner = (repo_root / "apps/cata/run_authentication_handoff.py").read_text()
     assert build_15595_admission_issues(admission) == ()
@@ -1978,26 +2116,30 @@ def self_check() -> None:
         "protected_inputs_unchanged": True,
         "reset": "PASS",
     })
-    character_plan = (
-        "Status: draft\nPlan 7\nCMSG_CHAR_ENUM\nSMSG_CHAR_ENUM\n"
-        "empty character list\nPlan 8 does not enter the world\n"
+    plan_index = (
+        "08\t18\topen\tPlan 8: typed empty character enumeration and stable build 15595 screen\t"
+        "https://github.com/trolloks/azerothcore-cata/issues/18\n"
+        "09\t19\topen\tPlan 9: one database-backed build 15595 character\t"
+        "https://github.com/trolloks/azerothcore-cata/issues/19\n"
+        "10\t20\topen\tPlan 10: select the enumerated build 15595 character\t"
+        "https://github.com/trolloks/azerothcore-cata/issues/20\n"
     )
-    assert real_client_authentication_issues(client_runner, client_fixture, character_plan) == ()
+    assert real_client_authentication_issues(client_runner, client_fixture, plan_index) == ()
     assert "real-client-authentication-runner-incomplete" in real_client_authentication_issues(
-        client_runner.replace('"reset"', '"remove"', 1), client_fixture, character_plan
+        client_runner.replace('"reset"', '"remove"', 1), client_fixture, plan_index
     )
     assert "real-client-authentication-runner-incomplete" in real_client_authentication_issues(
         client_runner.replace('"--purge-database-cache"', '"--keep-database-cache"', 1),
-        client_fixture, character_plan,
+        client_fixture, plan_index,
     )
     assert "real-client-authentication-fixture-incomplete" in real_client_authentication_issues(
-        client_runner, client_fixture.replace('"fresh_runs":2', '"fresh_runs":1', 1), character_plan
+        client_runner, client_fixture.replace('"fresh_runs":2', '"fresh_runs":1', 1), plan_index
     )
     assert "real-client-authentication-fixture-incomplete" in real_client_authentication_issues(
-        client_runner, "", character_plan
+        client_runner, "", plan_index
     )
-    assert "character-screen-plan-incomplete" in real_client_authentication_issues(
-        client_runner, client_fixture, character_plan.replace("does not enter the world", "enters the world", 1)
+    assert "plan-issue-index-incomplete" in real_client_authentication_issues(
+        client_runner, client_fixture, plan_index.replace("\t18\topen\t", "\t18\tclosed\t", 1)
     )
 
     defaults = LedgerRow(

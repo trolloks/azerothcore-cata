@@ -117,6 +117,18 @@ CLIENT_MILESTONES = (
     ("world_auth_ok", re.compile(r"COP_AUTHENTICATE.*AUTH_OK.*TRUE", re.IGNORECASE)),
     ("characters_started", re.compile(r"Initiating: COP_GET_CHARACTERS", re.IGNORECASE)),
 )
+CHARACTER_MILESTONES = CLIENT_MILESTONES[:3] + (
+    ("characters_completed", re.compile(r"Completed: COP_GET_CHARACTERS.*TRUE", re.IGNORECASE)),
+)
+FORBIDDEN_CHARACTER_OPCODES = frozenset({
+    "CMSG_CHAR_CREATE", "CMSG_CHAR_DELETE", "CMSG_CHAR_CUSTOMIZE", "CMSG_CHAR_FACTION_CHANGE",
+    "CMSG_CHAR_RACE_CHANGE", "CMSG_CHAR_RENAME", "CMSG_PLAYER_LOGIN",
+})
+EMPTY_CHARACTER_ENUM_PAYLOAD = "000001000000"
+
+
+def plan_number(mode: str) -> str:
+    return "8" if mode == "character-screen" else "7"
 
 
 def run_command(
@@ -315,7 +327,7 @@ def write_client_config(client: Path) -> None:
     (client / "WTF").mkdir(exist_ok=True)
     (client / "WTF/Config.wtf").write_text(
         'SET locale "enUS"\nSET realmlist "127.0.0.1"\nSET patchlist "127.0.0.1"\n'
-        'SET readTOS "1"\nSET readEULA "1"\nSET playIntroMovie "4"\nSET accounttype "CT"\n'
+        'SET readTOS "1"\nSET readEULA "1"\nSET movie "0"\nSET playIntroMovie "0"\nSET accounttype "CT"\n'
         'SET gxWindow "1"\nSET gxMaximize "0"\n'
     )
 
@@ -329,7 +341,7 @@ def install_dxvk(generation: Generation) -> None:
         raise RuntimeError(f"installed Wine runner has no bundled DXVK d3d9.dll: {source}")
     destination = Path(generation["paths"]["client"]) / "d3d9.dll"
     if destination.is_symlink():
-        raise RuntimeError("refusing to replace a linked client d3d9.dll")
+        destination.unlink()
     destination.unlink(missing_ok=True)
     shutil.copy2(source, destination)
 
@@ -388,7 +400,7 @@ def assert_container_owned(manifest: Manifest, generation: Generation, schema: s
     details = container_details(str(docker["container"]))
     labels = details["Config"].get("Labels") or {}
     expected = {
-        "org.azerothcore.plan": "7",
+        "org.azerothcore.plan": plan_number(str(generation["mode"])),
         "org.azerothcore.run_id": manifest["run_id"],
         "org.azerothcore.generation": str(generation["number"]),
     }
@@ -459,6 +471,7 @@ def apply_released_updates(
 
 def wait_for_mysql(manifest: Manifest, generation: Generation) -> None:
     deadline = time.monotonic() + 90
+    ready_since: float | None = None
     while time.monotonic() < deadline:
         result = run_command(
             [
@@ -469,7 +482,12 @@ def wait_for_mysql(manifest: Manifest, generation: Generation) -> None:
             check=False,
         )
         if result.returncode == 0 and result.stdout.strip() == b"1":
-            return
+            if ready_since is None:
+                ready_since = time.monotonic()
+            elif time.monotonic() - ready_since >= 1:
+                return
+        else:
+            ready_since = None
         time.sleep(0.25)
     raise RuntimeError("owned MySQL did not become ready within 90 seconds")
 
@@ -988,7 +1006,7 @@ def prepare(args: argparse.Namespace) -> None:
         }
     number = len(manifest["generations"]) + 1
     generation_root = Path(str(inputs["root"])) / f"generation-{number}"
-    prefix = f"acore-cata-plan7-{manifest['run_id']}-g{number}"
+    prefix = f"acore-cata-plan{plan_number(args.mode)}-{manifest['run_id']}-g{number}"
     paths = {
         "client": str(generation_root / "client"),
         "data": str(generation_root / "data"),
@@ -1007,6 +1025,7 @@ def prepare(args: argparse.Namespace) -> None:
     generation: Generation = {
         "number": number,
         "mode": args.mode,
+        "stability_seconds": 10 if args.mode == "character-screen" else 0,
         "state": "allocating",
         "completed_state": "",
         "root": str(generation_root),
@@ -1030,7 +1049,7 @@ def prepare(args: argparse.Namespace) -> None:
     save_manifest(manifest_path, manifest)
     try:
         labels = [
-            "--label", "org.azerothcore.plan=7",
+            "--label", f"org.azerothcore.plan={plan_number(args.mode)}",
             "--label", f"org.azerothcore.run_id={manifest['run_id']}",
             "--label", f"org.azerothcore.generation={number}",
         ]
@@ -1172,10 +1191,12 @@ def connection_log(generation: Generation) -> str:
     return path.read_text(errors="replace") if path.is_file() else ""
 
 
-def matched_milestones(text: str) -> list[str]:
+def matched_milestones(
+    text: str, milestones: tuple[tuple[str, re.Pattern[str]], ...] = CLIENT_MILESTONES,
+) -> list[str]:
     offset = 0
     found = []
-    for name, pattern in CLIENT_MILESTONES:
+    for name, pattern in milestones:
         match = pattern.search(text, offset)
         if match is None:
             break
@@ -1218,10 +1239,142 @@ def capture_owned_window(generation: Generation) -> None:
         return
 
 
+def owned_window_evidence(generation: Generation) -> bool:
+    raw = Path(generation["paths"]["raw_evidence"])
+    return all((raw / name).is_file() and (raw / name).stat().st_size > 0 for name in ("window.xprop", "window.xwd"))
+
+
+def client_login_points(x: int, y: int, width: int, height: int) -> tuple[tuple[int, int], ...]:
+    return (
+        (x + round(width * 0.506), y + round(height * 0.536)),
+        (x + round(width * 0.506), y + round(height * 0.623)),
+        (x + round(width * 0.506), y + round(height * 0.752)),
+    )
+
+
+def x_keysym_name(value: str) -> str:
+    return value.lower() if len(value) == 1 and value.isalpha() else value
+
+
+def owned_wow_window(output: str, owned_pids: set[int]) -> tuple[str, int, int, int, int] | None:
+    for line in output.splitlines():
+        fields = line.split(None, 9)
+        if (
+            len(fields) == 10 and fields[2].isdigit() and int(fields[2]) in owned_pids
+            and fields[9] == "World of Warcraft"
+        ):
+            return fields[0], *(int(value) for value in fields[3:7])
+    return None
+
+
+def automate_client_login(generation: Generation) -> None:
+    try:
+        from Xlib import X, XK, display
+        from Xlib.ext import xtest
+    except ImportError as error:
+        raise RuntimeError("--auto-login requires the installed python3-xlib package") from error
+
+    deadline = time.monotonic() + 90
+    window: tuple[str, int, int, int, int] | None = None
+    while time.monotonic() < deadline:
+        add_processes(generation, find_wine_processes(Path(generation["paths"]["wine_prefix"])))
+        owned_pids = {int(item["pid"]) for item in generation["processes"] if item["kind"] == "wine"}
+        output = run_command(
+            ["wmctrl", "-lpGx"], check=False, env=wine_environment(generation),
+        ).stdout.decode(errors="replace")
+        window = owned_wow_window(output, owned_pids)
+        if window:
+            break
+        time.sleep(0.5)
+    if not window:
+        raise RuntimeError("owned WoW window did not appear within 90 seconds")
+
+    window_id, x, y, width, height = window
+    focus_deadline = time.monotonic() + 5
+    while time.monotonic() < focus_deadline:
+        run_command(["wmctrl", "-i", "-a", window_id])
+        active = run_command(["xprop", "-root", "_NET_ACTIVE_WINDOW"], check=False)
+        active_id = re.search(rb"0x[0-9a-fA-F]+", active.stdout)
+        if active_id is not None and int(active_id.group(), 16) == int(window_id, 16):
+            break
+        time.sleep(0.25)
+    else:
+        raise RuntimeError("owned WoW window did not receive focus")
+    connection = display.Display(str(generation["inputs"]["display"]))
+    shift = connection.keysym_to_keycode(XK.string_to_keysym("Shift_L"))
+    control = connection.keysym_to_keycode(XK.string_to_keysym("Control_L"))
+
+    def press(value: str, modifier: int | None = None) -> None:
+        symbol = XK.string_to_keysym(x_keysym_name(value))
+        keycode = connection.keysym_to_keycode(symbol)
+        if modifier:
+            xtest.fake_input(connection, X.KeyPress, modifier)
+        xtest.fake_input(connection, X.KeyPress, keycode)
+        xtest.fake_input(connection, X.KeyRelease, keycode)
+        if modifier:
+            xtest.fake_input(connection, X.KeyRelease, modifier)
+
+    def click(point: tuple[int, int]) -> None:
+        connection.screen().root.warp_pointer(*point)
+        xtest.fake_input(connection, X.ButtonPress, 1)
+        xtest.fake_input(connection, X.ButtonRelease, 1)
+        connection.sync()
+        time.sleep(0.2)
+
+    def enter(value: str) -> None:
+        for character in value:
+            press(character, shift if character.isalpha() else None)
+            time.sleep(0.05)
+
+    movie_seen = False
+    no_movie_deadline = time.monotonic() + 30
+    movie_deadline = time.monotonic() + 240
+    while time.monotonic() < movie_deadline:
+        movie_active = any(
+            any("MovieProxy.exe" in argument for argument in item.get("cmdline", []))
+            for item in find_wine_processes(Path(generation["paths"]["wine_prefix"]))
+        )
+        if movie_active:
+            movie_seen = True
+            press("Escape")
+            connection.sync()
+            time.sleep(1)
+            continue
+        if movie_seen or time.monotonic() >= no_movie_deadline:
+            break
+        time.sleep(1)
+    account_point, _, _ = client_login_points(x, y, width, height)
+    click(account_point)
+    press("a", control)
+    press("BackSpace")
+    enter(ACCOUNT)
+    press("Tab")
+    press("a", control)
+    press("BackSpace")
+    enter(PASSWORD)
+    press("Return")
+    connection.sync()
+    connection.close()
+
+
+def character_row_count(manifest: Manifest, generation: Generation) -> int:
+    output = mysql(
+        manifest, generation,
+        f"SELECT COUNT(*) FROM `characters` WHERE `account`={ACCOUNT_ID};",
+        generation["schemas"]["characters"],
+    )
+    try:
+        return int(output)
+    except ValueError as error:
+        raise RuntimeError(f"owned character database returned a non-numeric row count: {output!r}") from error
+
+
 def run_client(args: argparse.Namespace) -> None:
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
     generation = active_generation(manifest)
+    if generation["mode"] == "character-screen" and args.stability_seconds < 5:
+        raise RuntimeError("--stability-seconds must be at least 5")
     retryable = (
         generation["state"] == "failed" and generation.get("failure", {}).get("phase") == "prepared"
     ) or generation["state"] == "inconclusive"
@@ -1242,6 +1395,7 @@ def run_client(args: argparse.Namespace) -> None:
         raise RuntimeError(f"cannot run from state {generation['state']}")
     assert_container_owned(manifest, generation)
     ensure_client_base(manifest, generation)
+    save_manifest(manifest_path, manifest)
     write_client_config(Path(generation["paths"]["client"]))
     install_dxvk(generation)
     configure_wine_proxy(generation)
@@ -1286,14 +1440,25 @@ def run_client(args: argparse.Namespace) -> None:
         set_state(generation, "client_running")
         save_manifest(manifest_path, manifest)
         print(f"owned client launched on {generation['inputs']['display']}")
-        if generation["mode"] == "authentication":
+        if args.auto_login and generation["mode"] in {"authentication", "character-screen"}:
+            automate_client_login(generation)
+            print("synthetic credentials submitted automatically")
+        elif generation["mode"] in {"authentication", "character-screen"}:
             print(f"enter synthetic credentials manually: {ACCOUNT} / {PASSWORD}")
         deadline = time.monotonic() + (args.no_login_seconds if generation["mode"] == "no-login" else args.timeout)
+        character_hold_started: float | None = None
+        milestone_definition = CHARACTER_MILESTONES if generation["mode"] == "character-screen" else CLIENT_MILESTONES
         while time.monotonic() < deadline:
             add_processes(generation, find_wine_processes(Path(paths["wine_prefix"])))
             capture_runtime(generation)
-            if generation["mode"] == "authentication" and len(matched_milestones(connection_log(generation))) == 4:
+            milestones = matched_milestones(connection_log(generation), milestone_definition)
+            if generation["mode"] == "authentication" and len(milestones) == 4:
                 break
+            if generation["mode"] == "character-screen":
+                if len(milestones) == len(CHARACTER_MILESTONES) and character_hold_started is None:
+                    character_hold_started = time.monotonic()
+                if character_hold_started is not None and time.monotonic() - character_hold_started >= args.stability_seconds:
+                    break
             if generation["mode"] == "no-login" and time.monotonic() + 0.5 >= deadline:
                 break
             if launcher.poll() is not None and not find_wine_processes(Path(paths["wine_prefix"])):
@@ -1301,6 +1466,8 @@ def run_client(args: argparse.Namespace) -> None:
             time.sleep(0.5)
         capture_runtime(generation)
         capture_owned_window(generation)
+        if generation["mode"] == "character-screen":
+            generation["stability_seconds"] = args.stability_seconds if character_hold_started is not None else 0
         raw = Path(paths["raw_evidence"])
         source_log = Path(paths["client"]) / "Logs/connection.log"
         if source_log.is_file():
@@ -1418,6 +1585,7 @@ def purge_database_cache(manifest_path: Path, manifest: Manifest) -> None:
 
 def sanitized_evidence(
     generation: Generation, milestones: list[str], transcript: list[dict[str, str]],
+    *, character_rows: int | None = None, screen_confirmed: bool = False,
 ) -> dict[str, object]:
     auth_index = next(
         (index for index, item in enumerate(transcript) if item["opcode"] == "SMSG_AUTH_RESPONSE"), None,
@@ -1434,17 +1602,29 @@ def sanitized_evidence(
             "CMSG_CHAR_ENUM", "SMSG_CHAR_ENUM", "SMSG_TUTORIAL_FLAGS", "SMSG_CLIENTCACHE_VERSION",
         }
     ]
-    owned_window = (Path(generation["paths"]["raw_evidence"]) / "window.xprop").is_file()
+    character_mode = generation["mode"] == "character-screen"
+    owned_window = owned_window_evidence(generation) if character_mode else (
+        Path(generation["paths"]["raw_evidence"]) / "window.xprop"
+    ).is_file()
+    forbidden = sorted({item["opcode"] for item in transcript if item["opcode"] in FORBIDDEN_CHARACTER_OPCODES})
     return {
         "schema": 1,
         "build": CLIENT_BUILD,
         "mode": generation["mode"],
-        "outcome": "world_auth_ok" if "world_auth_ok" in milestones else "not_accepted",
+        "outcome": (
+            "character_screen_candidate" if character_mode and "characters_completed" in milestones
+            else "world_auth_ok" if "world_auth_ok" in milestones else "not_accepted"
+        ),
         "client_milestones": milestones,
         "server_milestones": allowlisted,
         "endpoint_ownership": endpoint_evidence(generation),
         "network_scope": "owned-auth-and-world-only" if endpoint_evidence(generation) else "inconclusive",
         "owned_window": owned_window,
+        "screen_confirmed": screen_confirmed if character_mode else None,
+        "character_rows": character_rows if character_mode else None,
+        "empty_response_payload": EMPTY_CHARACTER_ENUM_PAYLOAD if character_mode else None,
+        "stability_seconds": generation.get("stability_seconds", 0) if character_mode else None,
+        "forbidden_opcodes": forbidden if character_mode else [],
         "next_server_packet": {
             "opcode": candidate or "unknown",
             "status": "candidate/inconclusive" if candidate else "not-observed/inconclusive",
@@ -1468,16 +1648,44 @@ def verify(args: argparse.Namespace) -> None:
         raise RuntimeError(f"cannot verify from state {generation['state']}")
     raw_log = Path(generation["paths"]["raw_evidence"]) / "connection.log"
     text = raw_log.read_text(errors="replace") if raw_log.is_file() else ""
-    milestones = matched_milestones(text)
+    milestone_definition = CHARACTER_MILESTONES if generation["mode"] == "character-screen" else CLIENT_MILESTONES
+    milestones = matched_milestones(text, milestone_definition)
     transcript = server_transcript(generation)
-    evidence = sanitized_evidence(generation, milestones, transcript)
+    rows = character_row_count(manifest, generation) if generation["mode"] == "character-screen" else None
+    evidence = sanitized_evidence(
+        generation, milestones, transcript, character_rows=rows,
+        screen_confirmed=bool(args.confirm_expected_screen),
+    )
     unchanged = protected_inputs_unchanged(manifest, generation)
     generation["isolation_unchanged"] = unchanged
+    evidence["protected_inputs_unchanged"] = unchanged
+    evidence["reset"] = "pending"
     server_ok = (
         any(item == {"direction": "c2s", "opcode": "CMSG_AUTH_SESSION"} for item in transcript)
         and any(item == {"direction": "s2c", "opcode": "SMSG_AUTH_RESPONSE"} for item in transcript)
     )
-    if generation["mode"] == "no-login":
+    if generation["mode"] == "character-screen":
+        character_ok = (
+            len(milestones) == len(CHARACTER_MILESTONES)
+            and any(item == {"direction": "c2s", "opcode": "CMSG_CHAR_ENUM"} for item in transcript)
+            and any(item == {"direction": "s2c", "opcode": "SMSG_CHAR_ENUM"} for item in transcript)
+            and rows == 0
+            and evidence["stability_seconds"] >= 5
+            and evidence["endpoint_ownership"]
+            and evidence["owned_window"]
+            and evidence["screen_confirmed"]
+            and not evidence["forbidden_opcodes"]
+            and unchanged
+        )
+        if character_ok:
+            evidence["outcome"] = "character_screen_pass"
+            set_state(generation, "accepted")
+        elif not unchanged:
+            set_state(generation, "failed")
+        else:
+            evidence["outcome"] = "inconclusive"
+            set_state(generation, "inconclusive")
+    elif generation["mode"] == "no-login":
         started = any(item["kind"] == "wine" for item in generation["processes"])
         started = started and bool(evidence["owned_window"])
         network_safe = not owned_established_lines(generation)
@@ -1502,7 +1710,7 @@ def verify(args: argparse.Namespace) -> None:
     save_manifest(manifest_path, manifest)
     print(json.dumps(evidence, indent=2, sort_keys=True))
     if generation["state"] != "accepted":
-        raise RuntimeError("Plan 7 evidence is incomplete; verdict is INCONCLUSIVE")
+        raise RuntimeError(f"Plan {plan_number(str(generation['mode']))} evidence is incomplete; verdict is INCONCLUSIVE")
 
 
 def normalized_replay(evidence: dict[str, object]) -> dict[str, object]:
@@ -1612,7 +1820,7 @@ def reset(args: argparse.Namespace) -> None:
         volume = json.loads(volume_result.stdout)[0]
         labels = volume.get("Labels") or {}
         expected = {
-            "org.azerothcore.plan": "7",
+            "org.azerothcore.plan": plan_number(str(generation["mode"])),
             "org.azerothcore.run_id": manifest["run_id"],
             "org.azerothcore.generation": str(generation["number"]),
         }
@@ -1625,6 +1833,9 @@ def reset(args: argparse.Namespace) -> None:
             remove_owned_path(path, generation)
     unchanged = protected_inputs_unchanged(manifest, generation)
     generation["isolation_unchanged"] = unchanged
+    if isinstance(generation.get("evidence"), dict):
+        generation["evidence"]["protected_inputs_unchanged"] = unchanged
+        generation["evidence"]["reset"] = "PASS" if unchanged else "FAIL"
     generation["completed_state"] = completed_state
     set_state(generation, "reset")
     if args.purge_client_base:
@@ -1648,6 +1859,14 @@ def comparison_projection(evidence: dict[str, object]) -> dict[str, object]:
         "server_milestones": evidence.get("server_milestones"),
         "payload_shape": evidence.get("payload_shape"),
         "inputs": evidence.get("inputs"),
+        "character_rows": evidence.get("character_rows"),
+        "empty_response_payload": evidence.get("empty_response_payload"),
+        "stability_seconds": evidence.get("stability_seconds"),
+        "owned_window": evidence.get("owned_window"),
+        "screen_confirmed": evidence.get("screen_confirmed"),
+        "forbidden_opcodes": evidence.get("forbidden_opcodes"),
+        "protected_inputs_unchanged": evidence.get("protected_inputs_unchanged"),
+        "reset": evidence.get("reset"),
     }
 
 
@@ -1655,17 +1874,20 @@ def compare_last_two(args: argparse.Namespace) -> None:
     manifest = load_manifest(args.manifest.resolve())
     candidates = [
         item for item in manifest["generations"]
-        if item.get("mode") == "authentication" and item.get("state") == "reset"
+        if item.get("state") == "reset"
         and item.get("completed_state") in {"accepted", "replayed"} and item.get("isolation_unchanged")
         and item.get("evidence")
     ]
+    if candidates:
+        mode = candidates[-1].get("mode")
+        candidates = [item for item in candidates if item.get("mode") == mode]
     if len(candidates) < 2:
-        raise RuntimeError("two reset, replayed authentication generations are required")
+        raise RuntimeError("two reset, accepted generations of the same mode are required")
     left, right = candidates[-2:]
     if left["number"] == right["number"]:
         raise RuntimeError("repeatability comparison requires distinct generations")
     if comparison_projection(left["evidence"]) != comparison_projection(right["evidence"]):
-        raise RuntimeError("the last two sanitized Plan 7 results differ")
+        raise RuntimeError("the last two sanitized results differ")
     print(json.dumps({
         "generations": [left["number"], right["number"]],
         "repeatable": True,
@@ -1681,6 +1903,22 @@ four Initiating: COP_GET_CHARACTERS
 """
     assert matched_milestones(sample) == [name for name, _ in CLIENT_MILESTONES]
     assert matched_milestones(sample.replace("AUTH_OK", "AUTH_FAILED")) == ["auth_login_ok", "world_connected"]
+    character_sample = """one LOGIN_STATE_AUTHENTICATED LOGIN_OK
+two COP_CONNECT RESPONSE_CONNECTED TRUE
+three COP_AUTHENTICATE AUTH_OK TRUE
+four Completed: COP_GET_CHARACTERS result=TRUE
+"""
+    assert matched_milestones(character_sample, CHARACTER_MILESTONES) == [name for name, _ in CHARACTER_MILESTONES]
+    assert matched_milestones(character_sample.replace("result=TRUE", "result=FALSE"), CHARACTER_MILESTONES) == [
+        "auth_login_ok", "world_connected", "world_auth_ok",
+    ]
+    assert stability_seconds("5") == 5
+    try:
+        stability_seconds("4")
+    except argparse.ArgumentTypeError:
+        pass
+    else:
+        raise AssertionError("stability below five seconds was accepted")
     assert len(srp_registration(ACCOUNT, PASSWORD, bytes(range(1, 33)))) == 32
     generation: Generation = {
         "mode": "authentication",
@@ -1701,6 +1939,26 @@ four Initiating: COP_GET_CHARACTERS
     encoded = json.dumps(evidence, sort_keys=True)
     assert "/abs/private" not in encoded and ACCOUNT not in encoded and PASSWORD not in encoded
     assert evidence["next_server_packet"] == {"opcode": "SMSG_CHAR_ENUM", "status": "candidate/inconclusive"}
+    character_generation = dict(generation)
+    character_generation["mode"] = "character-screen"
+    character_generation["stability_seconds"] = 10
+    character_evidence = sanitized_evidence(
+        character_generation,
+        [name for name, _ in CHARACTER_MILESTONES],
+        [
+            {"direction": "c2s", "opcode": "CMSG_CHAR_ENUM"},
+            {"direction": "s2c", "opcode": "SMSG_CHAR_ENUM"},
+        ],
+        character_rows=0,
+        screen_confirmed=True,
+    )
+    assert character_evidence["empty_response_payload"] == EMPTY_CHARACTER_ENUM_PAYLOAD
+    assert character_evidence["forbidden_opcodes"] == []
+    assert "CMSG_PLAYER_LOGIN" in sanitized_evidence(
+        character_generation,
+        [name for name, _ in CHARACTER_MILESTONES],
+        [{"direction": "c2s", "opcode": "CMSG_PLAYER_LOGIN"}],
+    )["forbidden_opcodes"]
     assert replace_config("# Key = old\nOther=1\n", {"Key": "new"}) == "Key = new\nOther=1\n"
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
@@ -1772,6 +2030,11 @@ four Initiating: COP_GET_CHARACTERS
         (REPO_ROOT / "src/server/apps/worldserver/worldserver.conf.dist").read_text(),
         {key: "test" for key in world_keys},
     )
+    assert client_login_points(60, 1, 1800, 1042) == ((971, 560), (971, 650), (971, 785))
+    assert x_keysym_name("A") == "a" and x_keysym_name("Escape") == "Escape"
+    window_sample = "0x08400003 0 3597195 124 4 1800 1042 steam_proton.steam_proton host World of Warcraft"
+    assert owned_wow_window(window_sample, {3597195}) == ("0x08400003", 124, 4, 1800, 1042)
+    assert owned_wow_window(window_sample, {1}) is None
     state: Generation = {"state": "allocating"}
     set_state(state, "prepared")
     try:
@@ -1781,6 +2044,16 @@ four Initiating: COP_GET_CHARACTERS
     else:
         raise AssertionError("invalid state transition was accepted")
     print("Plan 7 runner self-check passed")
+
+
+def stability_seconds(value: str) -> int:
+    try:
+        result = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("stability seconds must be an integer") from error
+    if result < 5:
+        raise argparse.ArgumentTypeError("stability seconds must be at least 5")
+    return result
 
 
 def parser() -> argparse.ArgumentParser:
@@ -1800,14 +2073,17 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--migration", type=Path, default=DEFAULT_MIGRATION)
     prepare_parser.add_argument("--display", required=True)
     prepare_parser.add_argument("--xauthority", type=Path)
-    prepare_parser.add_argument("--mode", choices=("no-login", "authentication"), default="authentication")
+    prepare_parser.add_argument("--mode", choices=("no-login", "authentication", "character-screen"), default="authentication")
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)
     run_parser = subcommands.add_parser("run")
     run_parser.add_argument("--manifest", type=Path, required=True)
     run_parser.add_argument("--timeout", type=int, default=300)
     run_parser.add_argument("--no-login-seconds", type=int, default=20)
+    run_parser.add_argument("--stability-seconds", type=stability_seconds, default=10)
+    run_parser.add_argument("--auto-login", action="store_true")
     verify_parser = subcommands.add_parser("verify")
     verify_parser.add_argument("--manifest", type=Path, required=True)
+    verify_parser.add_argument("--confirm-expected-screen", action="store_true")
     replay_parser = subcommands.add_parser("replay")
     replay_parser.add_argument("--manifest", type=Path, required=True)
     replay_parser.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
