@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "plan": 8,
+  "client_build": 15595,
+  "client_sha256": "0ea9cc0458cb137f4e0767e8a1896e2042480a4a22397480d7ee64c2e696192a",
+  "mode": "character-screen",
+  "verdict": "PASS",
+  "response_body": "000001000000",
+  "character_rows": 0,
+  "fresh_runs": 2,
+  "matching_runs": true,
+  "protected_inputs_unchanged": true,
+  "reset": "PASS",
+  "milestones": [
+    "LOGIN_OK",
+    "WORLD_CONNECTED",
+    "COP_AUTHENTICATE_AUTH_OK_TRUE",
+    "COP_GET_CHARACTERS_INITIATING",
+    "CMSG_AUTH_SESSION",
+    "SMSG_AUTH_RESPONSE"
+  ],
+  "server_milestones": [
+    {"direction": "s2c", "opcode": "SMSG_AUTH_CHALLENGE"},
+    {"direction": "c2s", "opcode": "CMSG_AUTH_SESSION"},
+    {"direction": "s2c", "opcode": "SMSG_AUTH_RESPONSE"},
+    {"direction": "s2c", "opcode": "SMSG_CLIENTCACHE_VERSION"},
+    {"direction": "s2c", "opcode": "SMSG_TUTORIAL_FLAGS"},
+    {"direction": "c2s", "opcode": "CMSG_CHAR_ENUM"},
+    {"direction": "s2c", "opcode": "SMSG_CHAR_ENUM"}
+  ],
+  "authentication_replay": "PASS"
+}

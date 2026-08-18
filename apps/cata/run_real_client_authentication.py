@@ -118,7 +118,7 @@ CLIENT_MILESTONES = (
     ("characters_started", re.compile(r"Initiating: COP_GET_CHARACTERS", re.IGNORECASE)),
 )
 CHARACTER_MILESTONES = CLIENT_MILESTONES[:3] + (
-    ("characters_completed", re.compile(r"COP_GET_CHARACTERS.*Completed.*TRUE", re.IGNORECASE)),
+    ("characters_completed", re.compile(r"Completed: COP_GET_CHARACTERS.*TRUE", re.IGNORECASE)),
 )
 FORBIDDEN_CHARACTER_OPCODES = frozenset({
     "CMSG_CHAR_CREATE", "CMSG_CHAR_DELETE", "CMSG_CHAR_CUSTOMIZE", "CMSG_CHAR_FACTION_CHANGE",
@@ -327,7 +327,7 @@ def write_client_config(client: Path) -> None:
     (client / "WTF").mkdir(exist_ok=True)
     (client / "WTF/Config.wtf").write_text(
         'SET locale "enUS"\nSET realmlist "127.0.0.1"\nSET patchlist "127.0.0.1"\n'
-        'SET readTOS "1"\nSET readEULA "1"\nSET playIntroMovie "4"\nSET accounttype "CT"\n'
+        'SET readTOS "1"\nSET readEULA "1"\nSET movie "0"\nSET playIntroMovie "0"\nSET accounttype "CT"\n'
         'SET gxWindow "1"\nSET gxMaximize "0"\n'
     )
 
@@ -341,7 +341,7 @@ def install_dxvk(generation: Generation) -> None:
         raise RuntimeError(f"installed Wine runner has no bundled DXVK d3d9.dll: {source}")
     destination = Path(generation["paths"]["client"]) / "d3d9.dll"
     if destination.is_symlink():
-        raise RuntimeError("refusing to replace a linked client d3d9.dll")
+        destination.unlink()
     destination.unlink(missing_ok=True)
     shutil.copy2(source, destination)
 
@@ -471,6 +471,7 @@ def apply_released_updates(
 
 def wait_for_mysql(manifest: Manifest, generation: Generation) -> None:
     deadline = time.monotonic() + 90
+    ready_since: float | None = None
     while time.monotonic() < deadline:
         result = run_command(
             [
@@ -481,7 +482,12 @@ def wait_for_mysql(manifest: Manifest, generation: Generation) -> None:
             check=False,
         )
         if result.returncode == 0 and result.stdout.strip() == b"1":
-            return
+            if ready_since is None:
+                ready_since = time.monotonic()
+            elif time.monotonic() - ready_since >= 1:
+                return
+        else:
+            ready_since = None
         time.sleep(0.25)
     raise RuntimeError("owned MySQL did not become ready within 90 seconds")
 
@@ -1238,6 +1244,119 @@ def owned_window_evidence(generation: Generation) -> bool:
     return all((raw / name).is_file() and (raw / name).stat().st_size > 0 for name in ("window.xprop", "window.xwd"))
 
 
+def client_login_points(x: int, y: int, width: int, height: int) -> tuple[tuple[int, int], ...]:
+    return (
+        (x + round(width * 0.506), y + round(height * 0.536)),
+        (x + round(width * 0.506), y + round(height * 0.623)),
+        (x + round(width * 0.506), y + round(height * 0.752)),
+    )
+
+
+def x_keysym_name(value: str) -> str:
+    return value.lower() if len(value) == 1 and value.isalpha() else value
+
+
+def owned_wow_window(output: str, owned_pids: set[int]) -> tuple[str, int, int, int, int] | None:
+    for line in output.splitlines():
+        fields = line.split(None, 9)
+        if (
+            len(fields) == 10 and fields[2].isdigit() and int(fields[2]) in owned_pids
+            and fields[9] == "World of Warcraft"
+        ):
+            return fields[0], *(int(value) for value in fields[3:7])
+    return None
+
+
+def automate_client_login(generation: Generation) -> None:
+    try:
+        from Xlib import X, XK, display
+        from Xlib.ext import xtest
+    except ImportError as error:
+        raise RuntimeError("--auto-login requires the installed python3-xlib package") from error
+
+    deadline = time.monotonic() + 90
+    window: tuple[str, int, int, int, int] | None = None
+    while time.monotonic() < deadline:
+        add_processes(generation, find_wine_processes(Path(generation["paths"]["wine_prefix"])))
+        owned_pids = {int(item["pid"]) for item in generation["processes"] if item["kind"] == "wine"}
+        output = run_command(
+            ["wmctrl", "-lpGx"], check=False, env=wine_environment(generation),
+        ).stdout.decode(errors="replace")
+        window = owned_wow_window(output, owned_pids)
+        if window:
+            break
+        time.sleep(0.5)
+    if not window:
+        raise RuntimeError("owned WoW window did not appear within 90 seconds")
+
+    window_id, x, y, width, height = window
+    focus_deadline = time.monotonic() + 5
+    while time.monotonic() < focus_deadline:
+        run_command(["wmctrl", "-i", "-a", window_id])
+        active = run_command(["xprop", "-root", "_NET_ACTIVE_WINDOW"], check=False)
+        active_id = re.search(rb"0x[0-9a-fA-F]+", active.stdout)
+        if active_id is not None and int(active_id.group(), 16) == int(window_id, 16):
+            break
+        time.sleep(0.25)
+    else:
+        raise RuntimeError("owned WoW window did not receive focus")
+    connection = display.Display(str(generation["inputs"]["display"]))
+    shift = connection.keysym_to_keycode(XK.string_to_keysym("Shift_L"))
+    control = connection.keysym_to_keycode(XK.string_to_keysym("Control_L"))
+
+    def press(value: str, modifier: int | None = None) -> None:
+        symbol = XK.string_to_keysym(x_keysym_name(value))
+        keycode = connection.keysym_to_keycode(symbol)
+        if modifier:
+            xtest.fake_input(connection, X.KeyPress, modifier)
+        xtest.fake_input(connection, X.KeyPress, keycode)
+        xtest.fake_input(connection, X.KeyRelease, keycode)
+        if modifier:
+            xtest.fake_input(connection, X.KeyRelease, modifier)
+
+    def click(point: tuple[int, int]) -> None:
+        connection.screen().root.warp_pointer(*point)
+        xtest.fake_input(connection, X.ButtonPress, 1)
+        xtest.fake_input(connection, X.ButtonRelease, 1)
+        connection.sync()
+        time.sleep(0.2)
+
+    def enter(value: str) -> None:
+        for character in value:
+            press(character, shift if character.isalpha() else None)
+            time.sleep(0.05)
+
+    movie_seen = False
+    no_movie_deadline = time.monotonic() + 30
+    movie_deadline = time.monotonic() + 240
+    while time.monotonic() < movie_deadline:
+        movie_active = any(
+            any("MovieProxy.exe" in argument for argument in item.get("cmdline", []))
+            for item in find_wine_processes(Path(generation["paths"]["wine_prefix"]))
+        )
+        if movie_active:
+            movie_seen = True
+            press("Escape")
+            connection.sync()
+            time.sleep(1)
+            continue
+        if movie_seen or time.monotonic() >= no_movie_deadline:
+            break
+        time.sleep(1)
+    account_point, _, _ = client_login_points(x, y, width, height)
+    click(account_point)
+    press("a", control)
+    press("BackSpace")
+    enter(ACCOUNT)
+    press("Tab")
+    press("a", control)
+    press("BackSpace")
+    enter(PASSWORD)
+    press("Return")
+    connection.sync()
+    connection.close()
+
+
 def character_row_count(manifest: Manifest, generation: Generation) -> int:
     output = mysql(
         manifest, generation,
@@ -1276,6 +1395,7 @@ def run_client(args: argparse.Namespace) -> None:
         raise RuntimeError(f"cannot run from state {generation['state']}")
     assert_container_owned(manifest, generation)
     ensure_client_base(manifest, generation)
+    save_manifest(manifest_path, manifest)
     write_client_config(Path(generation["paths"]["client"]))
     install_dxvk(generation)
     configure_wine_proxy(generation)
@@ -1320,7 +1440,10 @@ def run_client(args: argparse.Namespace) -> None:
         set_state(generation, "client_running")
         save_manifest(manifest_path, manifest)
         print(f"owned client launched on {generation['inputs']['display']}")
-        if generation["mode"] in {"authentication", "character-screen"}:
+        if args.auto_login and generation["mode"] in {"authentication", "character-screen"}:
+            automate_client_login(generation)
+            print("synthetic credentials submitted automatically")
+        elif generation["mode"] in {"authentication", "character-screen"}:
             print(f"enter synthetic credentials manually: {ACCOUNT} / {PASSWORD}")
         deadline = time.monotonic() + (args.no_login_seconds if generation["mode"] == "no-login" else args.timeout)
         character_hold_started: float | None = None
@@ -1783,10 +1906,10 @@ four Initiating: COP_GET_CHARACTERS
     character_sample = """one LOGIN_STATE_AUTHENTICATED LOGIN_OK
 two COP_CONNECT RESPONSE_CONNECTED TRUE
 three COP_AUTHENTICATE AUTH_OK TRUE
-four COP_GET_CHARACTERS Completed TRUE
+four Completed: COP_GET_CHARACTERS result=TRUE
 """
     assert matched_milestones(character_sample, CHARACTER_MILESTONES) == [name for name, _ in CHARACTER_MILESTONES]
-    assert matched_milestones(character_sample.replace("Completed TRUE", "Completed FALSE"), CHARACTER_MILESTONES) == [
+    assert matched_milestones(character_sample.replace("result=TRUE", "result=FALSE"), CHARACTER_MILESTONES) == [
         "auth_login_ok", "world_connected", "world_auth_ok",
     ]
     assert stability_seconds("5") == 5
@@ -1907,6 +2030,11 @@ four COP_GET_CHARACTERS Completed TRUE
         (REPO_ROOT / "src/server/apps/worldserver/worldserver.conf.dist").read_text(),
         {key: "test" for key in world_keys},
     )
+    assert client_login_points(60, 1, 1800, 1042) == ((971, 560), (971, 650), (971, 785))
+    assert x_keysym_name("A") == "a" and x_keysym_name("Escape") == "Escape"
+    window_sample = "0x08400003 0 3597195 124 4 1800 1042 steam_proton.steam_proton host World of Warcraft"
+    assert owned_wow_window(window_sample, {3597195}) == ("0x08400003", 124, 4, 1800, 1042)
+    assert owned_wow_window(window_sample, {1}) is None
     state: Generation = {"state": "allocating"}
     set_state(state, "prepared")
     try:
@@ -1952,6 +2080,7 @@ def parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--timeout", type=int, default=300)
     run_parser.add_argument("--no-login-seconds", type=int, default=20)
     run_parser.add_argument("--stability-seconds", type=stability_seconds, default=10)
+    run_parser.add_argument("--auto-login", action="store_true")
     verify_parser = subcommands.add_parser("verify")
     verify_parser.add_argument("--manifest", type=Path, required=True)
     verify_parser.add_argument("--confirm-expected-screen", action="store_true")
