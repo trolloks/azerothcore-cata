@@ -247,7 +247,7 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
             //    16                    17                      18                   19                   20                     21                   22               23
             //    guild_member.guildid, characters.playerFlags, characters.at_login, character_pet.entry, character_pet.modelid, character_pet.level, characters.equipmentCache, character_banned.guid,
             //    24                      25
-            //    characters.extra_flags, character_declinedname.genitive
+            //    COALESCE(characters.order, 0), character_declinedname.genitive
 
             // print all fields as flat long string
             charInfo.Guid              = ObjectGuid::Create<HighGuid::Player>(fields[0].Get<uint32>());
@@ -342,7 +342,6 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
             }
 
             std::vector<std::string_view> equipment = Acore::Tokenize(fields[22].Get<std::string_view>(), ' ', false);
-            // NOTE: This still works for some reason, but it is not getting the correct info. Need to grab playerslot (the order in which chars show) correctly
             charInfo.ListPosition = fields[24].Get<uint8>();
 
             for (uint8 slot = 0; slot < INVENTORY_SLOT_BAG_END; ++slot)
@@ -395,6 +394,8 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
             }
 
             _legitCharacters.insert(charInfo.Guid);
+            LOG_INFO("network.opcode", "Enumerated account {} character {} at list position {}.",
+                GetAccountId(), charInfo.Guid.ToString(), charInfo.ListPosition);
             charEnum.Characters.push_back(std::move(charInfo));
         } while (result->NextRow());
     }
