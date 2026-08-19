@@ -310,6 +310,30 @@ namespace WorldPackets
             uint32 Flag = 0; // PlayTimeFlag mask, set by WorldSession::SendPlayTimeWarning
             int32 PlayTimeRemaining = 0;
         };
+
+        // Sent by PhasingHandler::OnMapChange during AddPlayerToMap, and whenever the
+        // player's phase changes. A fresh character has no active phases and no terrain
+        // swaps: Flags = PhaseShiftFlags::Unphased (8) alone tells the client to use its
+        // default phase, so every list here stays empty.
+        class PhaseShiftChange final : public ServerPacket
+        {
+        public:
+            PhaseShiftChange() : ServerPacket(SMSG_PHASE_SHIFT_CHANGE, 32) { }
+
+            WorldPacket const* Write() override;
+
+            ObjectGuid Client;
+            uint32 PhaseShiftFlags = 0x8; // PhaseShiftFlags::Unphased
+        };
+
+        // Empty stub: no saved Compact Unit Frames profiles for a fresh character.
+        class LoadCufProfiles final : public ServerPacket
+        {
+        public:
+            LoadCufProfiles() : ServerPacket(SMSG_LOAD_CUF_PROFILES, 4) { }
+
+            WorldPacket const* Write() override;
+        };
     }
 }
 

@@ -783,6 +783,7 @@ void OpcodeTable::Initialize()
     /*0x234*/ DEFINE_HANDLER(CMSG_GUILD_SET_PUBLIC_NOTE,                                            STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleGuildSetPublicNoteOpcode           );
     /*0x235*/ DEFINE_HANDLER(CMSG_GUILD_SET_OFFICER_NOTE,                                           STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleGuildSetOfficerNoteOpcode          );
     /*0x236*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_LOGIN_VERIFY_WORLD,                                 STATUS_NEVER);
+    DEFINE_SERVER_OPCODE_HANDLER(SMSG_LOAD_CUF_PROFILES,                                            STATUS_NEVER);
     /*0x237*/ DEFINE_HANDLER(CMSG_CLEAR_EXPLORATION,                                                STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x238*/ DEFINE_HANDLER(CMSG_SEND_MAIL,                                                        STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleSendMail                           );
     /*0x239*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_SEND_MAIL_RESULT,                                   STATUS_NEVER);

@@ -252,3 +252,40 @@ WorldPacket const* WorldPackets::Misc::PlayTimeWarning::Write()
 
     return &_worldPacket;
 }
+
+WorldPacket const* WorldPackets::Misc::PhaseShiftChange::Write()
+{
+    _worldPacket.WriteBit(Client[2]);
+    _worldPacket.WriteBit(Client[3]);
+    _worldPacket.WriteBit(Client[1]);
+    _worldPacket.WriteBit(Client[6]);
+    _worldPacket.WriteBit(Client[4]);
+    _worldPacket.WriteBit(Client[5]);
+    _worldPacket.WriteBit(Client[0]);
+    _worldPacket.WriteBit(Client[7]);
+    _worldPacket.FlushBits();
+
+    _worldPacket.WriteByteSeq(Client[7]);
+    _worldPacket.WriteByteSeq(Client[4]);
+    _worldPacket << uint32(0); // UiMapPhaseIDs byte size: none
+    _worldPacket.WriteByteSeq(Client[1]);
+    _worldPacket << uint32(PhaseShiftFlags);
+    _worldPacket.WriteByteSeq(Client[2]);
+    _worldPacket.WriteByteSeq(Client[6]);
+    _worldPacket << uint32(0); // PreloadMapIDs byte size: none
+    _worldPacket << uint32(0); // Phases byte size: none, covered by the Unphased flag
+    _worldPacket.WriteByteSeq(Client[3]);
+    _worldPacket.WriteByteSeq(Client[0]);
+    _worldPacket << uint32(0); // VisibleMapIDs byte size: no terrain swaps
+    _worldPacket.WriteByteSeq(Client[5]);
+
+    return &_worldPacket;
+}
+
+WorldPacket const* WorldPackets::Misc::LoadCufProfiles::Write()
+{
+    _worldPacket.WriteBits(0, 20); // profile count
+    _worldPacket.FlushBits();
+
+    return &_worldPacket;
+}
