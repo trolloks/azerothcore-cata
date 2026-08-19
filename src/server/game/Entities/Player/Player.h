@@ -41,6 +41,7 @@
 #include "TradeData.h"
 #include "Unit.h"
 #include "WorldSession.h"
+#include <array>
 #include <set>
 #include <string>
 #include <vector>
@@ -76,7 +77,13 @@ typedef void(*bgZoneRef)(Battleground*, WorldPackets::WorldState::InitWorldState
 #define DEATH_EXPIRE_STEP (5*MINUTE)
 #define MAX_DEATH_COUNT 3
 
-#define PLAYER_SKILL_INDEX(x)       (PLAYER_SKILL_INFO_1_1 + ((x)*3))
+// Cata restructured the skill list into a compact TWO_SHORT-packed field
+// (PLAYER_SKILL_LINEID_0, size 64) instead of WotLK's 3-uint32-per-skill stride --
+// out of scope for Plan 17 (field-table layout only, not a skill-system rewrite).
+// This storage is kept as plain server-side state via Player::GetSkillFieldValue/
+// SetSkillFieldValue instead of a client update field; skill display to a real Cata
+// client is not yet correct and is deferred to a future skill-system plan.
+#define PLAYER_SKILL_INDEX(x)       ((x)*3)
 #define PLAYER_SKILL_VALUE_INDEX(x) (PLAYER_SKILL_INDEX(x)+1)
 #define PLAYER_SKILL_BONUS_INDEX(x) (PLAYER_SKILL_INDEX(x)+2)
 
@@ -1739,7 +1746,7 @@ public:
     void SetReputation(uint32 factionentry, float value);
     [[nodiscard]] uint32 GetReputation(uint32 factionentry) const;
     std::string const& GetGuildName();
-    [[nodiscard]] uint32 GetFreeTalentPoints() const { return GetUInt32Value(PLAYER_CHARACTER_POINTS1); }
+    [[nodiscard]] uint32 GetFreeTalentPoints() const { return m_freeTalentPoints; }
     void SetFreeTalentPoints(uint32 points);
     bool resetTalents(bool noResetCost = false);
     [[nodiscard]] uint32 resetTalentsCost() const;
@@ -1794,8 +1801,8 @@ public:
     }
     [[nodiscard]] uint32 GetGlyph(uint8 slot) const { return m_Glyphs[m_activeSpec][slot]; }
 
-    [[nodiscard]] uint32 GetFreePrimaryProfessionPoints() const { return GetUInt32Value(PLAYER_CHARACTER_POINTS2); }
-    void SetFreePrimaryProfessions(uint16 profs) { SetUInt32Value(PLAYER_CHARACTER_POINTS2, profs); }
+    [[nodiscard]] uint32 GetFreePrimaryProfessionPoints() const { return m_freePrimaryProfessionPoints; }
+    void SetFreePrimaryProfessions(uint16 profs) { m_freePrimaryProfessionPoints = profs; }
     void InitPrimaryProfessions();
 
     [[nodiscard]] PlayerSpellMap const& GetSpellMap() const { return m_spells; }
@@ -1921,14 +1928,17 @@ public:
 
     void SetInGuild(uint32 GuildId)
     {
-        SetUInt32Value(PLAYER_GUILDID, GuildId);
+        // Cata moved guild membership off a dedicated Player field and onto the base
+        // Object's OBJECT_FIELD_DATA slot, packed as an ObjectGuid(HighGuid::Guild, id)
+        // -- matches the pinned TrinityCore reference (Player::SetInGuild).
+        SetGuidValue(OBJECT_FIELD_DATA, GuildId ? ObjectGuid(HighGuid::Guild, GuildId) : ObjectGuid::Empty);
         // xinef: update global storage
         sCharacterCache->UpdateCharacterGuildId(GetGUID(), GetGuildId());
     }
     void SetRank(uint8 rankId) { SetUInt32Value(PLAYER_GUILDRANK, rankId); }
     [[nodiscard]] uint8 GetRank() const { return uint8(GetUInt32Value(PLAYER_GUILDRANK)); }
     void SetGuildIdInvited(uint32 GuildId) { m_GuildIdInvited = GuildId; }
-    [[nodiscard]] uint32 GetGuildId() const { return GetUInt32Value(PLAYER_GUILDID);  }
+    [[nodiscard]] uint32 GetGuildId() const { return GetGuidValue(OBJECT_FIELD_DATA).GetCounter(); }
     [[nodiscard]] Guild* GetGuild() const;
     uint32 GetGuildIdInvited() { return m_GuildIdInvited; }
     static void RemovePetitionsAndSigns(ObjectGuid guid, uint32 type);
@@ -2182,8 +2192,18 @@ public:
     /*********************************************************/
     void UpdateHonorFields();
     bool RewardHonor(Unit* victim, uint32 groupsize, int32 honor = -1, bool awardXP = true);
-    [[nodiscard]] uint32 GetHonorPoints() const { return GetUInt32Value(PLAYER_FIELD_HONOR_CURRENCY); }
-    [[nodiscard]] uint32 GetArenaPoints() const { return GetUInt32Value(PLAYER_FIELD_ARENA_CURRENCY); }
+    [[nodiscard]] uint32 GetHonorPoints() const { return m_honorPoints; }
+    [[nodiscard]] uint32 GetArenaPoints() const { return m_arenaPoints; }
+    [[nodiscard]] uint32 GetAmmoId() const { return m_ammoId; }
+    void SetAmmoId(uint32 item) { m_ammoId = item; }
+    [[nodiscard]] uint64 GetKnownCurrencies() const { return m_knownCurrencies; }
+    void SetKnownCurrencies(uint64 currencies) { m_knownCurrencies = currencies; }
+    void AddKnownCurrencyFlag(uint64 flag) { m_knownCurrencies |= flag; }
+    [[nodiscard]] uint32 GetTodayContribution() const { return m_todayContribution; }
+    void SetTodayContribution(uint32 value) { m_todayContribution = value; }
+    void ModifyTodayContribution(int32 value) { m_todayContribution += value; }
+    [[nodiscard]] uint32 GetYesterdayContribution() const { return m_yesterdayContribution; }
+    void SetYesterdayContribution(uint32 value) { m_yesterdayContribution = value; }
     void ModifyHonorPoints(int32 value, CharacterDatabaseTransaction trans = CharacterDatabaseTransaction(nullptr));      //! If trans is specified, honor save query will be added to trans
     void ModifyArenaPoints(int32 value, CharacterDatabaseTransaction trans = CharacterDatabaseTransaction(nullptr));      //! If trans is specified, arena point save query will be added to trans
     [[nodiscard]] uint32 GetMaxPersonalArenaRatingRequirement(uint32 minarenaslot) const;
@@ -2869,6 +2889,35 @@ protected:
 
     uint32 m_GuildIdInvited;
     uint32 m_ArenaTeamIdInvited;
+
+    // Cata dropped PLAYER_CHARACTER_POINTS1/2, PLAYER_FIELD_HONOR_CURRENCY, and
+    // PLAYER_FIELD_ARENA_CURRENCY as Player update fields (talent points moved to a
+    // TalentMgr, honor/arena points moved to the generic currency system in real
+    // TrinityCore) -- neither conversion is in scope for Plan 17 (field-table layout
+    // only), so these keep the existing WotLK-era behavior as plain server-side state
+    // instead of update fields that no longer exist in the real protocol.
+    uint32 m_freeTalentPoints = 0;
+    uint32 m_freePrimaryProfessionPoints = 0;
+    uint32 m_honorPoints = 0;
+    uint32 m_arenaPoints = 0;
+
+    // Cata also dropped PLAYER_AMMO_ID (ranged weapons no longer consume ammo),
+    // PLAYER_FIELD_KNOWN_CURRENCIES (currencies are tracked by the currency system,
+    // not a Player field bitmask), and PLAYER_FIELD_TODAY/YESTERDAY_CONTRIBUTION
+    // (guild contribution moved to the Guild system) -- same out-of-scope-for-Plan-17
+    // reasoning as above.
+    uint32 m_ammoId = 0;
+    uint64 m_knownCurrencies = 0;
+    uint32 m_todayContribution = 0;
+    uint32 m_yesterdayContribution = 0;
+
+public:
+    // See PLAYER_SKILL_INDEX/VALUE_INDEX/BONUS_INDEX above -- 384 = 128 skills * 3 uint32
+    // slots, matching WotLK's original PLAYER_SKILL_INFO_1_1 stride/capacity exactly.
+    [[nodiscard]] uint32 GetSkillFieldValue(uint32 index) const { return m_skillInfo[index]; }
+    void SetSkillFieldValue(uint32 index, uint32 value) { m_skillInfo[index] = value; }
+private:
+    std::array<uint32, 384> m_skillInfo = {};
 
     PlayerMails m_mail;
     PlayerSpellMap m_spells;

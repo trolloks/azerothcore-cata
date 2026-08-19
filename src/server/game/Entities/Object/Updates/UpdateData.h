@@ -58,6 +58,13 @@ class UpdateData
 {
 public:
     UpdateData();
+    explicit UpdateData(uint16 map) : UpdateData() { m_map = map; }
+
+    // Cata prefixes SMSG_UPDATE_OBJECT with the map id; WotLK did not. Omitting it
+    // shifts the entire packet by two bytes and the client misparses every update
+    // block, including the player's own create block -- which leaves the real client
+    // stuck forever on the 90% loading screen. See issue #40.
+    void SetMap(uint16 map) { m_map = map; }
 
     void AddOutOfRangeGUID(ObjectGuid guid);
     void AddUpdateBlock(ByteBuffer const& block);
@@ -67,6 +74,7 @@ public:
     void Clear();
 
 protected:
+    uint16 m_map{0};
     uint32 m_blockCount;
     GuidVector m_outOfRangeGUIDs;
     ByteBuffer m_data;

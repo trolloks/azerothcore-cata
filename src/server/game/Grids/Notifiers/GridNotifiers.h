@@ -50,6 +50,7 @@ namespace Acore
         VisibleNotifier(Player& player, bool gobjOnly) :
             i_player(player), i_visibleNow(player.m_newVisible), i_gobjOnly(gobjOnly)
         {
+            i_data.SetMap(player.GetMapId());
             i_visibleNow.clear();
         }
 

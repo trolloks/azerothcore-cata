@@ -30,7 +30,7 @@ Corpse::Corpse(CorpseType type) : WorldObject(), m_type(type)
 {
     m_objectType |= TYPEMASK_CORPSE;
     m_objectTypeId = TYPEID_CORPSE;
-    m_updateFlag = (UPDATEFLAG_LOWGUID | UPDATEFLAG_STATIONARY_POSITION | UPDATEFLAG_POSITION);
+    m_updateFlag.Stationary = true;
     m_valuesCount = CORPSE_END;
     m_time = GameTime::GetGameTime().count();
     lootRecipient = nullptr;

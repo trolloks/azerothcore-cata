@@ -785,6 +785,7 @@ public:                                                 // opcodes handlers
 
     void HandleMovementOpcodes(WorldPacket& recvPacket);
     void HandleSetActiveMoverOpcode(WorldPacket& recvData);
+    void HandleObjectUpdateFailedOpcode(WorldPacket& recvData);
     void HandleMoveNotActiveMover(WorldPacket& recvData);
     void HandleDismissControlledVehicle(WorldPacket& recvData);
     void HandleRequestVehicleExit(WorldPacket& recvData);

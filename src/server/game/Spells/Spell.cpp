@@ -4942,7 +4942,7 @@ void Spell::WriteAmmoToPacket(WorldPacket* data)
                 ammoDisplayID = pItem->GetTemplate()->DisplayInfoID;
             else
             {
-                uint32 ammoID = m_caster->ToPlayer()->GetUInt32Value(PLAYER_AMMO_ID);
+                uint32 ammoID = m_caster->ToPlayer()->GetAmmoId();
                 if (ammoID)
                 {
                     ItemTemplate const* pProto = sObjectMgr->GetItemTemplate(ammoID);
@@ -5403,7 +5403,7 @@ void Spell::TakeAmmo()
             }
         }
         else if (!sWorld->getBoolConfig(CONFIG_ENABLE_INFINITEAMMO))
-            if (uint32 ammo = m_caster->ToPlayer()->GetUInt32Value(PLAYER_AMMO_ID))
+            if (uint32 ammo = m_caster->ToPlayer()->GetAmmoId())
                 m_caster->ToPlayer()->DestroyItemCount(ammo, 1, true);
     }
 }
@@ -7710,7 +7710,7 @@ SpellCastResult Spell::CheckItems(uint32* param1, uint32* param2)
                         case ITEM_SUBCLASS_WEAPON_BOW:
                         case ITEM_SUBCLASS_WEAPON_CROSSBOW:
                             {
-                                uint32 ammo = m_caster->ToPlayer()->GetUInt32Value(PLAYER_AMMO_ID);
+                                uint32 ammo = m_caster->ToPlayer()->GetAmmoId();
                                 if (!ammo)
                                 {
                                     // Requires No Ammo
@@ -7745,7 +7745,7 @@ SpellCastResult Spell::CheckItems(uint32* param1, uint32* param2)
 
                                 if (!m_caster->ToPlayer()->HasItemCount(ammo))
                                 {
-                                    m_caster->ToPlayer()->SetUInt32Value(PLAYER_AMMO_ID, 0);
+                                    m_caster->ToPlayer()->SetAmmoId(0);
                                     return SPELL_FAILED_NO_AMMO;
                                 }
                             };

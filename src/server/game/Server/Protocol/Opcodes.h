@@ -386,6 +386,21 @@ enum OpcodeClient : uint16
     CMSG_AUCTION_LIST_BIDDER_ITEMS                  = 0x264,
     CMSG_SET_AMMO                                   = 0x268,
     CMSG_SET_ACTIVE_MOVER                           = 0x3314,
+    // Opcodes the real build 15595 client sends that this fork did not define at all
+    // (values from cata-js's proven-working table). Without these the server logs them
+    // as UNKNOWN and cannot even see what the client is reporting -- notably
+    // CMSG_OBJECT_UPDATE_FAILED, which is the client telling us it could not build an
+    // object from an SMSG_UPDATE_OBJECT block. See issue #40.
+    CMSG_OBJECT_UPDATE_FAILED                       = 0x3808,
+    CMSG_QUERY_BATTLEFIELD_STATE                    = 0x7202,
+    CMSG_QUEST_GIVER_STATUS_QUERY_CATA              = 0x4407,
+    CMSG_REQUEST_CEMETERY_LIST                      = 0x720A,
+    MSG_QUERY_NEXT_MAIL_TIME_CATA                   = 0x0F04,
+    CMSG_UNREGISTER_ALL_ADDON_PREFIXES              = 0x3D54,
+    CMSG_DB_QUERY_BULK                              = 0x2401,
+    CMSG_SAVE_CUF_PROFILES                          = 0x730E,
+    CMSG_REQUEST_CATEGORY_COOLDOWNS                 = 0x7102,
+    CMSG_LFG_LOCK_INFO_REQUEST                      = 0x0412,
     CMSG_PET_CANCEL_AURA                            = 0x26B,
     CMSG_PLAYER_AI_CHEAT                            = 0x26C,
     CMSG_CANCEL_AUTO_REPEAT_SPELL                   = 0x26D,
@@ -787,7 +802,7 @@ enum OpcodeServer : uint16
     SMSG_LOGOUT_RESPONSE                            = 0x0524,
     SMSG_LOGOUT_COMPLETE                            = 0x2137,
     SMSG_LOGOUT_CANCEL_ACK                          = 0x6514,
-    SMSG_NAME_QUERY_RESPONSE                        = 0x051, // DEPRECATED
+    SMSG_NAME_QUERY_RESPONSE                        = 0x6E04, // Cata: SMSG_QUERY_PLAYER_NAME_RESPONSE
     SMSG_PET_NAME_QUERY_RESPONSE                    = 0x4C37,
     SMSG_GUILD_QUERY_RESPONSE                       = 0x055, // DEPRECATED
     SMSG_ITEM_QUERY_SINGLE_RESPONSE                 = 0x058, // DEPRECATED

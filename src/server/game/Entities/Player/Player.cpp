@@ -514,7 +514,7 @@ bool Player::Create(ObjectGuid::LowType guidlow, CharacterCreateInfo* createInfo
     SetByteValue(PLAYER_BYTES_3, 0, createInfo->Gender);
     SetByteValue(PLAYER_BYTES_3, 3, 0);                     // BattlefieldArenaFaction (0 or 1)
 
-    SetUInt32Value(PLAYER_GUILDID, 0);
+    SetGuidValue(OBJECT_FIELD_DATA, ObjectGuid::Empty);
     SetUInt32Value(PLAYER_GUILDRANK, 0);
     SetUInt32Value(PLAYER_GUILD_TIMESTAMP, 0);
 
@@ -524,8 +524,8 @@ bool Player::Create(ObjectGuid::LowType guidlow, CharacterCreateInfo* createInfo
 
     SetUInt32Value(PLAYER_FIELD_KILLS, 0);
     SetUInt32Value(PLAYER_FIELD_LIFETIME_HONORABLE_KILLS, 0);
-    SetUInt32Value(PLAYER_FIELD_TODAY_CONTRIBUTION, 0);
-    SetUInt32Value(PLAYER_FIELD_YESTERDAY_CONTRIBUTION, 0);
+    SetTodayContribution(0);
+    SetYesterdayContribution(0);
 
     // set starting level
     uint32 start_level = !IsClass(CLASS_DEATH_KNIGHT, CLASS_CONTEXT_INIT)
@@ -2592,6 +2592,18 @@ void Player::InitStatsForLevel(bool reapplyMods)
     // set default cast time multiplier
     SetFloatValue(UNIT_MOD_CAST_SPEED, 1.0f);
 
+    // Cata-added haste fields. These are multipliers and must start at 1.0, not the
+    // zero-initialised default -- cata-js's proven-working login sequence lists them as
+    // required non-zero values in the player's own create block. Left at 0 the client
+    // sees a zero haste multiplier for casts, melee and ranged.
+    SetFloatValue(UNIT_MOD_CAST_HASTE, 1.0f);
+    SetFloatValue(PLAYER_FIELD_MOD_HASTE, 1.0f);
+    SetFloatValue(PLAYER_FIELD_MOD_RANGED_HASTE, 1.0f);
+    SetFloatValue(PLAYER_FIELD_MOD_HASTE_REGEN, 1.0f);
+
+    // -1 means "no watched faction"; 0 is a real faction index.
+    SetInt32Value(PLAYER_FIELD_WATCHED_FACTION_INDEX, -1);
+
     // reset size before reapply auras
     SetObjectScale(1.0f);
 
@@ -2636,10 +2648,12 @@ void Player::InitStatsForLevel(bool reapplyMods)
     SetFloatValue(UNIT_FIELD_MAXRANGEDDAMAGE, 0.0f);
 
     SetInt32Value(UNIT_FIELD_ATTACK_POWER,            0);
-    SetInt32Value(UNIT_FIELD_ATTACK_POWER_MODS,       0);
+    SetInt32Value(UNIT_FIELD_ATTACK_POWER_MOD_POS,    0);
+    SetInt32Value(UNIT_FIELD_ATTACK_POWER_MOD_NEG,    0);
     SetFloatValue(UNIT_FIELD_ATTACK_POWER_MULTIPLIER, 0.0f);
     SetInt32Value(UNIT_FIELD_RANGED_ATTACK_POWER,     0);
-    SetInt32Value(UNIT_FIELD_RANGED_ATTACK_POWER_MODS, 0);
+    SetInt32Value(UNIT_FIELD_RANGED_ATTACK_POWER_MOD_POS, 0);
+    SetInt32Value(UNIT_FIELD_RANGED_ATTACK_POWER_MOD_NEG, 0);
     SetFloatValue(UNIT_FIELD_RANGED_ATTACK_POWER_MULTIPLIER, 0.0f);
 
     // Base crit values (will be recalculated in UpdateAllStats() at loading and in _ApplyAllStatBonuses() at reset
@@ -3864,7 +3878,7 @@ bool Player::resetTalents(bool noResetCost)
 void Player::SetFreeTalentPoints(uint32 points)
 {
     sScriptMgr->OnPlayerFreeTalentPointsChanged(this, points);
-    SetUInt32Value(PLAYER_CHARACTER_POINTS1, points);
+    m_freeTalentPoints = points;
 }
 
 Mail* Player::GetMail(uint32 id)
@@ -5397,16 +5411,16 @@ void Player::SetSkill(uint16 id, uint16 step, uint16 newVal, uint16 maxVal)
     //has skill
     if (itr != mSkillStatus.end() && itr->second.uState != SKILL_DELETED)
     {
-        currVal = SKILL_VALUE(GetUInt32Value(PLAYER_SKILL_VALUE_INDEX(itr->second.pos)));
+        currVal = SKILL_VALUE(GetSkillFieldValue(PLAYER_SKILL_VALUE_INDEX(itr->second.pos)));
         if (newVal)
         {
             // if skill value is going down, update enchantments before setting the new value
             if (newVal < currVal)
                 UpdateSkillEnchantments(id, currVal, newVal);
             // update step
-            SetUInt32Value(PLAYER_SKILL_INDEX(itr->second.pos), MAKE_PAIR32(id, step));
+            SetSkillFieldValue(PLAYER_SKILL_INDEX(itr->second.pos), MAKE_PAIR32(id, step));
             // update value
-            SetUInt32Value(PLAYER_SKILL_VALUE_INDEX(itr->second.pos), MAKE_SKILL_VALUE(newVal, maxVal));
+            SetSkillFieldValue(PLAYER_SKILL_VALUE_INDEX(itr->second.pos), MAKE_SKILL_VALUE(newVal, maxVal));
             if (itr->second.uState != SKILL_NEW)
                 itr->second.uState = SKILL_CHANGED;
             learnSkillRewardedSpells(id, newVal);
@@ -5421,9 +5435,9 @@ void Player::SetSkill(uint16 id, uint16 step, uint16 newVal, uint16 maxVal)
             //remove enchantments needing this skill
             UpdateSkillEnchantments(id, currVal, 0);
             // clear skill fields
-            SetUInt32Value(PLAYER_SKILL_INDEX(itr->second.pos), 0);
-            SetUInt32Value(PLAYER_SKILL_VALUE_INDEX(itr->second.pos), 0);
-            SetUInt32Value(PLAYER_SKILL_BONUS_INDEX(itr->second.pos), 0);
+            SetSkillFieldValue(PLAYER_SKILL_INDEX(itr->second.pos), 0);
+            SetSkillFieldValue(PLAYER_SKILL_VALUE_INDEX(itr->second.pos), 0);
+            SetSkillFieldValue(PLAYER_SKILL_BONUS_INDEX(itr->second.pos), 0);
 
             // mark as deleted or simply remove from map if not saved yet
             if (itr->second.uState != SKILL_NEW)
@@ -5444,7 +5458,7 @@ void Player::SetSkill(uint16 id, uint16 step, uint16 newVal, uint16 maxVal)
     {
         currVal = 0;
         for (int i = 0; i < PLAYER_MAX_SKILLS; ++i)
-            if (!GetUInt32Value(PLAYER_SKILL_INDEX(i)))
+            if (!GetSkillFieldValue(PLAYER_SKILL_INDEX(i)))
             {
                 SkillLineEntry const* pSkill = sSkillLineStore.LookupEntry(id);
                 if (!pSkill)
@@ -5453,8 +5467,8 @@ void Player::SetSkill(uint16 id, uint16 step, uint16 newVal, uint16 maxVal)
                     return;
                 }
 
-                SetUInt32Value(PLAYER_SKILL_INDEX(i), MAKE_PAIR32(id, step));
-                SetUInt32Value(PLAYER_SKILL_VALUE_INDEX(i), MAKE_SKILL_VALUE(newVal, maxVal));
+                SetSkillFieldValue(PLAYER_SKILL_INDEX(i), MAKE_PAIR32(id, step));
+                SetSkillFieldValue(PLAYER_SKILL_VALUE_INDEX(i), MAKE_SKILL_VALUE(newVal, maxVal));
                 UpdateSkillEnchantments(id, currVal, newVal);
 
                 // insert new entry or update if not deleted old entry yet
@@ -5467,7 +5481,7 @@ void Player::SetSkill(uint16 id, uint16 step, uint16 newVal, uint16 maxVal)
                     mSkillStatus.insert(SkillStatusMap::value_type(id, SkillStatusData(i, SKILL_NEW)));
 
                 // apply skill bonuses
-                SetUInt32Value(PLAYER_SKILL_BONUS_INDEX(i), 0);
+                SetSkillFieldValue(PLAYER_SKILL_BONUS_INDEX(i), 0);
 
                 // temporary bonuses
                 AuraEffectList const& mModSkill = GetAuraEffectsByType(SPELL_AURA_MOD_SKILL);
@@ -5509,7 +5523,7 @@ uint16 Player::GetSkillStep(uint16 skill) const
     if (itr == mSkillStatus.end() || itr->second.uState == SKILL_DELETED)
         return 0;
 
-    return PAIR32_HIPART(GetUInt32Value(PLAYER_SKILL_INDEX(itr->second.pos)));
+    return PAIR32_HIPART(GetSkillFieldValue(PLAYER_SKILL_INDEX(itr->second.pos)));
 }
 
 uint16 Player::GetSkillValue(uint32 skill) const
@@ -5521,9 +5535,9 @@ uint16 Player::GetSkillValue(uint32 skill) const
     if (itr == mSkillStatus.end() || itr->second.uState == SKILL_DELETED)
         return 0;
 
-    uint32 bonus = GetUInt32Value(PLAYER_SKILL_BONUS_INDEX(itr->second.pos));
+    uint32 bonus = GetSkillFieldValue(PLAYER_SKILL_BONUS_INDEX(itr->second.pos));
 
-    int32 result = int32(SKILL_VALUE(GetUInt32Value(PLAYER_SKILL_VALUE_INDEX(itr->second.pos))));
+    int32 result = int32(SKILL_VALUE(GetSkillFieldValue(PLAYER_SKILL_VALUE_INDEX(itr->second.pos))));
     result += SKILL_TEMP_BONUS(bonus);
     result += SKILL_PERM_BONUS(bonus);
     return result < 0 ? 0 : result;
@@ -5538,9 +5552,9 @@ uint16 Player::GetMaxSkillValue(uint32 skill) const
     if (itr == mSkillStatus.end() || itr->second.uState == SKILL_DELETED)
         return 0;
 
-    uint32 bonus = GetUInt32Value(PLAYER_SKILL_BONUS_INDEX(itr->second.pos));
+    uint32 bonus = GetSkillFieldValue(PLAYER_SKILL_BONUS_INDEX(itr->second.pos));
 
-    int32 result = int32(SKILL_MAX(GetUInt32Value(PLAYER_SKILL_VALUE_INDEX(itr->second.pos))));
+    int32 result = int32(SKILL_MAX(GetSkillFieldValue(PLAYER_SKILL_VALUE_INDEX(itr->second.pos))));
     sScriptMgr->OnPlayerGetMaxSkillValue(const_cast<Player*>(this), skill, result, false);
     result += SKILL_TEMP_BONUS(bonus);
     result += SKILL_PERM_BONUS(bonus);
@@ -5556,7 +5570,7 @@ uint16 Player::GetPureMaxSkillValue(uint32 skill) const
     if (itr == mSkillStatus.end() || itr->second.uState == SKILL_DELETED)
         return 0;
 
-    int32 result = int32(SKILL_MAX(GetUInt32Value(PLAYER_SKILL_VALUE_INDEX(itr->second.pos))));
+    int32 result = int32(SKILL_MAX(GetSkillFieldValue(PLAYER_SKILL_VALUE_INDEX(itr->second.pos))));
 
     sScriptMgr->OnPlayerGetMaxSkillValue(const_cast<Player*>(this), skill, result, true);
 
@@ -5572,8 +5586,8 @@ uint16 Player::GetBaseSkillValue(uint32 skill) const
     if (itr == mSkillStatus.end() || itr->second.uState == SKILL_DELETED)
         return 0;
 
-    int32 result = int32(SKILL_VALUE(GetUInt32Value(PLAYER_SKILL_VALUE_INDEX(itr->second.pos))));
-    result += SKILL_PERM_BONUS(GetUInt32Value(PLAYER_SKILL_BONUS_INDEX(itr->second.pos)));
+    int32 result = int32(SKILL_VALUE(GetSkillFieldValue(PLAYER_SKILL_VALUE_INDEX(itr->second.pos))));
+    result += SKILL_PERM_BONUS(GetSkillFieldValue(PLAYER_SKILL_BONUS_INDEX(itr->second.pos)));
     return result < 0 ? 0 : result;
 }
 
@@ -5586,7 +5600,7 @@ uint16 Player::GetPureSkillValue(uint32 skill) const
     if (itr == mSkillStatus.end() || itr->second.uState == SKILL_DELETED)
         return 0;
 
-    return SKILL_VALUE(GetUInt32Value(PLAYER_SKILL_VALUE_INDEX(itr->second.pos)));
+    return SKILL_VALUE(GetSkillFieldValue(PLAYER_SKILL_VALUE_INDEX(itr->second.pos)));
 }
 
 int16 Player::GetSkillPermBonusValue(uint32 skill) const
@@ -5598,7 +5612,7 @@ int16 Player::GetSkillPermBonusValue(uint32 skill) const
     if (itr == mSkillStatus.end() || itr->second.uState == SKILL_DELETED)
         return 0;
 
-    return SKILL_PERM_BONUS(GetUInt32Value(PLAYER_SKILL_BONUS_INDEX(itr->second.pos)));
+    return SKILL_PERM_BONUS(GetSkillFieldValue(PLAYER_SKILL_BONUS_INDEX(itr->second.pos)));
 }
 
 int16 Player::GetSkillTempBonusValue(uint32 skill) const
@@ -5610,7 +5624,7 @@ int16 Player::GetSkillTempBonusValue(uint32 skill) const
     if (itr == mSkillStatus.end() || itr->second.uState == SKILL_DELETED)
         return 0;
 
-    return SKILL_TEMP_BONUS(GetUInt32Value(PLAYER_SKILL_BONUS_INDEX(itr->second.pos)));
+    return SKILL_TEMP_BONUS(GetSkillFieldValue(PLAYER_SKILL_BONUS_INDEX(itr->second.pos)));
 }
 
 void Player::SendActionButtons(uint32 state) const
@@ -6269,7 +6283,7 @@ bool Player::RewardHonor(Unit* uVictim, uint32 groupsize, int32 honor, bool awar
     // add honor points
     ModifyHonorPoints(honor);
 
-    ApplyModUInt32Value(PLAYER_FIELD_TODAY_CONTRIBUTION, honor, true);
+    ModifyTodayContribution(honor);
 
     // Xinef: Battleground experience
     if (awardXP)
@@ -6326,7 +6340,7 @@ void Player::SetHonorPoints(uint32 value)
 
         value = sWorld->getIntConfig(CONFIG_MAX_HONOR_POINTS);
     }
-    SetUInt32Value(PLAYER_FIELD_HONOR_CURRENCY, value);
+    m_honorPoints = value;
     if (value)
         AddKnownCurrency(ITEM_HONOR_POINTS_ID);
 }
@@ -6335,7 +6349,7 @@ void Player::SetArenaPoints(uint32 value)
 {
     if (value > sWorld->getIntConfig(CONFIG_MAX_ARENA_POINTS))
         value = sWorld->getIntConfig(CONFIG_MAX_ARENA_POINTS);
-    SetUInt32Value(PLAYER_FIELD_ARENA_CURRENCY, value);
+    m_arenaPoints = value;
     if (value)
         AddKnownCurrency(ITEM_ARENA_POINTS_ID);
 }
@@ -7722,7 +7736,7 @@ void Player::_ApplyAllLevelScaleItemMods(bool apply)
 void Player::_ApplyAmmoBonuses()
 {
     // check ammo
-    uint32 ammo_id = GetUInt32Value(PLAYER_AMMO_ID);
+    uint32 ammo_id = GetAmmoId();
     if (!ammo_id)
         return;
 
@@ -13985,10 +13999,10 @@ void Player::_LoadSkills(PreparedQueryResult result)
                 }
             }
 
-            SetUInt32Value(PLAYER_SKILL_INDEX(count), MAKE_PAIR32(skill, skillStep));
+            SetSkillFieldValue(PLAYER_SKILL_INDEX(count), MAKE_PAIR32(skill, skillStep));
 
-            SetUInt32Value(PLAYER_SKILL_VALUE_INDEX(count), MAKE_SKILL_VALUE(value, max));
-            SetUInt32Value(PLAYER_SKILL_BONUS_INDEX(count), 0);
+            SetSkillFieldValue(PLAYER_SKILL_VALUE_INDEX(count), MAKE_SKILL_VALUE(value, max));
+            SetSkillFieldValue(PLAYER_SKILL_BONUS_INDEX(count), 0);
 
             mSkillStatus.insert(SkillStatusMap::value_type(skill, SkillStatusData(count, SKILL_UNCHANGED)));
 
@@ -14012,9 +14026,9 @@ void Player::_LoadSkills(PreparedQueryResult result)
 
     for (; count < PLAYER_MAX_SKILLS; ++count)
     {
-        SetUInt32Value(PLAYER_SKILL_INDEX(count), 0);
-        SetUInt32Value(PLAYER_SKILL_VALUE_INDEX(count), 0);
-        SetUInt32Value(PLAYER_SKILL_BONUS_INDEX(count), 0);
+        SetSkillFieldValue(PLAYER_SKILL_INDEX(count), 0);
+        SetSkillFieldValue(PLAYER_SKILL_VALUE_INDEX(count), 0);
+        SetSkillFieldValue(PLAYER_SKILL_BONUS_INDEX(count), 0);
     }
 }
 
@@ -14466,7 +14480,7 @@ void Player::LearnPetTalent(ObjectGuid petGuid, uint32 talentId, uint32 talentRa
 void Player::AddKnownCurrency(uint32 itemId)
 {
     if (CurrencyTypesEntry const* ctEntry = sCurrencyTypesStore.LookupEntry(itemId))
-        SetFlag64(PLAYER_FIELD_KNOWN_CURRENCIES, (1LL << (ctEntry->BitIndex - 1)));
+        AddKnownCurrencyFlag((1LL << (ctEntry->BitIndex - 1)));
 }
 
 void Player::UnsummonPetTemporaryIfAny()
@@ -15099,13 +15113,13 @@ void Player::_SaveCharacter(bool create, CharacterDatabaseTransaction trans)
         stmt->SetData(index++, ss.str());
         stmt->SetData(index++, GetArenaPoints());
         stmt->SetData(index++, GetHonorPoints());
-        stmt->SetData(index++, GetUInt32Value(PLAYER_FIELD_TODAY_CONTRIBUTION));
-        stmt->SetData(index++, GetUInt32Value(PLAYER_FIELD_YESTERDAY_CONTRIBUTION));
+        stmt->SetData(index++, GetTodayContribution());
+        stmt->SetData(index++, GetYesterdayContribution());
         stmt->SetData(index++, GetUInt32Value(PLAYER_FIELD_LIFETIME_HONORABLE_KILLS));
         stmt->SetData(index++, GetUInt16Value(PLAYER_FIELD_KILLS, 0));
         stmt->SetData(index++, GetUInt16Value(PLAYER_FIELD_KILLS, 1));
         stmt->SetData(index++, GetUInt32Value(PLAYER_CHOSEN_TITLE));
-        stmt->SetData(index++, GetUInt64Value(PLAYER_FIELD_KNOWN_CURRENCIES));
+        stmt->SetData(index++, GetKnownCurrencies());
         stmt->SetData(index++, GetUInt32Value(PLAYER_FIELD_WATCHED_FACTION_INDEX));
         stmt->SetData(index++, GetDrunkValue());
         stmt->SetData(index++, GetHealth());
@@ -15139,7 +15153,7 @@ void Player::_SaveCharacter(bool create, CharacterDatabaseTransaction trans)
         }
 
         stmt->SetData(index++, ss.str());
-        stmt->SetData(index++, GetUInt32Value(PLAYER_AMMO_ID));
+        stmt->SetData(index++, GetAmmoId());
 
         ss.str("");
         for (uint32 i = 0; i < KNOWN_TITLES_SIZE * 2; ++i)
@@ -15239,13 +15253,13 @@ void Player::_SaveCharacter(bool create, CharacterDatabaseTransaction trans)
         stmt->SetData(index++, ss.str());
         stmt->SetData(index++, GetArenaPoints());
         stmt->SetData(index++, GetHonorPoints());
-        stmt->SetData(index++, GetUInt32Value(PLAYER_FIELD_TODAY_CONTRIBUTION));
-        stmt->SetData(index++, GetUInt32Value(PLAYER_FIELD_YESTERDAY_CONTRIBUTION));
+        stmt->SetData(index++, GetTodayContribution());
+        stmt->SetData(index++, GetYesterdayContribution());
         stmt->SetData(index++, GetUInt32Value(PLAYER_FIELD_LIFETIME_HONORABLE_KILLS));
         stmt->SetData(index++, GetUInt16Value(PLAYER_FIELD_KILLS, 0));
         stmt->SetData(index++, GetUInt16Value(PLAYER_FIELD_KILLS, 1));
         stmt->SetData(index++, GetUInt32Value(PLAYER_CHOSEN_TITLE));
-        stmt->SetData(index++, GetUInt64Value(PLAYER_FIELD_KNOWN_CURRENCIES));
+        stmt->SetData(index++, GetKnownCurrencies());
         stmt->SetData(index++, GetUInt32Value(PLAYER_FIELD_WATCHED_FACTION_INDEX));
         stmt->SetData(index++, GetDrunkValue());
         stmt->SetData(index++, GetHealth());
@@ -15279,7 +15293,7 @@ void Player::_SaveCharacter(bool create, CharacterDatabaseTransaction trans)
         }
 
         stmt->SetData(index++, ss.str());
-        stmt->SetData(index++, GetUInt32Value(PLAYER_AMMO_ID));
+        stmt->SetData(index++, GetAmmoId());
 
         ss.str("");
         for (uint32 i = 0; i < KNOWN_TITLES_SIZE * 2; ++i)
