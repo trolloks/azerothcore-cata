@@ -362,7 +362,7 @@ Unit::Unit() : WorldObject(),
     m_objectType |= TYPEMASK_UNIT;
     m_objectTypeId = TYPEID_UNIT;
 
-    m_updateFlag = (UPDATEFLAG_LIVING | UPDATEFLAG_STATIONARY_POSITION);
+    m_updateFlag.MovementUpdate = true;
 
     m_attackTimer[BASE_ATTACK] = 0;
     m_attackTimer[OFF_ATTACK] = 0;
@@ -14989,7 +14989,7 @@ bool Unit::CreateVehicleKit(uint32 id, uint32 creatureEntry)
         return false;
 
     m_vehicleKit = new Vehicle(this, vehInfo, creatureEntry);
-    m_updateFlag |= UPDATEFLAG_VEHICLE;
+    m_updateFlag.Vehicle = true;
     m_unitTypeMask |= UNIT_MASK_VEHICLE;
     return true;
 }
@@ -15004,7 +15004,7 @@ void Unit::RemoveVehicleKit()
 
     m_vehicleKit = nullptr;
 
-    m_updateFlag &= ~UPDATEFLAG_VEHICLE;
+    m_updateFlag.Vehicle = false;
     m_unitTypeMask &= ~UNIT_MASK_VEHICLE;
     RemoveNpcFlag(UNIT_NPC_FLAG_SPELLCLICK | UNIT_NPC_FLAG_PLAYER_VEHICLE);
 }

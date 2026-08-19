@@ -60,7 +60,8 @@ GameObject::GameObject() : WorldObject(), MovableMapObject(),
     m_objectType |= TYPEMASK_GAMEOBJECT;
     m_objectTypeId = TYPEID_GAMEOBJECT;
 
-    m_updateFlag = (UPDATEFLAG_LOWGUID | UPDATEFLAG_STATIONARY_POSITION | UPDATEFLAG_POSITION | UPDATEFLAG_ROTATION);
+    m_updateFlag.Stationary = true;
+    m_updateFlag.Rotation = true;
 
     m_valuesCount = GAMEOBJECT_END;
     m_respawnTime = 0;

@@ -101,6 +101,32 @@ typedef std::unordered_map<Player*, UpdateData> UpdateDataMapType;
 
 static constexpr Milliseconds HEARTBEAT_INTERVAL = 5s + 200ms;
 
+// Cata 4.3.4 replaced WotLK's OBJECT_UPDATE_FLAGS bitmask with a bit-packed struct written
+// directly into the movement/create block header (Object::BuildMovementUpdate) -- ported from
+// the pinned TrinityCore reference (Object.h) as part of Plan 19 (issue #40).
+struct CreateObjectBits
+{
+    bool PlayerHoverAnim : 1;
+    bool SupressedGreetings : 1;
+    bool Rotation : 1;
+    bool AnimKit : 1;
+    bool CombatVictim : 1;
+    bool ThisIsYou : 1;
+    bool Vehicle : 1;
+    bool MovementUpdate : 1;
+    bool NoBirthAnim : 1;
+    bool MovementTransport : 1;
+    bool Stationary : 1;
+    bool AreaTrigger : 1;
+    bool EnablePortals : 1;
+    bool ServerTime : 1;
+
+    void Clear()
+    {
+        memset(this, 0, sizeof(CreateObjectBits));
+    }
+};
+
 class Object
 {
 public:
@@ -246,13 +272,13 @@ protected:
 
     uint32 GetUpdateFieldData(Player const* target, uint32*& flags) const;
 
-    void BuildMovementUpdate(ByteBuffer* data, uint16 flags) const;
+    void BuildMovementUpdate(ByteBuffer* data, CreateObjectBits flags) const;
     virtual void BuildValuesUpdate(uint8 updateType, ByteBuffer* data, Player* target);
 
     uint16 m_objectType;
 
     TypeID m_objectTypeId;
-    uint16 m_updateFlag;
+    CreateObjectBits m_updateFlag = {};
 
     union
     {

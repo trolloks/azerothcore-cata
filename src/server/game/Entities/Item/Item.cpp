@@ -264,7 +264,8 @@ Item::Item()
     m_objectType |= TYPEMASK_ITEM;
     m_objectTypeId = TYPEID_ITEM;
 
-    m_updateFlag = UPDATEFLAG_LOWGUID;
+    // Cata's real Item update block sets no movement/create bits (m_updateFlag stays default);
+    // WotLK's UPDATEFLAG_LOWGUID has no equivalent in the bit-packed CreateObjectBits header.
 
     m_valuesCount = ITEM_END;
     m_slot = 0;
