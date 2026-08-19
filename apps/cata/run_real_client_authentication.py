@@ -357,12 +357,23 @@ def link_client_base(base: Path, destination: Path) -> None:
         (destination / name).mkdir()
 
 
+# Data/Cache is writable: the client rewrites SoundCache-*.MPQ there at runtime. It has
+# to be a real local directory, never a symlink to the protected source tree -- otherwise
+# the client writes its sound cache straight back into the user's real installation, which
+# both violates the isolation contract and trips the protected-tree guard on the next
+# prepare. WRITABLE_CLIENT_DIRS covers the top-level Cache dir; this covers Data/Cache.
+WRITABLE_CLIENT_DATA_DIRS = ("Cache",)
+
+
 def link_client_data(source: Path, destination: Path) -> None:
     destination.mkdir()
     for entry in source.iterdir():
-        if entry.name == "enUS":
+        if entry.name == "enUS" or entry.name in WRITABLE_CLIENT_DATA_DIRS:
             continue
         (destination / entry.name).symlink_to(entry, target_is_directory=entry.is_dir())
+
+    for name in WRITABLE_CLIENT_DATA_DIRS:
+        (destination / name).mkdir(exist_ok=True)
 
     locale_source = source / "enUS"
     locale_destination = destination / "enUS"
