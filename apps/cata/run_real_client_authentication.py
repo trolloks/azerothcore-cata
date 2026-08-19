@@ -893,9 +893,15 @@ def wine_environment(generation: Generation) -> dict[str, str]:
         "WINEDLLOVERRIDES": "d3d9=n,b",
         "http_proxy": "http://127.0.0.1:9",
         "https_proxy": "http://127.0.0.1:9",
-        # +seh is cheap and is what surfaced the deterministic post-map-insertion
-        # stack overflow this fork is currently blocked on (see issue #32); +tid/
-        # +module are far too verbose/slow for routine runs, only useful for a
+        # +seh is cheap and is what surfaced the "stack overflow" warning that used
+        # to be mistaken for a client crash (see issue #32) -- that warning turns out
+        # to be an artifact of stop_wine()'s own `wineserver -k` teardown, not a real
+        # in-game fault: it appears at a fixed address/size regardless of game state,
+        # and only on runs where the client process was still alive when killed
+        # (compare a run with no crash line -- its trace just stops mid-normal-trace,
+        # same as the "crashed" runs stop mid-SEH-warning). Do not treat this warning
+        # as a failure signal without first checking the client was still responsive.
+        # +tid/+module are far too verbose/slow for routine runs, only useful for a
         # one-off manual diagnostic session.
         "WINEDEBUG": "+seh",
     })

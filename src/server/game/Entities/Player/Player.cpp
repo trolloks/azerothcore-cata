@@ -8946,8 +8946,19 @@ void Player::SendInitWorldStates(uint32 zoneId, uint32 areaId)
 
     sWorldState->FillInitialWorldStates(packet, zoneId, areaId);
     SendDirectMessage(packet.Write());
-    SendBGWeekendWorldStates();
-    SendBattlefieldWorldStates();
+    // SendBGWeekendWorldStates() reads BattlemasterList.dbc's HolidayWorldStateId per
+    // row and sends every one via SendUpdateWorldState unconditionally. That DBC is
+    // still the WotLK client-data set (client-data conversion is separate, unstarted
+    // roadmap work), so these IDs are stale WotLK-era values with no meaning to a
+    // 4.3.4 client. Not calling it is correct until the DBC itself is Cata-converted;
+    // do not stub out its own body, since a caller with correct Cata DBC data should
+    // still work.
+    //
+    // SendBattlefieldWorldStates() (Wintergrasp, enabled by default via
+    // Wintergrasp.Enable) sends its own WORLD_STATE_BATTLEFIELD_WG_* values on every
+    // login; its world-state wire contract has not been Cata-verified either. Leave
+    // the config and battlefield systems themselves alone, just don't send this
+    // login-time snapshot yet.
 }
 
 void Player::SendBGWeekendWorldStates()
@@ -11722,6 +11733,19 @@ void Player::SendInitialPacketsAfterAddToMap()
 
     GetSession()->ResetTimeSync();
     GetSession()->SendTimeSync();
+
+    // Client-proven Cata login sequence (cata-js world-login-flow.md): the client
+    // never dismisses its loading screen without these two. LoadCufProfiles is an
+    // empty stub (no saved profiles yet); PhaseShiftChange mirrors TrinityCore's
+    // PhasingHandler::OnMapChange, fired here since that hook does not exist in
+    // this fork -- a fresh character has no active phases, so Unphased (flag 8)
+    // alone is correct.
+    WorldPackets::Misc::LoadCufProfiles cufProfiles;
+    SendDirectMessage(cufProfiles.Write());
+
+    WorldPackets::Misc::PhaseShiftChange phaseShift;
+    phaseShift.Client = GetGUID();
+    SendDirectMessage(phaseShift.Write());
 
     CastSpell(this, 836, true);                             // LOGINEFFECT
 
