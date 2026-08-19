@@ -25,12 +25,18 @@ class WorldPacket;
 
 enum OBJECT_UPDATE_TYPE
 {
+    // Cata 4.3.4 dropped the WotLK UPDATETYPE_MOVEMENT=1 variant from this byte
+    // (movement travels over separate MSG_MOVE_*/SMSG_MONSTER_MOVE opcodes instead),
+    // which shifts every other value down by one versus WotLK -- verified against
+    // cata-js's proven-working reference (docs/smsg-update-object.md). Sending the
+    // old WotLK numbering (CREATE_OBJECT2=3) makes the real client read a player's
+    // own create block as UPDATETYPE_OUT_OF_RANGE_OBJECTS and never construct the
+    // local player object, hanging the loading screen at 90% forever.
     UPDATETYPE_VALUES               = 0,
-    UPDATETYPE_MOVEMENT             = 1,
-    UPDATETYPE_CREATE_OBJECT        = 2,
-    UPDATETYPE_CREATE_OBJECT2       = 3,
-    UPDATETYPE_OUT_OF_RANGE_OBJECTS = 4,
-    UPDATETYPE_NEAR_OBJECTS         = 5
+    UPDATETYPE_CREATE_OBJECT        = 1,
+    UPDATETYPE_CREATE_OBJECT2       = 2,
+    UPDATETYPE_OUT_OF_RANGE_OBJECTS = 3,
+    UPDATETYPE_NEAR_OBJECTS         = 4
 };
 
 enum OBJECT_UPDATE_FLAGS
