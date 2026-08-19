@@ -475,12 +475,19 @@ def populated_character_seed_sql() -> str:
     return (
         f"DELETE FROM `characters` WHERE `account`={ACCOUNT_ID} OR `guid`={CHARACTER_GUID} "
         f"OR `name`='{CHARACTER_NAME}';"
+        # `health` must be seeded non-zero. Player::LoadFromDB restores it verbatim via
+        # SetHealth(savedHealth), so leaving it at the column default of 0 loads the
+        # character with no health -- the client then receives a 0/0-HP player in its own
+        # CREATE_OBJECT2 block and never completes world entry (permanent 90% loading
+        # screen). Seeded larger than any level-1 pool; LoadFromDB clamps to GetMaxHealth(),
+        # so this simply means "spawn at full health".
         "INSERT INTO `characters` "
         "(`guid`,`account`,`name`,`race`,`class`,`gender`,`level`,`skin`,`face`,`hairStyle`,`hairColor`,"
         "`facialStyle`,`playerFlags`,`position_x`,`position_y`,`position_z`,`map`,`orientation`,`taximask`,"
-        "`at_login`,`zone`,`extra_flags`,`equipmentCache`,`exploredZones`,`knownTitles`,`order`,`innTriggerId`) "
+        "`at_login`,`zone`,`extra_flags`,`equipmentCache`,`exploredZones`,`knownTitles`,`order`,`innTriggerId`,"
+        "`health`) "
         f"VALUES ({CHARACTER_GUID},{ACCOUNT_ID},'{CHARACTER_NAME}',1,1,0,1,0,0,0,0,0,0,"
-        f"{x},{y},{z},0,0,'',0,12,0,'','','',{CHARACTER_LIST_POSITION},0);"
+        f"{x},{y},{z},0,0,'',0,12,0,'','','',{CHARACTER_LIST_POSITION},0,10000);"
     )
 
 
