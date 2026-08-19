@@ -2,7 +2,7 @@
 
 Canonical issue: [#40](https://github.com/trolloks/azerothcore-cata/issues/40)
 
-Status: blocks #32 (Plan 14). Continues the "Object model" plan family started by Plan 17 (#36).
+Status: complete, merged in #39 (commit 471ef218c). Continues the "Object model" plan family started by Plan 17 (#36).
 Converts `Object::BuildMovementUpdate` (`src/server/game/Entities/Object/Object.cpp`) from WotLK's
 plain byte-stream movement format (`uint16 flags` followed by sequential field writes) to Cata
 4.3.4 build 15595's bit-packed movement/create block.

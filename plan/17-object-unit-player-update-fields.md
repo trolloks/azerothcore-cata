@@ -2,7 +2,7 @@
 
 Canonical issue: [#36](https://github.com/trolloks/azerothcore-cata/issues/36)
 
-Status: blocks #32 (Plan 14). Opens the "Object model" plan family. Converts
+Status: complete, merged in #39 (commit 736a374d1). Opens the "Object model" plan family. Converts
 `src/server/game/Entities/Object/Updates/UpdateFields.h`'s `EObjectFields`/`EUnitFields`/
 `EPlayerFields`-equivalent boundaries (`OBJECT_END`, `UNIT_END`, `PLAYER_END`) and every field offset
 inside them from their current WotLK layout to the real build 15595 layout. This is the minimal

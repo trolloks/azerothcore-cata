@@ -37,4 +37,10 @@ TrinityCore reference commit (`c699217775d90794158422387b07a917e161b582`,
 against these boundaries, so a real Cata client almost certainly misparses the player's own
 values-update block against our fork's WotLK-shaped layout. This is Object model work, not
 world-entry work, and is large enough to be its own plan family slice: see #36 (Plan 17) and #37
-(Plan 18, non-blocking remainder). Plan 14 stays open and blocked on #36.
+(Plan 18, non-blocking remainder).
+
+Update (2026-08-19): #36 and #40 are both complete and merged in #39, which took the client from
+~86% to ~99% of the loading bar and got it sending genuine in-world opcodes. World entry still does
+not complete. Plan 14 stays open, now blocked on #41 (full opcode-table realignment) -- 714 of 884
+shared opcode names still carry WotLK values, 367 of them SMSG responses, so the client asks and the
+server answers on opcodes it cannot recognise.
