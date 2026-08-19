@@ -6667,7 +6667,7 @@ void Player::SendRaidInfo()
 {
     uint32 counter = 0;
 
-    WorldPacket data(SMSG_RAID_INSTANCE_INFO, 4);
+    WorldPacket data(SMSG_INSTANCE_INFO, 4);
 
     std::size_t p_counter = data.wpos();
     data << uint32(counter);                                // placeholder
