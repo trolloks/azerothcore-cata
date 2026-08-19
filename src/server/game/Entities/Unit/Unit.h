@@ -1133,8 +1133,19 @@ public:
     [[nodiscard]] virtual bool HasActivePowerType(Powers power) { return getPowerType() == power; }
     [[nodiscard]] Powers GetPowerTypeByAuraGroup(UnitMods unitMod) const;
 
-    [[nodiscard]] uint32 GetPower(Powers power) const { return GetUInt32Value(static_cast<uint16>(UNIT_FIELD_POWER1) + power); }
-    [[nodiscard]] uint32 GetMaxPower(Powers power) const { return GetUInt32Value(static_cast<uint16>(UNIT_FIELD_MAXPOWER1) + power); }
+    // Cata exposes only five client-visible power slots (UNIT_FIELD_POWER1..POWER5 /
+    // MAXPOWER1..MAXPOWER5) where WotLK had seven, and UNIT_FIELD_MAXHEALTH sits
+    // immediately after POWER5. Indexing these fields by raw Powers value therefore
+    // overruns into MAXHEALTH/MAXPOWER1 for POWER_RUNE(5) and POWER_RUNIC_POWER(6) --
+    // that overrun was zeroing the player's max health on login and leaving the real
+    // client stuck forever on the 90% loading screen. Guard every access until the
+    // proper per-class slot mapping (TrinityCore's virtual Unit::GetPowerIndex, driven
+    // by ChrClasses.dbc) is converted; see issue #40.
+    static constexpr uint8 MAX_UNIT_POWER_FIELDS = 5;
+    [[nodiscard]] static bool HasPowerField(Powers power) { return AsUnderlyingType(power) < MAX_UNIT_POWER_FIELDS; }
+
+    [[nodiscard]] uint32 GetPower(Powers power) const { return HasPowerField(power) ? GetUInt32Value(static_cast<uint16>(UNIT_FIELD_POWER1) + power) : 0; }
+    [[nodiscard]] uint32 GetMaxPower(Powers power) const { return HasPowerField(power) ? GetUInt32Value(static_cast<uint16>(UNIT_FIELD_MAXPOWER1) + power) : 0; }
     [[nodiscard]] float GetPowerPct(Powers power) const { return GetMaxPower(power) ? 100.f * GetPower(power) / GetMaxPower(power) : 0.0f; }
     [[nodiscard]] uint32 GetCreatePowers(Powers power) const;
 

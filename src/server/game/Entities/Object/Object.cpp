@@ -233,7 +233,7 @@ void Object::BuildCreateUpdateBlockForPlayer(UpdateData* data, Player* target)
 void Object::SendUpdateToPlayer(Player* player)
 {
     // send create update to player
-    UpdateData upd;
+    UpdateData upd(player->GetMapId());
     WorldPacket packet;
 
     BuildCreateUpdateBlockForPlayer(&upd, player);
@@ -667,7 +667,7 @@ void Object::BuildFieldsUpdate(Player* player, UpdateDataMapType& data_map)
 
     if (iter == data_map.end())
     {
-        std::pair<UpdateDataMapType::iterator, bool> p = data_map.insert(UpdateDataMapType::value_type(player, UpdateData()));
+        std::pair<UpdateDataMapType::iterator, bool> p = data_map.insert(UpdateDataMapType::value_type(player, UpdateData(player->GetMapId())));
         ASSERT(p.second);
         iter = p.first;
     }

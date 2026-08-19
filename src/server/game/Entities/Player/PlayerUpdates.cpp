@@ -1757,7 +1757,7 @@ void Player::UpdateTriggerVisibility()
     if (GetObjectVisibilityContainer().GetVisibleWorldObjectsMap()->empty())
         return;
 
-    UpdateData udata;
+    UpdateData udata(GetMapId());
     DoForAllVisibleWorldObjects([this, &udata](WorldObject* worldObject)
     {
         if (worldObject->IsCreature())
@@ -1799,7 +1799,7 @@ void Player::UpdateForQuestWorldObjects()
     if (GetObjectVisibilityContainer().GetVisibleWorldObjectsMap()->empty())
         return;
 
-    UpdateData udata;
+    UpdateData udata(GetMapId());
     DoForAllVisibleWorldObjects([this, &udata](WorldObject* worldObject)
     {
         if (worldObject->IsGameObject())

@@ -2592,6 +2592,18 @@ void Player::InitStatsForLevel(bool reapplyMods)
     // set default cast time multiplier
     SetFloatValue(UNIT_MOD_CAST_SPEED, 1.0f);
 
+    // Cata-added haste fields. These are multipliers and must start at 1.0, not the
+    // zero-initialised default -- cata-js's proven-working login sequence lists them as
+    // required non-zero values in the player's own create block. Left at 0 the client
+    // sees a zero haste multiplier for casts, melee and ranged.
+    SetFloatValue(UNIT_MOD_CAST_HASTE, 1.0f);
+    SetFloatValue(PLAYER_FIELD_MOD_HASTE, 1.0f);
+    SetFloatValue(PLAYER_FIELD_MOD_RANGED_HASTE, 1.0f);
+    SetFloatValue(PLAYER_FIELD_MOD_HASTE_REGEN, 1.0f);
+
+    // -1 means "no watched faction"; 0 is a real faction index.
+    SetInt32Value(PLAYER_FIELD_WATCHED_FACTION_INDEX, -1);
+
     // reset size before reapply auras
     SetObjectScale(1.0f);
 

@@ -7734,7 +7734,7 @@ void Unit::SetOwnerGUID(ObjectGuid owner)
 
     SetFieldNotifyFlag(UF_FLAG_OWNER);
 
-    UpdateData udata;
+    UpdateData udata(GetMapId());
     WorldPacket packet;
     BuildValuesUpdateBlockForPlayer(&udata, player);
     udata.BuildPacket(packet);
@@ -12439,6 +12439,9 @@ void Unit::SetMaxHealth(uint32 val)
 
 void Unit::SetPower(Powers power, uint32 val, bool withPowerUpdate /*= true*/, bool fromRegenerate /* = false */)
 {
+    if (!HasPowerField(power))
+        return;
+
     if (!fromRegenerate && GetPower(power) == val)
         return;
 
@@ -12490,6 +12493,9 @@ void Unit::SetPower(Powers power, uint32 val, bool withPowerUpdate /*= true*/, b
 
 void Unit::SetMaxPower(Powers power, uint32 val)
 {
+    if (!HasPowerField(power))
+        return;
+
     uint32 cur_power = GetPower(power);
     SetStatInt32Value(static_cast<uint16>(UNIT_FIELD_MAXPOWER1) + power, val);
 
