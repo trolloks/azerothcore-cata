@@ -261,7 +261,11 @@ class spell_dk_raise_ally : public SpellScript
                 // Attack Power
                 ghoul->SetStatFlatModifier(UNIT_MOD_ATTACK_POWER, BASE_VALUE, 589 + ghoul->GetStat(STAT_STRENGTH) + ghoul->GetStat(STAT_AGILITY));
                 ghoul->SetInt32Value(UNIT_FIELD_ATTACK_POWER, (int32)ghoul->GetFlatModifierValue(UNIT_MOD_ATTACK_POWER, BASE_VALUE) * ghoul->GetPctModifierValue(UNIT_MOD_ATTACK_POWER, BASE_PCT));
-                ghoul->SetInt32Value(UNIT_FIELD_ATTACK_POWER_MODS, (int32)ghoul->GetFlatModifierValue(UNIT_MOD_ATTACK_POWER, TOTAL_VALUE));
+                {
+                    float ghoulAttPowerMod = ghoul->GetFlatModifierValue(UNIT_MOD_ATTACK_POWER, TOTAL_VALUE);
+                    ghoul->SetInt32Value(UNIT_FIELD_ATTACK_POWER_MOD_POS, int32(ghoulAttPowerMod > 0.f ? ghoulAttPowerMod : 0.f));
+                    ghoul->SetInt32Value(UNIT_FIELD_ATTACK_POWER_MOD_NEG, int32(ghoulAttPowerMod < 0.f ? -ghoulAttPowerMod : 0.f));
+                }
                 ghoul->SetFloatValue(UNIT_FIELD_ATTACK_POWER_MULTIPLIER, ghoul->GetPctModifierValue(UNIT_MOD_ATTACK_POWER, TOTAL_PCT) - 1.0f);
 
                 // Health

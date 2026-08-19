@@ -93,8 +93,8 @@ public:
         playerTarget->SetHonorPoints(0);
         playerTarget->SetUInt32Value(PLAYER_FIELD_KILLS, 0);
         playerTarget->SetUInt32Value(PLAYER_FIELD_LIFETIME_HONORABLE_KILLS, 0);
-        playerTarget->SetUInt32Value(PLAYER_FIELD_TODAY_CONTRIBUTION, 0);
-        playerTarget->SetUInt32Value(PLAYER_FIELD_YESTERDAY_CONTRIBUTION, 0);
+        playerTarget->SetTodayContribution(0);
+        playerTarget->SetYesterdayContribution(0);
         playerTarget->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EARN_HONORABLE_KILL);
 
         return true;

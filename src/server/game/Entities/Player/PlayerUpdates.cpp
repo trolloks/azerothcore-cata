@@ -721,7 +721,7 @@ bool Player::UpdateSkill(uint32 skill_id, uint32 step)
         return false;
 
     uint32 valueIndex = PLAYER_SKILL_VALUE_INDEX(itr->second.pos);
-    uint32 data       = GetUInt32Value(valueIndex);
+    uint32 data       = GetSkillFieldValue(valueIndex);
     uint32 value      = SKILL_VALUE(data);
     uint32 max        = SKILL_MAX(data);
 
@@ -736,7 +736,7 @@ bool Player::UpdateSkill(uint32 skill_id, uint32 step)
         if (new_value > max)
             new_value = max;
 
-        SetUInt32Value(valueIndex, MAKE_SKILL_VALUE(new_value, max));
+        SetSkillFieldValue(valueIndex, MAKE_SKILL_VALUE(new_value, max));
         if (itr->second.uState != SKILL_NEW)
             itr->second.uState = SKILL_CHANGED;
 
@@ -937,7 +937,7 @@ bool Player::UpdateSkillPro(uint16 SkillId, int32 Chance, uint32 step)
 
     uint32 valueIndex = PLAYER_SKILL_VALUE_INDEX(itr->second.pos);
 
-    uint32 data       = GetUInt32Value(valueIndex);
+    uint32 data       = GetSkillFieldValue(valueIndex);
     uint32 SkillValue = SKILL_VALUE(data);
     uint32 MaxValue   = SKILL_MAX(data);
 
@@ -959,7 +959,7 @@ bool Player::UpdateSkillPro(uint16 SkillId, int32 Chance, uint32 step)
         if (new_value > MaxValue)
             new_value = MaxValue;
 
-        SetUInt32Value(valueIndex, MAKE_SKILL_VALUE(new_value, MaxValue));
+        SetSkillFieldValue(valueIndex, MAKE_SKILL_VALUE(new_value, MaxValue));
         if (itr->second.uState != SKILL_NEW)
             itr->second.uState = SKILL_CHANGED;
 
@@ -1110,7 +1110,7 @@ void Player::UpdateSkillsForLevel()
             continue;
 
         uint32 valueIndex = PLAYER_SKILL_VALUE_INDEX(itr->second.pos);
-        uint32 data       = GetUInt32Value(valueIndex);
+        uint32 data       = GetSkillFieldValue(valueIndex);
         uint32 max        = SKILL_MAX(data);
         uint32 val        = SKILL_VALUE(data);
 
@@ -1121,7 +1121,7 @@ void Player::UpdateSkillsForLevel()
             if (alwaysMaxSkill ||
                 (rcEntry->Flags & SKILL_FLAG_ALWAYS_MAX_VALUE))
             {
-                SetUInt32Value(valueIndex,
+                SetSkillFieldValue(valueIndex,
                                MAKE_SKILL_VALUE(maxSkill, maxSkill));
                 if (itr->second.uState != SKILL_NEW)
                     itr->second.uState = SKILL_CHANGED;
@@ -1129,7 +1129,7 @@ void Player::UpdateSkillsForLevel()
             else if (max != maxconfskill) /// update max skill value if current
                                           /// max skill not maximized
             {
-                SetUInt32Value(valueIndex, MAKE_SKILL_VALUE(val, maxSkill));
+                SetSkillFieldValue(valueIndex, MAKE_SKILL_VALUE(val, maxSkill));
                 if (itr->second.uState != SKILL_NEW)
                     itr->second.uState = SKILL_CHANGED;
             }
@@ -1149,12 +1149,12 @@ void Player::UpdateSkillsToMaxSkillsForLevel()
         if (IsProfessionOrRidingSkill(pskill))
             continue;
         uint32 valueIndex = PLAYER_SKILL_VALUE_INDEX(itr->second.pos);
-        uint32 data       = GetUInt32Value(valueIndex);
+        uint32 data       = GetSkillFieldValue(valueIndex);
         uint32 max        = SKILL_MAX(data);
 
         if (max > 1)
         {
-            SetUInt32Value(valueIndex, MAKE_SKILL_VALUE(max, max));
+            SetSkillFieldValue(valueIndex, MAKE_SKILL_VALUE(max, max));
             if (itr->second.uState != SKILL_NEW)
                 itr->second.uState = SKILL_CHANGED;
         }
@@ -1201,17 +1201,16 @@ void Player::UpdateHonorFields()
         // update yesterday's contribution
         if (m_lastHonorUpdateTime >= yesterday)
         {
-            SetUInt32Value(PLAYER_FIELD_YESTERDAY_CONTRIBUTION,
-                           GetUInt32Value(PLAYER_FIELD_TODAY_CONTRIBUTION));
+            SetYesterdayContribution(GetTodayContribution());
 
             // this is the first update today, reset today's contribution
-            SetUInt32Value(PLAYER_FIELD_TODAY_CONTRIBUTION, 0);
+            SetTodayContribution(0);
             SetUInt32Value(PLAYER_FIELD_KILLS, MAKE_PAIR32(0, kills_today));
         }
         else
         {
             // no honor/kills yesterday or today, reset
-            SetUInt32Value(PLAYER_FIELD_YESTERDAY_CONTRIBUTION, 0);
+            SetYesterdayContribution(0);
             SetUInt32Value(PLAYER_FIELD_KILLS, 0);
         }
     }
