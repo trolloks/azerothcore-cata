@@ -777,6 +777,18 @@ void WorldSession::HandleForceSpeedChangeAck(WorldPacket& recvData)
     }
 }
 
+// The client sends this when it received an SMSG_UPDATE_OBJECT block it could not
+// turn into a real object. Purely diagnostic here: log the reported GUID so a
+// malformed create block can be traced back to the specific entity that produced it.
+// See issue #40.
+void WorldSession::HandleObjectUpdateFailedOpcode(WorldPacket& recvData)
+{
+    ObjectGuid guid;
+    recvData >> guid.ReadAsPacked();
+
+    LOG_INFO("network", "CMSG_OBJECT_UPDATE_FAILED: client could not build object {}", guid.ToString());
+}
+
 void WorldSession::HandleSetActiveMoverOpcode(WorldPacket& recvData)
 {
     LOG_DEBUG("network", "WORLD: Recvd CMSG_SET_ACTIVE_MOVER");
