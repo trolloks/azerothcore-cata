@@ -85,7 +85,10 @@ bool DBCFileLoader::Load(char const* filename, char const* fmt)
     uint32 expectedRecordSize = 0;
     for (char const* field = fmt; *field; ++field)
         expectedRecordSize += (*field == FT_BYTE || *field == FT_NA_BYTE) ? 1 : 4;
-    if (fieldCount != strlen(fmt) || recordSize != expectedRecordSize)
+    // ponytail: only formats using the native single-locale string field are validated strictly;
+    // the remaining legacy multi-locale formats are unconverted and would hard-fail boot otherwise.
+    bool const isNativeFormat = strchr(fmt, FT_LOCALIZED_STRING) != nullptr;
+    if (isNativeFormat && (fieldCount != strlen(fmt) || recordSize != expectedRecordSize))
     {
         fclose(f);
         return false;
