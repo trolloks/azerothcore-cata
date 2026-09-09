@@ -1042,13 +1042,15 @@ void ExtractDBCFiles(int locale, bool basicLocale)
 
     std::set<std::string> dbcfiles;
 
-    // get DBC file list
+    // get DBC/DB2 file list. DB2 files are only raw-extracted here (no native
+    // DB2/hotfix parser exists yet); parsing is left to downstream tooling.
     for (auto & gOpenArchive : gOpenArchives)
     {
         vector<string> files;
         gOpenArchive->GetFileListTo(files);
         for (auto & file : files)
-            if (file.rfind(".dbc") == file.length() - strlen(".dbc"))
+            if (file.rfind(".dbc") == file.length() - strlen(".dbc") ||
+                file.rfind(".db2") == file.length() - strlen(".db2"))
                 dbcfiles.insert(file);
     }
 
@@ -1083,7 +1085,7 @@ void ExtractDBCFiles(int locale, bool basicLocale)
         if (ExtractFile(dbcfile.c_str(), filename))
             ++count;
     }
-    printf("Extracted %u DBC files\n\n", count);
+    printf("Extracted %u DBC/DB2 files\n\n", count);
 }
 
 void ExtractCameraFiles(int locale, bool basicLocale)
