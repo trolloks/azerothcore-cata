@@ -77,12 +77,7 @@ typedef void(*bgZoneRef)(Battleground*, WorldPackets::WorldState::InitWorldState
 #define DEATH_EXPIRE_STEP (5*MINUTE)
 #define MAX_DEATH_COUNT 3
 
-// Cata restructured the skill list into a compact TWO_SHORT-packed field
-// (PLAYER_SKILL_LINEID_0, size 64) instead of WotLK's 3-uint32-per-skill stride --
-// out of scope for Plan 17 (field-table layout only, not a skill-system rewrite).
-// This storage is kept as plain server-side state via Player::GetSkillFieldValue/
-// SetSkillFieldValue instead of a client update field; skill display to a real Cata
-// client is not yet correct and is deferred to a future skill-system plan.
+// Preserve the skill accessor stride while storing values in Cata's six halfword arrays.
 #define PLAYER_SKILL_INDEX(x)       ((x)*3)
 #define PLAYER_SKILL_VALUE_INDEX(x) (PLAYER_SKILL_INDEX(x)+1)
 #define PLAYER_SKILL_BONUS_INDEX(x) (PLAYER_SKILL_INDEX(x)+2)
@@ -317,13 +312,7 @@ struct PlayerCreateInfoAction
 
 typedef std::list<PlayerCreateInfoAction> PlayerCreateInfoActions;
 
-struct PlayerCreateInfoSkill
-{
-    uint16 SkillId;
-    uint16 Rank;
-};
-
-typedef std::list<PlayerCreateInfoSkill> PlayerCreateInfoSkills;
+using PlayerCreateInfoSkills = std::vector<SkillRaceClassInfoEntry const*>;
 
 struct PlayerInfo
 {
@@ -1738,7 +1727,7 @@ public:
     void resetSpells();
     void LearnCustomSpells();
     void LearnDefaultSkills();
-    void LearnDefaultSkill(uint32 skillId, uint16 rank);
+    void LearnDefaultSkill(SkillRaceClassInfoEntry const* skill);
     void learnQuestRewardedSpells();
     void learnQuestRewardedSpells(Quest const* quest);
     void learnSpellHighRank(uint32 spellid);
@@ -2912,12 +2901,9 @@ protected:
     uint32 m_yesterdayContribution = 0;
 
 public:
-    // See PLAYER_SKILL_INDEX/VALUE_INDEX/BONUS_INDEX above -- 384 = 128 skills * 3 uint32
-    // slots, matching WotLK's original PLAYER_SKILL_INFO_1_1 stride/capacity exactly.
-    [[nodiscard]] uint32 GetSkillFieldValue(uint32 index) const { return m_skillInfo[index]; }
-    void SetSkillFieldValue(uint32 index, uint32 value) { m_skillInfo[index] = value; }
+    [[nodiscard]] uint32 GetSkillFieldValue(uint32 index) const;
+    void SetSkillFieldValue(uint32 index, uint32 value);
 private:
-    std::array<uint32, 384> m_skillInfo = {};
 
     PlayerMails m_mail;
     PlayerSpellMap m_spells;

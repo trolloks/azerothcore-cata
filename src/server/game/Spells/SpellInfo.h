@@ -297,7 +297,7 @@ public:
         RealPointsPerLevel(0), BasePoints(0), PointsPerComboPoint(0), ValueMultiplier(0), DamageMultiplier(0),
         BonusMultiplier(0), MiscValue(0), MiscValueB(0), Mechanic(MECHANIC_NONE), RadiusEntry(nullptr), ChainTarget(0),
         ItemType(0), TriggerSpell(0), ImplicitTargetConditions(nullptr) {}
-    SpellEffectInfo(SpellEntry const* spellEntry, SpellInfo const* spellInfo, uint8 effIndex);
+    SpellEffectInfo(SpellEffectEntry const* effect, SpellInfo const* spellInfo, uint8 effIndex);
 
     bool IsEffect() const;
     bool IsEffect(SpellEffects effectName) const;
@@ -353,9 +353,12 @@ public:
     uint32 AttributesEx5;
     uint32 AttributesEx6;
     uint32 AttributesEx7;
+    uint32 AttributesEx8;
+    uint32 AttributesEx9;
+    uint32 AttributesEx10;
     uint32 AttributesCu;
-    uint32 Stances;
-    uint32 StancesNot;
+    uint64 Stances;
+    uint64 StancesNot;
     uint32 Targets;
     uint32 TargetCreatureType;
     uint32 RequiresSpellFocus;
@@ -375,7 +378,9 @@ public:
     uint32 StartRecoveryTime;
     uint32 InterruptFlags;
     uint32 AuraInterruptFlags;
+    uint32 AuraInterruptFlags2;
     uint32 ChannelInterruptFlags;
+    uint32 ChannelInterruptFlags2;
     uint32 ProcFlags;
     uint32 ProcChance;
     uint32 ProcCharges;
@@ -389,6 +394,7 @@ public:
     uint32 ManaPerSecond;
     uint32 ManaPerSecondPerLevel;
     uint32 ManaCostPercentage;
+    float ManaCostPercentage2;
     uint32 RuneCostID;
     SpellRangeEntry const* RangeEntry;
     float  Speed;
@@ -414,6 +420,9 @@ public:
     uint32 PreventionType;
     int32  AreaGroupId;
     uint32 SchoolMask;
+    SpellScalingEntry const* ScalingEntry;
+    float BonusCoefficientFromAP;
+    float ConeAngle;
     std::array<SpellEffectInfo, MAX_SPELL_EFFECTS> Effects;
     uint32 ExplicitTargetMask;
     SpellChainNode const* ChainEntry;
@@ -427,7 +436,7 @@ public:
     bool _requireCooldownInfo;
     float JumpDistance;
 
-    SpellInfo(SpellEntry const* spellEntry);
+    SpellInfo(SpellEntry const* spellEntry, std::array<SpellEffectEntry const*, MAX_SPELL_EFFECTS> const& effects);
     ~SpellInfo();
 
     uint32 GetCategory() const;

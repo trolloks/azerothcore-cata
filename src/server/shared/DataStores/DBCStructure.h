@@ -1572,26 +1572,23 @@ struct SkillRaceClassInfoEntry
     uint32 RaceMask;                                        // 2
     uint32 ClassMask;                                       // 3
     uint32 Flags;                                           // 4
-    //uint32 MinLevel;                                      // 5
-    uint32 SkillTierID;                                     // 6
-    //uint32 SkillCostIndex;                                // 7
+    uint32 Availability;                                    // 5
+    uint32 MinLevel;                                        // 6
+    uint32 SkillTierID;                                     // 7
+    //uint32 SkillCostIndex;                                // 8
 };
 
 #define MAX_SKILL_STEP 16
 
 struct SkillLineEntry
 {
-    uint32    id;                                           // 0        m_ID
-    int32     categoryId;                                   // 1        m_categoryID
-    //uint32    skillCostID;                                // 2        m_skillCostsID
-    char const*     name[16];                               // 3-18     m_displayName_lang
-    // 19 string flags
-    //char const*     description[16];                      // 20-35    m_description_lang
-    // 36 string flags
-    uint32    spellIcon;                                    // 37       m_spellIconID
-    //char const*     alternateVerb[16];                    // 38-53    m_alternateVerb_lang
-    // 54 string flags
-    uint32    canLink;                                      // 55       m_canLink (prof. with recipes
+    uint32 id;
+    int32 categoryId;
+    char const* name[16];
+    // Description
+    uint32 spellIcon;
+    // Alternate verb
+    uint32 canLink;
 };
 
 struct SkillLineAbilityEntry
@@ -1608,7 +1605,8 @@ struct SkillLineAbilityEntry
     uint32 AcquireMethod;                                   // 9
     uint32 TrivialSkillLineRankHigh;                        // 10
     uint32 TrivialSkillLineRankLow;                         // 11
-    //uint32 CharacterPoints[2];                            // 12-13
+    uint32 NumSkillUps;                                     // 12
+    uint32 UniqueBit;                                       // 13
 };
 
 struct SkillTiersEntry
@@ -1640,113 +1638,204 @@ struct SoundEntriesEntry
 
 struct SpellEntry
 {
-    uint32    Id;                                                   // 0        m_ID
-    uint32    Category;                                             // 1        m_category
-    uint32    Dispel;                                               // 2        m_dispelType
-    uint32    Mechanic;                                             // 3        m_mechanic
-    uint32    Attributes;                                           // 4        m_attributes
-    uint32    AttributesEx;                                         // 5        m_attributesEx
-    uint32    AttributesEx2;                                        // 6        m_attributesExB
-    uint32    AttributesEx3;                                        // 7        m_attributesExC
-    uint32    AttributesEx4;                                        // 8        m_attributesExD
-    uint32    AttributesEx5;                                        // 9        m_attributesExE
-    uint32    AttributesEx6;                                        // 10       m_attributesExF
-    uint32    AttributesEx7;                                        // 11       m_attributesExG
-    uint32    Stances;                                              // 12       m_shapeshiftMask
-    uint32    StancesNot;                                           // 14       m_shapeshiftExclude
-    uint32    Targets;                                              // 16       m_targets
-    uint32    TargetCreatureType;                                   // 17       m_targetCreatureType
-    uint32    RequiresSpellFocus;                                   // 18       m_requiresSpellFocus
-    uint32    FacingCasterFlags;                                    // 19       m_facingCasterFlags
-    uint32    CasterAuraState;                                      // 20       m_casterAuraState
-    uint32    TargetAuraState;                                      // 21       m_targetAuraState
-    uint32    CasterAuraStateNot;                                   // 22       m_excludeCasterAuraState
-    uint32    TargetAuraStateNot;                                   // 23       m_excludeTargetAuraState
-    uint32    CasterAuraSpell;                                      // 24       m_casterAuraSpell
-    uint32    TargetAuraSpell;                                      // 25       m_targetAuraSpell
-    uint32    ExcludeCasterAuraSpell;                               // 26       m_excludeCasterAuraSpell
-    uint32    ExcludeTargetAuraSpell;                               // 27       m_excludeTargetAuraSpell
-    uint32    CastingTimeIndex;                                     // 28       m_castingTimeIndex
-    uint32    RecoveryTime;                                         // 29       m_recoveryTime
-    uint32    CategoryRecoveryTime;                                 // 30       m_categoryRecoveryTime
-    uint32    InterruptFlags;                                       // 31       m_interruptFlags
-    uint32    AuraInterruptFlags;                                   // 32       m_auraInterruptFlags
-    uint32    ChannelInterruptFlags;                                // 33       m_channelInterruptFlags
-    uint32    ProcFlags;                                            // 34       m_procTypeMask
-    uint32    ProcChance;                                           // 35       m_procChance
-    uint32    ProcCharges;                                          // 36       m_procCharges
-    uint32    MaxLevel;                                             // 37       m_maxLevel
-    uint32    BaseLevel;                                            // 38       m_baseLevel
-    uint32    SpellLevel;                                           // 39       m_spellLevel
-    uint32    DurationIndex;                                        // 40       m_durationIndex
-    uint32    PowerType;                                            // 41       m_powerType
-    uint32    ManaCost;                                             // 42       m_manaCost
-    uint32    ManaCostPerlevel;                                     // 43       m_manaCostPerLevel
-    uint32    ManaPerSecond;                                        // 44       m_manaPerSecond
-    uint32    ManaPerSecondPerLevel;                                // 45       m_manaPerSecondPerLeve
-    uint32    RangeIndex;                                           // 46       m_rangeIndex
-    float     Speed;                                                // 47       m_speed
-    //uint32    ModalNextSpell;                                     // 48       m_modalNextSpell not used
-    uint32    StackAmount;                                          // 49       m_cumulativeAura
-    std::array<uint32, 2> Totem;                                    // 50-51    m_totem
-    std::array<int32, MAX_SPELL_REAGENTS> Reagent;                  // 52-59    m_reagent
-    std::array<uint32, MAX_SPELL_REAGENTS> ReagentCount;            // 60-67    m_reagentCount
-    int32     EquippedItemClass;                                    // 68       m_equippedItemClass (value)
-    int32     EquippedItemSubClassMask;                             // 69       m_equippedItemSubclass (mask)
-    int32     EquippedItemInventoryTypeMask;                        // 70       m_equippedItemInvTypes (mask)
-    std::array<uint32, MAX_SPELL_EFFECTS> Effect;                   // 71-73    m_effect
-    std::array<int32, MAX_SPELL_EFFECTS> EffectDieSides;            // 74-76    m_effectDieSides
-    std::array<float, MAX_SPELL_EFFECTS> EffectRealPointsPerLevel;  // 77-79    m_effectRealPointsPerLevel
-    std::array<int32, MAX_SPELL_EFFECTS> EffectBasePoints;          // 80-82    m_effectBasePoints (must not be used in spell/auras explicitly, must be used cached Spell::m_currentBasePoints)
-    std::array<uint32, MAX_SPELL_EFFECTS> EffectMechanic;           // 83-85    m_effectMechanic
-    std::array<uint32, MAX_SPELL_EFFECTS> EffectImplicitTargetA;    // 86-88    m_implicitTargetA
-    std::array<uint32, MAX_SPELL_EFFECTS> EffectImplicitTargetB;    // 89-91    m_implicitTargetB
-    std::array<uint32, MAX_SPELL_EFFECTS> EffectRadiusIndex;        // 92-94    m_effectRadiusIndex - spellradius.dbc
-    std::array<uint32, MAX_SPELL_EFFECTS> EffectApplyAuraName;      // 95-97    m_effectAura
-    std::array<uint32, MAX_SPELL_EFFECTS> EffectAmplitude;          // 98-100   m_effectAuraPeriod
-    std::array<float, MAX_SPELL_EFFECTS> EffectValueMultiplier;     // 101-103
-    std::array<uint32, MAX_SPELL_EFFECTS> EffectChainTarget;        // 104-106  m_effectChainTargets
-    std::array<uint32, MAX_SPELL_EFFECTS> EffectItemType;           // 107-109  m_effectItemType
-    std::array<int32, MAX_SPELL_EFFECTS> EffectMiscValue;           // 110-112  m_effectMiscValue
-    std::array<int32, MAX_SPELL_EFFECTS> EffectMiscValueB;          // 113-115  m_effectMiscValueB
-    std::array<uint32, MAX_SPELL_EFFECTS> EffectTriggerSpell;       // 116-118  m_effectTriggerSpell
-    std::array<float, MAX_SPELL_EFFECTS> EffectPointsPerComboPoint; // 119-121  m_effectPointsPerCombo
-    std::array<flag96, MAX_SPELL_EFFECTS> EffectSpellClassMask;     // 122-130
-    std::array<uint32, 2> SpellVisual;                              // 131-132  m_spellVisualID
-    uint32    SpellIconID;                                          // 133      m_spellIconID
-    uint32    ActiveIconID;                                         // 134      m_activeIconID
-    uint32    SpellPriority;                                        // 135 not used
-    std::array<char const*, 16> SpellName;                          // 136-151  m_name_lang
-    //uint32    SpellNameFlag;                                      // 152 not used
-    std::array<char const*, 16> Rank;                               // 153-168  m_nameSubtext_lang
-    //uint32    RankFlags;                                          // 169 not used
-    //char const*     Description[16];                              // 170-185  m_description_lang not used
-    //uint32    DescriptionFlags;                                   // 186 not used
-    //char const*     ToolTip[16];                                  // 187-202  m_auraDescription_lang not used
-    //uint32    ToolTipFlags;                                       // 203 not used
-    uint32    ManaCostPercentage;                                   // 204      m_manaCostPct
-    uint32    StartRecoveryCategory;                                // 205      m_startRecoveryCategory
-    uint32    StartRecoveryTime;                                    // 206      m_startRecoveryTime
-    uint32    MaxTargetLevel;                                       // 207      m_maxTargetLevel
-    uint32    SpellFamilyName;                                      // 208      m_spellClassSet
-    flag96    SpellFamilyFlags;                                     // 209-211
-    uint32    MaxAffectedTargets;                                   // 212      m_maxTargets
-    uint32    DmgClass;                                             // 213      m_defenseType
-    uint32    PreventionType;                                       // 214      m_preventionType
-    //uint32    StanceBarOrder;                                     // 215      m_stanceBarOrder not used
-    std::array<float, MAX_SPELL_EFFECTS> EffectDamageMultiplier;    // 216-218  m_effectChainAmplitude
-    //uint32    MinFactionId;                                       // 219      m_minFactionID not used
-    //uint32    MinReputation;                                      // 220      m_minReputation not used
-    //uint32    RequiredAuraVision;                                 // 221      m_requiredAuraVision not used
-    std::array<uint32, 2> TotemCategory;                            // 222-223  m_requiredTotemCategoryID
-    int32     AreaGroupId;                                          // 224      m_requiredAreaGroupId
-    uint32    SchoolMask;                                           // 225      m_schoolMask
-    uint32    RuneCostID;                                           // 226      m_runeCostID
-    //uint32    SpellMissileID;                                     // 227      m_spellMissileID not used
-    //uint32  PowerDisplayId;                                       // 228      PowerDisplay.dbc, new in 3.1
-    std::array<float, MAX_SPELL_EFFECTS> EffectBonusMultiplier;     // 229-231  3.2.0
-    //uint32  SpellDescriptionVariableID;                           // 232      3.2.0
-    //uint32  SpellDifficultyId;                                    // 233      3.3.0
+    uint32 Id;
+    uint32 Attributes;
+    uint32 AttributesEx;
+    uint32 AttributesEx2;
+    uint32 AttributesEx3;
+    uint32 AttributesEx4;
+    uint32 AttributesEx5;
+    uint32 AttributesEx6;
+    uint32 AttributesEx7;
+    uint32 AttributesEx8;
+    uint32 AttributesEx9;
+    uint32 AttributesEx10;
+    uint32 CastingTimeIndex;
+    uint32 DurationIndex;
+    uint32 PowerType;
+    uint32 RangeIndex;
+    float Speed;
+    std::array<uint32, 2> SpellVisualID;
+    uint32 SpellIconID;
+    uint32 ActiveIconID;
+    std::array<char const*, 16> Name;
+    std::array<char const*, 16> NameSubtext;
+    uint32 SchoolMask;
+    uint32 RuneCostID;
+    uint32 Difficulty;
+    float BonusCoefficient;
+    uint32 ScalingID;
+    uint32 AuraOptionsID;
+    uint32 AuraRestrictionsID;
+    uint32 CastingRequirementsID;
+    uint32 CategoriesID;
+    uint32 ClassOptionsID;
+    uint32 CooldownsID;
+    uint32 EquippedItemsID;
+    uint32 InterruptsID;
+    uint32 LevelsID;
+    uint32 PowerDisplayID;
+    uint32 ReagentsID;
+    uint32 ShapeshiftID;
+    uint32 TargetRestrictionsID;
+    uint32 TotemsID;
+    uint32 RequiredProjectID;
+};
+
+struct SpellEffectEntry
+{
+    uint32 ID;
+    uint32 Effect;
+    float EffectAmplitude;
+    uint32 EffectAura;
+    uint32 EffectAuraPeriod;
+    int32 EffectBasePoints;
+    float EffectBonusCoefficient;
+    float EffectChainAmplitude;
+    uint32 EffectChainTargets;
+    int32 EffectDieSides;
+    uint32 EffectItemType;
+    uint32 EffectMechanic;
+    int32 EffectMiscValue;
+    int32 EffectMiscValueB;
+    float EffectPointsPerResource;
+    uint32 EffectRadiusIndex;
+    uint32 EffectRadiusMaxIndex;
+    float EffectRealPointsPerLevel;
+    flag96 EffectSpellClassMask;
+    uint32 EffectTriggerSpell;
+    uint32 EffectImplicitTargetA;
+    uint32 EffectImplicitTargetB;
+    uint32 SpellID;
+    uint32 EffectIndex;
+};
+
+struct SpellAuraOptionsEntry
+{
+    uint32 ID;
+    uint32 CumulativeAura;
+    uint32 ProcChance;
+    uint32 ProcCharges;
+    uint32 ProcTypeMask;
+};
+
+struct SpellAuraRestrictionsEntry
+{
+    uint32 CasterAuraState;
+    uint32 TargetAuraState;
+    uint32 ExcludeCasterAuraState;
+    uint32 ExcludeTargetAuraState;
+    uint32 CasterAuraSpell;
+    uint32 TargetAuraSpell;
+    uint32 ExcludeCasterAuraSpell;
+    uint32 ExcludeTargetAuraSpell;
+};
+
+struct SpellCastingRequirementsEntry
+{
+    uint32 ID;
+    uint32 FacingCasterFlags;
+    uint32 MinFactionID;
+    uint32 MinReputation;
+    int32 RequiredAreasID;
+    uint32 RequiredAuraVision;
+    uint32 RequiresSpellFocus;
+};
+
+struct SpellCategoriesEntry
+{
+    uint32 Category;
+    uint32 DefenseType;
+    uint32 DispelType;
+    uint32 Mechanic;
+    uint32 PreventionType;
+    uint32 StartRecoveryCategory;
+};
+
+struct SpellClassOptionsEntry
+{
+    flag96 SpellFamilyMask;
+    uint32 SpellClassSet;
+};
+
+struct SpellCooldownsEntry
+{
+    uint32 CategoryRecoveryTime;
+    uint32 RecoveryTime;
+    uint32 StartRecoveryTime;
+};
+
+struct SpellEquippedItemsEntry
+{
+    int32 EquippedItemClass;
+    int32 EquippedItemInvTypes;
+    int32 EquippedItemSubclass;
+};
+
+struct SpellInterruptsEntry
+{
+    std::array<uint32, 2> AuraInterruptFlags;
+    std::array<uint32, 2> ChannelInterruptFlags;
+    uint32 InterruptFlags;
+};
+
+struct SpellLevelsEntry
+{
+    uint32 BaseLevel;
+    uint32 MaxLevel;
+    uint32 SpellLevel;
+};
+
+struct SpellPowerEntry
+{
+    uint32 ManaCost;
+    uint32 ManaCostPerLevel;
+    uint32 PowerCostPct;
+    uint32 ManaPerSecond;
+    float PowerCostPct2;
+};
+
+struct SpellReagentsEntry
+{
+    std::array<int32, MAX_SPELL_REAGENTS> Reagents;
+    std::array<uint32, MAX_SPELL_REAGENTS> ReagentCount;
+};
+
+struct SpellScalingEntry
+{
+    int32 CastTimeMin;
+    int32 CastTimeMax;
+    int32 CastTimeMaxLevel;
+    int32 Class;
+    std::array<float, 3> Coefficient;
+    std::array<float, 3> Variance;
+    std::array<float, 3> ComboPointsCoefficient;
+    float NerfFactor;
+    int32 NerfMaxLevel;
+};
+
+struct SpellShapeshiftEntry
+{
+    uint32 ID;
+    std::array<uint32, 2> ShapeshiftExclude;
+    std::array<uint32, 2> ShapeshiftMask;
+};
+
+struct SpellTargetRestrictionsEntry
+{
+    uint32 ID;
+    float ConeAngle;
+    uint32 MaxTargets;
+    uint32 MaxTargetLevel;
+    uint32 TargetCreatureType;
+    uint32 Targets;
+};
+
+struct SpellTotemsEntry
+{
+    uint32 ID;
+    std::array<uint32, 2> RequiredTotemCategoryID;
+    std::array<uint32, 2> Totem;
 };
 
 typedef std::set<std::pair<bool, uint32>> SpellCategorySet;

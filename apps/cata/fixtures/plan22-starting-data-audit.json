@@ -333,8 +333,8 @@
       "outfit": 0
     }
   ],
-  "source_provenance_limits": "World and hotfix dumps match the official release. Client DBC extraction provenance remains unverified; DB2 headers declare build 15595. No AC loader or character-creation acceptance yet.",
-  "source_provenance_verified": false,
+  "source_provenance_limits": "User confirmed on 2026-09-09 that the Cata DBCs were extracted from their own build-15595 client. World and hotfix dumps match the official release. The exact locale patch chain has not been reproduced; native AC loader and creation acceptance remain unverified.",
+  "source_provenance_verified": true,
   "sources": [
     {
       "file": "TDB_full_world_434.22011_2022_01_09.sql",

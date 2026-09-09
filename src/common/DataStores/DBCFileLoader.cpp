@@ -82,6 +82,15 @@ bool DBCFileLoader::Load(char const* filename, char const* fmt)
 
     EndianConvert(stringSize);
 
+    uint32 expectedRecordSize = 0;
+    for (char const* field = fmt; *field; ++field)
+        expectedRecordSize += (*field == FT_BYTE || *field == FT_NA_BYTE) ? 1 : 4;
+    if (fieldCount != strlen(fmt) || recordSize != expectedRecordSize)
+    {
+        fclose(f);
+        return false;
+    }
+
     fieldsOffset = new uint32[fieldCount];
     fieldsOffset[0] = 0;
 
@@ -139,6 +148,9 @@ uint32 DBCFileLoader::GetFormatRecordSize(char const* format, int32* index_pos)
                 break;
             case FT_INT:
                 recordsize += sizeof(uint32);
+                break;
+            case FT_LOCALIZED_STRING:
+                recordsize += DBC_LOCALE_SLOTS * sizeof(char*);
                 break;
             case FT_STRING:
                 recordsize += sizeof(char*);
@@ -252,6 +264,13 @@ char* DBCFileLoader::AutoProduceData(char const* format, uint32& records, char**
                     *((uint8*)(&dataTable[offset])) = getRecord(y).getUInt8(x);
                     offset += sizeof(uint8);
                     break;
+                case FT_LOCALIZED_STRING:
+                    for (uint32 locale = 0; locale < DBC_LOCALE_SLOTS; ++locale)
+                    {
+                        *reinterpret_cast<char**>(&dataTable[offset]) = nullptr;
+                        offset += sizeof(char*);
+                    }
+                    break;
                 case FT_STRING:
                     *((char**)(&dataTable[offset])) = nullptr;   // will replace non-empty or "" strings in AutoProduceStrings
                     offset += sizeof(char*);
@@ -301,6 +320,19 @@ char* DBCFileLoader::AutoProduceStrings(char const* format, char* dataTable)
                 case FT_BYTE:
                     offset += sizeof(uint8);
                     break;
+                case FT_LOCALIZED_STRING:
+                {
+                    // ponytail: one locale per store; select locale slots when multi-locale Cata loading is added.
+                    char const* value = getRecord(y).getString(x);
+                    for (uint32 locale = 0; locale < DBC_LOCALE_SLOTS; ++locale)
+                    {
+                        char** slot = reinterpret_cast<char**>(&dataTable[offset]);
+                        if (!*slot || !**slot)
+                            *slot = stringPool + (value - reinterpret_cast<char const*>(stringTable));
+                        offset += sizeof(char*);
+                    }
+                    break;
+                }
                 case FT_STRING:
                 {
                     // fill only not filled entries

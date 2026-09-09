@@ -4510,79 +4510,34 @@ void ObjectMgr::LoadPlayerInfo()
         }
     }
 
-    // Load playercreate skills
     LOG_INFO("server.loading", "Loading Player Create Skill Data...");
     {
         uint32 oldMSTime = getMSTime();
-
-        QueryResult result = WorldDatabase.Query("SELECT raceMask, classMask, skill, `rank` FROM playercreateinfo_skills");
-
-        if (!result)
+        uint32 count = 0;
+        for (SkillRaceClassInfoEntry const* skill : sSkillRaceClassInfoStore)
         {
-            LOG_WARN("server.loading", ">> Loaded 0 Player Create Skills. DB Table `playercreateinfo_skills` Is Empty.");
-        }
-        else
-        {
-            uint32 count = 0;
+            if (skill->Availability != 1 || !sSkillLineStore.LookupEntry(skill->SkillID))
+                continue;
 
-            do
+            for (uint32 race = RACE_HUMAN; race < sRaceMgr->GetMaxRaces(); ++race)
             {
-                Field* fields = result->Fetch();
-                uint32 raceMask = fields[0].Get<uint32>();
-                uint32 classMask = fields[1].Get<uint32>();
-                PlayerCreateInfoSkill skill;
-                skill.SkillId = fields[2].Get<uint16>();
-                skill.Rank = fields[3].Get<uint16>();
-
-                if (skill.Rank >= MAX_SKILL_STEP)
-                {
-                    LOG_ERROR("sql.sql", "Skill rank value {} set for skill {} raceMask {} classMask {} is too high, max allowed value is {}", skill.Rank, skill.SkillId, raceMask, classMask, MAX_SKILL_STEP);
+                if (skill->RaceMask && !(skill->RaceMask & (1u << (race - 1))))
                     continue;
-                }
 
-                if (raceMask != 0 && !(raceMask & sRaceMgr->GetPlayableRaceMask()))
+                for (uint32 classId = CLASS_WARRIOR; classId < MAX_CLASSES; ++classId)
                 {
-                    LOG_ERROR("sql.sql", "Wrong race mask {} in `playercreateinfo_skills` table, ignoring.", raceMask);
-                    continue;
-                }
+                    if (skill->ClassMask && !(skill->ClassMask & (1u << (classId - 1))))
+                        continue;
 
-                if (classMask != 0 && !(classMask & CLASSMASK_ALL_PLAYABLE))
-                {
-                    LOG_ERROR("sql.sql", "Wrong class mask {} in `playercreateinfo_skills` table, ignoring.", classMask);
-                    continue;
-                }
-
-                if (!sSkillLineStore.LookupEntry(skill.SkillId))
-                {
-                    LOG_ERROR("sql.sql", "Wrong skill id {} in `playercreateinfo_skills` table, ignoring.", skill.SkillId);
-                    continue;
-                }
-
-                for (uint32 raceIndex = RACE_HUMAN; raceIndex < sRaceMgr->GetMaxRaces(); ++raceIndex)
-                {
-                    if (raceMask == 0 || ((1 << (raceIndex - 1)) & raceMask))
+                    if (PlayerInfo* info = _playerInfo[race][classId])
                     {
-                        for (uint32 classIndex = CLASS_WARRIOR; classIndex < MAX_CLASSES; ++classIndex)
-                        {
-                            if (classMask == 0 || ((1 << (classIndex - 1)) & classMask))
-                            {
-                                if (!GetSkillRaceClassInfo(skill.SkillId, raceIndex, classIndex))
-                                    continue;
-
-                                if (PlayerInfo* info = _playerInfo[raceIndex][classIndex])
-                                {
-                                    info->skills.push_back(skill);
-                                    ++count;
-                                }
-                            }
-                        }
+                        info->skills.push_back(skill);
+                        ++count;
                     }
                 }
-            } while (result->NextRow());
-
-            LOG_INFO("server.loading", ">> Loaded {} Player Create Skills in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
-            LOG_INFO("server.loading", " ");
+            }
         }
+        LOG_INFO("server.loading", ">> Loaded {} Player Create Skills in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
     }
 
     // Load playercreate spells

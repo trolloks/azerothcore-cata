@@ -21,6 +21,8 @@
 #include "DBCStores.h"
 #include "GameTime.h"
 #include "Player.h"
+#include "SpellInfo.h"
+#include "SpellMgr.h"
 
 AuctionHouseWorkerThread::AuctionHouseWorkerThread(ProducerConsumerQueue<AuctionSearcherRequest*>* requestQueue, MPSCQueue<AuctionSearcherResponse>* responseQueue)
 {
@@ -689,9 +691,9 @@ bool AuctionHouseUsablePlayerInfo::PlayerCanUseItem(ItemTemplate const* proto) c
     if (proto->Spells[0].SpellId)
     {
         // this check is for vanilla recipies. Spells are learned through individual learning spells instead of spell 483 and 55884
-        SpellEntry const* spellEntry = sSpellStore.LookupEntry(proto->Spells[0].SpellId);
-        if (spellEntry && spellEntry->Effect[0] == SPELL_EFFECT_LEARN_SPELL && spellEntry->EffectTriggerSpell[0])
-            if (HasSpell(spellEntry->EffectTriggerSpell[0]))
+        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(proto->Spells[0].SpellId);
+        if (spellInfo && spellInfo->Effects[0].Effect == SPELL_EFFECT_LEARN_SPELL && spellInfo->Effects[0].TriggerSpell)
+            if (HasSpell(spellInfo->Effects[0].TriggerSpell))
                 return false;
 
         // this check is for tbc/wotlk recipies. Spells are learned through 483 and 55884, the second spell in the item will be the actual spell learned.

@@ -119,7 +119,10 @@ Implementation is split into blocking children of #57:
 2. [#59: native items and starting outfits](https://github.com/trolloks/azerothcore-cata/issues/59).
 3. [#60: starting stats and world profiles](https://github.com/trolloks/azerothcore-cata/issues/60).
 
-Start with #58. Coordinate these changes and the saved #52 protocol patch before one authorized build
+#58 has a native loader draft and [static dependency audit](../apps/cata/fixtures/plan22-native-spell-audit.json).
+Client-data provenance is confirmed. Four optional references need fresh extraction checks;
+loader and creation acceptance remain unverified. Coordinate these changes and the saved #52
+protocol patch before one authorized build
 using the existing ccache/PCH tree and one client session. Reuse cached prepare inputs and binaries.
 Keep #52 and #57 open until normal creation, correct starting state, and persistence are accepted.
 

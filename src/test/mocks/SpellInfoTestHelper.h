@@ -22,282 +22,148 @@
 #include "SharedDefines.h"
 #include <memory>
 
-/**
- * @brief Helper class to create SpellEntry test instances
- *
- * This creates a SpellEntry with sensible defaults for unit testing.
- */
-class TestSpellEntryHelper
-{
-public:
-    TestSpellEntryHelper()
-    {
-        // Set safe defaults
-        _entry.EquippedItemClass = -1;
-        _entry.SchoolMask = SPELL_SCHOOL_MASK_NORMAL;
-
-        // Initialize empty strings
-        for (auto& name : _entry.SpellName)
-            name = "";
-        for (auto& rank : _entry.Rank)
-            rank = "";
-    }
-
-    TestSpellEntryHelper& WithId(uint32 id)
-    {
-        _entry.Id = id;
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithSpellFamilyName(uint32 familyName)
-    {
-        _entry.SpellFamilyName = familyName;
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithSpellFamilyFlags(uint32 flag0, uint32 flag1 = 0, uint32 flag2 = 0)
-    {
-        _entry.SpellFamilyFlags[0] = flag0;
-        _entry.SpellFamilyFlags[1] = flag1;
-        _entry.SpellFamilyFlags[2] = flag2;
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithSchoolMask(uint32 schoolMask)
-    {
-        _entry.SchoolMask = schoolMask;
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithProcFlags(uint32 procFlags)
-    {
-        _entry.ProcFlags = procFlags;
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithProcChance(uint32 procChance)
-    {
-        _entry.ProcChance = procChance;
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithProcCharges(uint32 procCharges)
-    {
-        _entry.ProcCharges = procCharges;
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithDmgClass(uint32 dmgClass)
-    {
-        _entry.DmgClass = dmgClass;
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithAttributesEx3(uint32 attr)
-    {
-        _entry.AttributesEx3 = attr;
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithAttributesEx(uint32 attr)
-    {
-        _entry.AttributesEx = attr;
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithEffect(uint8 effIndex, uint32 effect, uint32 auraType = 0)
-    {
-        if (effIndex < MAX_SPELL_EFFECTS)
-        {
-            _entry.Effect[effIndex] = effect;
-            _entry.EffectApplyAuraName[effIndex] = auraType;
-        }
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithEffectImplicitTargets(uint8 effIndex, uint32 targetA, uint32 targetB = 0)
-    {
-        if (effIndex < MAX_SPELL_EFFECTS)
-        {
-            _entry.EffectImplicitTargetA[effIndex] = targetA;
-            _entry.EffectImplicitTargetB[effIndex] = targetB;
-        }
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithEffectTriggerSpell(uint8 effIndex, uint32 triggerSpell)
-    {
-        if (effIndex < MAX_SPELL_EFFECTS)
-        {
-            _entry.EffectTriggerSpell[effIndex] = triggerSpell;
-        }
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithEffectBasePoints(uint8 effIndex, int32 basePoints)
-    {
-        if (effIndex < MAX_SPELL_EFFECTS)
-            _entry.EffectBasePoints[effIndex] = basePoints;
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithEffectMiscValue(uint8 effIndex, int32 miscValue)
-    {
-        if (effIndex < MAX_SPELL_EFFECTS)
-            _entry.EffectMiscValue[effIndex] = miscValue;
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithEffectDieSides(uint8 effIndex, int32 dieSides)
-    {
-        if (effIndex < MAX_SPELL_EFFECTS)
-            _entry.EffectDieSides[effIndex] = dieSides;
-        return *this;
-    }
-
-    TestSpellEntryHelper& WithAttributes(uint32 attr)
-    {
-        _entry.Attributes = attr;
-        return *this;
-    }
-
-    SpellEntry const* Get() const
-    {
-        return &_entry;
-    }
-
-private:
-    SpellEntry _entry{};
-};
-
-/**
- * @brief Builder class for creating SpellInfo test instances
- *
- * This helper allows easy construction of SpellInfo objects for unit testing
- * without requiring DBC data.
- */
 class SpellInfoBuilder
 {
 public:
-    SpellInfoBuilder() : _entryHelper() {}
+    SpellInfoBuilder()
+    {
+        SpellEntry entry{};
+        entry.SchoolMask = SPELL_SCHOOL_MASK_NORMAL;
+        entry.Name.fill("");
+        entry.NameSubtext.fill("");
+        _spell = std::make_unique<SpellInfo>(&entry, std::array<SpellEffectEntry const*, MAX_SPELL_EFFECTS>{});
+    }
 
     SpellInfoBuilder& WithId(uint32 id)
     {
-        _entryHelper.WithId(id);
+        _spell->Id = id;
         return *this;
     }
 
     SpellInfoBuilder& WithSpellFamilyName(uint32 familyName)
     {
-        _entryHelper.WithSpellFamilyName(familyName);
+        _spell->SpellFamilyName = familyName;
         return *this;
     }
 
     SpellInfoBuilder& WithSpellFamilyFlags(uint32 flag0, uint32 flag1 = 0, uint32 flag2 = 0)
     {
-        _entryHelper.WithSpellFamilyFlags(flag0, flag1, flag2);
+        _spell->SpellFamilyFlags[0] = flag0;
+        _spell->SpellFamilyFlags[1] = flag1;
+        _spell->SpellFamilyFlags[2] = flag2;
         return *this;
     }
 
     SpellInfoBuilder& WithSchoolMask(uint32 schoolMask)
     {
-        _entryHelper.WithSchoolMask(schoolMask);
+        _spell->SchoolMask = schoolMask;
         return *this;
     }
 
     SpellInfoBuilder& WithProcFlags(uint32 procFlags)
     {
-        _entryHelper.WithProcFlags(procFlags);
+        _spell->ProcFlags = procFlags;
         return *this;
     }
 
     SpellInfoBuilder& WithProcChance(uint32 procChance)
     {
-        _entryHelper.WithProcChance(procChance);
+        _spell->ProcChance = procChance;
         return *this;
     }
 
     SpellInfoBuilder& WithProcCharges(uint32 procCharges)
     {
-        _entryHelper.WithProcCharges(procCharges);
+        _spell->ProcCharges = procCharges;
         return *this;
     }
 
     SpellInfoBuilder& WithDmgClass(uint32 dmgClass)
     {
-        _entryHelper.WithDmgClass(dmgClass);
+        _spell->DmgClass = dmgClass;
         return *this;
     }
 
     SpellInfoBuilder& WithAttributesEx3(uint32 attr)
     {
-        _entryHelper.WithAttributesEx3(attr);
+        _spell->AttributesEx3 = attr;
         return *this;
     }
 
     SpellInfoBuilder& WithAttributesEx(uint32 attr)
     {
-        _entryHelper.WithAttributesEx(attr);
+        _spell->AttributesEx = attr;
         return *this;
     }
 
     SpellInfoBuilder& WithEffect(uint8 effIndex, uint32 effect, uint32 auraType = 0)
     {
-        _entryHelper.WithEffect(effIndex, effect, auraType);
+        if (effIndex < MAX_SPELL_EFFECTS)
+        {
+            _spell->Effects[effIndex].Effect = effect;
+            _spell->Effects[effIndex].ApplyAuraName = AuraType(auraType);
+        }
         return *this;
     }
 
     SpellInfoBuilder& WithEffectImplicitTargets(uint8 effIndex, uint32 targetA, uint32 targetB = 0)
     {
-        _entryHelper.WithEffectImplicitTargets(effIndex, targetA, targetB);
+        if (effIndex < MAX_SPELL_EFFECTS)
+        {
+            _spell->Effects[effIndex].TargetA = SpellImplicitTargetInfo(targetA);
+            _spell->Effects[effIndex].TargetB = SpellImplicitTargetInfo(targetB);
+        }
         return *this;
     }
 
     SpellInfoBuilder& WithEffectTriggerSpell(uint8 effIndex, uint32 triggerSpell)
     {
-        _entryHelper.WithEffectTriggerSpell(effIndex, triggerSpell);
+        if (effIndex < MAX_SPELL_EFFECTS)
+        {
+            _spell->Effects[effIndex].TriggerSpell = triggerSpell;
+        }
         return *this;
     }
 
     SpellInfoBuilder& WithEffectBasePoints(uint8 effIndex, int32 basePoints)
     {
-        _entryHelper.WithEffectBasePoints(effIndex, basePoints);
+        if (effIndex < MAX_SPELL_EFFECTS)
+            _spell->Effects[effIndex].BasePoints = basePoints;
         return *this;
     }
 
     SpellInfoBuilder& WithEffectMiscValue(uint8 effIndex, int32 miscValue)
     {
-        _entryHelper.WithEffectMiscValue(effIndex, miscValue);
+        if (effIndex < MAX_SPELL_EFFECTS)
+            _spell->Effects[effIndex].MiscValue = miscValue;
         return *this;
     }
 
     SpellInfoBuilder& WithEffectDieSides(uint8 effIndex, int32 dieSides)
     {
-        _entryHelper.WithEffectDieSides(effIndex, dieSides);
+        if (effIndex < MAX_SPELL_EFFECTS)
+            _spell->Effects[effIndex].DieSides = dieSides;
         return *this;
     }
 
     SpellInfoBuilder& WithAttributes(uint32 attr)
     {
-        _entryHelper.WithAttributes(attr);
+        _spell->Attributes = attr;
         return *this;
     }
 
-    // Builds and returns a SpellInfo pointer
-    // Note: Caller is responsible for lifetime management
     SpellInfo* Build()
     {
-        return new SpellInfo(_entryHelper.Get());
+        return _spell.release();
     }
 
-    // Builds and returns a managed SpellInfo pointer
     std::unique_ptr<SpellInfo> BuildUnique()
     {
-        return std::unique_ptr<SpellInfo>(new SpellInfo(_entryHelper.Get()));
+        return std::move(_spell);
     }
 
 private:
-    TestSpellEntryHelper _entryHelper;
+    std::unique_ptr<SpellInfo> _spell;
 };
 
-#endif //AZEROTHCORE_SPELL_INFO_TEST_HELPER_H
+#endif // AZEROTHCORE_SPELL_INFO_TEST_HELPER_H

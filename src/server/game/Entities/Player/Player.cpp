@@ -3294,7 +3294,7 @@ bool Player::_addSpell(uint32 spellId, uint8 addSpecMask, bool temporary, bool l
             /// @todo confirm if rogues start wth lockpicking skill at level 1 but only recieve the spell to use it at level 16
             // Added for runeforging, it is confirmed via sniff that this happens when death knights learn the spell, not on character creation.
             if ((_spell_idx->second->AcquireMethod == SKILL_LINE_ABILITY_LEARNED_ON_SKILL_LEARN && !HasSkill(pSkill->id)) || ((pSkill->id == SKILL_LOCKPICKING || pSkill->id == SKILL_RUNEFORGING) && _spell_idx->second->TrivialSkillLineRankHigh == 0))
-                LearnDefaultSkill(pSkill->id, 0);
+                LearnDefaultSkill(GetSkillRaceClassInfo(pSkill->id, getRace(), getClass()));
 
             if (pSkill->id == SKILL_MOUNTS && !Has310Flyer(false))
                 for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
@@ -5378,6 +5378,23 @@ void Player::SetRegularAttackTime()
     }
 }
 
+uint32 Player::GetSkillFieldValue(uint32 index) const
+{
+    uint32 skill = index / 3;
+    uint32 field = PLAYER_SKILL_LINEID_0 + (index % 3) * 128 + skill / 2;
+    uint8 offset = skill % 2;
+    return MAKE_PAIR32(GetUInt16Value(field, offset), GetUInt16Value(field + 64, offset));
+}
+
+void Player::SetSkillFieldValue(uint32 index, uint32 value)
+{
+    uint32 skill = index / 3;
+    uint32 field = PLAYER_SKILL_LINEID_0 + (index % 3) * 128 + skill / 2;
+    uint8 offset = skill % 2;
+    SetUInt16Value(field, offset, PAIR32_LOPART(value));
+    SetUInt16Value(field + 64, offset, PAIR32_HIPART(value));
+}
+
 void Player::ModifySkillBonus(uint32 skillid, int32 val, bool talent)
 {
     SkillStatusMap::const_iterator itr = mSkillStatus.find(skillid);
@@ -5386,14 +5403,14 @@ void Player::ModifySkillBonus(uint32 skillid, int32 val, bool talent)
 
     uint32 bonusIndex = PLAYER_SKILL_BONUS_INDEX(itr->second.pos);
 
-    uint32 bonus_val = GetUInt32Value(bonusIndex);
+    uint32 bonus_val = GetSkillFieldValue(bonusIndex);
     int16 temp_bonus = SKILL_TEMP_BONUS(bonus_val);
     int16 perm_bonus = SKILL_PERM_BONUS(bonus_val);
 
     if (talent)                                          // permanent bonus stored in high part
-        SetUInt32Value(bonusIndex, MAKE_SKILL_BONUS(temp_bonus, perm_bonus + val));
+        SetSkillFieldValue(bonusIndex, MAKE_SKILL_BONUS(temp_bonus, perm_bonus + val));
     else                                                // temporary/item bonus stored in low part
-        SetUInt32Value(bonusIndex, MAKE_SKILL_BONUS(temp_bonus + val, perm_bonus));
+        SetSkillFieldValue(bonusIndex, MAKE_SKILL_BONUS(temp_bonus + val, perm_bonus));
 }
 
 // This functions sets a skill line value (and adds if doesn't exist yet)
@@ -12060,23 +12077,18 @@ void Player::LearnCustomSpells()
 
 void Player::LearnDefaultSkills()
 {
-    // learn default race/class skills
     PlayerInfo const* info = sObjectMgr->GetPlayerInfo(getRace(), getClass());
-    for (PlayerCreateInfoSkills::const_iterator itr = info->skills.begin(); itr != info->skills.end(); ++itr)
-    {
-        uint32 skillId = itr->SkillId;
-        if (HasSkill(skillId))
-            continue;
-
-        LearnDefaultSkill(skillId, itr->Rank);
-    }
+    for (SkillRaceClassInfoEntry const* skill : info->skills)
+        if (!HasSkill(skill->SkillID) && skill->MinLevel <= GetLevel())
+            LearnDefaultSkill(skill);
 }
 
-void Player::LearnDefaultSkill(uint32 skillId, uint16 rank)
+void Player::LearnDefaultSkill(SkillRaceClassInfoEntry const* rcInfo)
 {
-    SkillRaceClassInfoEntry const* rcInfo = GetSkillRaceClassInfo(skillId, getRace(), getClass());
-    if (!rcInfo)
+    if (!rcInfo || rcInfo->MinLevel > GetLevel())
         return;
+
+    uint16 skillId = rcInfo->SkillID;
 
     LOG_DEBUG("entities.player.loading", "PLAYER (Class: {} Race: {}): Adding initial skill, id = {}", uint32(getClass()), uint32(getRace()), skillId);
     switch (GetSkillRangeType(rcInfo))
@@ -12117,13 +12129,9 @@ void Player::LearnDefaultSkill(uint32 skillId, uint16 rank)
             break;
         case SKILL_RANGE_RANK:
         {
-            if (!rank)
-            {
-                break;
-            }
-
             SkillTiersEntry const* tier = sSkillTiersStore.LookupEntry(rcInfo->SkillTierID);
-            uint16 maxValue = tier->Value[std::max<int32>(rank - 1, 0)];
+            ASSERT(tier && tier->Value[0], "Missing initial tier {} for skill {}", rcInfo->SkillTierID, skillId);
+            uint16 maxValue = tier->Value[0];
             uint16 skillValue = 1;
             if (rcInfo->Flags & SKILL_FLAG_ALWAYS_MAX_VALUE)
             {
@@ -12134,7 +12142,7 @@ void Player::LearnDefaultSkill(uint32 skillId, uint16 rank)
                 skillValue = std::min(std::max<uint16>({ uint16(1), uint16((GetLevel() - 1) * 5) }), maxValue);
             }
 
-            SetSkill(skillId, rank, skillValue, maxValue);
+            SetSkill(skillId, 1, skillValue, maxValue);
             break;
         }
         default:
@@ -12209,8 +12217,13 @@ void Player::learnSkillRewardedSpells(uint32 skill_id, uint32 skill_value)
         SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(pAbility->Spell);
         if (!spellInfo)
         {
+            LOG_ERROR("entities.player.loading", "Skill {} cannot grant missing or unsupported spell {}",
+                skill_id, pAbility->Spell);
             continue;
         }
+
+        if (std::max(spellInfo->SpellLevel, spellInfo->BaseLevel) > GetLevel())
+            continue;
 
         if (pAbility->AcquireMethod != SKILL_LINE_ABILITY_LEARNED_ON_SKILL_VALUE && pAbility->AcquireMethod != SKILL_LINE_ABILITY_LEARNED_ON_SKILL_LEARN)
         {
@@ -12244,7 +12257,10 @@ void Player::learnSkillRewardedSpells(uint32 skill_id, uint32 skill_value)
                 auto bounds = sSpellMgr->GetSkillLineAbilityMapBounds(pAbility->SupercededBySpell);
                 for (auto itr = bounds.first; itr != bounds.second; ++itr)
                 {
-                    if (itr->second->AcquireMethod == SKILL_LINE_ABILITY_LEARNED_ON_SKILL_LEARN && skill_value >= itr->second->MinSkillLineRank)
+                    SpellInfo const* nextSpell = sSpellMgr->GetSpellInfo(itr->second->Spell);
+                    if (itr->second->AcquireMethod == SKILL_LINE_ABILITY_LEARNED_ON_SKILL_LEARN
+                        && skill_value >= itr->second->MinSkillLineRank && nextSpell
+                        && std::max(nextSpell->SpellLevel, nextSpell->BaseLevel) <= GetLevel())
                     {
                         skipCurrent = true;
                         break;
@@ -14005,7 +14021,7 @@ void Player::_LoadSkills(PreparedQueryResult result)
             {
                 for (uint32 i = 0; i < MAX_SKILL_STEP; ++i)
                 {
-                    if (skillTier->Value[skillStep] == max)
+                    if (skillTier->Value[i] == max)
                     {
                         skillStep = i + 1;
                         break;
