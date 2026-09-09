@@ -1153,6 +1153,10 @@ void Player::UpdateSkillsForLevel()
             }
         }
     }
+
+    for (auto const& [skill, status] : mSkillStatus)
+        if (status.uState != SKILL_DELETED)
+            learnSkillRewardedSpells(skill, GetPureSkillValue(skill));
 }
 
 void Player::UpdateSkillsToMaxSkillsForLevel()

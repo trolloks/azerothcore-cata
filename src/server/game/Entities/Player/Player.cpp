@@ -12079,13 +12079,13 @@ void Player::LearnDefaultSkills()
 {
     PlayerInfo const* info = sObjectMgr->GetPlayerInfo(getRace(), getClass());
     for (SkillRaceClassInfoEntry const* skill : info->skills)
-        if (!HasSkill(skill->SkillID) && skill->MinLevel <= GetLevel())
+        if (!HasSkill(skill->SkillID) && skill->MinLevel <= int32(GetLevel()))
             LearnDefaultSkill(skill);
 }
 
 void Player::LearnDefaultSkill(SkillRaceClassInfoEntry const* rcInfo)
 {
-    if (!rcInfo || rcInfo->MinLevel > GetLevel())
+    if (!rcInfo || rcInfo->MinLevel > int32(GetLevel()))
         return;
 
     uint16 skillId = rcInfo->SkillID;
@@ -12214,17 +12214,6 @@ void Player::learnSkillRewardedSpells(uint32 skill_id, uint32 skill_value)
 
     for (SkillLineAbilityEntry const* pAbility : sortedAbilities)
     {
-        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(pAbility->Spell);
-        if (!spellInfo)
-        {
-            LOG_ERROR("entities.player.loading", "Skill {} cannot grant missing or unsupported spell {}",
-                skill_id, pAbility->Spell);
-            continue;
-        }
-
-        if (std::max(spellInfo->SpellLevel, spellInfo->BaseLevel) > GetLevel())
-            continue;
-
         if (pAbility->AcquireMethod != SKILL_LINE_ABILITY_LEARNED_ON_SKILL_VALUE && pAbility->AcquireMethod != SKILL_LINE_ABILITY_LEARNED_ON_SKILL_LEARN)
         {
             continue;
@@ -12241,6 +12230,17 @@ void Player::learnSkillRewardedSpells(uint32 skill_id, uint32 skill_value)
         {
             continue;
         }
+
+        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(pAbility->Spell);
+        if (!spellInfo)
+        {
+            LOG_ERROR("entities.player.loading", "Skill {} cannot grant missing or unsupported spell {}",
+                skill_id, pAbility->Spell);
+            continue;
+        }
+
+        if (std::max(spellInfo->SpellLevel, spellInfo->BaseLevel) > GetLevel())
+            continue;
 
         // need unlearn spell
         if (skill_value < pAbility->MinSkillLineRank && pAbility->AcquireMethod == SKILL_LINE_ABILITY_LEARNED_ON_SKILL_VALUE)

@@ -1568,13 +1568,13 @@ struct ScalingStatValuesEntry
 struct SkillRaceClassInfoEntry
 {
     //uint32 ID;                                            // 0
-    uint32 SkillID;                                         // 1
-    uint32 RaceMask;                                        // 2
-    uint32 ClassMask;                                       // 3
-    uint32 Flags;                                           // 4
-    uint32 Availability;                                    // 5
-    uint32 MinLevel;                                        // 6
-    uint32 SkillTierID;                                     // 7
+    int32 SkillID;                                         // 1
+    int32 RaceMask;                                        // 2
+    int32 ClassMask;                                       // 3
+    int32 Flags;                                           // 4
+    int32 Availability;                                    // 5
+    int32 MinLevel;                                        // 6
+    int32 SkillTierID;                                     // 7
     //uint32 SkillCostIndex;                                // 8
 };
 
@@ -1904,18 +1904,17 @@ struct SpellRuneCostEntry
 
 struct SpellShapeshiftFormEntry
 {
-    uint32 ID;                                              // 0
-    //uint32 bonusActionBar;                                // 1 unused
-    //char const*  Name[16];                                // 2-17 unused
-    //uint32 NameFlags;                                     // 18 unused
-    uint32 flags1;                                          // 19
-    int32  creatureType;                                    // 20 <= 0 humanoid, other normal creature types
-    //uint32 attackIconID;                                  // 21 unused
-    uint32 attackSpeed;                                     // 22
-    uint32 modelID_A;                                       // 23 alliance modelid
-    uint32 modelID_H;                                       // 24 horde modelid (only one form)
-    //uint32 creatureDisplayID[2];                          // 25-26 unused
-    uint32 stanceSpell[MAX_SHAPESHIFT_SPELLS];              // 27 - 34
+    uint32 ID;                                             // 0
+    // Bonus action bar, name                               // 1-2
+    uint32 flags1;                                         // 3
+    int32 creatureType;                                    // 4
+    // Attack icon                                         // 5
+    uint32 attackSpeed;                                    // 6
+    uint32 modelID_A;                                      // 7
+    uint32 modelID_H;                                      // 8
+    // Additional creature display IDs                     // 9-10
+    uint32 stanceSpell[MAX_SHAPESHIFT_SPELLS];              // 11-18
+    // Mount type, exit sound                              // 19-20
 };
 
 struct SpellDurationEntry
