@@ -2785,14 +2785,14 @@ void WorldSession::HandleCharFactionOrRaceChangeCallback(std::shared_ptr<Charact
 
 void WorldSession::SendCharCreate(ResponseCodes result)
 {
-    WorldPacket data(SMSG_CHAR_CREATE, 1);
+    WorldPacket data(SMSG_CREATE_CHAR, 1);
     data << uint8(result);
     SendPacket(&data);
 }
 
 void WorldSession::SendCharDelete(ResponseCodes result)
 {
-    WorldPacket data(SMSG_CHAR_DELETE, 1);
+    WorldPacket data(SMSG_DELETE_CHAR, 1);
     data << uint8(result);
     SendPacket(&data);
 }

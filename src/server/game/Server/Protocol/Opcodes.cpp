@@ -211,9 +211,9 @@ void OpcodeTable::Initialize()
     /*0x0502*/ DEFINE_HANDLER(CMSG_CHAR_ENUM,                                                        STATUS_AUTHED,     PROCESS_THREADUNSAFE,   &WorldSession::HandleCharEnumOpcode                     );
     /*0x6425*/ DEFINE_HANDLER(CMSG_CHAR_DELETE,                                                      STATUS_AUTHED,     PROCESS_THREADUNSAFE,   &WorldSession::HandleCharDeleteOpcode                   );
     /*0x0039*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_AUTH_SRP6_RESPONSE,                                 STATUS_NEVER);
-    /*0x2D05*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_CHAR_CREATE,                                        STATUS_NEVER);
+    /*0x2D05*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_CREATE_CHAR,                                        STATUS_NEVER);
     /*0x10B0*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_CHAR_ENUM,                                          STATUS_NEVER);
-    /*0x003C*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_CHAR_DELETE,                                        STATUS_NEVER);
+    /*0x0304*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_DELETE_CHAR,                                        STATUS_NEVER);
     /*0x05B1*/ DEFINE_HANDLER(CMSG_PLAYER_LOGIN,                                                     STATUS_AUTHED,     PROCESS_THREADUNSAFE,   &WorldSession::HandlePlayerLoginOpcode                  );
     /*0x79B1*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_NEW_WORLD,                                          STATUS_NEVER);
     /*0x18A6*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_TRANSFER_PENDING,                                   STATUS_NEVER);

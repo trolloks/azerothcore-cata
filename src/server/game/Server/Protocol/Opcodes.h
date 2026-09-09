@@ -776,9 +776,9 @@ enum OpcodeServer : uint16
     SMSG_DEBUG_AISTATE                              = 0x02F, // DEPRECATED
     SMSG_DESTRUCTIBLE_BUILDING_DAMAGE               = 0x4825,
     SMSG_AUTH_SRP6_RESPONSE                         = 0x039, // DEPRECATED
-    SMSG_CHAR_CREATE                                = 0x2D05,
+    SMSG_CREATE_CHAR                                = 0x2D05,
     SMSG_CHAR_ENUM                                  = 0x10B0,
-    SMSG_CHAR_DELETE                                = 0x03C, // DEPRECATED
+    SMSG_DELETE_CHAR                                = 0x0304,
     SMSG_NEW_WORLD                                  = 0x79B1,
     SMSG_TRANSFER_PENDING                           = 0x18A6,
     SMSG_TRANSFER_ABORTED                           = 0x0537,
