@@ -85,10 +85,12 @@ bool DBCFileLoader::Load(char const* filename, char const* fmt)
     uint32 expectedRecordSize = 0;
     for (char const* field = fmt; *field; ++field)
         expectedRecordSize += (*field == FT_BYTE || *field == FT_NA_BYTE) ? 1 : 4;
-    // ponytail: only formats using the native single-locale string field are validated strictly;
-    // the remaining legacy multi-locale formats are unconverted and would hard-fail boot otherwise.
-    bool const isNativeFormat = strchr(fmt, FT_LOCALIZED_STRING) != nullptr;
-    if (isNativeFormat && (fieldCount != strlen(fmt) || recordSize != expectedRecordSize))
+    // ponytail: skip strict validation only for formats still using the legacy repeated FT_STRING
+    // locale block (16 raw fields collapsed to 1 on real single-locale Cata files) -- those tables
+    // are unconverted and would hard-fail boot otherwise. Formats with no legacy string block (native
+    // FT_LOCALIZED_STRING or none at all) are unaffected by that mismatch and stay strictly validated.
+    bool const hasLegacyStringBlock = strchr(fmt, FT_STRING) != nullptr;
+    if (!hasLegacyStringBlock && (fieldCount != strlen(fmt) || recordSize != expectedRecordSize))
     {
         fclose(f);
         return false;
