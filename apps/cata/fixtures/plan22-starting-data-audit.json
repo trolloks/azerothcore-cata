@@ -7,6 +7,7 @@
     "reference_PlayerStart.AllSpells": 0
   },
   "class": 1,
+  "client_extraction_evidence": "apps/cata/fixtures/plan22-client-extraction.json",
   "hotfix_updates": {
     "import_verified": true,
     "inventory_sha256": "8455dd4805d24e67207374ac66e2ea74ce2a42fff846d2705865d8c61210658d",
@@ -21,7 +22,7 @@
     59,
     60
   ],
-  "limits": "Source-file joins and reference SQL replay only. Client extraction provenance, native AC layouts/values/relations, exact transitive grants, supported upgrade, and normal creation/save/relogin remain unverified.",
+  "limits": "Source-file joins, extraction identity and reference SQL replay only. Native AC layouts/values/relations, exact transitive grants, supported upgrade, and normal creation/save/relogin remain unverified.",
   "missing_reference_action_spells": [],
   "missing_server_action_spells": [
     88161,
@@ -333,7 +334,7 @@
       "outfit": 0
     }
   ],
-  "source_provenance_limits": "User confirmed on 2026-09-09 that the Cata DBCs were extracted from their own build-15595 client. World and hotfix dumps match the official release. The exact locale patch chain has not been reproduced; native AC loader and creation acceptance remain unverified.",
+  "source_provenance_limits": "User confirmed ownership on 2026-09-09. Fresh extraction using the pinned TC locale patch chain reproduces all 13 Cata client inputs recorded here and all 27 native spell/skill audit inputs byte-for-byte. World and hotfix dumps match the official release. Native AC loader and creation acceptance remain unverified.",
   "source_provenance_verified": true,
   "sources": [
     {

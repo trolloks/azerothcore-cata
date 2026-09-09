@@ -111,7 +111,7 @@ through the TC pin replayed successfully in disposable MySQL 8.4.8; all 20 hotfi
 match the release ledger. The updated reference removes SQL starter skills and adds class/race stats.
 See the [source and replay evidence](../apps/cata/fixtures/plan22-starting-data-audit.json) and
 [update hash ledger](../apps/cata/fixtures/plan22-world-update-audit.tsv). Client extraction provenance
-and native AC loader/runtime acceptance remain open.
+is confirmed; native AC loader/runtime acceptance remains open.
 
 Implementation is split into blocking children of #57:
 
@@ -120,8 +120,9 @@ Implementation is split into blocking children of #57:
 3. [#60: starting stats and world profiles](https://github.com/trolloks/azerothcore-cata/issues/60).
 
 #58 has a native loader draft and [static dependency audit](../apps/cata/fixtures/plan22-native-spell-audit.json).
-Client-data provenance is confirmed. Four optional references need fresh extraction checks;
-loader and creation acceptance remain unverified. Coordinate these changes and the saved #52
+[Fresh extraction](../apps/cata/fixtures/plan22-client-extraction.json) with the pinned extractor
+reproduces all 27 audited spell/skill tables byte-for-byte, including four absent optional references.
+Their acceptance and loader/creation behaviour remain unverified. Coordinate these changes and the saved #52
 protocol patch before one authorized build
 using the existing ccache/PCH tree and one client session. Reuse cached prepare inputs and binaries.
 Keep #52 and #57 open until normal creation, correct starting state, and persistence are accepted.

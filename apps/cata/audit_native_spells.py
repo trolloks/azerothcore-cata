@@ -162,8 +162,8 @@ def audit(root, sql_path):
         ],
         "status": "INCONCLUSIVE",
         "limits": "Static input audit; AC loader, passive auras and persistence have not run. "
-                  "Pinned TC defaults absent optional split records; fresh extraction is needed "
-                  "before deciding whether these omissions satisfy issue #58.",
+                  "Pinned TC defaults absent optional split records. Nonzero missing references "
+                  "remain unresolved here; extraction evidence is linked from the provenance manifest.",
         "matrix": {"race": 1, "class": 1, "level": 1, "genders": [0, 1]},
         "initial_skills": skills, "ignored_obsolete_skills": ignored,
         "direct_spells": sorted(direct), "dependency_spells": sorted(required),

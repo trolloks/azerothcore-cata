@@ -1,0 +1,123 @@
+{
+  "archive_chain": [
+    {
+      "bytes": 448141565,
+      "path": "Data/enUS/locale-enUS.MPQ",
+      "sha256": "cc0ca7783311cc60630d93675faa01767f74c8639a93a9c6dede9c6ff46e3e75"
+    },
+    {
+      "bytes": 408041,
+      "path": "Data/enUS/wow-update-enUS-15211.MPQ",
+      "sha256": "3f636969d02ae03b208755b6de96181a098844446db7f20cd98f6986cddf48c3"
+    },
+    {
+      "bytes": 78594,
+      "path": "Data/enUS/wow-update-enUS-15354.MPQ",
+      "sha256": "d435b42b0f0f785b2c8e12148eef42bae1d39ce47cab17bc61e6fc648ac135d1"
+    },
+    {
+      "bytes": 116953,
+      "path": "Data/enUS/wow-update-enUS-15595.MPQ",
+      "sha256": "9ce13d7a61ef0c3e336f507c636074ec1be7edd9b2b7824496083f82597f8d62"
+    }
+  ],
+  "cache_archives_used": false,
+  "client_build_detected": 15595,
+  "comparison": {
+    "all_sha256_match_previous_inputs": true,
+    "native_spell_audit_tables": 27,
+    "source_sha256": {
+      "CharBaseInfo.dbc": "7bb4c296501835d9f5b5a55fe343a4b1b1660586a1f06d580cd9c2cb84f14317",
+      "CharStartOutfit.dbc": "2e1e594144a4604b2f146c52287a4a7d58217de7647dbede8c1ff37f987f1470",
+      "ChrClasses.dbc": "98a159142775b29acabc2b8102604add03a460beaaf1ccb18de1f56cf585e651",
+      "ChrRaces.dbc": "446548812df17185ebef419c1fda2798b5634fbe0baf560af81acf6d12138bab",
+      "Item-sparse.db2": "bd21d2a012c4a983dc3179de84d63abd1cfcd1f7063d0785426d75636dd24c06",
+      "Item.db2": "3335bad4bc3b1cc76b761acecf6fa8aad37999c319b42527806a16f4c9d4b063",
+      "SkillLine.dbc": "b988a59c292ba58f83dd6e991afe43b5f5df63882cb49395939209de4c5706a1",
+      "SkillLineAbility.dbc": "6b71b4746e0a950ba0414f53905c308119f0485429240651733747c252fcaadf",
+      "SkillRaceClassInfo.dbc": "ac1a57eb05b3b207f5616537f03fa8a95fcc565d3c7df3546fa16dc1af8a820d",
+      "SkillTiers.dbc": "d869044d27f91a835b979eb2aa728915685231393a91c4705a65887655ef75bb",
+      "Spell.dbc": "088a14963d3f81a10963702c760215f49ff73132bea751306c57aae0dae9f39f",
+      "SpellAuraOptions.dbc": "5a4b128d0df0136dec4c2848800c0d3f5d82de75d6e4410d5393d28731312599",
+      "SpellAuraRestrictions.dbc": "a48e2962501da64163c5021325a07e12f0746218f68aabc68efa5bc868b9c892",
+      "SpellCastTimes.dbc": "8f7167c3e37e6975afee20fdfc0ee68efe8440644e236b0b1aa86390529e30dc",
+      "SpellCastingRequirements.dbc": "bc6bc7a126db30ea4e2be4c371a454e291add2380a85d8ca0c03278944655a70",
+      "SpellCategories.dbc": "a94ded9f900643c4e2986126b1a42a4c73dda4bdd9c4960e50f01b8fa1cb3d5e",
+      "SpellCategory.dbc": "4f14a7e5125bc8e5f99f9c29a82bc3a9c3376568cca02e1a3ca3c4b3bd88e349",
+      "SpellClassOptions.dbc": "6df7951ec8fa988cd0444a61d35992db8f94020870473d8101829b6d22dcd69c",
+      "SpellCooldowns.dbc": "0939c8ffb7902dc4e11546feedf36603b3bead730dfe795289fe977771b71d12",
+      "SpellDuration.dbc": "284e22a843ce4cb85604cd037d228f55a757ea3a608e59e3a5f30cbba02bc727",
+      "SpellEffect.dbc": "e3d9a470bbcb5cea4e3f2947911a908b816cc60e6ffeb9f70b4cfb123bad6252",
+      "SpellEquippedItems.dbc": "397d8983f60da174041cd3f5055a7396a1800a69e41207dc1e19f66557b03746",
+      "SpellInterrupts.dbc": "86cbc97b32ff83be222824ebedf33ab57dc16b2a81fcf77164b742565c99e3d6",
+      "SpellLevels.dbc": "a3d5b9bb9818997538d182b36b88384fb9d6a0ab3603103917f5f1d016e2a788",
+      "SpellPower.dbc": "34ed71ed6d5360b88a8b13ccdcca291bb285e81ff23f193810a2bcd3f41f6b68",
+      "SpellRadius.dbc": "7f72b397dd4463761e2d83253ad92ce64a7aef769698846ba6174e37b5642af1",
+      "SpellRange.dbc": "46fc3e766ff03f621a7641e2e440886475714f1304721c41e1e767d15ba87efd",
+      "SpellReagents.dbc": "08a62d4ec69194098ad3d5484a8e9deb34c65e671b924d8636d479c5404fd4a3",
+      "SpellRuneCost.dbc": "f29b964235900abb1031439d475ac63cb4fb2941cbcecdfa66a3f4f30a118ad9",
+      "SpellScaling.dbc": "0f4baff6d7d6e9d260a5bd66d353f24881dd8c13f10d9899171774bb5860049b",
+      "SpellShapeshift.dbc": "7315879e13b124437311179ddc00c794d578e3179e64d302530396436af1f497",
+      "SpellTargetRestrictions.dbc": "52a6be41baf1956ab84105c28258f521493f61be203f34bce6026ec540aad055",
+      "SpellTotems.dbc": "b848a011d90ad8cfd4ce0fda4936d7bfb4caeebfe946ac20bb99f42b9c4c595a",
+      "gtOCTBaseHPByClass.dbc": "8469d8f0c8f22e1fbd20a7c7b715e8e8cfd66c823103b971ba8455c7fd9340fd",
+      "gtOCTBaseMPByClass.dbc": "b7e726a91d6f6955bda408bdd83b8c2011f1ab4a7a659c63b57c70c73f03ea0a"
+    },
+    "starting_data_manifest_tables": 13,
+    "unique_tables": 35
+  },
+  "date": "2026-09-09",
+  "extract_log": "TrinityCore rev. unknown 1970-01-01 00:00:00 +0000 (Archived branch) (Unix, Release, Static) (Map & DBC Extractor)\n<Ctrl-C> to stop.\n\n ______                       __\n/\\__  _\\       __          __/\\ \\__\n\\/_/\\ \\/ _ __ /\\_\\    ___ /\\_\\ \\, _\\  __  __\n   \\ \\ \\/\\`'__\\/\\ \\ /' _ `\\/\\ \\ \\ \\/ /\\ \\/\\ \\\n    \\ \\ \\ \\ \\/ \\ \\ \\/\\ \\/\\ \\ \\ \\ \\ \\_\\ \\ \\_\\ \\\n     \\ \\_\\ \\_\\  \\ \\_\\ \\_\\ \\_\\ \\_\\ \\__\\\\/`____ \\\n      \\/_/\\/_/   \\/_/\\/_/\\/_/\\/_/\\/__/ `/___/> \\\n                                 C O R E  /\\___/\nhttp://TrinityCore.org                    \\/__/\n\nDetected locale: enUS\n\nLoading enUS locale MPQs\nLoaded <CLIENT_ROOT>/Data/enUS/wow-update-enUS-15211.MPQ\nLoaded <CLIENT_ROOT>/Data/enUS/wow-update-enUS-15354.MPQ\nLoaded <CLIENT_ROOT>/Data/enUS/wow-update-enUS-15595.MPQ\n\nDetected client build: 15595\nExtracting dbc files...\nlocale enUS output path <OUTPUT_ROOT>/dbc/enUS\nExtracted 328 DBC files\n\nExtracting db2 files...\nlocale enUS output path <OUTPUT_ROOT>/dbc/enUS\nExtracted 5 DB2 files\n\n",
+  "extracted_files": {
+    "db2": 5,
+    "dbc": 328
+  },
+  "extractor": {
+    "build_dependency_patch": "--- a/dep/CMakeLists.txt\n+++ b/dep/CMakeLists.txt\n@@ -11,6 +11,8 @@\n add_subdirectory(threads)\n \n if(SERVERS OR TOOLS)\n+  add_subdirectory(short_alloc)\n+  add_subdirectory(argon2)\n   add_subdirectory(boost)\n   add_subdirectory(zlib)\n   add_subdirectory(bzip2)\n@@ -32,8 +34,6 @@\n   add_subdirectory(gsoap)\n   add_subdirectory(rapidjson)\n   add_subdirectory(efsw)\n-  add_subdirectory(short_alloc)\n-  add_subdirectory(argon2)\n endif()\n \n if(TOOLS)\n",
+    "cmake_options": [
+      "SERVERS=0",
+      "SCRIPTS=none",
+      "TOOLS=1",
+      "BUILD_TESTING=OFF",
+      "WITHOUT_GIT=1",
+      "CMAKE_BUILD_TYPE=Release"
+    ],
+    "command": "mapextractor -i <CLIENT_ROOT> -o <EMPTY_OUTPUT_ROOT> -e 2",
+    "exit_code": 0,
+    "sha256": "3d119746e45b47fbc2e83079b3606e21075dafea3aaeead41e454f14bb800bb3",
+    "source": "Clean git archive of the pinned commit; only the dependency wiring patch below was applied.",
+    "target": "mapextractor"
+  },
+  "limits": "The four references are absent under the pinned extraction chain, not resolved by re-extraction. Static audit remains INCONCLUSIVE. No AC server/test build, loader execution, normal character creation, passive-aura or persistence acceptance was performed.",
+  "native_audit_exit_code": 1,
+  "patch_prefix": "",
+  "reference_behaviour": {
+    "SpellAuraOptions": "Pinned TC defaults absent records to zero proc flags, chance, charges and stack amount (lines 985-989).",
+    "SpellClassOptions": "Pinned TC defaults absent records to zero spell family and family mask (lines 1020-1022).",
+    "source": "src/server/game/Spells/SpellInfo.cpp"
+  },
+  "reference_commit": "c699217775d90794158422387b07a917e161b582",
+  "scope": "Fresh extraction from the user-owned build-15595 enUS client; source identity only.",
+  "unresolved_nonzero_joins": [
+    {
+      "id": 49,
+      "spell": 2457,
+      "table": "SpellAuraOptions"
+    },
+    {
+      "id": 11774,
+      "spell": 6603,
+      "table": "SpellClassOptions"
+    },
+    {
+      "id": 9107,
+      "spell": 76268,
+      "table": "SpellClassOptions"
+    },
+    {
+      "id": 11768,
+      "spell": 88163,
+      "table": "SpellClassOptions"
+    }
+  ]
+}

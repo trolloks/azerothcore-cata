@@ -294,7 +294,7 @@
       "value": 1
     }
   },
-  "limits": "Static input audit; AC loader, passive auras and persistence have not run. Pinned TC defaults absent optional split records; fresh extraction is needed before deciding whether these omissions satisfy issue #58.",
+  "limits": "Static input audit; AC loader, passive auras and persistence have not run. Pinned TC defaults absent optional split records. Nonzero missing references remain unresolved here; extraction evidence is linked from the provenance manifest.",
   "matrix": {
     "class": 1,
     "genders": [
