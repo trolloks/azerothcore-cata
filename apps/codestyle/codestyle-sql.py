@@ -193,7 +193,10 @@ def insert_delete_safety_check(file: io, file_path: str) -> None:
     for line_number, line in enumerate(file, start = 1):
         if line.strip().startswith("--"):
             continue
-        if "INSERT" in line and "DELETE" not in previous_line:
+        insert_match = re.match(r"INSERT INTO\s+`([^`]+)`", line, re.IGNORECASE)
+        # Protected tables (not_delete) can never have a preceding DELETE (that's the other
+        # rule below), so a brand-new row in one of them is exempt from this check.
+        if "INSERT" in line and "DELETE" not in previous_line and not (insert_match and insert_match.group(1) in not_delete):
             print(f"❌ No DELETE keyword found before the INSERT in {file_path} at line {line_number}\nIf this error is intended, please notify a maintainer")
             check_failed = True
         previous_line = line
