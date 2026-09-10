@@ -12130,7 +12130,12 @@ void Player::LearnDefaultSkill(SkillRaceClassInfoEntry const* rcInfo)
         case SKILL_RANGE_RANK:
         {
             SkillTiersEntry const* tier = sSkillTiersStore.LookupEntry(rcInfo->SkillTierID);
-            ASSERT(tier && tier->Value[0], "Missing initial tier {} for skill {}", rcInfo->SkillTierID, skillId);
+            if (!tier || !tier->Value[0])
+            {
+                LOG_ERROR("entities.player.loading", "Missing initial tier {} for skill {}, race {}, class {}",
+                    rcInfo->SkillTierID, skillId, uint32(getRace()), uint32(getClass()));
+                break;
+            }
             uint16 maxValue = tier->Value[0];
             uint16 skillValue = 1;
             if (rcInfo->Flags & SKILL_FLAG_ALWAYS_MAX_VALUE)
