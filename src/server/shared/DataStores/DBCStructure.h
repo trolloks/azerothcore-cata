@@ -626,6 +626,8 @@ struct CharStartOutfitEntry
     int32 ItemId[MAX_OUTFIT_ITEMS];                         // 5-28
     //int32 ItemDisplayId[MAX_OUTFIT_ITEMS];                // 29-52 not required at server side
     //int32 ItemInventorySlot[MAX_OUTFIT_ITEMS];            // 53-76 not required at server side
+    int32 PetDisplayId;                                     // 77, native Cata field, unsupported pet classes are 0
+    int32 PetFamilyId;                                      // 78, native Cata field, unsupported pet classes are 0
 };
 
 struct CharTitlesEntry
