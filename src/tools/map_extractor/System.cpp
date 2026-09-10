@@ -17,6 +17,7 @@
 
 #define _CRT_SECURE_NO_DEPRECATE
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <deque>
@@ -1041,13 +1042,15 @@ void ExtractDBCFiles(int locale, bool basicLocale)
 
     std::set<std::string> dbcfiles;
 
-    // get DBC file list
+    // get DBC/DB2 file list. DB2 files are only raw-extracted here (no native
+    // DB2/hotfix parser exists yet); parsing is left to downstream tooling.
     for (auto & gOpenArchive : gOpenArchives)
     {
         vector<string> files;
         gOpenArchive->GetFileListTo(files);
         for (auto & file : files)
-            if (file.rfind(".dbc") == file.length() - strlen(".dbc"))
+            if (file.rfind(".dbc") == file.length() - strlen(".dbc") ||
+                file.rfind(".db2") == file.length() - strlen(".db2"))
                 dbcfiles.insert(file);
     }
 
@@ -1082,7 +1085,7 @@ void ExtractDBCFiles(int locale, bool basicLocale)
         if (ExtractFile(dbcfile.c_str(), filename))
             ++count;
     }
-    printf("Extracted %u DBC files\n\n", count);
+    printf("Extracted %u DBC/DB2 files\n\n", count);
 }
 
 void ExtractCameraFiles(int locale, bool basicLocale)
@@ -1146,8 +1149,11 @@ void LoadLocaleMPQFiles(int const locale)
     char filename[512];
 
     sprintf(filename, "%s/Data/%s/locale-%s.MPQ", input_path, langs[locale], langs[locale]);
-    new MPQArchive(filename);
+    MPQArchive* base = new MPQArchive(filename);
+    if (!base->mpq_a)
+        return;
 
+    // WotLK-style full-replacement patches, applied oldest to newest
     for (int i = 1; i <= 9; ++i)
     {
         char ext[3] = "";
@@ -1156,8 +1162,33 @@ void LoadLocaleMPQFiles(int const locale)
 
         sprintf(filename, "%s/Data/%s/patch-%s%s.MPQ", input_path, langs[locale], langs[locale], ext);
         if (FileExists(filename))
-            new MPQArchive(filename);
+            base->ApplyPatch(filename);
     }
+
+    // Cataclysm-style incremental binary-diff patches (wow-update-<locale>-<build>.MPQ),
+    // discovered on disk and applied in ascending build order so StormLib can reconstruct
+    // the patched files correctly.
+    std::string dataDir = std::string(input_path) + "/Data/" + langs[locale];
+    std::string prefix = std::string("wow-update-") + langs[locale] + "-";
+    std::vector<std::pair<uint32, std::string>> updates;
+
+    if (std::filesystem::exists(dataDir))
+    {
+        for (auto const& entry : std::filesystem::directory_iterator(dataDir))
+        {
+            std::string name = entry.path().filename().string();
+            if (name.rfind(prefix, 0) != 0 || name.rfind(".MPQ") != name.size() - 4)
+                continue;
+
+            std::string buildStr = name.substr(prefix.size(), name.size() - prefix.size() - 4);
+            if (!buildStr.empty() && std::all_of(buildStr.begin(), buildStr.end(), [](unsigned char c) { return std::isdigit(c); }))
+                updates.emplace_back(static_cast<uint32>(std::stoul(buildStr)), entry.path().string());
+        }
+    }
+
+    std::sort(updates.begin(), updates.end());
+    for (auto const& update : updates)
+        base->ApplyPatch(update.second.c_str());
 }
 
 void LoadCommonMPQFiles()
