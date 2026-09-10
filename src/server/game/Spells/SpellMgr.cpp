@@ -3026,8 +3026,38 @@ void SpellMgr::LoadSpellInfoStore()
     UnloadSpellInfoStore();
     mSpellInfoMap.resize(sSpellStore.GetNumRows(), nullptr);
 
+    std::unordered_map<uint32, std::array<SpellEffectEntry const*, MAX_SPELL_EFFECTS>> effects;
+    for (SpellEffectEntry const* effect : sSpellEffectStore)
+    {
+        ASSERT(sSpellStore.LookupEntry(effect->SpellID), "SpellEffect {} references missing spell {}",
+            effect->ID, effect->SpellID);
+        ASSERT(effect->EffectIndex < MAX_SPELL_EFFECTS, "SpellEffect {} has invalid index {}",
+            effect->ID, effect->EffectIndex);
+        SpellEffectEntry const*& slot = effects[effect->SpellID][effect->EffectIndex];
+        ASSERT(!slot, "Duplicate effect {} for spell {}", effect->EffectIndex, effect->SpellID);
+        slot = effect;
+    }
+
+    uint32 unsupported = 0;
     for (SpellEntry const* spellEntry : sSpellStore)
-        mSpellInfoMap[spellEntry->Id] = new SpellInfo(spellEntry);
+    {
+        auto const& spellEffects = effects[spellEntry->Id];
+        bool supported = std::all_of(spellEffects.begin(), spellEffects.end(), [](SpellEffectEntry const* effect)
+        {
+            return !effect || (effect->Effect < TOTAL_SPELL_EFFECTS && effect->EffectAura < TOTAL_AURAS
+                && effect->EffectImplicitTargetA < TOTAL_SPELL_TARGETS
+                && effect->EffectImplicitTargetB < TOTAL_SPELL_TARGETS);
+        });
+        if (!supported)
+        {
+            LOG_DEBUG("dbc", "Spell {} requires unimplemented Cataclysm effect, aura or target dispatch", spellEntry->Id);
+            ++unsupported;
+            continue;
+        }
+        mSpellInfoMap[spellEntry->Id] = new SpellInfo(spellEntry, spellEffects);
+    }
+    if (unsupported)
+        LOG_WARN("dbc", "Excluded {} spells requiring unimplemented Cataclysm dispatch; see dbc debug log", unsupported);
 
     for (uint32 spellIndex = 0; spellIndex < GetSpellInfoStoreSize(); ++spellIndex)
     {

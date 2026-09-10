@@ -1153,6 +1153,12 @@ void Player::UpdateSkillsForLevel()
             }
         }
     }
+
+    // Reward spells can add skills, invalidating iterators into mSkillStatus.
+    SkillStatusMap const skills = mSkillStatus;
+    for (auto const& [skill, status] : skills)
+        if (status.uState != SKILL_DELETED)
+            learnSkillRewardedSpells(skill, GetPureSkillValue(skill));
 }
 
 void Player::UpdateSkillsToMaxSkillsForLevel()

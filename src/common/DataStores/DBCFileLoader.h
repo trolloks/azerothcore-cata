@@ -22,10 +22,13 @@
 #include "Errors.h"
 #include "Utilities/ByteConverter.h"
 
+inline constexpr uint32 DBC_LOCALE_SLOTS = 16;
+
 enum DbcFieldFormat
 {
     FT_NA = 'x',                                              //not used or unknown, 4 byte size
     FT_NA_BYTE = 'X',                                         //not used or unknown, byte
+    FT_LOCALIZED_STRING = 'S', // one locale, expanded to legacy locale slots
     FT_STRING = 's',                                          //char*
     FT_FLOAT = 'f',                                           //float
     FT_INT = 'i',                                             //uint32

@@ -149,6 +149,22 @@ DBCStorage <SoundEntriesEntry> sSoundEntriesStore(SoundEntriesfmt);
 DBCStorage <SpellItemEnchantmentEntry> sSpellItemEnchantmentStore(SpellItemEnchantmentfmt);
 DBCStorage <SpellItemEnchantmentConditionEntry> sSpellItemEnchantmentConditionStore(SpellItemEnchantmentConditionfmt);
 DBCStorage <SpellEntry> sSpellStore(SpellEntryfmt);
+DBCStorage<SpellEffectEntry> sSpellEffectStore(SpellEffectEntryfmt);
+DBCStorage<SpellAuraOptionsEntry> sSpellAuraOptionsStore(SpellAuraOptionsEntryfmt);
+DBCStorage<SpellAuraRestrictionsEntry> sSpellAuraRestrictionsStore(SpellAuraRestrictionsEntryfmt);
+DBCStorage<SpellCastingRequirementsEntry> sSpellCastingRequirementsStore(SpellCastingRequirementsEntryfmt);
+DBCStorage<SpellCategoriesEntry> sSpellCategoriesStore(SpellCategoriesEntryfmt);
+DBCStorage<SpellClassOptionsEntry> sSpellClassOptionsStore(SpellClassOptionsEntryfmt);
+DBCStorage<SpellCooldownsEntry> sSpellCooldownsStore(SpellCooldownsEntryfmt);
+DBCStorage<SpellEquippedItemsEntry> sSpellEquippedItemsStore(SpellEquippedItemsEntryfmt);
+DBCStorage<SpellInterruptsEntry> sSpellInterruptsStore(SpellInterruptsEntryfmt);
+DBCStorage<SpellLevelsEntry> sSpellLevelsStore(SpellLevelsEntryfmt);
+DBCStorage<SpellPowerEntry> sSpellPowerStore(SpellPowerEntryfmt);
+DBCStorage<SpellReagentsEntry> sSpellReagentsStore(SpellReagentsEntryfmt);
+DBCStorage<SpellScalingEntry> sSpellScalingStore(SpellScalingEntryfmt);
+DBCStorage<SpellShapeshiftEntry> sSpellShapeshiftStore(SpellShapeshiftEntryfmt);
+DBCStorage<SpellTargetRestrictionsEntry> sSpellTargetRestrictionsStore(SpellTargetRestrictionsEntryfmt);
+DBCStorage<SpellTotemsEntry> sSpellTotemsStore(SpellTotemsEntryfmt);
 SpellCategoryStore sSpellsByCategoryStore;
 PetFamilySpellsStore sPetFamilySpellsStore;
 
@@ -347,23 +363,39 @@ void LoadDBCStores(std::string const& dataPath)
     LOAD_DBC(sRandomPropertiesPointsStore,          "RandPropPoints.dbc",                   "randproppoints_dbc");
     LOAD_DBC(sScalingStatDistributionStore,         "ScalingStatDistribution.dbc",          "scalingstatdistribution_dbc");
     LOAD_DBC(sScalingStatValuesStore,               "ScalingStatValues.dbc",                "scalingstatvalues_dbc");
-    LOAD_DBC(sSkillLineStore,                       "SkillLine.dbc",                        "skillline_dbc");
-    LOAD_DBC(sSkillLineAbilityStore,                "SkillLineAbility.dbc",                 "skilllineability_dbc");
-    LOAD_DBC(sSkillRaceClassInfoStore,              "SkillRaceClassInfo.dbc",               "skillraceclassinfo_dbc");
-    LOAD_DBC(sSkillTiersStore,                      "SkillTiers.dbc",                       "skilltiers_dbc");
+    LOAD_DBC(sSkillLineStore,                       "SkillLine.dbc",                        nullptr);
+    LOAD_DBC(sSkillLineAbilityStore,                "SkillLineAbility.dbc",                 nullptr);
+    LOAD_DBC(sSkillRaceClassInfoStore,              "SkillRaceClassInfo.dbc",               nullptr);
+    LOAD_DBC(sSkillTiersStore,                      "SkillTiers.dbc",                       nullptr);
     LOAD_DBC(sSoundEntriesStore,                    "SoundEntries.dbc",                     "soundentries_dbc");
-    LOAD_DBC(sSpellStore,                           "Spell.dbc",                            "spell_dbc");
-    LOAD_DBC(sSpellCastTimesStore,                  "SpellCastTimes.dbc",                   "spellcasttimes_dbc");
-    LOAD_DBC(sSpellCategoryStore,                   "SpellCategory.dbc",                    "spellcategory_dbc");
+    LOAD_DBC(sSpellStore,                           "Spell.dbc",                            nullptr);
+    LOAD_DBC(sSpellEffectStore, "SpellEffect.dbc", nullptr);
+    LOAD_DBC(sSpellAuraOptionsStore, "SpellAuraOptions.dbc", nullptr);
+    LOAD_DBC(sSpellAuraRestrictionsStore, "SpellAuraRestrictions.dbc", nullptr);
+    LOAD_DBC(sSpellCastingRequirementsStore, "SpellCastingRequirements.dbc", nullptr);
+    LOAD_DBC(sSpellCategoriesStore, "SpellCategories.dbc", nullptr);
+    LOAD_DBC(sSpellClassOptionsStore, "SpellClassOptions.dbc", nullptr);
+    LOAD_DBC(sSpellCooldownsStore, "SpellCooldowns.dbc", nullptr);
+    LOAD_DBC(sSpellEquippedItemsStore, "SpellEquippedItems.dbc", nullptr);
+    LOAD_DBC(sSpellInterruptsStore, "SpellInterrupts.dbc", nullptr);
+    LOAD_DBC(sSpellLevelsStore, "SpellLevels.dbc", nullptr);
+    LOAD_DBC(sSpellPowerStore, "SpellPower.dbc", nullptr);
+    LOAD_DBC(sSpellReagentsStore, "SpellReagents.dbc", nullptr);
+    LOAD_DBC(sSpellScalingStore, "SpellScaling.dbc", nullptr);
+    LOAD_DBC(sSpellShapeshiftStore, "SpellShapeshift.dbc", nullptr);
+    LOAD_DBC(sSpellTargetRestrictionsStore, "SpellTargetRestrictions.dbc", nullptr);
+    LOAD_DBC(sSpellTotemsStore, "SpellTotems.dbc", nullptr);
+    LOAD_DBC(sSpellCastTimesStore,                  "SpellCastTimes.dbc",                   nullptr);
+    LOAD_DBC(sSpellCategoryStore,                   "SpellCategory.dbc",                    nullptr);
     LOAD_DBC(sSpellDifficultyStore,                 "SpellDifficulty.dbc",                  "spelldifficulty_dbc");
-    LOAD_DBC(sSpellDurationStore,                   "SpellDuration.dbc",                    "spellduration_dbc");
-    LOAD_DBC(sSpellFocusObjectStore,                "SpellFocusObject.dbc",                 "spellfocusobject_dbc");
+    LOAD_DBC(sSpellDurationStore,                   "SpellDuration.dbc",                    nullptr);
+    LOAD_DBC(sSpellFocusObjectStore,                "SpellFocusObject.dbc",                 nullptr);
     LOAD_DBC(sSpellItemEnchantmentStore,            "SpellItemEnchantment.dbc",             "spellitemenchantment_dbc");
     LOAD_DBC(sSpellItemEnchantmentConditionStore,   "SpellItemEnchantmentCondition.dbc",    "spellitemenchantmentcondition_dbc");
-    LOAD_DBC(sSpellRadiusStore,                     "SpellRadius.dbc",                      "spellradius_dbc");
-    LOAD_DBC(sSpellRangeStore,                      "SpellRange.dbc",                       "spellrange_dbc");
-    LOAD_DBC(sSpellRuneCostStore,                   "SpellRuneCost.dbc",                    "spellrunecost_dbc");
-    LOAD_DBC(sSpellShapeshiftFormStore,             "SpellShapeshiftForm.dbc",              "spellshapeshiftform_dbc");
+    LOAD_DBC(sSpellRadiusStore,                     "SpellRadius.dbc",                      nullptr);
+    LOAD_DBC(sSpellRangeStore,                      "SpellRange.dbc",                       nullptr);
+    LOAD_DBC(sSpellRuneCostStore,                   "SpellRuneCost.dbc",                    nullptr);
+    LOAD_DBC(sSpellShapeshiftFormStore,             "SpellShapeshiftForm.dbc",              nullptr);
     LOAD_DBC(sSpellVisualStore,                     "SpellVisual.dbc",                      "spellvisual_dbc");
     LOAD_DBC(sStableSlotPricesStore,                "StableSlotPrices.dbc",                 "stableslotprices_dbc");
     LOAD_DBC(sSummonPropertiesStore,                "SummonProperties.dbc",                 "summonproperties_dbc");
@@ -383,6 +415,9 @@ void LoadDBCStores(std::string const& dataPath)
     LOAD_DBC(sWorldMapOverlayStore,                 "WorldMapOverlay.dbc",                  "worldmapoverlay_dbc");
 
 #undef LOAD_DBC
+
+    sSpellStore.LoadFromDB("spell_cata_dbc", SpellEntryfmt);
+    sSpellEffectStore.LoadFromDB("spelleffect_dbc", SpellEffectEntryfmt);
 
     for (CharStartOutfitEntry const* outfit : sCharStartOutfitStore)
         sCharStartOutfitMap[outfit->Race | (outfit->Class << 8) | (outfit->Gender << 16)] = outfit;
@@ -416,9 +451,10 @@ void LoadDBCStores(std::string const& dataPath)
         if (entry->bracketId > MAX_BATTLEGROUND_BRACKETS)
             ASSERT(false && "Need update MAX_BATTLEGROUND_BRACKETS by DBC data");
 
-    for (auto i : sSpellStore)
-        if (i->Category)
-            sSpellsByCategoryStore[i->Category].emplace(false, i->Id);
+    for (SpellEntry const* spell : sSpellStore)
+        if (SpellCategoriesEntry const* categories = sSpellCategoriesStore.LookupEntry(spell->CategoriesID))
+            if (categories->Category)
+                sSpellsByCategoryStore[categories->Category].emplace(false, spell->Id);
 
     for (SkillRaceClassInfoEntry const* entry : sSkillRaceClassInfoStore)
     {
@@ -440,7 +476,8 @@ void LoadDBCStores(std::string const& dataPath)
                     continue;
                 }
 
-                if (spellEntry->SpellLevel)
+                SpellLevelsEntry const* levels = sSpellLevelsStore.LookupEntry(spellEntry->LevelsID);
+                if (levels && levels->SpellLevel)
                 {
                     continue;
                 }
@@ -552,10 +589,9 @@ void LoadDBCStores(std::string const& dataPath)
     // include existed nodes that have at least single not spell base (scripted) path
     {
         std::set<uint32> spellPaths;
-        for (SpellEntry const* sInfo : sSpellStore)
-            for (uint8 j = 0; j < MAX_SPELL_EFFECTS; ++j)
-                if (sInfo->Effect[j] == SPELL_EFFECT_SEND_TAXI)
-                    spellPaths.insert(sInfo->EffectMiscValue[j]);
+        for (SpellEffectEntry const* effect : sSpellEffectStore)
+            if (effect->Effect == SPELL_EFFECT_SEND_TAXI)
+                spellPaths.insert(effect->EffectMiscValue);
 
         sTaxiNodesMask.fill(0);
         sOldContinentsNodesMask.fill(0);

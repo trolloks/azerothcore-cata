@@ -101,6 +101,16 @@ char* DBCDatabaseLoader::Load(uint32& records, char**& indexTable)
                     *reinterpret_cast<uint8*>(&dataValue[dataOffset]) = fields[sqlColumnNumber].Get<uint8>();
                     dataOffset += sizeof(uint8);
                     break;
+                case FT_LOCALIZED_STRING:
+                {
+                    char* value = CloneStringToPool(fields[sqlColumnNumber].Get<std::string>());
+                    for (uint32 locale = 0; locale < DBC_LOCALE_SLOTS; ++locale)
+                    {
+                        *reinterpret_cast<char**>(&dataValue[dataOffset]) = value;
+                        dataOffset += sizeof(char*);
+                    }
+                    break;
+                }
                 case FT_STRING:
                     *reinterpret_cast<char**>(&dataValue[dataOffset]) = CloneStringToPool(fields[sqlColumnNumber].Get<std::string>());
                     dataOffset += sizeof(char*);
