@@ -100,18 +100,16 @@ float CONF_float_to_int16_limit = 2048.0f;   // Max accuracy = val/65536
 float CONF_flat_height_delta_limit = 0.005f; // If max - min less this value - surface is flat
 float CONF_flat_liquid_delta_limit = 0.001f; // If max - min less this value - liquid surface is flat
 
-// List MPQ for extract from
+// List MPQ for extract from. world.MPQ is the base archive; the rest are applied as
+// patches on top of it (matching the real Cata client's archive layout).
 char const* CONF_mpq_list[] =
 {
-    "common.MPQ",
-    "common-2.MPQ",
-    "lichking.MPQ",
-    "expansion.MPQ",
-    "patch.MPQ",
-    "patch-2.MPQ",
-    "patch-3.MPQ",
-    "patch-4.MPQ",
-    "patch-5.MPQ",
+    "world.MPQ",
+    "art.MPQ",
+    "world2.MPQ",
+    "expansion1.MPQ",
+    "expansion2.MPQ",
+    "expansion3.MPQ",
 };
 
 static char const* const langs[] = {"enGB", "enUS", "deDE", "esES", "frFR", "koKR", "zhCN", "zhTW", "enCN", "enTW", "esMX", "ruRU" };
@@ -1194,13 +1192,44 @@ void LoadLocaleMPQFiles(int const locale)
 void LoadCommonMPQFiles()
 {
     char filename[512];
+
+    sprintf(filename, "%s/Data/%s", input_path, CONF_mpq_list[0]);
+    MPQArchive* base = new MPQArchive(filename);
+    if (!base->mpq_a)
+        return;
+
     int count = sizeof(CONF_mpq_list) / sizeof(char*);
-    for (int i = 0; i < count; ++i)
+    for (int i = 1; i < count; ++i)
     {
         sprintf(filename, "%s/Data/%s", input_path, CONF_mpq_list[i]);
         if (FileExists(filename))
-            new MPQArchive(filename);
+            base->ApplyPatch(filename);
     }
+
+    // Cataclysm-style incremental binary-diff patches (wow-update-base-<build>.MPQ),
+    // discovered on disk and applied in ascending build order so StormLib can reconstruct
+    // the patched files correctly (mirrors LoadLocaleMPQFiles's discovery logic).
+    std::string dataDir = std::string(input_path) + "/Data";
+    std::string prefix = "wow-update-base-";
+    std::vector<std::pair<uint32, std::string>> updates;
+
+    if (std::filesystem::exists(dataDir))
+    {
+        for (auto const& entry : std::filesystem::directory_iterator(dataDir))
+        {
+            std::string name = entry.path().filename().string();
+            if (name.rfind(prefix, 0) != 0 || name.rfind(".MPQ") != name.size() - 4)
+                continue;
+
+            std::string buildStr = name.substr(prefix.size(), name.size() - prefix.size() - 4);
+            if (!buildStr.empty() && std::all_of(buildStr.begin(), buildStr.end(), [](unsigned char c) { return std::isdigit(c); }))
+                updates.emplace_back(static_cast<uint32>(std::stoul(buildStr)), entry.path().string());
+        }
+    }
+
+    std::sort(updates.begin(), updates.end());
+    for (auto const& update : updates)
+        base->ApplyPatch(update.second.c_str());
 }
 
 inline void CloseMPQFiles()
@@ -1229,6 +1258,7 @@ int main(int argc, char* arg[])
 
             //Open MPQs
             LoadLocaleMPQFiles(i);
+            LoadCommonMPQFiles();
 
             if ((CONF_extract & EXTRACT_DBC) == 0)
             {
