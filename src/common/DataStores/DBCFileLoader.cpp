@@ -85,12 +85,15 @@ bool DBCFileLoader::Load(char const* filename, char const* fmt)
     uint32 expectedRecordSize = 0;
     for (char const* field = fmt; *field; ++field)
         expectedRecordSize += (*field == FT_BYTE || *field == FT_NA_BYTE) ? 1 : 4;
+    // real WDBC records are padded to a 4-byte boundary, so a format string whose raw field
+    // widths don't already sum to a multiple of 4 still matches a file padded up to the next one.
+    uint32 const paddedExpectedRecordSize = (expectedRecordSize + 3) & ~3u;
     // ponytail: skip strict validation only for formats still using the legacy repeated FT_STRING
     // locale block (16 raw fields collapsed to 1 on real single-locale Cata files) -- those tables
     // are unconverted and would hard-fail boot otherwise. Formats with no legacy string block (native
     // FT_LOCALIZED_STRING or none at all) are unaffected by that mismatch and stay strictly validated.
     bool const hasLegacyStringBlock = strchr(fmt, FT_STRING) != nullptr;
-    if (!hasLegacyStringBlock && (fieldCount != strlen(fmt) || recordSize != expectedRecordSize))
+    if (!hasLegacyStringBlock && (fieldCount != strlen(fmt) || recordSize != paddedExpectedRecordSize))
     {
         fclose(f);
         return false;
