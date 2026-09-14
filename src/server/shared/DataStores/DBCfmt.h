@@ -20,7 +20,7 @@
 
 char constexpr Achievementfmt[] = "niixSxiixixxii";
 char constexpr AchievementCategoryfmt[] = "nixx";
-char constexpr AchievementCriteriafmt[] = "niiiiiiiixxxxxxxxxxxxxxxxxiiiix";
+char constexpr AchievementCriteriafmt[] = "niiiqixxxxiixixxxiiiiii";
 char constexpr AreaTableEntryfmt[] = "niiiixxxxxiSiiiiixxxxxxxxx";
 char constexpr AreaGroupEntryfmt[] = "niiiiiii";
 char constexpr AreaPOIEntryfmt[] = "niiiiiiiiiiifffixixxix";

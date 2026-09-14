@@ -80,7 +80,7 @@ enum AchievementFlags
     ACHIEVEMENT_FLAG_REALM_FIRST_KILL  = 0x00000200,        //
 };
 
-#define MAX_CRITERIA_REQUIREMENTS 2
+#define MAX_CRITERIA_REQUIREMENTS 3 // Cata's AdditionalConditionType/Value columns, was 2 pre-Cata
 
 enum AchievementCriteriaCondition
 {

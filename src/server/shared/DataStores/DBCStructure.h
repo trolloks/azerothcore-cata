@@ -498,21 +498,18 @@ struct AchievementCriteriaEntry
         } raw;
     };
 
-    struct
-    {
-        uint32  additionalRequirement_type;
-        uint32  additionalRequirement_value;
-    } additionalRequirements[MAX_CRITERIA_REQUIREMENTS];
-
-    //char const*  name[16];                                // 9-24
-    //uint32 name_flags;                                    // 25
-    uint32  flags;                                          // 26
-    uint32  timedType;                                      // 27
-    uint32  timerStartEvent;                                // 28 Alway appears with timed events
+    // quantity (offset 4, second union member above) is really the low 32 bits of an
+    // 8-byte source column; the high 32 bits are always 0 for every criteria type we use.
+    // Offsets 6-9, 12, 14-16 (StartAsset/FailEvent/FailAsset/Description/TimerAsset/OrderIndex/
+    // RequiredWorldState*) are real Cata columns we don't consume, skipped via 'x' in the format.
+    uint32  timedType;                                      // 5, real column is StartEvent
+    uint32  flags;                                          // 10
+    uint32  timerStartEvent;                                // 11 Alway appears with timed events
     // for timed spells it is spell id for
     // timed kills it is creature id
-    uint32  timeLimit;                                      // 29 time limit in seconds
-    //uint32 showOrder;                                     // 30 show order
+    uint32  timeLimit;                                      // 13 time limit in seconds, real column is TimerTime
+    uint32  additionalRequirement_type[MAX_CRITERIA_REQUIREMENTS];  // 17-19, real column is AdditionalConditionType
+    uint32  additionalRequirement_value[MAX_CRITERIA_REQUIREMENTS]; // 20-22, real column is AdditionalConditionValue
 };
 
 struct AreaTableEntry

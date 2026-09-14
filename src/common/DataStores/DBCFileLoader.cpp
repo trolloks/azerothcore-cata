@@ -84,7 +84,7 @@ bool DBCFileLoader::Load(char const* filename, char const* fmt)
 
     uint32 expectedRecordSize = 0;
     for (char const* field = fmt; *field; ++field)
-        expectedRecordSize += (*field == FT_BYTE || *field == FT_NA_BYTE) ? 1 : 4;
+        expectedRecordSize += (*field == FT_BYTE || *field == FT_NA_BYTE) ? 1 : (*field == FT_LONG ? 8 : 4);
     // real WDBC records are padded to a 4-byte boundary, so a format string whose raw field
     // widths don't already sum to a multiple of 4 still matches a file padded up to the next one.
     uint32 const paddedExpectedRecordSize = (expectedRecordSize + 3) & ~3u;
@@ -105,9 +105,13 @@ bool DBCFileLoader::Load(char const* filename, char const* fmt)
     for (uint32 i = 1; i < fieldCount; ++i)
     {
         fieldsOffset[i] = fieldsOffset[i - 1];
-        if (fmt[i - 1] == 'b' || fmt[i - 1] == 'X')         // byte fields
+        if (fmt[i - 1] == FT_BYTE || fmt[i - 1] == FT_NA_BYTE)  // byte fields
         {
             fieldsOffset[i] += sizeof(uint8);
+        }
+        else if (fmt[i - 1] == FT_LONG)                         // 8 byte source column
+        {
+            fieldsOffset[i] += sizeof(uint64);
         }
         else                                                // 4 byte fields (int32/float/strings)
         {
@@ -172,6 +176,9 @@ uint32 DBCFileLoader::GetFormatRecordSize(char const* format, int32* index_pos)
                 break;
             case FT_BYTE:
                 recordsize += sizeof(uint8);
+                break;
+            case FT_LONG:
+                recordsize += sizeof(uint32); // only the low 32 bits of the 8-byte source column are stored
                 break;
             case FT_NA:
             case FT_NA_BYTE:
@@ -272,6 +279,11 @@ char* DBCFileLoader::AutoProduceData(char const* format, uint32& records, char**
                     *((uint8*)(&dataTable[offset])) = getRecord(y).getUInt8(x);
                     offset += sizeof(uint8);
                     break;
+                case FT_LONG:
+                    // little-endian: the low 32 bits of the 8-byte source column sit at its base offset
+                    *((uint32*)(&dataTable[offset])) = getRecord(y).getUInt(x);
+                    offset += sizeof(uint32);
+                    break;
                 case FT_LOCALIZED_STRING:
                     for (uint32 locale = 0; locale < DBC_LOCALE_SLOTS; ++locale)
                     {
@@ -327,6 +339,9 @@ char* DBCFileLoader::AutoProduceStrings(char const* format, char* dataTable)
                     break;
                 case FT_BYTE:
                     offset += sizeof(uint8);
+                    break;
+                case FT_LONG:
+                    offset += sizeof(uint32);
                     break;
                 case FT_LOCALIZED_STRING:
                 {

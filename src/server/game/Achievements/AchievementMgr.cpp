@@ -1335,7 +1335,7 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
                     continue;
 
                 // additional requirements
-                if (achievementCriteria->additionalRequirements[0].additionalRequirement_type == ACHIEVEMENT_CRITERIA_CONDITION_NO_LOSE)
+                if (achievementCriteria->additionalRequirement_type[0] == ACHIEVEMENT_CRITERIA_CONDITION_NO_LOSE)
                 {
                     // those requirements couldn't be found in the dbc
                     AchievementCriteriaDataSet const* data = sAchievementMgr->GetCriteriaDataSet(achievementCriteria);
@@ -1497,9 +1497,9 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
                     if (!miscValue1)
                         continue;
 
-                    if (achievementCriteria->additionalRequirements[0].additionalRequirement_type == ACHIEVEMENT_CRITERIA_CONDITION_BG_MAP)
+                    if (achievementCriteria->additionalRequirement_type[0] == ACHIEVEMENT_CRITERIA_CONDITION_BG_MAP)
                     {
-                        if (GetPlayer()->GetMapId() != achievementCriteria->additionalRequirements[0].additionalRequirement_value)
+                        if (GetPlayer()->GetMapId() != achievementCriteria->additionalRequirement_value[0])
                             continue;
 
                         // map specific case (BG in fact) expected player targeted damage/heal
@@ -2468,13 +2468,13 @@ bool AchievementMgr::CanUpdateCriteria(AchievementCriteriaEntry const* criteria,
 
     for (uint32 i = 0; i < MAX_CRITERIA_REQUIREMENTS; ++i)
     {
-        if (!criteria->additionalRequirements[i].additionalRequirement_type)
+        if (!criteria->additionalRequirement_type[i])
             continue;
 
-        switch (criteria->additionalRequirements[i].additionalRequirement_type)
+        switch (criteria->additionalRequirement_type[i])
         {
             case ACHIEVEMENT_CRITERIA_CONDITION_BG_MAP:
-                if (GetPlayer()->GetMapId() != criteria->additionalRequirements[i].additionalRequirement_value)
+                if (GetPlayer()->GetMapId() != criteria->additionalRequirement_value[i])
                     return false;
                 break;
             case ACHIEVEMENT_CRITERIA_CONDITION_NOT_IN_GROUP:
@@ -2659,11 +2659,11 @@ void AchievementGlobalMgr::LoadAchievementCriteriaList()
         _achievementCriteriasByType[criteria->requiredType].push_back(criteria);
         _achievementCriteriaListByAchievement[criteria->referredAchievement].push_back(criteria);
 
-        if (criteria->additionalRequirements[0].additionalRequirement_type != ACHIEVEMENT_CRITERIA_CONDITION_NONE)
-            _achievementCriteriasByCondition[criteria->additionalRequirements[0].additionalRequirement_type][criteria->additionalRequirements[0].additionalRequirement_value].push_back(criteria);
-        if (criteria->additionalRequirements[1].additionalRequirement_type != ACHIEVEMENT_CRITERIA_CONDITION_NONE &&
-                criteria->additionalRequirements[1].additionalRequirement_type != criteria->additionalRequirements[0].additionalRequirement_type)
-            _achievementCriteriasByCondition[criteria->additionalRequirements[1].additionalRequirement_type][criteria->additionalRequirements[1].additionalRequirement_value].push_back(criteria);
+        if (criteria->additionalRequirement_type[0] != ACHIEVEMENT_CRITERIA_CONDITION_NONE)
+            _achievementCriteriasByCondition[criteria->additionalRequirement_type[0]][criteria->additionalRequirement_value[0]].push_back(criteria);
+        if (criteria->additionalRequirement_type[1] != ACHIEVEMENT_CRITERIA_CONDITION_NONE &&
+                criteria->additionalRequirement_type[1] != criteria->additionalRequirement_type[0])
+            _achievementCriteriasByCondition[criteria->additionalRequirement_type[1]][criteria->additionalRequirement_value[1]].push_back(criteria);
 
         switch (criteria->requiredType)
         {
@@ -2913,7 +2913,7 @@ void AchievementGlobalMgr::LoadAchievementCriteriaData()
                     continue;
                 }
             case ACHIEVEMENT_CRITERIA_TYPE_WIN_RATED_ARENA: // need skip generic cases
-                if (criteria->additionalRequirements[0].additionalRequirement_type != ACHIEVEMENT_CRITERIA_CONDITION_NO_LOSE)
+                if (criteria->additionalRequirement_type[0] != ACHIEVEMENT_CRITERIA_CONDITION_NO_LOSE)
                     continue;
                 break;
             case ACHIEVEMENT_CRITERIA_TYPE_DO_EMOTE:        // need skip generic cases

@@ -35,7 +35,8 @@ enum DbcFieldFormat
     FT_BYTE = 'b',                                            //uint8
     FT_SORT = 'd',                                            //sorted by this field, field is not included
     FT_IND = 'n',                                             //the same, but parsed to data
-    FT_LOGIC = 'l'                                           //Logical (boolean)
+    FT_LOGIC = 'l',                                           //Logical (boolean)
+    FT_LONG = 'q'                                             //uint64 source column (Cata 8-byte fields); only the low 32 bits are stored
 };
 
 class DBCFileLoader
