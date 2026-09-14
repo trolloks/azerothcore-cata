@@ -67,7 +67,13 @@ CMakeLists.txt.user
 .claude/settings.local.json
 .claude/plans/**
 .claude/.cc-writes/
+.claude/.headroom_wrap_*
 CLAUDE.local.md
+
+#
+# Serena
+#
+.serena/
 
 #
 # IDE & other software
