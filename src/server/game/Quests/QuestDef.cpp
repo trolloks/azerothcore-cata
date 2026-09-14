@@ -309,7 +309,9 @@ uint32 Quest::CalculateHonorGain(uint8 level) const
 
     uint32 honor = 0;
 
-    if (GetRewHonorAddition() > 0 || GetRewHonorMultiplier() > 0.0f)
+    // TeamContributionPoints.dbc was removed in the real Cata client (matches upstream TC,
+    // which also drops this calculation for build 15595 onward).
+    /*if (GetRewHonorAddition() > 0 || GetRewHonorMultiplier() > 0.0f)
     {
         // values stored from 0.. for 1...
         TeamContributionPointsEntry const* tc = sTeamContributionPointsStore.LookupEntry(level);
@@ -320,7 +322,7 @@ uint32 Quest::CalculateHonorGain(uint8 level) const
         // Xinef: exactly this is calculated above, however with higher precision...
         //honor += Acore::Honor::hk_honor_at_level(level, GetRewHonorMultiplier());
         honor += GetRewHonorAddition();
-    }
+    }*/
 
     return honor;
 }

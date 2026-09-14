@@ -404,7 +404,7 @@ void LoadDBCStores(std::string const& dataPath)
     LOAD_DBC(sTaxiNodesStore,                       "TaxiNodes.dbc",                        "taxinodes_dbc");
     LOAD_DBC(sTaxiPathStore,                        "TaxiPath.dbc",                         "taxipath_dbc");
     LOAD_DBC(sTaxiPathNodeStore,                    "TaxiPathNode.dbc",                     "taxipathnode_dbc");
-    LOAD_DBC(sTeamContributionPointsStore,          "TeamContributionPoints.dbc",           "teamcontributionpoints_dbc");
+    //LOAD_DBC(sTeamContributionPointsStore,        "TeamContributionPoints.dbc",           "teamcontributionpoints_dbc"); -- removed in real Cata client (matches upstream TC, which also drops this load); only caller (Quest::CalculateHonorGain) is disabled below to match
     LOAD_DBC(sTotemCategoryStore,                   "TotemCategory.dbc",                    "totemcategory_dbc");
     LOAD_DBC(sTransportAnimationStore,              "TransportAnimation.dbc",               "transportanimation_dbc");
     LOAD_DBC(sTransportRotationStore,               "TransportRotation.dbc",                "transportrotation_dbc");
