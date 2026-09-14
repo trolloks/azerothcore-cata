@@ -330,9 +330,9 @@ void LoadDBCStores(std::string const& dataPath)
     LOAD_DBC(sGtChanceToSpellCritStore,             "gtChanceToSpellCrit.dbc",              "gtchancetospellcrit_dbc");
     LOAD_DBC(sGtNPCManaCostScalerStore,             "gtNPCManaCostScaler.dbc",              "gtnpcmanacostscaler_dbc");
     LOAD_DBC(sGtOCTClassCombatRatingScalarStore,    "gtOCTClassCombatRatingScalar.dbc",     "gtoctclasscombatratingscalar_dbc");
-    LOAD_DBC(sGtOCTRegenHPStore,                    "gtOCTRegenHP.dbc",                     "gtoctregenhp_dbc");
+    //LOAD_DBC(sGtOCTRegenHPStore,                  "gtOCTRegenHP.dbc",                     "gtoctregenhp_dbc");       -- real Cata 4.3.4 file has 1 field (matches upstream TC, which also disables this load for build 15595); GtOCTRegenHPfmt is unconverted WotLK layout
     //LOAD_DBC(sGtOCTRegenMPStore,                  "gtOCTRegenMP.dbc",                     "gtoctregenmp_dbc");       -- not used currently
-    LOAD_DBC(sGtRegenHPPerSptStore,                 "gtRegenHPPerSpt.dbc",                  "gtregenhpperspt_dbc");
+    //LOAD_DBC(sGtRegenHPPerSptStore,               "gtRegenHPPerSpt.dbc",                  "gtregenhpperspt_dbc");    -- table doesn't exist in Cata (Spirit no longer regenerates health); upstream TC has no equivalent for Cata
     LOAD_DBC(sGtRegenMPPerSptStore,                 "gtRegenMPPerSpt.dbc",                  "gtregenmpperspt_dbc");
     LOAD_DBC(sHolidaysStore,                        "Holidays.dbc",                         "holidays_dbc");
     LOAD_DBC(sItemStore,                            "Item.dbc",                             "item_dbc");
