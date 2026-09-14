@@ -848,7 +848,9 @@ void OpcodeTable::Initialize()
     DEFINE_BIDIRECTIONAL_OPCODE(MSG_LIST_STABLED_PETS, MSG_LIST_STABLED_PETS, MSG_LIST_STABLED_PETS_SERVER);
     /*0x0270*/ DEFINE_HANDLER(CMSG_STABLE_PET,                                                       STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleStablePet                          );
     /*0x0271*/ DEFINE_HANDLER(CMSG_UNSTABLE_PET,                                                     STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleUnstablePet                        );
-    /*0x0272*/ DEFINE_HANDLER(CMSG_BUY_STABLE_SLOT,                                                  STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleBuyStableSlot                      );
+    // CMSG_BUY_STABLE_SLOT is never sent by the real Cata client (matches upstream TC, which drops
+    // this handler entirely); StableSlotPrices.dbc that it depends on no longer exists either.
+    //DEFINE_HANDLER(CMSG_BUY_STABLE_SLOT,                                                            STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleBuyStableSlot                      );
     /*0x2204*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_STABLE_RESULT,                                      STATUS_NEVER);
     /*0x0274*/ DEFINE_HANDLER(CMSG_STABLE_REVIVE_PET,                                                STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleStableRevivePet                    );
     /*0x0275*/ DEFINE_HANDLER(CMSG_STABLE_SWAP_PET,                                                  STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleStableSwapPet                      );

@@ -604,6 +604,9 @@ void WorldSession::HandleUnstablePet(WorldPacket& recvData)
     }
 }
 
+// CMSG_BUY_STABLE_SLOT is never sent by the real Cata client (matches upstream TC, which drops
+// this handler entirely); StableSlotPrices.dbc that it depends on no longer exists either.
+/*
 void WorldSession::HandleBuyStableSlot(WorldPacket& recvData)
 {
     LOG_DEBUG("network", "WORLD: Recv CMSG_BUY_STABLE_SLOT.");
@@ -637,6 +640,7 @@ void WorldSession::HandleBuyStableSlot(WorldPacket& recvData)
     else
         SendStableResult(STABLE_ERR_STABLE);
 }
+*/
 
 void WorldSession::HandleStableRevivePet(WorldPacket& /* recvData */)
 {
