@@ -626,6 +626,9 @@ void LoadDBCStores(std::string const& dataPath)
             // valid taxi network node
             uint8  field   = (uint8)((i - 1) / 32);
             uint32 submask = 1 << ((i - 1) % 32);
+            if (field >= TaxiMaskSize)
+                continue;
+
             sTaxiNodesMask[field] |= submask;
 
             if (node->MountCreatureID[0] && node->MountCreatureID[0] != 32981)
