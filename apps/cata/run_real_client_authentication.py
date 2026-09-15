@@ -581,17 +581,20 @@ def verify_populated_character_seed(manifest: Manifest, generation: Generation) 
 
 
 def verify_populated_character_identity(manifest: Manifest, generation: Generation) -> dict[str, object]:
-    matches = mysql(
+    # Seeded modes insert the character with the synthetic CHARACTER_GUID fixture, but a
+    # character made through real character creation gets a server-assigned GUID instead, so
+    # this looks the row up by name/account rather than assuming the fixture GUID.
+    guids = mysql(
         manifest, generation,
-        "SELECT COUNT(*) FROM `characters` WHERE "
-        f"`guid`={CHARACTER_GUID} AND `account`={ACCOUNT_ID} AND `name`='{CHARACTER_NAME}' "
+        f"SELECT `guid` FROM `characters` WHERE `account`={ACCOUNT_ID} AND `name`='{CHARACTER_NAME}' "
         "AND `deleteDate` IS NULL;",
         generation["schemas"]["characters"],
     )
-    if matches != "1":
-        raise RuntimeError(f"owned selected character matched {matches!r} rows instead of one")
+    rows = guids.splitlines()
+    if len(rows) != 1:
+        raise RuntimeError(f"owned selected character matched {len(rows)} rows instead of one")
     return {
-        "guid_low": CHARACTER_GUID, "name": CHARACTER_NAME, "race": CHARACTER_RACE,
+        "guid_low": int(rows[0]), "name": CHARACTER_NAME, "race": CHARACTER_RACE,
         "class": CHARACTER_CLASS, "gender": 0,
         "level": 1, "map": CHARACTER_MAP, "zone": CHARACTER_ZONE,
         "list_position": CHARACTER_LIST_POSITION,
@@ -1641,6 +1644,12 @@ def automate_character_creation(generation: Generation) -> None:
         xtest.fake_input(connection, X.KeyRelease, keycode)
         if modifier:
             xtest.fake_input(connection, X.KeyRelease, modifier)
+        # Without an explicit sync, these fake_input requests sit in Xlib's local output
+        # buffer until some later round-trip call (e.g. the next require_focus()) flushes
+        # them, so the very last keystroke of a name never reaches the X server at all until
+        # something else forces a flush -- which was previously the Accept click's own
+        # require_focus(), landing right on top of it with no real settle time.
+        connection.sync()
 
     def enter(value: str) -> None:
         for character in value:
@@ -1655,6 +1664,9 @@ def automate_character_creation(generation: Generation) -> None:
     click(points["class_warrior"])
     click(points["name_field"])
     enter(CHARACTER_NAME)
+    # Give the client a moment to render the committed name before Accept, matching the
+    # settle delay already used between other clicks in this flow (see click() above).
+    time.sleep(1.2)
     click(points["accept"])
     connection.sync()
     connection.close()
@@ -1787,7 +1799,15 @@ def run_client(args: argparse.Namespace) -> None:
                         capture_runtime(generation)
                         generation["post_marker_snapshots"] = 1
                         post_marker_hold_started = time.monotonic()
-                    if (
+                        if generation["mode"] == CHARACTER_CREATION_MODE:
+                            automate_character_selection(generation)
+                    if generation["mode"] == CHARACTER_CREATION_MODE:
+                        if post_marker_hold_started is not None and player_login_callbacks(generation):
+                            capture_runtime(generation)
+                            generation["post_marker_snapshots"] = 2
+                            generation["post_marker_hold_seconds"] = time.monotonic() - post_marker_hold_started
+                            break
+                    elif (
                         post_marker_hold_started is not None
                         and time.monotonic() - post_marker_hold_started >= args.stability_seconds
                     ):
@@ -2135,7 +2155,7 @@ def sanitized_evidence(
     creation_mode = generation["mode"] == CHARACTER_CREATION_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     in_world_control_mode = generation["mode"] in {IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
-    login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode
+    login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
         Path(generation["paths"]["raw_evidence"]) / "window.xprop"
     ).is_file()
@@ -2227,7 +2247,7 @@ def verify(args: argparse.Namespace) -> None:
     creation_mode = generation["mode"] == CHARACTER_CREATION_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     in_world_control_mode = generation["mode"] in {IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
-    login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode
+    login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     rows = character_row_count(manifest, generation) if character_mode else None
     realm_count = realm_character_count(manifest, generation) if populated_mode else None
     seed = (
@@ -2325,6 +2345,9 @@ def verify(args: argparse.Namespace) -> None:
                 any(item == {"direction": "c2s", "opcode": "CMSG_CHAR_CREATE"} for item in transcript)
                 and any(item == {"direction": "s2c", "opcode": "SMSG_CHAR_CREATE"} for item in transcript)
                 and evidence["creation_marker_count"] == 1
+                and selection is not None
+                and selection["legit_characters_admission"]
+                and selection["seeded_guid_low"] == selection["callback_guid_low"]
             )
         if character_ok:
             evidence["outcome"] = (
