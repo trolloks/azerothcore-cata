@@ -141,6 +141,7 @@ MAP_INSERTION_MODE = "map-insertion-object-bootstrap"
 IN_WORLD_CONTROL_MODE = "in-world-control-bootstrap"
 BASIC_MOVEMENT_MODE = "basic-movement"
 RUN_SPEED_MODE = "run-speed-change"
+CHARACTER_CREATION_MODE = "character-creation"
 RUN_SPEED_AURA = 2983
 RUN_SPEED_AURA_AMOUNT = 50
 RUN_SPEED_AURA_DURATION_MS = 60000
@@ -148,7 +149,7 @@ POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
     IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
 })
-CHARACTER_MODES = frozenset({"character-screen", *POPULATED_CHARACTER_MODES})
+CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
 CHARACTER_NAME = "Cataplan"
 CHARACTER_LIST_POSITION = 7
@@ -160,6 +161,8 @@ CHARACTER_ZONE = 12
 
 
 def plan_number(mode: str) -> str:
+    if mode == CHARACTER_CREATION_MODE:
+        return "22"
     if mode == RUN_SPEED_MODE:
         return "16"
     if mode == BASIC_MOVEMENT_MODE:
@@ -1581,6 +1584,73 @@ def automate_character_selection(generation: Generation) -> None:
     connection.close()
 
 
+def character_creation_points(x: int, y: int, width: int, height: int) -> dict[str, tuple[int, int]]:
+    # Fractions calibrated against a 1800x1042 owned window on the Cataclysm 15595 creation
+    # screen: Alliance/Human is the first race portrait, Warrior the first class icon (both
+    # already match CHARACTER_RACE/CHARACTER_CLASS), male is the left gender icon, matching the
+    # gender=0 used by the populated-mode SQL fixtures.
+    return {
+        "race_human": (x + round(width * 0.0678), y + round(height * 0.0912)),
+        "gender_male": (x + round(width * 0.0833), y + round(height * 0.5566)),
+        "class_warrior": (x + round(width * 0.0378), y + round(height * 0.6449)),
+        "name_field": (x + round(width * 0.5000), y + round(height * 0.8974)),
+        "accept": (x + round(width * 0.8972), y + round(height * 0.9357)),
+    }
+
+
+def automate_character_creation(generation: Generation) -> None:
+    try:
+        from Xlib import X, XK, display
+        from Xlib.ext import xtest
+    except ImportError as error:
+        raise RuntimeError("character creation requires the installed python3-xlib package") from error
+
+    connection = display.Display(str(generation["inputs"]["display"]))
+    window_id, x, y, width, height = focus_owned_window(generation)
+    shift = connection.keysym_to_keycode(XK.string_to_keysym("Shift_L"))
+
+    def require_focus() -> None:
+        active = connection.screen().root.get_full_property(
+            connection.intern_atom("_NET_ACTIVE_WINDOW"), X.AnyPropertyType,
+        )
+        if active is None or not len(active.value) or int(active.value[0]) != int(window_id, 16):
+            raise RuntimeError("owned WoW window lost focus before input")
+
+    def click(point: tuple[int, int]) -> None:
+        require_focus()
+        connection.screen().root.warp_pointer(*point)
+        xtest.fake_input(connection, X.ButtonPress, 1)
+        xtest.fake_input(connection, X.ButtonRelease, 1)
+        connection.sync()
+        time.sleep(0.3)
+
+    def press(value: str, modifier: int | None = None) -> None:
+        require_focus()
+        symbol = XK.string_to_keysym(x_keysym_name(value))
+        keycode = connection.keysym_to_keycode(symbol)
+        if modifier:
+            xtest.fake_input(connection, X.KeyPress, modifier)
+        xtest.fake_input(connection, X.KeyPress, keycode)
+        xtest.fake_input(connection, X.KeyRelease, keycode)
+        if modifier:
+            xtest.fake_input(connection, X.KeyRelease, modifier)
+
+    def enter(value: str) -> None:
+        for character in value:
+            press(character, shift if character.isalpha() else None)
+            time.sleep(0.05)
+
+    points = character_creation_points(x, y, width, height)
+    click(points["race_human"])
+    click(points["gender_male"])
+    click(points["class_warrior"])
+    click(points["name_field"])
+    enter(CHARACTER_NAME)
+    click(points["accept"])
+    connection.sync()
+    connection.close()
+
+
 def character_row_count(manifest: Manifest, generation: Generation) -> int:
     output = mysql(
         manifest, generation,
@@ -1689,8 +1759,12 @@ def run_client(args: argparse.Namespace) -> None:
                     generation["mode"] in {CHARACTER_SELECTION_MODE, *POST_MARKER_MODES}
                     and character_hold_started is not None and not selection_sent
                 ):
-                    automate_character_selection(generation)
-                    generation["selection_action"] = "enter"
+                    if generation["mode"] == CHARACTER_CREATION_MODE:
+                        automate_character_creation(generation)
+                        generation["selection_action"] = "create"
+                    else:
+                        automate_character_selection(generation)
+                        generation["selection_action"] = "enter"
                     save_manifest(manifest_path, manifest)
                     selection_sent = True
                 if (
@@ -1897,8 +1971,13 @@ def run_speed_acknowledgements(generation: Generation) -> list[dict[str, int | f
     return accepted
 
 
+def character_creation_marker_count(generation: Generation) -> int:
+    return world_log_text(generation).count("[SMSG_CHAR_CREATE ")
+
+
 POST_MARKER_MODES = frozenset({
     INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
+    CHARACTER_CREATION_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -1906,6 +1985,7 @@ POST_MARKER_COUNTERS = {
     IN_WORLD_CONTROL_MODE: in_world_control_marker_count,
     BASIC_MOVEMENT_MODE: movement_heartbeat_count,
     RUN_SPEED_MODE: lambda generation: len(run_speed_acknowledgements(generation)),
+    CHARACTER_CREATION_MODE: character_creation_marker_count,
 }
 
 
@@ -2020,7 +2100,7 @@ def sanitized_evidence(
     initial_packet_prefix_value: list[str] | None = None, pre_map_marker_count: int | None = None,
     map_insertion_prefix_value: list[str] | None = None, map_insertion_marker_count_value: int | None = None,
     in_world_control_prefix_value: list[str] | None = None, in_world_control_marker_count_value: int | None = None,
-    movement_heartbeat_count_value: int | None = None,
+    movement_heartbeat_count_value: int | None = None, creation_marker_count_value: int | None = None,
 ) -> dict[str, object]:
     auth_index = next(
         (index for index, item in enumerate(transcript) if item["opcode"] == "SMSG_AUTH_RESPONSE"), None,
@@ -2043,20 +2123,27 @@ def sanitized_evidence(
     initial_packets_mode = generation["mode"] == INITIAL_POST_LOAD_PACKETS_MODE
     map_insertion_mode = generation["mode"] == MAP_INSERTION_MODE
     run_speed_mode = generation["mode"] == RUN_SPEED_MODE
+    creation_mode = generation["mode"] == CHARACTER_CREATION_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     in_world_control_mode = generation["mode"] in {IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
         Path(generation["paths"]["raw_evidence"]) / "window.xprop"
     ).is_file()
-    forbidden_opcodes = FORBIDDEN_CHARACTER_OPCODES - ({"CMSG_PLAYER_LOGIN"} if login_mode else set())
+    allowed_opcodes = set()
+    if login_mode:
+        allowed_opcodes.add("CMSG_PLAYER_LOGIN")
+    if creation_mode:
+        allowed_opcodes.add("CMSG_CHAR_CREATE")
+    forbidden_opcodes = FORBIDDEN_CHARACTER_OPCODES - allowed_opcodes
     forbidden = sorted({item["opcode"] for item in transcript if item["opcode"] in forbidden_opcodes})
     return {
         "schema": 1,
         "build": CLIENT_BUILD,
         "mode": generation["mode"],
         "outcome": (
-            "run_speed_change_candidate" if run_speed_mode and "characters_completed" in milestones
+            "character_creation_candidate" if creation_mode and "characters_completed" in milestones
+            else "run_speed_change_candidate" if run_speed_mode and "characters_completed" in milestones
             else "basic_movement_pass_candidate" if basic_movement_mode and "characters_completed" in milestones
             else "in_world_control_bootstrap_candidate" if in_world_control_mode and "characters_completed" in milestones
             else "map_insertion_object_bootstrap_candidate" if map_insertion_mode and "characters_completed" in milestones
@@ -2085,6 +2172,7 @@ def sanitized_evidence(
         "in_world_control_marker_count": in_world_control_marker_count_value if in_world_control_mode else None,
         "movement_heartbeat_count": movement_heartbeat_count_value if basic_movement_mode else None,
         "run_speed_acknowledgements": run_speed_acknowledgements(generation) if run_speed_mode else None,
+        "creation_marker_count": creation_marker_count_value if creation_mode else None,
         "post_marker_hold_seconds": (
             generation.get("post_marker_hold_seconds", 0) if generation["mode"] in POST_MARKER_MODES else None
         ),
@@ -2127,6 +2215,7 @@ def verify(args: argparse.Namespace) -> None:
     initial_packets_mode = generation["mode"] == INITIAL_POST_LOAD_PACKETS_MODE
     map_insertion_mode = generation["mode"] == MAP_INSERTION_MODE
     run_speed_mode = generation["mode"] == RUN_SPEED_MODE
+    creation_mode = generation["mode"] == CHARACTER_CREATION_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     in_world_control_mode = generation["mode"] in {IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode
@@ -2165,6 +2254,7 @@ def verify(args: argparse.Namespace) -> None:
             in_world_control_marker_count(generation) if in_world_control_mode else None
         ),
         movement_heartbeat_count_value=movement_heartbeat_count(generation) if basic_movement_mode else None,
+        creation_marker_count_value=character_creation_marker_count(generation) if creation_mode else None,
     )
     unchanged = protected_inputs_unchanged(manifest, generation)
     generation["isolation_unchanged"] = unchanged
@@ -2179,7 +2269,7 @@ def verify(args: argparse.Namespace) -> None:
             len(milestones) == len(CHARACTER_MILESTONES)
             and any(item == {"direction": "c2s", "opcode": "CMSG_CHAR_ENUM"} for item in transcript)
             and any(item == {"direction": "s2c", "opcode": "SMSG_CHAR_ENUM"} for item in transcript)
-            and rows == (1 if populated_mode else 0)
+            and rows == (1 if populated_mode or creation_mode else 0)
             and evidence["stability_seconds"] >= 5
             and evidence["endpoint_ownership"]
             and evidence["owned_window"]
@@ -2221,9 +2311,16 @@ def verify(args: argparse.Namespace) -> None:
             character_ok = character_ok and evidence["movement_heartbeat_count"] > 0
         if run_speed_mode:
             character_ok = character_ok and bool(evidence["run_speed_acknowledgements"])
+        if creation_mode:
+            character_ok = character_ok and (
+                any(item == {"direction": "c2s", "opcode": "CMSG_CHAR_CREATE"} for item in transcript)
+                and any(item == {"direction": "s2c", "opcode": "SMSG_CHAR_CREATE"} for item in transcript)
+                and evidence["creation_marker_count"] == 1
+            )
         if character_ok:
             evidence["outcome"] = (
-                "run_speed_change_pass" if run_speed_mode
+                "character_creation_pass" if creation_mode
+                else "run_speed_change_pass" if run_speed_mode
                 else "basic_movement_pass" if basic_movement_mode
                 else "in_world_control_bootstrap_pass" if in_world_control_mode
                 else "map_insertion_object_bootstrap_pass" if map_insertion_mode
@@ -2530,6 +2627,26 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         [name for name, _ in CHARACTER_MILESTONES],
         [{"direction": "c2s", "opcode": "CMSG_PLAYER_LOGIN"}],
     )["forbidden_opcodes"]
+    creation_generation = dict(character_generation)
+    creation_generation["mode"] = CHARACTER_CREATION_MODE
+    creation_transcript = [
+        {"direction": "c2s", "opcode": "CMSG_CHAR_ENUM"},
+        {"direction": "s2c", "opcode": "SMSG_CHAR_ENUM"},
+        {"direction": "c2s", "opcode": "CMSG_CHAR_CREATE"},
+        {"direction": "s2c", "opcode": "SMSG_CHAR_CREATE"},
+    ]
+    creation_evidence = sanitized_evidence(
+        creation_generation, [name for name, _ in CHARACTER_MILESTONES], creation_transcript,
+        character_rows=1, screen_confirmed=True, creation_marker_count_value=1,
+    )
+    assert creation_evidence["forbidden_opcodes"] == []
+    assert creation_evidence["creation_marker_count"] == 1
+    assert creation_evidence["outcome"] == "character_creation_candidate"
+    assert "CMSG_CHAR_DELETE" in sanitized_evidence(
+        creation_generation, [name for name, _ in CHARACTER_MILESTONES],
+        [{"direction": "c2s", "opcode": "CMSG_CHAR_DELETE"}],
+    )["forbidden_opcodes"]
+    assert plan_number(CHARACTER_CREATION_MODE) == "22"
     populated_generation = dict(character_generation)
     populated_generation["mode"] = POPULATED_MODE
     expected_character = {
@@ -2828,7 +2945,8 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--xauthority", type=Path)
     prepare_parser.add_argument(
         "--mode", choices=(
-            "no-login", "authentication", "character-screen", POPULATED_MODE, CHARACTER_SELECTION_MODE,
+            "no-login", "authentication", "character-screen", CHARACTER_CREATION_MODE, POPULATED_MODE,
+            CHARACTER_SELECTION_MODE,
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
         ), default="authentication",
     )
