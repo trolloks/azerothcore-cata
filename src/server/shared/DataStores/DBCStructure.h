@@ -1182,16 +1182,25 @@ struct ItemDisplayInfoEntry
 //};
 
 #define MAX_ITEM_EXTENDED_COST_REQUIREMENTS 5
+#define MAX_ITEM_EXTENDED_COST_CURRENCIES 5
 
 struct ItemExtendedCostEntry
 {
-    uint32      ID;                                                 // 0 extended-cost entry id
-    uint32      reqhonorpoints;                                     // 1 required honor points
-    uint32      reqarenapoints;                                     // 2 required arena points
-    uint32      reqarenaslot;                                       // 3 arena slot restrctions (min slot value)
-    uint32      reqitem[MAX_ITEM_EXTENDED_COST_REQUIREMENTS];       // 4-8 required item id
-    uint32      reqitemcount[MAX_ITEM_EXTENDED_COST_REQUIREMENTS];  // 9-14 required count of 1st item
-    uint32      reqpersonalarenarating;                             // 15 required personal arena rating};
+    uint32      ID;                                                     // 0 extended-cost entry id
+    uint32      reqhonorpoints;                                         // 1 required honor points
+    uint32      reqarenapoints;                                         // 2 required arena points
+    uint32      reqarenaslot;                                           // 3 arena slot restrctions (min slot value)
+    uint32      reqitem[MAX_ITEM_EXTENDED_COST_REQUIREMENTS];           // 4-8 required item id
+    uint32      reqitemcount[MAX_ITEM_EXTENDED_COST_REQUIREMENTS];      // 9-13 required count of matching item
+    uint32      reqpersonalarenarating;                                 // 14 required personal arena rating
+    uint32      itempurchasegroup;                                      // 15
+    uint32      reqcurrency[MAX_ITEM_EXTENDED_COST_CURRENCIES];         // 16-20 required currency id
+    uint32      reqcurrencycount[MAX_ITEM_EXTENDED_COST_CURRENCIES];    // 21-25 required currency count
+    uint32      reqfactionid;                                           // 26
+    uint32      reqfactionstanding;                                     // 27
+    uint32      requirementflags;                                       // 28
+    uint32      reqguildlevel;                                          // 29
+    uint32      reqachievement;                                         // 30
 };
 
 struct ItemLimitCategoryEntry

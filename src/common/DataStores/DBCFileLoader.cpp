@@ -44,7 +44,8 @@ bool DBCFileLoader::Load(char const* filename, char const* fmt)
 
     EndianConvert(header);
 
-    if (header != 0x43424457)                                //'WDBC'
+    bool const isWdb2 = header == 0x32424457;                //'WDB2', Cata's replacement for some WDBC tables
+    if (header != 0x43424457 && !isWdb2)                     //'WDBC'
     {
         fclose(f);
         return false;
@@ -81,6 +82,37 @@ bool DBCFileLoader::Load(char const* filename, char const* fmt)
     }
 
     EndianConvert(stringSize);
+
+    if (isWdb2)
+    {
+        uint32 tableHash, build, unk1;
+        int32 minIndex = 0, maxIndex = 0, locale, unk5;
+        if (fread(&tableHash, 4, 1, f) != 1 || fread(&build, 4, 1, f) != 1 || fread(&unk1, 4, 1, f) != 1)
+        {
+            fclose(f);
+            return false;
+        }
+        EndianConvert(build);
+
+        if (build > 12880)
+        {
+            if (fread(&minIndex, 4, 1, f) != 1 || fread(&maxIndex, 4, 1, f) != 1 ||
+                fread(&locale, 4, 1, f) != 1 || fread(&unk5, 4, 1, f) != 1)
+            {
+                fclose(f);
+                return false;
+            }
+            EndianConvert(minIndex);
+            EndianConvert(maxIndex);
+        }
+
+        if (maxIndex != 0)
+        {
+            // skip the sparse id lookup table (4 bytes/id) and string-offset bank (2 bytes/id)
+            int32 diff = maxIndex - minIndex + 1;
+            fseek(f, diff * 4 + diff * 2, SEEK_CUR);
+        }
+    }
 
     uint32 expectedRecordSize = 0;
     for (char const* field = fmt; *field; ++field)
