@@ -6,9 +6,11 @@ authenticates a synthetic account over the actual SRP6 + world-socket wire proto
 real CMSG_CHAR_CREATE packet for a Human Warrior, and inspects the resulting
 characters/character_inventory/character_skills/character_action rows against the native
 reference values already recorded in fixtures/plan22-starting-data-audit.json. This exercises
-Player::Create's real loading path without needing the graphical client or wine. It also covers
-three negative cases from #52's acceptance scope: duplicate name, invalid race/class combination,
-and a second account attempting to delete the first account's character (ownership).
+Player::Create's real loading path without needing the graphical client or wine. It also logs the
+character in and out twice to prove relogin does not duplicate skill/action/inventory grants, then
+deletes it through the normal owning-account path, and covers three negative cases from #52's
+acceptance scope: duplicate name, invalid race/class combination, and a second account attempting
+to delete the first account's character (ownership).
 
 Every Docker resource this script creates is named with its own run id and removed in a
 finally block; nothing here touches an existing database.
@@ -44,9 +46,16 @@ CMSG_CHAR_CREATE = 0x4A36
 SMSG_CHAR_CREATE = 0x2D05
 CMSG_CHAR_DELETE = 0x6425
 SMSG_CHAR_DELETE = 0x003C
+CMSG_CHAR_ENUM = 0x0502
+SMSG_CHAR_ENUM = 0x10B0
+CMSG_PLAYER_LOGIN = 0x05B1
+SMSG_LOGIN_VERIFY_WORLD = 0x2005
+CMSG_LOGOUT_REQUEST = 0x0A25
+SMSG_LOGOUT_COMPLETE = 0x2137
 CHAR_CREATE_SUCCESS = 0x2F
 CHAR_CREATE_ERROR = 0x30
 CHAR_CREATE_NAME_IN_USE = 0x32
+CHAR_DELETE_SUCCESS = 0x47
 AUTH_OK = 0x0C
 
 SERVER_CONNECTION_INITIALIZE = b"WORLD OF WARCRAFT CONNECTION - SERVER TO CLIENT"
@@ -407,6 +416,73 @@ def create_character(auth_port: int, world_port: int) -> dict:
     return {}
 
 
+def _player_login_body(guid: int) -> bytes:
+    """Mirrors WorldPackets::Character::PlayerLogin::Read() (CharacterPackets.cpp): a packed
+    GUID, not a raw 8-byte value. Guid[0] is the low byte (struct.pack("<Q", ...) byte order
+    matches ObjectGuid's own little-endian byte layout)."""
+    guid_bytes = struct.pack("<Q", guid)
+    bit_order = [2, 3, 0, 6, 4, 5, 1, 7]
+    byte_order = [2, 7, 0, 3, 5, 6, 1, 4]
+    packer = BitPacker()
+    for index in bit_order:
+        packer.write_bit(1 if guid_bytes[index] else 0)
+    packer.flush()
+    body = bytes(packer.out)
+    for index in byte_order:
+        if guid_bytes[index]:
+            # Mirrors ByteBuffer::WriteByteSeq(): the transmitted byte is the real value XORed
+            # with 1, undone by the matching ReadByteSeq() on the server (it XORs the wire byte
+            # into the 1 already stored there by the preceding ReadBit()).
+            body += bytes([guid_bytes[index] ^ 1])
+    return body
+
+
+def _login_and_logout(auth_port: int, world_port: int, guid: int) -> None:
+    """Logs the given character into the world and back out over one clean session, proving
+    the relogin path (spell/skill grant recomputation on login) runs without error and without
+    leaving the session attached, which would otherwise block a following CMSG_CHAR_DELETE."""
+    with socket.create_connection(("127.0.0.1", world_port), timeout=10) as sock:
+        send_client_packet, recv_server_packet = _open_world_session(auth_port, world_port, sock)
+
+        # HandlePlayerLoginOpcode only accepts a GUID present in the session's _legitCharacters
+        # set, which HandleCharEnumOpcode populates as a side effect of building its response;
+        # a real client always requests the character list before logging in, so this must too.
+        send_client_packet(CMSG_CHAR_ENUM, b"")
+        for _ in range(2000):
+            opcode, _body = recv_server_packet()
+            if opcode == SMSG_CHAR_ENUM:
+                break
+        else:
+            raise RuntimeError("expected SMSG_CHAR_ENUM, did not receive it")
+
+        send_client_packet(CMSG_PLAYER_LOGIN, _player_login_body(guid))
+        for _ in range(2000):
+            opcode, _body = recv_server_packet()
+            if opcode == SMSG_LOGIN_VERIFY_WORLD:
+                break
+        else:
+            raise RuntimeError("expected SMSG_LOGIN_VERIFY_WORLD, did not receive it")
+
+        send_client_packet(CMSG_LOGOUT_REQUEST, b"")
+        for _ in range(2000):
+            opcode, _body = recv_server_packet()
+            if opcode == SMSG_LOGOUT_COMPLETE:
+                break
+        else:
+            raise RuntimeError("expected SMSG_LOGOUT_COMPLETE, did not receive it")
+
+
+def _delete_own_character(auth_port: int, world_port: int, guid: int) -> int:
+    with socket.create_connection(("127.0.0.1", world_port), timeout=10) as sock:
+        send_client_packet, recv_server_packet = _open_world_session(auth_port, world_port, sock)
+        send_client_packet(CMSG_CHAR_DELETE, struct.pack("<Q", guid))
+        for _ in range(500):
+            opcode, body = recv_server_packet()
+            if opcode == SMSG_CHAR_DELETE:
+                return body[0]
+        raise RuntimeError(f"expected SMSG_CHAR_DELETE, got opcode 0x{opcode:04x}")
+
+
 def mysql(container: str, root_password: str, sql: str | bytes, schema: str | None = None,
           timeout: int = 300) -> str:
     command = ["docker", "exec", "-i", container, "mysql", "--batch", "--skip-column-names",
@@ -676,10 +752,33 @@ def main() -> int:
         base_pass = spawn_ok and actual_items == expected_items and arms_skill_present \
             and sorted(actual_actions) == expected_actions
 
+        grant_counts_query = (
+            f"SELECT (SELECT COUNT(*) FROM `character_skills` WHERE `guid`={guid}),"
+            f"(SELECT COUNT(*) FROM `character_action` WHERE `guid`={guid}),"
+            f"(SELECT COUNT(*) FROM `character_inventory` WHERE `guid`={guid});"
+        )
+        before_relogin_counts = mysql(container, root_password, grant_counts_query, characters_schema)
+        _login_and_logout(auth_port, world_port, int(guid))
+        _login_and_logout(auth_port, world_port, int(guid))
+        after_relogin_counts = mysql(container, root_password, grant_counts_query, characters_schema)
+        relogin_ok = before_relogin_counts == after_relogin_counts
+        print(f"relogin x2, skill/action/inventory counts unchanged (no duplicate grants): "
+              f"before={before_relogin_counts!r} after={after_relogin_counts!r} match={relogin_ok}")
+
         negative_pass = run_negative_cases(auth_port, world_port, container, root_password,
                                             characters_schema, auth_schema, int(guid))
 
-        all_pass = base_pass and negative_pass
+        delete_result = _delete_own_character(auth_port, world_port, int(guid))
+        delete_ok = delete_result == CHAR_DELETE_SUCCESS
+        print(f"normal delete: response=0x{delete_result:02x} expected=0x{CHAR_DELETE_SUCCESS:02x} "
+              f"match={delete_ok}")
+        remaining_row = mysql(container, root_password,
+                               f"SELECT `guid` FROM `characters` WHERE `guid`={guid} AND `deleteDate` IS NULL;",
+                               characters_schema)
+        delete_removed_ok = not bool(remaining_row)
+        print(f"character no longer active after normal delete: {delete_removed_ok}")
+
+        all_pass = base_pass and relogin_ok and negative_pass and delete_ok and delete_removed_ok
         print(f"OVERALL: {'PASS' if all_pass else 'FAIL'}")
         return 0 if all_pass else 1
     finally:
