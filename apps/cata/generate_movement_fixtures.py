@@ -106,7 +106,7 @@ def main():
         "MovementUpdateRunSpeed", "MovementStartBackward", "MovementStartForward", "MovementStartStrafeLeft",
         "MovementStartStrafeRight", "MovementStartTurnLeft", "MovementStartTurnRight", "MovementStop",
         "MovementStopStrafe", "MovementStopTurn", "MovementSetRunMode", "MovementSetWalkMode",
-        "MovementSetFacing",
+        "MovementSetFacing", "MovementFallLand", "MovementJump",
     ):
         body = re.search(r"\b" + name + r"\[\]\s*=\s*\{(.*?)\};", source, re.S).group(1)
         sequences[name] = re.findall(r"\bMSE\w+", body)
