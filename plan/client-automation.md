@@ -222,8 +222,8 @@ python3 apps/cata/run_real_client_authentication.py prepare --manifest "$M" \
   --unit-tests  "$PWD/var/build-plan7/src/test/unit_tests" \
   --client-root "/mnt/f79365ff-6a68-45da-925e-b9ddc6d5da6c/Blizzard Games/Battle.NET/drive_c/Games/Cataclysm-4.3.4.15595-enUS-x64" \
   --data-root   "/mnt/f79365ff-6a68-45da-925e-b9ddc6d5da6c/Fun/TrinityCore/TrinityCore/data" \
-  --server-dbc-root "/mnt/f79365ff-6a68-45da-925e-b9ddc6d5da6c/Fun/node-dbc-reader/data/dbc" \
-  --wine-runner "/home/trolloks/.var/app/com.usebottles.bottles/data/bottles/runners/ge-proton11-1/files" \
+  --server-dbc-root "$PWD/var/extractors/dbc-out3/dbc" \
+  --wine-runner "/home/trolloks/.var/app/com.usebottles.bottles/data/bottles/runners/ge-proton11-6/files" \
   --personal-bottle "/mnt/f79365ff-6a68-45da-925e-b9ddc6d5da6c/Blizzard Games/Battle.NET" \
   --migration "$PWD/data/sql/updates/pending_db_auth/rev_1786964293354831242.sql" \
   --display ":0" --xauthority "/home/trolloks/.Xauthority" \
