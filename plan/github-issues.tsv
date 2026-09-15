@@ -20,7 +20,7 @@ plan	issue	state	title	url
 19	40	closed	Plan 19: bit-packed movement/create block Cata conversion	https://github.com/trolloks/azerothcore-cata/issues/40
 20	41	closed	Plan 20: full opcode-table realignment to Cata 4.3.4	https://github.com/trolloks/azerothcore-cata/issues/41
 21	43	closed	Plan 21: login packet sequence parity with cata-js	https://github.com/trolloks/azerothcore-cata/issues/43
-22	52	open	Plan 22: character creation and correct starting state	https://github.com/trolloks/azerothcore-cata/issues/52
+22	52	closed	Plan 22: character creation and correct starting state	https://github.com/trolloks/azerothcore-cata/issues/52
 23	53	open	Plan 23: on-foot movement	https://github.com/trolloks/azerothcore-cata/issues/53
 24	54	open	Plan 24: initial phasing and visibility	https://github.com/trolloks/azerothcore-cata/issues/54
 25	55	open	Plan 25: basic spell casting	https://github.com/trolloks/azerothcore-cata/issues/55
