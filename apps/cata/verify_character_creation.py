@@ -4,9 +4,10 @@
 Boots a disposable, run-owned MySQL container plus a real authserver and worldserver,
 authenticates a synthetic account over the actual SRP6 + world-socket wire protocol, sends a
 real CMSG_CHAR_CREATE packet for a Human Warrior, and inspects the resulting
-characters/character_inventory/character_spell/character_action rows against the native
+characters/character_inventory/character_skills/character_action rows against the native
 reference values already recorded in fixtures/plan22-starting-data-audit.json. This exercises
-Player::Create's real loading path without needing the graphical client or wine.
+Player::Create's real loading path without needing the graphical client or wine. It also covers
+two negative cases from #52's acceptance scope (duplicate name, invalid race/class combination).
 
 Every Docker resource this script creates is named with its own run id and removed in a
 finally block; nothing here touches an existing database.
@@ -41,6 +42,8 @@ SMSG_AUTH_RESPONSE = 0x5DB6
 CMSG_CHAR_CREATE = 0x4A36
 SMSG_CHAR_CREATE = 0x2D05
 CHAR_CREATE_SUCCESS = 0x2F
+CHAR_CREATE_ERROR = 0x30
+CHAR_CREATE_NAME_IN_USE = 0x32
 AUTH_OK = 0x0C
 
 SERVER_CONNECTION_INITIALIZE = b"WORLD OF WARCRAFT CONNECTION - SERVER TO CLIENT"
@@ -207,67 +210,120 @@ def send_client_frame(sock: socket.socket, size_only_prefix: bytes) -> None:
     sock.sendall(size_only_prefix)
 
 
-def create_character(auth_port: int, world_port: int) -> dict:
+def _open_world_session(auth_port: int, world_port: int, sock: socket.socket):
+    """Authenticates the shared synthetic account over one world-socket connection and returns
+    (send_client_packet, recv_server_packet) bound to it."""
     peer, session_key = plan6.authenticate(auth_port)
 
+    sock.settimeout(10)
+    header = plan6.recv_exact(sock, 2)
+    size = struct.unpack(">H", header)[0]
+    greeting = plan6.recv_exact(sock, size)
+    if greeting != SERVER_CONNECTION_INITIALIZE:
+        raise RuntimeError(f"unexpected world greeting: {greeting!r}")
+    hello = CLIENT_CONNECTION_INITIALIZE
+    sock.sendall(struct.pack(">H", len(hello)) + hello)
+
+    header = plan6.recv_exact(sock, 4)
+    size, opcode = struct.unpack(">H", header[0:2])[0], struct.unpack("<H", header[2:4])[0]
+    if opcode != SMSG_AUTH_CHALLENGE:
+        raise RuntimeError(f"expected SMSG_AUTH_CHALLENGE, got opcode 0x{opcode:04x}")
+    challenge_body = plan6.recv_exact(sock, size - 2)
+    auth_seed = challenge_body[32:36]
+
+    local_challenge = bytes(range(4))
+    digest = hashlib.sha1(ACCOUNT.encode() + bytes(4) + local_challenge + auth_seed + session_key).digest()
+    auth_body = build_auth_session_body(ACCOUNT, digest, local_challenge, REALM_ID)
+    auth_header = struct.pack(">H", 4 + len(auth_body)) + struct.pack("<I", CMSG_AUTH_SESSION)
+    sock.sendall(auth_header + auth_body)
+
+    crypt = WorldCrypt(session_key)
+
+    def recv_server_packet() -> tuple[int, bytes]:
+        raw_header = plan6.recv_exact(sock, 4)
+        raw_header = crypt.decrypt_incoming_header(raw_header)
+        packet_size, packet_opcode = struct.unpack(">H", raw_header[0:2])[0], struct.unpack(
+            "<H", raw_header[2:4])[0]
+        packet_body = plan6.recv_exact(sock, packet_size - 2)
+        return packet_opcode, packet_body
+
+    def send_client_packet(opcode: int, body: bytes) -> None:
+        header = struct.pack(">H", 4 + len(body)) + struct.pack("<I", opcode)
+        header = crypt.encrypt_outgoing_header(header)
+        sock.sendall(header + body)
+
+    response_opcode, response_body = recv_server_packet()
+    if response_opcode != SMSG_AUTH_RESPONSE:
+        raise RuntimeError(f"expected SMSG_AUTH_RESPONSE, got opcode 0x{response_opcode:04x}")
+    # Mirrors WorldPackets::Auth::AuthResponse::Write() (AuthenticationPackets.cpp): a
+    # sequential bit stream (WaitInfo present, then HasFCM only if WaitInfo present, then
+    # SuccessInfo present) flushed to one byte, since WorldSessionMgr::AddSession_ always
+    # calls SendAuthResponse(AUTH_OK, /*shortForm=*/false, queuePos) on success.
+    reader = BitReader(response_body)
+    has_wait_info = reader.read_bit()
+    reader.read_bit() if has_wait_info else None  # HasFCM, unused here
+    has_success_info = reader.read_bit()
+    offset = 1
+    if has_success_info:
+        offset += 15
+    result = response_body[offset]
+    if result != AUTH_OK:
+        raise RuntimeError(f"world auth response was 0x{result:02x}, expected AUTH_OK")
+
+    return send_client_packet, recv_server_packet
+
+
+def _char_create_body(name: str, race: int, cls: int) -> bytes:
+    return name.encode() + b"\x00" + bytes([race, cls, 0, 0, 0, 0, 0, 0, 0])
+
+
+def _attempt_char_create(auth_port: int, world_port: int, name: str, race: int, cls: int) -> int:
+    """Sends one CMSG_CHAR_CREATE over its own fresh session and returns the response code."""
     with socket.create_connection(("127.0.0.1", world_port), timeout=10) as sock:
-        sock.settimeout(10)
-        header = plan6.recv_exact(sock, 2)
-        size = struct.unpack(">H", header)[0]
-        greeting = plan6.recv_exact(sock, size)
-        if greeting != SERVER_CONNECTION_INITIALIZE:
-            raise RuntimeError(f"unexpected world greeting: {greeting!r}")
-        hello = CLIENT_CONNECTION_INITIALIZE
-        sock.sendall(struct.pack(">H", len(hello)) + hello)
+        send_client_packet, recv_server_packet = _open_world_session(auth_port, world_port, sock)
+        send_client_packet(CMSG_CHAR_CREATE, _char_create_body(name, race, cls))
+        # See the matching comment in create_character(): Player::Create()'s Init*ForLevel()
+        # helpers legitimately emit ordinary gameplay packets before SMSG_CHAR_CREATE.
+        for _ in range(500):
+            opcode, body = recv_server_packet()
+            if opcode == SMSG_CHAR_CREATE:
+                return body[0]
+        raise RuntimeError(f"expected SMSG_CHAR_CREATE, got opcode 0x{opcode:04x}")
 
-        header = plan6.recv_exact(sock, 4)
-        size, opcode = struct.unpack(">H", header[0:2])[0], struct.unpack("<H", header[2:4])[0]
-        if opcode != SMSG_AUTH_CHALLENGE:
-            raise RuntimeError(f"expected SMSG_AUTH_CHALLENGE, got opcode 0x{opcode:04x}")
-        challenge_body = plan6.recv_exact(sock, size - 2)
-        auth_seed = challenge_body[32:36]
 
-        local_challenge = bytes(range(4))
-        digest = hashlib.sha1(ACCOUNT.encode() + bytes(4) + local_challenge + auth_seed + session_key).digest()
-        auth_body = build_auth_session_body(ACCOUNT, digest, local_challenge, REALM_ID)
-        auth_header = struct.pack(">H", 4 + len(auth_body)) + struct.pack("<I", CMSG_AUTH_SESSION)
-        sock.sendall(auth_header + auth_body)
+def run_negative_cases(auth_port: int, world_port: int) -> bool:
+    """Covers the two negative cases from #52's acceptance scope that a single wire-protocol
+    connection can exercise deterministically. Ownership (deleting another account's character)
+    is not covered here: HandleCharDeleteOpcode intentionally sends no response at all for both
+    a still-loaded character and a foreign account guid, so proving it needs a second real
+    account and a timeout-based non-response assertion - left for the real-client harness rather
+    than bolted onto this deterministic script."""
+    ok = True
 
-        crypt = WorldCrypt(session_key)
+    duplicate_result = _attempt_char_create(auth_port, world_port, CHAR_NAME, 1, 1)
+    duplicate_ok = duplicate_result == CHAR_CREATE_NAME_IN_USE
+    print(f"negative case, duplicate name: response=0x{duplicate_result:02x} "
+          f"expected=0x{CHAR_CREATE_NAME_IN_USE:02x} match={duplicate_ok}")
+    ok = ok and duplicate_ok
 
-        def recv_server_packet() -> tuple[int, bytes]:
-            raw_header = plan6.recv_exact(sock, 4)
-            raw_header = crypt.decrypt_incoming_header(raw_header)
-            packet_size, packet_opcode = struct.unpack(">H", raw_header[0:2])[0], struct.unpack(
-                "<H", raw_header[2:4])[0]
-            packet_body = plan6.recv_exact(sock, packet_size - 2)
-            return packet_opcode, packet_body
+    # Human (race 1) cannot be Shaman (class 7). HandleCharCreateOpcode has no dedicated
+    # "restricted combo" response: absent playercreateinfo for the pair fails Player::Create()
+    # itself, which the handler reports as CHAR_CREATE_ERROR (see CharacterHandler.cpp's
+    # "Player not create (race/class/etc problem?)" branch).
+    invalid_combo_result = _attempt_char_create(auth_port, world_port, "Auditbad", 1, 7)
+    invalid_combo_ok = invalid_combo_result == CHAR_CREATE_ERROR
+    print(f"negative case, invalid race/class combo: response=0x{invalid_combo_result:02x} "
+          f"expected=0x{CHAR_CREATE_ERROR:02x} match={invalid_combo_ok}")
+    ok = ok and invalid_combo_ok
 
-        def send_client_packet(opcode: int, body: bytes) -> None:
-            header = struct.pack(">H", 4 + len(body)) + struct.pack("<I", opcode)
-            header = crypt.encrypt_outgoing_header(header)
-            sock.sendall(header + body)
+    return ok
 
-        response_opcode, response_body = recv_server_packet()
-        if response_opcode != SMSG_AUTH_RESPONSE:
-            raise RuntimeError(f"expected SMSG_AUTH_RESPONSE, got opcode 0x{response_opcode:04x}")
-        # Mirrors WorldPackets::Auth::AuthResponse::Write() (AuthenticationPackets.cpp): a
-        # sequential bit stream (WaitInfo present, then HasFCM only if WaitInfo present, then
-        # SuccessInfo present) flushed to one byte, since WorldSessionMgr::AddSession_ always
-        # calls SendAuthResponse(AUTH_OK, /*shortForm=*/false, queuePos) on success.
-        reader = BitReader(response_body)
-        has_wait_info = reader.read_bit()
-        reader.read_bit() if has_wait_info else None  # HasFCM, unused here
-        has_success_info = reader.read_bit()
-        offset = 1
-        if has_success_info:
-            offset += 15
-        result = response_body[offset]
-        if result != AUTH_OK:
-            raise RuntimeError(f"world auth response was 0x{result:02x}, expected AUTH_OK")
 
-        char_body = CHAR_NAME.encode() + b"\x00" + bytes([1, 1, 0, 0, 0, 0, 0, 0, 0])
-        send_client_packet(CMSG_CHAR_CREATE, char_body)
+def create_character(auth_port: int, world_port: int) -> dict:
+    with socket.create_connection(("127.0.0.1", world_port), timeout=10) as sock:
+        send_client_packet, recv_server_packet = _open_world_session(auth_port, world_port, sock)
+
+        send_client_packet(CMSG_CHAR_CREATE, _char_create_body(CHAR_NAME, 1, 1))
 
         # Player::Create() runs several Init*ForLevel() helpers (talents, power, proficiencies,
         # criteria) that unconditionally push their normal in-game update packets to the session
@@ -285,7 +341,7 @@ def create_character(auth_port: int, world_port: int) -> dict:
         if create_body[0] != CHAR_CREATE_SUCCESS:
             raise RuntimeError(f"character creation failed with response code 0x{create_body[0]:02x}")
 
-    return {"account_realm": peer["realm"]}
+    return {}
 
 
 def mysql(container: str, root_password: str, sql: str | bytes, schema: str | None = None,
@@ -527,12 +583,16 @@ def main() -> int:
         print(f"starting items: expected={expected_items} actual={actual_items} "
               f"match={actual_items == expected_items}")
 
-        spells_row = mysql(container, root_password,
-                            f"SELECT `spell` FROM `character_spell` WHERE `guid`={guid} ORDER BY `spell`;",
-                            characters_schema)
-        actual_spells = sorted(int(value) for value in spells_row.splitlines() if value)
-        print(f"starting spells: count={len(actual_spells)} initial_cast_spell_2457_present="
-              f"{2457 in actual_spells}")
+        # Spell 2457 (Battle Stance) is a skill-derived grant: AC marks it PLAYERSPELL_TEMPORARY
+        # and recomputes it from character_skills on every login instead of persisting a
+        # character_spell row (see issue #76 for the AC-vs-TrinityCore-Cata design divergence).
+        # The correct persistence check is therefore the driving skill (26, Arms), not the spell.
+        skill_row = mysql(container, root_password,
+                           f"SELECT `value`,`max` FROM `character_skills` WHERE `guid`={guid} AND `skill`=26;",
+                           characters_schema)
+        arms_skill_present = bool(skill_row)
+        print(f"starting skill: Arms(26) present={arms_skill_present} "
+              f"(drives recomputed initial cast spell 2457 on every login)")
 
         actions_row = mysql(container, root_password,
                              f"SELECT `button`,`action`,`type` FROM `character_action` WHERE `guid`={guid} "
@@ -547,8 +607,12 @@ def main() -> int:
         print(f"action bars: expected={expected_actions} actual={sorted(actual_actions)} "
               f"match={sorted(actual_actions) == expected_actions}")
 
-        all_pass = spawn_ok and actual_items == expected_items and 2457 in actual_spells \
+        base_pass = spawn_ok and actual_items == expected_items and arms_skill_present \
             and sorted(actual_actions) == expected_actions
+
+        negative_pass = run_negative_cases(auth_port, world_port)
+
+        all_pass = base_pass and negative_pass
         print(f"OVERALL: {'PASS' if all_pass else 'FAIL'}")
         return 0 if all_pass else 1
     finally:

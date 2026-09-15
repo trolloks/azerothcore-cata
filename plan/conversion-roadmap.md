@@ -14,6 +14,14 @@ The rule for every change is simple:
 3. Use `cata-js` as corroborating protocol notes and runtime evidence, never as an architecture to
    transplant.
 4. Let the real build 15595 client decide whether a completed slice works.
+5. **Important:** where AC's own design and TC-Cata's produce the same player-visible outcome
+   through a different internal mechanism (e.g. persisted vs. recomputed-on-login data), keep the
+   AC way. This is an AzerothCore project; TC-Cata is a source for required 4.3.4 behavior/wire
+   format, not a template to converge AC's architecture toward. Only follow TC-Cata's approach
+   where AC has no prior mechanism to defer to. See
+   [#76](https://github.com/trolloks/azerothcore-cata/issues/76) for a concrete example (starting
+   spells: AC recomputes from `character_skills` at login; a TC-Cata-derived fixture wrongly
+   expected a persisted `character_spell` row).
 
 ## Reference order
 
