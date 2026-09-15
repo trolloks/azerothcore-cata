@@ -38,6 +38,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 MYSQL_IMAGE = "mysql:8.4"
 CLIENT_BUILD = 15595
 CHAR_NAME = "Auditwarr"
+CHAR_NAME_FEMALE = "Auditwarrf"
 
 CMSG_AUTH_SESSION = 0x0449
 SMSG_AUTH_CHALLENGE = 0x4542
@@ -285,8 +286,8 @@ def _open_world_session(auth_port: int, world_port: int, sock: socket.socket):
     return send_client_packet, recv_server_packet
 
 
-def _char_create_body(name: str, race: int, cls: int) -> bytes:
-    return name.encode() + b"\x00" + bytes([race, cls, 0, 0, 0, 0, 0, 0, 0])
+def _char_create_body(name: str, race: int, cls: int, gender: int = 0) -> bytes:
+    return name.encode() + b"\x00" + bytes([race, cls, gender, 0, 0, 0, 0, 0, 0])
 
 
 def _attempt_char_create(auth_port: int, world_port: int, name: str, race: int, cls: int) -> int:
@@ -391,11 +392,101 @@ def run_negative_cases(auth_port: int, world_port: int, container: str, root_pas
     return ok
 
 
-def create_character(auth_port: int, world_port: int) -> dict:
+def verify_starting_state(container: str, root_password: str, characters_schema: str, name: str) -> bool:
+    """Checks one created character's spawn/items/skill/action-bar rows against the reference
+    matrix (#57's fixtures/plan22-starting-data-audit.json), which pins the same outfit/action
+    bar for both genders of Human Warrior. Returns the created row's guid and whether it matched."""
+    char_row = mysql(container, root_password,
+                      "SELECT `guid`,`race`,`class`,`gender`,`map`,`position_x`,`position_y`,`position_z`,"
+                      "`orientation` FROM `characters` WHERE `account`="
+                      f"{ACCOUNT_ID} AND `name`='{name}';",
+                      characters_schema)
+    if not char_row:
+        raise RuntimeError("no characters row was created")
+    guid, race, cls, gender, map_id, pos_x, pos_y, pos_z, orientation = char_row.split("\t")
+    print(f"characters row: guid={guid} race={race} class={cls} gender={gender} map={map_id} "
+          f"pos=({pos_x},{pos_y},{pos_z}) orientation={orientation}")
+
+    expected_spawn = [1, 1, 0, 9, -8914.57, -133.909, 80.5378, 5.13806]
+    actual_spawn = [int(race), int(cls), int(map_id), None, float(pos_x), float(pos_y), float(pos_z),
+                    float(orientation)]
+    spawn_ok = (actual_spawn[0] == expected_spawn[0] and actual_spawn[1] == expected_spawn[1]
+                and actual_spawn[2] == expected_spawn[2]
+                and all(abs(actual_spawn[i] - expected_spawn[i]) < 0.001 for i in (4, 5, 6, 7)))
+    print(f"spawn matches reference (map/position/orientation, zone unverified since it is not persisted): "
+          f"{spawn_ok}")
+
+    items_row = mysql(container, root_password,
+                       "SELECT `ii`.`itemEntry` FROM `character_inventory` `ci` "
+                       "JOIN `item_instance` `ii` ON `ci`.`item`=`ii`.`guid` "
+                       f"WHERE `ci`.`guid`={guid} ORDER BY `ii`.`itemEntry`;",
+                       characters_schema)
+    actual_items = sorted(int(value) for value in items_row.splitlines() if value)
+    expected_items = sorted([58231, 39, 40, 49778, 6948])
+    print(f"starting items: expected={expected_items} actual={actual_items} "
+          f"match={actual_items == expected_items}")
+
+    # The chest piece (58231, "Recruit's Vest") must land in EQUIPMENT_SLOT_CHEST (bag 0, slot 4),
+    # not merely somewhere in the backpack, for either gender to render it instead of underwear.
+    chest_slot_row = mysql(container, root_password,
+                            "SELECT `ci`.`bag`,`ci`.`slot` FROM `character_inventory` `ci` "
+                            "JOIN `item_instance` `ii` ON `ci`.`item`=`ii`.`guid` "
+                            f"WHERE `ci`.`guid`={guid} AND `ii`.`itemEntry`=58231;",
+                            characters_schema)
+    chest_equipped_ok = chest_slot_row == "0\t4"
+    print(f"chest item equipped in EQUIPMENT_SLOT_CHEST (bag=0,slot=4): {chest_slot_row!r} "
+          f"match={chest_equipped_ok}")
+
+    # characters.equipmentCache is a separate snapshot of PLAYER_VISIBLE_ITEM_* built at SaveToDB
+    # time and used only to render the character-select screen; it can diverge from the live
+    # character_inventory row above if the visible-item field was not set for a slot even though
+    # the real item is equipped, which is exactly what would show the wrong (or no) gear at
+    # select without affecting in-game equipment. EQUIPMENT_SLOT_CHEST (4) is entry pair index 4
+    # (tokens 8/9: "entry ench") in the space-separated "cache equipment..." loop.
+    equipment_cache_row = mysql(container, root_password,
+                                 f"SELECT `equipmentCache` FROM `characters` WHERE `guid`={guid};",
+                                 characters_schema)
+    cache_tokens = equipment_cache_row.split()
+    cache_chest_entry = int(cache_tokens[8]) if len(cache_tokens) > 8 else None
+    cache_chest_ok = cache_chest_entry == 58231
+    print(f"character-select equipmentCache chest entry: {cache_chest_entry} expected=58231 "
+          f"match={cache_chest_ok}")
+
+    # Spell 2457 (Battle Stance) is a skill-derived grant: AC marks it PLAYERSPELL_TEMPORARY
+    # and recomputes it from character_skills on every login instead of persisting a
+    # character_spell row (see issue #76 for the AC-vs-TrinityCore-Cata design divergence).
+    # The correct persistence check is therefore the driving skill (26, Arms), not the spell.
+    skill_row = mysql(container, root_password,
+                       f"SELECT `value`,`max` FROM `character_skills` WHERE `guid`={guid} AND `skill`=26;",
+                       characters_schema)
+    arms_skill_present = bool(skill_row)
+    print(f"starting skill: Arms(26) present={arms_skill_present} "
+          f"(drives recomputed initial cast spell 2457 on every login)")
+
+    actions_row = mysql(container, root_password,
+                         f"SELECT `button`,`action`,`type` FROM `character_action` WHERE `guid`={guid} "
+                         "ORDER BY `button`;",
+                         characters_schema)
+    actual_actions = [tuple(int(value) for value in line.split("\t")) for line in actions_row.splitlines()
+                       if line]
+    expected_actions = sorted((row[2], row[3], row[4]) for row in [
+        [1, 1, 72, 88163, 0], [1, 1, 73, 88161, 0], [1, 1, 81, 59752, 0],
+        [1, 1, 84, 6603, 0], [1, 1, 96, 6603, 0], [1, 1, 108, 6603, 0],
+    ])
+    print(f"action bars: expected={expected_actions} actual={sorted(actual_actions)} "
+          f"match={sorted(actual_actions) == expected_actions}")
+
+    ok = spawn_ok and actual_items == expected_items and chest_equipped_ok and cache_chest_ok \
+        and arms_skill_present and sorted(actual_actions) == expected_actions
+    return int(guid), ok
+
+
+def create_character(auth_port: int, world_port: int, name: str = CHAR_NAME, gender: int = 0,
+                      race: int = 1, cls: int = 1) -> dict:
     with socket.create_connection(("127.0.0.1", world_port), timeout=10) as sock:
         send_client_packet, recv_server_packet = _open_world_session(auth_port, world_port, sock)
 
-        send_client_packet(CMSG_CHAR_CREATE, _char_create_body(CHAR_NAME, 1, 1))
+        send_client_packet(CMSG_CHAR_CREATE, _char_create_body(name, race, cls, gender))
 
         # Player::Create() runs several Init*ForLevel() helpers (talents, power, proficiencies,
         # criteria) that unconditionally push their normal in-game update packets to the session
@@ -481,6 +572,79 @@ def _delete_own_character(auth_port: int, world_port: int, guid: int) -> int:
             if opcode == SMSG_CHAR_DELETE:
                 return body[0]
         raise RuntimeError(f"expected SMSG_CHAR_DELETE, got opcode 0x{opcode:04x}")
+
+
+RACE_NAMES = {1: "Hu", 2: "Or", 3: "Dw", 4: "Ne", 5: "Un", 6: "Ta", 7: "Gn", 8: "Tr", 10: "Be", 11: "Dr"}
+CLASS_NAMES = {1: "War", 2: "Pal", 3: "Hun", 4: "Rog", 5: "Pri", 6: "Dk", 7: "Sha", 8: "Mag", 9: "Wlk", 11: "Dru"}
+
+
+def verify_race_class_matrix(auth_port: int, world_port: int, container: str, root_password: str,
+                              characters_schema: str, world_schema: str) -> bool:
+    """Covers every race/class/gender combination `playercreateinfo` allows (the same table
+    Player::Create() itself reads its spawn point from), not just Human Warrior. Each combination
+    only needs to prove it creates, spawns where playercreateinfo says, and is granted a starting
+    kit at all - the exact outfit/action-bar contents are pinned per-profile in
+    verify_starting_state()'s reference fixture, which only exists for Human Warrior so far."""
+    combos_raw = mysql(container, root_password,
+                        "SELECT `race`,`class`,`map`,`position_x`,`position_y`,`position_z` "
+                        "FROM `playercreateinfo` ORDER BY `race`,`class`;",
+                        world_schema)
+    combos = [tuple(float(v) if "." in v else int(v) for v in line.split("\t"))
+              for line in combos_raw.splitlines() if line]
+
+    ok = True
+    for race, cls, exp_map, exp_x, exp_y, exp_z in combos:
+        race_abbr = RACE_NAMES.get(race, f"R{race}")
+        class_abbr = CLASS_NAMES.get(cls, f"C{cls}")
+        for gender in (0, 1):
+            gender_letter = "M" if gender == 0 else "F"
+            # Gender goes first, not last: IsReservedName() blocks any name ending in "gm"
+            # (anti-GM-impersonation filter), which a trailing "...MagM"/"...RogM" would hit.
+            name = f"{gender_letter}{race_abbr}{class_abbr}"
+            try:
+                create_character(auth_port, world_port, name, gender=gender, race=race, cls=cls)
+            except RuntimeError as exc:
+                # Death Knight (class 6) correctly refuses creation on this fresh account, which
+                # has no existing level-55+ character to unlock it (CHAR_CREATE_LEVEL_REQUIREMENT,
+                # response 0x3b) - that is expected behavior, not a defect.
+                expected = cls == 6 and "0x3b" in str(exc)
+                verdict = "expected refusal" if expected else "CREATE FAILED"
+                print(f"matrix: race={race} class={cls} gender={gender} ({name}): {verdict}: {exc}")
+                ok = ok and expected
+                continue
+
+            # Match by newest guid, not by name: the server normalizes names (first letter upper,
+            # rest lower), so a mixed-case name like "HuWarM" is stored as "Huwarm" and a WHERE
+            # `name`=... lookup using the unnormalized form would find nothing.
+            char_row = mysql(container, root_password,
+                              "SELECT `guid`,`map`,`position_x`,`position_y`,`position_z` FROM `characters` "
+                              f"WHERE `account`={ACCOUNT_ID} ORDER BY `guid` DESC LIMIT 1;",
+                              characters_schema)
+            guid, map_id, pos_x, pos_y, pos_z = char_row.split("\t")
+            spawn_ok = (int(map_id) == exp_map
+                        and all(abs(a - b) < 0.001 for a, b in
+                                ((float(pos_x), exp_x), (float(pos_y), exp_y), (float(pos_z), exp_z))))
+
+            kit_counts = mysql(container, root_password,
+                                f"SELECT (SELECT COUNT(*) FROM `character_inventory` WHERE `guid`={guid}),"
+                                f"(SELECT COUNT(*) FROM `character_action` WHERE `guid`={guid});",
+                                characters_schema)
+            items_count, actions_count = (int(v) for v in kit_counts.split("\t"))
+            kit_ok = items_count > 0 and actions_count > 0
+
+            combo_ok = spawn_ok and kit_ok
+            print(f"matrix: race={race} class={cls} gender={gender} ({name}): spawn_ok={spawn_ok} "
+                  f"items={items_count} actions={actions_count} match={combo_ok}")
+            ok = ok and combo_ok
+
+            delete_result = _delete_own_character(auth_port, world_port, int(guid))
+            if delete_result != CHAR_DELETE_SUCCESS:
+                print(f"matrix: race={race} class={cls} gender={gender} ({name}): "
+                      f"delete failed with 0x{delete_result:02x}")
+                ok = False
+
+    print(f"race/class/gender matrix: {len(combos) * 2} combinations checked, overall match={ok}")
+    return ok
 
 
 def mysql(container: str, root_password: str, sql: str | bytes, schema: str | None = None,
@@ -693,64 +857,20 @@ def main() -> int:
         wait_for_port(world_port, worldserver_process)
         time.sleep(3)  # let worldserver finish loading DBC/world state before the socket accepts real work
 
-        create_character(auth_port, world_port)
+        create_character(auth_port, world_port, CHAR_NAME, gender=0)
+        guid, base_pass = verify_starting_state(container, root_password, characters_schema, CHAR_NAME)
 
-        char_row = mysql(container, root_password,
-                          "SELECT `guid`,`race`,`class`,`gender`,`map`,`position_x`,`position_y`,`position_z`,"
-                          "`orientation` FROM `characters` WHERE `account`="
-                          f"{ACCOUNT_ID} AND `name`='{CHAR_NAME}';",
-                          characters_schema)
-        if not char_row:
-            raise RuntimeError("no characters row was created")
-        guid, race, cls, gender, map_id, pos_x, pos_y, pos_z, orientation = char_row.split("\t")
-        print(f"characters row: guid={guid} race={race} class={cls} gender={gender} map={map_id} "
-              f"pos=({pos_x},{pos_y},{pos_z}) orientation={orientation}")
-
-        expected_spawn = [1, 1, 0, 9, -8914.57, -133.909, 80.5378, 5.13806]
-        actual_spawn = [int(race), int(cls), int(map_id), None, float(pos_x), float(pos_y), float(pos_z),
-                        float(orientation)]
-        spawn_ok = (actual_spawn[0] == expected_spawn[0] and actual_spawn[1] == expected_spawn[1]
-                    and actual_spawn[2] == expected_spawn[2]
-                    and all(abs(actual_spawn[i] - expected_spawn[i]) < 0.001 for i in (4, 5, 6, 7)))
-        print(f"spawn matches reference (map/position/orientation, zone unverified since it is not persisted): "
-              f"{spawn_ok}")
-
-        items_row = mysql(container, root_password,
-                           "SELECT `ii`.`itemEntry` FROM `character_inventory` `ci` "
-                           "JOIN `item_instance` `ii` ON `ci`.`item`=`ii`.`guid` "
-                           f"WHERE `ci`.`guid`={guid} ORDER BY `ii`.`itemEntry`;",
-                           characters_schema)
-        actual_items = sorted(int(value) for value in items_row.splitlines() if value)
-        expected_items = sorted([58231, 39, 40, 49778, 6948])
-        print(f"starting items: expected={expected_items} actual={actual_items} "
-              f"match={actual_items == expected_items}")
-
-        # Spell 2457 (Battle Stance) is a skill-derived grant: AC marks it PLAYERSPELL_TEMPORARY
-        # and recomputes it from character_skills on every login instead of persisting a
-        # character_spell row (see issue #76 for the AC-vs-TrinityCore-Cata design divergence).
-        # The correct persistence check is therefore the driving skill (26, Arms), not the spell.
-        skill_row = mysql(container, root_password,
-                           f"SELECT `value`,`max` FROM `character_skills` WHERE `guid`={guid} AND `skill`=26;",
-                           characters_schema)
-        arms_skill_present = bool(skill_row)
-        print(f"starting skill: Arms(26) present={arms_skill_present} "
-              f"(drives recomputed initial cast spell 2457 on every login)")
-
-        actions_row = mysql(container, root_password,
-                             f"SELECT `button`,`action`,`type` FROM `character_action` WHERE `guid`={guid} "
-                             "ORDER BY `button`;",
-                             characters_schema)
-        actual_actions = [tuple(int(value) for value in line.split("\t")) for line in actions_row.splitlines()
-                           if line]
-        expected_actions = sorted((row[2], row[3], row[4]) for row in [
-            [1, 1, 72, 88163, 0], [1, 1, 73, 88161, 0], [1, 1, 81, 59752, 0],
-            [1, 1, 84, 6603, 0], [1, 1, 96, 6603, 0], [1, 1, 108, 6603, 0],
-        ])
-        print(f"action bars: expected={expected_actions} actual={sorted(actual_actions)} "
-              f"match={sorted(actual_actions) == expected_actions}")
-
-        base_pass = spawn_ok and actual_items == expected_items and arms_skill_present \
-            and sorted(actual_actions) == expected_actions
+        # #57's initial acceptance matrix covers Human Warrior for both genders (the reference
+        # outfit/actions are identical for both), so a female character is created, checked, and
+        # cleaned up too rather than only ever proving the default male body type.
+        create_character(auth_port, world_port, CHAR_NAME_FEMALE, gender=1)
+        female_guid, female_pass = verify_starting_state(container, root_password, characters_schema,
+                                                           CHAR_NAME_FEMALE)
+        female_delete_result = _delete_own_character(auth_port, world_port, female_guid)
+        female_delete_ok = female_delete_result == CHAR_DELETE_SUCCESS
+        print(f"female Human Warrior normal delete: response=0x{female_delete_result:02x} "
+              f"expected=0x{CHAR_DELETE_SUCCESS:02x} match={female_delete_ok}")
+        base_pass = base_pass and female_pass and female_delete_ok
 
         grant_counts_query = (
             f"SELECT (SELECT COUNT(*) FROM `character_skills` WHERE `guid`={guid}),"
@@ -768,6 +888,9 @@ def main() -> int:
         negative_pass = run_negative_cases(auth_port, world_port, container, root_password,
                                             characters_schema, auth_schema, int(guid))
 
+        matrix_pass = verify_race_class_matrix(auth_port, world_port, container, root_password,
+                                                characters_schema, world_schema)
+
         delete_result = _delete_own_character(auth_port, world_port, int(guid))
         delete_ok = delete_result == CHAR_DELETE_SUCCESS
         print(f"normal delete: response=0x{delete_result:02x} expected=0x{CHAR_DELETE_SUCCESS:02x} "
@@ -778,7 +901,7 @@ def main() -> int:
         delete_removed_ok = not bool(remaining_row)
         print(f"character no longer active after normal delete: {delete_removed_ok}")
 
-        all_pass = base_pass and relogin_ok and negative_pass and delete_ok and delete_removed_ok
+        all_pass = base_pass and relogin_ok and negative_pass and matrix_pass and delete_ok and delete_removed_ok
         print(f"OVERALL: {'PASS' if all_pass else 'FAIL'}")
         return 0 if all_pass else 1
     finally:
