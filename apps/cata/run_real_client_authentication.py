@@ -143,13 +143,14 @@ IN_WORLD_CONTROL_MODE = "in-world-control-bootstrap"
 BASIC_MOVEMENT_MODE = "basic-movement"
 RUN_SPEED_MODE = "run-speed-change"
 GROUND_MOVEMENT_MODE = "ground-movement"
+JUMP_FALL_LAND_MODE = "jump-fall-land"
 CHARACTER_CREATION_MODE = "character-creation"
 RUN_SPEED_AURA = 2983
 RUN_SPEED_AURA_AMOUNT = 50
 RUN_SPEED_AURA_DURATION_MS = 60000
 POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
-    IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE,
+    IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
 })
 CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
@@ -165,7 +166,7 @@ CHARACTER_ZONE = 12
 def plan_number(mode: str) -> str:
     if mode == CHARACTER_CREATION_MODE:
         return "22"
-    if mode == GROUND_MOVEMENT_MODE:
+    if mode in {GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE}:
         return "23"
     if mode == RUN_SPEED_MODE:
         return "16"
@@ -838,7 +839,9 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         "Cluster.Enabled": "0",
         "Appender.Server": '2,5,0,WorldServer.log,w',
         "Logger.network": (
-            "5,Server" if generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE}
+            "5,Server" if generation["mode"] in {
+                BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
+            }
             else "4,Server"
         ),
         "Logger.network.opcode": "4,Server",
@@ -1598,14 +1601,17 @@ def automate_character_selection(generation: Generation) -> None:
 # paired with the key that ends that action (release-to-stop for forward/backward/strafe,
 # a turn key's own release also emits MSG_MOVE_STOP_TURN in this default binding scheme).
 GROUND_MOVEMENT_KEYS = ("w", "s", "q", "e", "a", "d")
+# Default 4.3.4 keybind for jumping; a single press-release in place emits MSG_MOVE_JUMP, and the
+# client sends MSG_MOVE_FALL_LAND on its own once the character lands.
+JUMP_FALL_LAND_KEYS = ("space",)
 
 
-def automate_ground_movement(generation: Generation) -> None:
+def automate_key_sequence(generation: Generation, keys: tuple[str, ...]) -> None:
     try:
         from Xlib import X, XK, display
         from Xlib.ext import xtest
     except ImportError as error:
-        raise RuntimeError("ground movement requires the installed python3-xlib package") from error
+        raise RuntimeError("key automation requires the installed python3-xlib package") from error
 
     window_id, *_ = focus_owned_window(generation)
     connection = display.Display(str(generation["inputs"]["display"]))
@@ -1617,7 +1623,7 @@ def automate_ground_movement(generation: Generation) -> None:
         if active is None or not len(active.value) or int(active.value[0]) != int(window_id, 16):
             raise RuntimeError("owned WoW window lost focus before input")
 
-    for key in GROUND_MOVEMENT_KEYS:
+    for key in keys:
         require_focus()
         keycode = connection.keysym_to_keycode(XK.string_to_keysym(key))
         xtest.fake_input(connection, X.KeyPress, keycode)
@@ -1627,6 +1633,14 @@ def automate_ground_movement(generation: Generation) -> None:
         connection.sync()
         time.sleep(0.4)
     connection.close()
+
+
+def automate_ground_movement(generation: Generation) -> None:
+    automate_key_sequence(generation, GROUND_MOVEMENT_KEYS)
+
+
+def automate_jump_fall_land(generation: Generation) -> None:
+    automate_key_sequence(generation, JUMP_FALL_LAND_KEYS)
 
 
 def character_creation_points(x: int, y: int, width: int, height: int) -> dict[str, tuple[int, int]]:
@@ -1808,6 +1822,7 @@ def run_client(args: argparse.Namespace) -> None:
         character_hold_started: float | None = None
         selection_sent = False
         ground_movement_sent = False
+        jump_fall_land_sent = False
         post_marker_hold_started: float | None = None
         milestone_definition = CHARACTER_MILESTONES if generation["mode"] in CHARACTER_MODES else CLIENT_MILESTONES
         while time.monotonic() < deadline:
@@ -1842,6 +1857,12 @@ def run_client(args: argparse.Namespace) -> None:
                 ):
                     automate_ground_movement(generation)
                     ground_movement_sent = True
+                if (
+                    generation["mode"] == JUMP_FALL_LAND_MODE and selection_sent and not jump_fall_land_sent
+                    and in_world_control_marker_count(generation) > 0
+                ):
+                    automate_jump_fall_land(generation)
+                    jump_fall_land_sent = True
                 if generation["mode"] in POST_MARKER_MODES and selection_sent:
                     marker_count = POST_MARKER_COUNTERS[generation["mode"]](generation)
                     if marker_count and post_marker_hold_started is None:
@@ -2064,6 +2085,10 @@ GROUND_MOVEMENT_OPCODES = (
     "MSG_MOVE_START_TURN_LEFT", "MSG_MOVE_STOP_TURN",
     "MSG_MOVE_START_TURN_RIGHT", "MSG_MOVE_STOP_TURN",
 )
+# The acceptance log line and marker text are shared with ground movement (both route through
+# GetGroundMovementSequence), so ground_movement_samples/sequence/marker_count below are reused
+# as-is for jump/fall-land; only the opcode sequence and delta-appropriateness check differ.
+JUMP_FALL_LAND_OPCODES = ("MSG_MOVE_JUMP", "MSG_MOVE_FALL_LAND")
 
 
 GROUND_MOVEMENT_SAMPLE_PATTERN = re.compile(
@@ -2126,6 +2151,50 @@ def ground_movement_deltas_are_action_appropriate(samples: list[dict[str, str | 
     return True
 
 
+def jump_fall_land_action_pair(samples: list[dict[str, str | float]]) -> list[dict[str, str | float]]:
+    """The client settles onto the ground right after world entry, which emits its own
+    MSG_MOVE_FALL_LAND before the synthetic space-bar press; only the trailing JUMP/FALL_LAND
+    pair is the automated action under test."""
+    return samples[-2:]
+
+
+def jump_fall_land_deltas_are_action_appropriate(samples: list[dict[str, str | float]]) -> bool:
+    """A vertical in-place jump should land back close to where it started: little horizontal
+    drift and a similar height, evidence the character returned to solid ground rather than
+    falling through or teleporting."""
+    pair = jump_fall_land_action_pair(samples)
+    if len(pair) != 2:
+        return False
+    jump, land = pair
+    if jump["opcode"] != "MSG_MOVE_JUMP" or land["opcode"] != "MSG_MOVE_FALL_LAND":
+        return False
+    tolerance = 2.0
+    dx = float(land["x"]) - float(jump["x"])
+    dy = float(land["y"]) - float(jump["y"])
+    dz = float(land["z"]) - float(jump["z"])
+    return math.hypot(dx, dy) < tolerance and abs(dz) < tolerance
+
+
+def jump_fall_land_is_stable_after_landing(generation: Generation, samples: list[dict[str, str | float]]) -> bool:
+    """A client standing idle after landing may send zero heartbeats (unlike sustained ground
+    movement, heartbeats are not emitted while nothing is moving); any heartbeats that do appear
+    must still match the landing position, but their absence is not itself evidence of drift."""
+    if not samples:
+        return False
+    final = samples[-1]
+    text = world_log_text(generation)
+    after_final = text.rpartition(GROUND_MOVEMENT_MARKER)[2]
+    heartbeats = HEARTBEAT_SAMPLE_PATTERN.findall(after_final)
+    tolerance = 1e-3
+    return all(
+        math.isclose(float(x), float(final["x"]), abs_tol=tolerance)
+        and math.isclose(float(y), float(final["y"]), abs_tol=tolerance)
+        and math.isclose(float(z), float(final["z"]), abs_tol=tolerance)
+        and math.isclose(float(o), float(final["o"]), abs_tol=tolerance)
+        for x, y, z, o in heartbeats
+    )
+
+
 def ground_movement_is_stable_after_final_stop(generation: Generation, samples: list[dict[str, str | float]]) -> bool:
     """The client keeps sending MSG_MOVE_HEARTBEAT during the post-run hold; confirm none of them
     drifted away from the position/orientation the final MSG_MOVE_STOP_TURN left the character at."""
@@ -2149,7 +2218,7 @@ def ground_movement_is_stable_after_final_stop(generation: Generation, samples: 
 
 POST_MARKER_MODES = frozenset({
     INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
-    GROUND_MOVEMENT_MODE, CHARACTER_CREATION_MODE,
+    GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, CHARACTER_CREATION_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -2158,6 +2227,7 @@ POST_MARKER_COUNTERS = {
     BASIC_MOVEMENT_MODE: movement_heartbeat_count,
     RUN_SPEED_MODE: lambda generation: len(run_speed_acknowledgements(generation)),
     GROUND_MOVEMENT_MODE: ground_movement_marker_count,
+    JUMP_FALL_LAND_MODE: ground_movement_marker_count,
     CHARACTER_CREATION_MODE: character_creation_marker_count,
 }
 
@@ -2299,8 +2369,9 @@ def sanitized_evidence(
     creation_mode = generation["mode"] == CHARACTER_CREATION_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
+    jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
     in_world_control_mode = generation["mode"] in {
-        IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE,
+        IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
@@ -2320,6 +2391,7 @@ def sanitized_evidence(
         "outcome": (
             "character_creation_candidate" if creation_mode and "characters_completed" in milestones
             else "run_speed_change_candidate" if run_speed_mode and "characters_completed" in milestones
+            else "jump_fall_land_pass_candidate" if jump_fall_land_mode and "characters_completed" in milestones
             else "ground_movement_pass_candidate" if ground_movement_mode and "characters_completed" in milestones
             else "basic_movement_pass_candidate" if basic_movement_mode and "characters_completed" in milestones
             else "in_world_control_bootstrap_candidate" if in_world_control_mode and "characters_completed" in milestones
@@ -2350,6 +2422,7 @@ def sanitized_evidence(
         "movement_heartbeat_count": movement_heartbeat_count_value if basic_movement_mode else None,
         "run_speed_acknowledgements": run_speed_acknowledgements(generation) if run_speed_mode else None,
         "ground_movement_sequence": ground_movement_sequence(generation) if ground_movement_mode else None,
+        "jump_fall_land_sequence": ground_movement_sequence(generation) if jump_fall_land_mode else None,
         "creation_marker_count": creation_marker_count_value if creation_mode else None,
         "post_marker_hold_seconds": (
             generation.get("post_marker_hold_seconds", 0) if generation["mode"] in POST_MARKER_MODES else None
@@ -2396,8 +2469,9 @@ def verify(args: argparse.Namespace) -> None:
     creation_mode = generation["mode"] == CHARACTER_CREATION_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
+    jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
     in_world_control_mode = generation["mode"] in {
-        IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE,
+        IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     rows = character_row_count(manifest, generation) if character_mode else None
@@ -2497,6 +2571,14 @@ def verify(args: argparse.Namespace) -> None:
                 and ground_movement_deltas_are_action_appropriate(ground_movement_samples_value)
                 and ground_movement_is_stable_after_final_stop(generation, ground_movement_samples_value)
             )
+        if jump_fall_land_mode:
+            jump_fall_land_samples_value = ground_movement_samples(generation)
+            character_ok = character_ok and (
+                [sample["opcode"] for sample in jump_fall_land_action_pair(jump_fall_land_samples_value)]
+                == list(JUMP_FALL_LAND_OPCODES)
+                and jump_fall_land_deltas_are_action_appropriate(jump_fall_land_samples_value)
+                and jump_fall_land_is_stable_after_landing(generation, jump_fall_land_samples_value)
+            )
         if run_speed_mode:
             character_ok = character_ok and bool(evidence["run_speed_acknowledgements"])
         if creation_mode:
@@ -2512,6 +2594,7 @@ def verify(args: argparse.Namespace) -> None:
             evidence["outcome"] = (
                 "character_creation_pass" if creation_mode
                 else "run_speed_change_pass" if run_speed_mode
+                else "jump_fall_land_pass" if jump_fall_land_mode
                 else "ground_movement_pass" if ground_movement_mode
                 else "basic_movement_pass" if basic_movement_mode
                 else "in_world_control_bootstrap_pass" if in_world_control_mode
@@ -3140,7 +3223,7 @@ def parser() -> argparse.ArgumentParser:
             "no-login", "authentication", "character-screen", CHARACTER_CREATION_MODE, POPULATED_MODE,
             CHARACTER_SELECTION_MODE,
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,
-            RUN_SPEED_MODE, GROUND_MOVEMENT_MODE,
+            RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
         ), default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)
