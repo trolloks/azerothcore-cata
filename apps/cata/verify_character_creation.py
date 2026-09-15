@@ -269,8 +269,14 @@ def create_character(auth_port: int, world_port: int) -> dict:
         char_body = CHAR_NAME.encode() + b"\x00" + bytes([1, 1, 0, 0, 0, 0, 0, 0, 0])
         send_client_packet(CMSG_CHAR_CREATE, char_body)
 
-        create_opcode, create_body = recv_server_packet()
-        if create_opcode != SMSG_CHAR_CREATE:
+        # The server interleaves unrelated async session-setup packets (SMSG_ADDON_INFO,
+        # SMSG_CLIENTCACHE_VERSION, ...) before SMSG_CHAR_CREATE arrives; skip up to a bounded
+        # number of them rather than enumerating every opcode the server happens to send first.
+        for _ in range(10):
+            create_opcode, create_body = recv_server_packet()
+            if create_opcode == SMSG_CHAR_CREATE:
+                break
+        else:
             raise RuntimeError(f"expected SMSG_CHAR_CREATE, got opcode 0x{create_opcode:04x}")
         if create_body[0] != CHAR_CREATE_SUCCESS:
             raise RuntimeError(f"character creation failed with response code 0x{create_body[0]:02x}")
