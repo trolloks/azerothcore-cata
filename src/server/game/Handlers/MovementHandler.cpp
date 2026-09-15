@@ -419,7 +419,9 @@ void WorldSession::HandleMovementOpcodes(WorldPacket& recvData)
     WriteMovementInfo(&data, &movementInfo);
     mover->SendMessageToSet(&data, _player);
     if (opcode == MSG_MOVE_HEARTBEAT)
-        LOG_DEBUG("network", "Accepted Cataclysm movement heartbeat after movement validation");
+        LOG_DEBUG("network", "Accepted Cataclysm movement heartbeat after movement validation: x={}, y={}, z={}, o={}",
+            movementInfo.pos.GetPositionX(), movementInfo.pos.GetPositionY(), movementInfo.pos.GetPositionZ(),
+            movementInfo.pos.GetOrientation());
     else if (WorldPackets::Movement::GetGroundMovementSequence(opcode))
         LOG_DEBUG("network", "Accepted Cataclysm ground movement {} after movement validation: x={}, y={}, z={}, o={}",
             GetOpcodeNameForLogging(static_cast<OpcodeClient>(opcode)), movementInfo.pos.GetPositionX(),

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -2021,6 +2022,8 @@ def in_world_control_packet_prefix(generation: Generation) -> list[str]:
 
 
 MOVEMENT_HEARTBEAT_MARKER = "Accepted Cataclysm movement heartbeat after movement validation"
+MOVEMENT_SAMPLE_SUFFIX = r": x=([-+0-9.eE]+), y=([-+0-9.eE]+), z=([-+0-9.eE]+), o=([-+0-9.eE]+)"
+HEARTBEAT_SAMPLE_PATTERN = re.compile(re.escape(MOVEMENT_HEARTBEAT_MARKER) + MOVEMENT_SAMPLE_SUFFIX)
 
 
 def movement_heartbeat_count(generation: Generation) -> int:
@@ -2063,15 +2066,85 @@ GROUND_MOVEMENT_OPCODES = (
 )
 
 
+GROUND_MOVEMENT_SAMPLE_PATTERN = re.compile(
+    re.escape(GROUND_MOVEMENT_MARKER) + r" \[?(MSG_MOVE_[A-Z_]+)(?: 0x[0-9A-Fa-f]+ \(\d+\))?\]? after movement "
+    r"validation" + MOVEMENT_SAMPLE_SUFFIX
+)
+
+
 def ground_movement_marker_count(generation: Generation) -> int:
     return len(ground_movement_sequence(generation))
 
 
-def ground_movement_sequence(generation: Generation) -> list[str]:
+def ground_movement_samples(generation: Generation) -> list[dict[str, str | float]]:
     after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
     after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
-    pattern = re.compile(re.escape(GROUND_MOVEMENT_MARKER) + r" \[?(MSG_MOVE_[A-Z_]+)\]?")
-    return pattern.findall(after_sync)
+    return [
+        {"opcode": opcode, "x": float(x), "y": float(y), "z": float(z), "o": float(o)}
+        for opcode, x, y, z, o in GROUND_MOVEMENT_SAMPLE_PATTERN.findall(after_sync)
+    ]
+
+
+def ground_movement_sequence(generation: Generation) -> list[str]:
+    return [str(sample["opcode"]) for sample in ground_movement_samples(generation)]
+
+
+def _normalized_angle_delta(delta: float) -> float:
+    return (delta + math.pi) % (2 * math.pi) - math.pi
+
+
+def ground_movement_deltas_are_action_appropriate(samples: list[dict[str, str | float]]) -> bool:
+    """Each START opcode is paired with its terminating STOP opcode; verify the position/orientation
+    delta between them moved in the direction implied by the key that was pressed (forward/backward
+    along the facing vector, strafe along the perpendicular vector, turn changing orientation the
+    expected way), rather than merely checking that some movement was logged."""
+    epsilon = 0.05
+    for index in range(0, len(samples) - 1, 2):
+        start, stop = samples[index], samples[index + 1]
+        dx = float(stop["x"]) - float(start["x"])
+        dy = float(stop["y"]) - float(start["y"])
+        orientation = float(start["o"])
+        forward = (math.cos(orientation), math.sin(orientation))
+        left = (-math.sin(orientation), math.cos(orientation))
+        opcode = start["opcode"]
+        if opcode == "MSG_MOVE_START_FORWARD":
+            ok = dx * forward[0] + dy * forward[1] > epsilon
+        elif opcode == "MSG_MOVE_START_BACKWARD":
+            ok = dx * forward[0] + dy * forward[1] < -epsilon
+        elif opcode == "MSG_MOVE_START_STRAFE_LEFT":
+            ok = dx * left[0] + dy * left[1] > epsilon
+        elif opcode == "MSG_MOVE_START_STRAFE_RIGHT":
+            ok = dx * left[0] + dy * left[1] < -epsilon
+        elif opcode == "MSG_MOVE_START_TURN_LEFT":
+            ok = _normalized_angle_delta(float(stop["o"]) - orientation) > epsilon
+        elif opcode == "MSG_MOVE_START_TURN_RIGHT":
+            ok = _normalized_angle_delta(float(stop["o"]) - orientation) < -epsilon
+        else:
+            ok = False
+        if not ok:
+            return False
+    return True
+
+
+def ground_movement_is_stable_after_final_stop(generation: Generation, samples: list[dict[str, str | float]]) -> bool:
+    """The client keeps sending MSG_MOVE_HEARTBEAT during the post-run hold; confirm none of them
+    drifted away from the position/orientation the final MSG_MOVE_STOP_TURN left the character at."""
+    if not samples:
+        return False
+    final = samples[-1]
+    text = world_log_text(generation)
+    after_final_stop = text.rpartition(GROUND_MOVEMENT_MARKER)[2]
+    heartbeats = HEARTBEAT_SAMPLE_PATTERN.findall(after_final_stop)
+    if not heartbeats:
+        return False
+    tolerance = 1e-3
+    return all(
+        math.isclose(float(x), float(final["x"]), abs_tol=tolerance)
+        and math.isclose(float(y), float(final["y"]), abs_tol=tolerance)
+        and math.isclose(float(z), float(final["z"]), abs_tol=tolerance)
+        and math.isclose(float(o), float(final["o"]), abs_tol=tolerance)
+        for x, y, z, o in heartbeats
+    )
 
 
 POST_MARKER_MODES = frozenset({
@@ -2418,7 +2491,12 @@ def verify(args: argparse.Namespace) -> None:
         if basic_movement_mode:
             character_ok = character_ok and evidence["movement_heartbeat_count"] > 0
         if ground_movement_mode:
-            character_ok = character_ok and evidence["ground_movement_sequence"] == list(GROUND_MOVEMENT_OPCODES)
+            ground_movement_samples_value = ground_movement_samples(generation)
+            character_ok = character_ok and (
+                evidence["ground_movement_sequence"] == list(GROUND_MOVEMENT_OPCODES)
+                and ground_movement_deltas_are_action_appropriate(ground_movement_samples_value)
+                and ground_movement_is_stable_after_final_stop(generation, ground_movement_samples_value)
+            )
         if run_speed_mode:
             character_ok = character_ok and bool(evidence["run_speed_acknowledgements"])
         if creation_mode:
