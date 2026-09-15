@@ -20,6 +20,7 @@
 #include "DBCFileLoader.h"
 #include "DBCfmt.h"
 #include "Errors.h"
+#include "ItemTemplate.h"
 #include "LFGMgr.h"
 #include "Log.h"
 #include "SharedDefines.h"
@@ -720,6 +721,136 @@ TalentSpellPos const* GetTalentSpellPos(uint32 spellId)
         return nullptr;
 
     return &itr->second;
+}
+
+// Cata replaced WotLK's ScalingStatValue-bitmask lookup with a direct per-inventoryType/
+// per-subclass model; ported from TrinityCore-Cata (Shauren, "Core/Items: Updated scaling item
+// stat calculations"). Lives here rather than inline in DBCStructure.h because it switches on
+// InventoryType/ItemSubclassWeapon, which are game-layer enums the shared header can't depend on.
+uint32 ScalingStatValuesEntry::GetStatMultiplier(uint32 inventoryType) const
+{
+    switch (inventoryType)
+    {
+        case INVTYPE_NON_EQUIP:
+        case INVTYPE_BODY:
+        case INVTYPE_BAG:
+        case INVTYPE_TABARD:
+        case INVTYPE_AMMO:
+        case INVTYPE_QUIVER:
+            return 0;
+        case INVTYPE_HEAD:
+        case INVTYPE_CHEST:
+        case INVTYPE_LEGS:
+        case INVTYPE_2HWEAPON:
+        case INVTYPE_ROBE:
+            return statMultiplier[0];
+        case INVTYPE_SHOULDERS:
+        case INVTYPE_WAIST:
+        case INVTYPE_FEET:
+        case INVTYPE_HANDS:
+        case INVTYPE_TRINKET:
+            return statMultiplier[1];
+        case INVTYPE_NECK:
+        case INVTYPE_WRISTS:
+        case INVTYPE_FINGER:
+        case INVTYPE_SHIELD:
+        case INVTYPE_CLOAK:
+        case INVTYPE_HOLDABLE:
+            return statMultiplier[2];
+        case INVTYPE_RANGED:
+        case INVTYPE_THROWN:
+        case INVTYPE_RANGEDRIGHT:
+        case INVTYPE_RELIC:
+            return statMultiplier[3];
+        case INVTYPE_WEAPON:
+        case INVTYPE_WEAPONMAINHAND:
+        case INVTYPE_WEAPONOFFHAND:
+            return statMultiplier[4];
+        default:
+            return 0;
+    }
+}
+
+uint32 ScalingStatValuesEntry::GetArmor(uint32 inventoryType, uint32 armorType) const
+{
+    if (inventoryType > INVTYPE_ROBE || armorType >= 4)
+        return 0;
+
+    switch (inventoryType)
+    {
+        case INVTYPE_SHOULDERS:
+            return armor[0][armorType];
+        case INVTYPE_CHEST:
+        case INVTYPE_ROBE:
+            return armor[1][armorType];
+        case INVTYPE_HEAD:
+            return armor[2][armorType];
+        case INVTYPE_LEGS:
+            return armor[3][armorType];
+        case INVTYPE_FEET:
+            return armor[4][armorType];
+        case INVTYPE_WAIST:
+            return armor[5][armorType];
+        case INVTYPE_HANDS:
+            return armor[6][armorType];
+        case INVTYPE_WRISTS:
+            return armor[7][armorType];
+        case INVTYPE_CLOAK:
+            return cloakArmor;
+        default:
+            return 0;
+    }
+}
+
+uint32 ScalingStatValuesEntry::GetDPSAndDamageMultiplier(uint32 subClass, bool isCasterWeapon, float* damageMultiplier) const
+{
+    if (!isCasterWeapon)
+    {
+        switch (subClass)
+        {
+            case ITEM_SUBCLASS_WEAPON_AXE:
+            case ITEM_SUBCLASS_WEAPON_MACE:
+            case ITEM_SUBCLASS_WEAPON_SWORD:
+            case ITEM_SUBCLASS_WEAPON_DAGGER:
+            case ITEM_SUBCLASS_WEAPON_THROWN:
+                *damageMultiplier = 0.3f;
+                return dpsMod[0];
+            case ITEM_SUBCLASS_WEAPON_AXE2:
+            case ITEM_SUBCLASS_WEAPON_MACE2:
+            case ITEM_SUBCLASS_WEAPON_POLEARM:
+            case ITEM_SUBCLASS_WEAPON_SWORD2:
+            case ITEM_SUBCLASS_WEAPON_STAFF:
+            case ITEM_SUBCLASS_WEAPON_FISHING_POLE:
+                *damageMultiplier = 0.2f;
+                return dpsMod[1];
+            case ITEM_SUBCLASS_WEAPON_BOW:
+            case ITEM_SUBCLASS_WEAPON_GUN:
+            case ITEM_SUBCLASS_WEAPON_CROSSBOW:
+                *damageMultiplier = 0.3f;
+                return dpsMod[4];
+            default:
+                break;
+        }
+    }
+    else if (subClass <= ITEM_SUBCLASS_WEAPON_WAND)
+    {
+        uint32 mask = 1 << subClass;
+        if (mask & 0x562) // two-handed weapons
+        {
+            *damageMultiplier = 0.2f;
+            return dpsMod[3];
+        }
+
+        if (mask & (1 << ITEM_SUBCLASS_WEAPON_WAND))
+        {
+            *damageMultiplier = 0.3f;
+            return dpsMod[5];
+        }
+
+        *damageMultiplier = 0.3f;
+        return dpsMod[2];
+    }
+    return 0;
 }
 
 uint32 GetTalentSpellCost(uint32 spellId)

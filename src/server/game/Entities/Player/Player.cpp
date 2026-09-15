@@ -6729,7 +6729,7 @@ void Player::_ApplyItemBonuses(ItemTemplate const* proto, uint8 slot, bool apply
                     continue;
 
                 statType = ssd->StatMod[i];
-                val = (ssv->getssdMultiplier(ScalingStatValue) * ssd->Modifier[i]) / 10000;
+                val = (ssv->GetStatMultiplier(proto->InventoryType) * ssd->Modifier[i]) / 10000;
             }
             else
             {
@@ -6906,16 +6906,16 @@ void Player::_ApplyItemBonuses(ItemTemplate const* proto, uint8 slot, bool apply
         }
     }
 
-    // Apply Spell Power from ScalingStatValue if set
-    if (ssv)
-        if (int32 spellbonus = ssv->getSpellBonus(ScalingStatValue))
+    // Apply Spell Power from ScalingStatValue if set (Cata: only for caster weapons)
+    if (ssv && proto->HasFlag2(ITEM_FLAG2_CASTER_WEAPON))
+        if (int32 spellbonus = int32(ssv->spellPower))
             ApplySpellPowerBonus(spellbonus, apply);
 
     // If set ScalingStatValue armor get it or use item armor
     uint32 armor = proto->Armor;
     if (ssv)
     {
-        if (uint32 ssvarmor = ssv->getArmorMod(ScalingStatValue))
+        if (uint32 ssvarmor = ssv->GetArmor(proto->InventoryType, proto->SubClass - 1))
             if (proto->ScalingStatValue > 0 || ssvarmor < proto->Armor) //Check to avoid higher values than stat itself (heirloom OR items with correct armor value)
                 armor = ssvarmor;
     }
@@ -6976,14 +6976,13 @@ void Player::_ApplyItemBonuses(ItemTemplate const* proto, uint8 slot, bool apply
     if (IsClass(CLASS_DRUID, CLASS_CONTEXT_STATS))
     {
         int32 dpsMod = 0;
-        int32 feral_bonus = 0;
         if (ssv)
         {
-            dpsMod = ssv->getDPSMod(ScalingStatValue);
-            feral_bonus += ssv->getFeralBonus(ScalingStatValue);
+            float unusedDamageMultiplier = 0.0f;
+            dpsMod = int32(ssv->GetDPSAndDamageMultiplier(proto->SubClass, proto->HasFlag2(ITEM_FLAG2_CASTER_WEAPON), &unusedDamageMultiplier));
         }
 
-        feral_bonus += proto->getFeralBonus(dpsMod);
+        int32 feral_bonus = proto->getFeralBonus(dpsMod);
         sScriptMgr->OnPlayerGetFeralApBonus(this, feral_bonus, dpsMod, proto, ssv);
         if (feral_bonus)
             ApplyFeralAPBonus(feral_bonus, apply);
@@ -7027,14 +7026,14 @@ void Player::_ApplyWeaponDamage(uint8 slot, ItemTemplate const* proto, ScalingSt
         // If set dpsMod in ScalingStatValue use it for min (70% from average), max (130% from average) damage
         if (ssv && i == 0) // scaling stats only for first damage
         {
-            int32 extraDPS = ssv->getDPSMod(ScalingStatValue);
+            float damageMultiplier = 0.0f;
+            int32 extraDPS = int32(ssv->GetDPSAndDamageMultiplier(proto->SubClass, proto->HasFlag2(ITEM_FLAG2_CASTER_WEAPON), &damageMultiplier));
             if (extraDPS)
             {
                 float average = extraDPS * proto->Delay / 1000.0f;
-                float mod = ssv->IsTwoHand(proto->ScalingStatValue) ? 0.2f : 0.3f;
 
-                minDamage = (1.0f - mod) * average;
-                maxDamage = (1.0f + mod) * average;
+                minDamage = (1.0f - damageMultiplier) * average;
+                maxDamage = (1.0f + damageMultiplier) * average;
             }
         }
 
