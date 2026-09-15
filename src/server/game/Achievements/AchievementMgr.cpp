@@ -2656,13 +2656,20 @@ void AchievementGlobalMgr::LoadAchievementCriteriaList()
             continue;
         }
 
+        if (criteria->requiredType >= ACHIEVEMENT_CRITERIA_TYPE_TOTAL)
+            continue;
+
         _achievementCriteriasByType[criteria->requiredType].push_back(criteria);
         _achievementCriteriaListByAchievement[criteria->referredAchievement].push_back(criteria);
 
-        if (criteria->additionalRequirement_type[0] != ACHIEVEMENT_CRITERIA_CONDITION_NONE)
+        // Cata's AdditionalConditionType column has a much wider range of values than AC's condition
+        // handling (GetAchievementCriteriaByCondition callers) understands; only index the ones we use.
+        if (criteria->additionalRequirement_type[0] != ACHIEVEMENT_CRITERIA_CONDITION_NONE &&
+                criteria->additionalRequirement_type[0] < ACHIEVEMENT_CRITERIA_CONDITION_TOTAL)
             _achievementCriteriasByCondition[criteria->additionalRequirement_type[0]][criteria->additionalRequirement_value[0]].push_back(criteria);
         if (criteria->additionalRequirement_type[1] != ACHIEVEMENT_CRITERIA_CONDITION_NONE &&
-                criteria->additionalRequirement_type[1] != criteria->additionalRequirement_type[0])
+                criteria->additionalRequirement_type[1] != criteria->additionalRequirement_type[0] &&
+                criteria->additionalRequirement_type[1] < ACHIEVEMENT_CRITERIA_CONDITION_TOTAL)
             _achievementCriteriasByCondition[criteria->additionalRequirement_type[1]][criteria->additionalRequirement_value[1]].push_back(criteria);
 
         switch (criteria->requiredType)
