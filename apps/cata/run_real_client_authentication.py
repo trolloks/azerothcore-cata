@@ -1273,6 +1273,11 @@ def prepare(args: argparse.Namespace) -> None:
             generation["released_updates"] = released
             dump_database_cache(manifest_path, manifest, generation, cache_key)
             generation["database_cache"] = {"key": cache_key, "result": "built"}
+        # Pending migrations aren't part of the database cache key (they're not released yet, so
+        # they change independently of it) and must be applied fresh every prepare, whether the
+        # schemas above came from a restored cache or a fresh import.
+        for key, schema in (("auth", auth), ("characters", characters), ("world", world)):
+            apply_released_updates(manifest, generation, REPO_ROOT / f"data/sql/updates/pending_db_{key}", schema)
         realm_count = 1 if args.mode in POPULATED_CHARACTER_MODES else 0
         mysql(
             manifest, generation,
@@ -1596,6 +1601,7 @@ def run_client(args: argparse.Namespace) -> None:
         raise RuntimeError("--stability-seconds must be at least 5")
     retryable = generation["state"] in {"failed", "inconclusive"}
     if retryable:
+        stop_servers(generation)
         if any(process.get("active", False) for process in generation["processes"]):
             raise RuntimeError("cannot retry a diagnostic generation with active processes")
         for path in (
