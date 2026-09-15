@@ -1589,10 +1589,17 @@ def character_creation_points(x: int, y: int, width: int, height: int) -> dict[s
     # screen: Alliance/Human is the first race portrait, Warrior the first class icon (both
     # already match CHARACTER_RACE/CHARACTER_CLASS), male is the left gender icon, matching the
     # gender=0 used by the populated-mode SQL fixtures.
+    #
+    # The x fractions below are shifted ~59px left of the icons' true on-screen centers: the
+    # synthetic click (XWarpPointer + XTestFake ButtonPress/Release) consistently lands ~59px
+    # right of the requested point on this window, so aiming left compensates. Confirmed by
+    # comparing requested vs. actually-selected icon across several generations (race clicks
+    # landed in the dead gap between the Alliance/Horde columns; gender/class clicks landed one
+    # icon slot to the right of the target).
     return {
-        "race_human": (x + round(width * 0.0678), y + round(height * 0.0912)),
-        "gender_male": (x + round(width * 0.0833), y + round(height * 0.5566)),
-        "class_warrior": (x + round(width * 0.0378), y + round(height * 0.6449)),
+        "race_human": (x + round(width * 0.0328), y + round(height * 0.0912)),
+        "gender_male": (x + round(width * 0.0433), y + round(height * 0.5566)),
+        "class_warrior": (x + round(width * 0.0006), y + round(height * 0.6449)),
         "name_field": (x + round(width * 0.5000), y + round(height * 0.8974)),
         "accept": (x + round(width * 0.8972), y + round(height * 0.9357)),
     }
@@ -1622,7 +1629,7 @@ def automate_character_creation(generation: Generation) -> None:
         xtest.fake_input(connection, X.ButtonPress, 1)
         xtest.fake_input(connection, X.ButtonRelease, 1)
         connection.sync()
-        time.sleep(0.3)
+        time.sleep(1.2)
 
     def press(value: str, modifier: int | None = None) -> None:
         require_focus()
@@ -1640,6 +1647,8 @@ def automate_character_creation(generation: Generation) -> None:
             press(character, shift if character.isalpha() else None)
             time.sleep(0.05)
 
+    # The creation screen needs a moment to become interactive after the window gains focus.
+    time.sleep(2)
     points = character_creation_points(x, y, width, height)
     click(points["race_human"])
     click(points["gender_male"])
