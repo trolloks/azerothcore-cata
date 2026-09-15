@@ -7,7 +7,8 @@ real CMSG_CHAR_CREATE packet for a Human Warrior, and inspects the resulting
 characters/character_inventory/character_skills/character_action rows against the native
 reference values already recorded in fixtures/plan22-starting-data-audit.json. This exercises
 Player::Create's real loading path without needing the graphical client or wine. It also covers
-two negative cases from #52's acceptance scope (duplicate name, invalid race/class combination).
+three negative cases from #52's acceptance scope: duplicate name, invalid race/class combination,
+and a second account attempting to delete the first account's character (ownership).
 
 Every Docker resource this script creates is named with its own run id and removed in a
 finally block; nothing here touches an existing database.
@@ -41,6 +42,8 @@ SMSG_AUTH_CHALLENGE = 0x4542
 SMSG_AUTH_RESPONSE = 0x5DB6
 CMSG_CHAR_CREATE = 0x4A36
 SMSG_CHAR_CREATE = 0x2D05
+CMSG_CHAR_DELETE = 0x6425
+SMSG_CHAR_DELETE = 0x003C
 CHAR_CREATE_SUCCESS = 0x2F
 CHAR_CREATE_ERROR = 0x30
 CHAR_CREATE_NAME_IN_USE = 0x32
@@ -232,8 +235,8 @@ def _open_world_session(auth_port: int, world_port: int, sock: socket.socket):
     auth_seed = challenge_body[32:36]
 
     local_challenge = bytes(range(4))
-    digest = hashlib.sha1(ACCOUNT.encode() + bytes(4) + local_challenge + auth_seed + session_key).digest()
-    auth_body = build_auth_session_body(ACCOUNT, digest, local_challenge, REALM_ID)
+    digest = hashlib.sha1(plan6.ACCOUNT.encode() + bytes(4) + local_challenge + auth_seed + session_key).digest()
+    auth_body = build_auth_session_body(plan6.ACCOUNT, digest, local_challenge, REALM_ID)
     auth_header = struct.pack(">H", 4 + len(auth_body)) + struct.pack("<I", CMSG_AUTH_SESSION)
     sock.sendall(auth_header + auth_body)
 
@@ -291,13 +294,49 @@ def _attempt_char_create(auth_port: int, world_port: int, name: str, race: int, 
         raise RuntimeError(f"expected SMSG_CHAR_CREATE, got opcode 0x{opcode:04x}")
 
 
-def run_negative_cases(auth_port: int, world_port: int) -> bool:
-    """Covers the two negative cases from #52's acceptance scope that a single wire-protocol
-    connection can exercise deterministically. Ownership (deleting another account's character)
-    is not covered here: HandleCharDeleteOpcode intentionally sends no response at all for both
-    a still-loaded character and a foreign account guid, so proving it needs a second real
-    account and a timeout-based non-response assertion - left for the real-client harness rather
-    than bolted onto this deterministic script."""
+SECOND_ACCOUNT_ID = 900001
+# Real WoW clients always uppercase the account name and password before the SRP handshake, and
+# AC's login flow assumes that convention (see AUDITTWO in the log for a lowercase attempt against
+# an uppercase-keyed lookup); keep both uppercase like the primary ACCOUNT/PASSWORD constants.
+SECOND_ACCOUNT = "AUDITTWO"
+SECOND_PASSWORD = "AUDITTWOPASS"
+
+
+def _attempt_char_delete_as(auth_port: int, world_port: int, account: str, password: str,
+                             account_id: int, guid: int) -> bytes | None:
+    """Authenticates as a different account than the one create_character() used and sends
+    CMSG_CHAR_DELETE for someone else's guid. Returns the response body if the server sent one
+    (SMSG_CHAR_DELETE), or None if the connection produced no response within the timeout -
+    which is what HandleCharDeleteOpcode's ownership check ("accountId != initAccountId") does:
+    it returns without calling SendCharDelete at all, exactly like the earlier
+    still-connected-elsewhere guard right above it."""
+    saved_account, saved_password = plan6.ACCOUNT, plan6.PASSWORD
+    plan6.ACCOUNT, plan6.PASSWORD = account, password
+    try:
+        with socket.create_connection(("127.0.0.1", world_port), timeout=10) as sock:
+            send_client_packet, recv_server_packet = _open_world_session(auth_port, world_port, sock)
+            send_client_packet(CMSG_CHAR_DELETE, struct.pack("<Q", guid))
+            # Same tolerance as _attempt_char_create(): an authenticated session receives ordinary
+            # gameplay/session packets unrelated to the request in flight. The ownership guard emits
+            # nothing at all, so "no response" is proven by draining those for a few seconds without
+            # ever seeing SMSG_CHAR_DELETE, not by the first packet's opcode.
+            sock.settimeout(3)
+            try:
+                for _ in range(500):
+                    opcode, body = recv_server_packet()
+                    if opcode == SMSG_CHAR_DELETE:
+                        return body
+            except (socket.timeout, OSError):
+                return None
+            return None
+    finally:
+        plan6.ACCOUNT, plan6.PASSWORD = saved_account, saved_password
+
+
+def run_negative_cases(auth_port: int, world_port: int, container: str, root_password: str,
+                        characters_schema: str, auth_schema: str, created_guid: int) -> bool:
+    """Covers the negative cases from #52's acceptance scope that this deterministic
+    wire-protocol harness can exercise without a real client."""
     ok = True
 
     duplicate_result = _attempt_char_create(auth_port, world_port, CHAR_NAME, 1, 1)
@@ -315,6 +354,30 @@ def run_negative_cases(auth_port: int, world_port: int) -> bool:
     print(f"negative case, invalid race/class combo: response=0x{invalid_combo_result:02x} "
           f"expected=0x{CHAR_CREATE_ERROR:02x} match={invalid_combo_ok}")
     ok = ok and invalid_combo_ok
+
+    salt = bytes(range(33, 65))
+    verifier = plan6.srp_registration(SECOND_ACCOUNT, SECOND_PASSWORD, salt)
+    mysql(container, root_password,
+          "INSERT INTO `account` (`id`,`username`,`salt`,`verifier`,`email`,`reg_mail`,`expansion`,`Flags`) "
+          f"VALUES ({SECOND_ACCOUNT_ID},'{SECOND_ACCOUNT}',UNHEX('{salt.hex()}'),UNHEX('{verifier.hex()}'),"
+          "'charcreate-2@example.invalid','charcreate-2@example.invalid',3,0);"
+          f"INSERT INTO `realmcharacters` (`realmid`,`acctid`,`numchars`) VALUES ({REALM_ID},{SECOND_ACCOUNT_ID},0);",
+          auth_schema)
+
+    ownership_response = _attempt_char_delete_as(auth_port, world_port, SECOND_ACCOUNT, SECOND_PASSWORD,
+                                                  SECOND_ACCOUNT_ID, created_guid)
+    ownership_no_response = ownership_response is None
+    print(f"negative case, delete another account's character: response="
+          f"{'none' if ownership_response is None else ownership_response.hex()} expected=none "
+          f"match={ownership_no_response}")
+    ok = ok and ownership_no_response
+
+    survives_row = mysql(container, root_password,
+                          f"SELECT `guid` FROM `characters` WHERE `guid`={created_guid};", characters_schema)
+    character_survived = bool(survives_row)
+    print(f"negative case, character row survives ownership-violating delete attempt: "
+          f"{character_survived}")
+    ok = ok and character_survived
 
     return ok
 
@@ -408,12 +471,11 @@ def main() -> int:
 
     run_id = uuid.uuid4().hex[:12]
     container = f"acore-cata-charcreate-{run_id}-mysql"
-    volume = f"acore-cata-charcreate-{run_id}-mysql-data"
     workdir = Path(f"/tmp/acore-cata-charcreate-{run_id}")
     workdir.mkdir(parents=True)
     manifest_path = workdir / "manifest.json"
     manifest_path.write_text(json.dumps({"run_id": run_id, "docker_container": container,
-                                          "docker_volume": volume, "workdir": str(workdir)}, indent=2))
+                                          "workdir": str(workdir)}, indent=2))
     print(f"run {run_id}: workdir {workdir}, container {container}")
 
     root_password = uuid.uuid4().hex
@@ -427,12 +489,15 @@ def main() -> int:
     worldserver_process: subprocess.Popen | None = None
     try:
         plan6.require_unused(mysql_port)
-        run(["docker", "volume", "create", volume])
         result = run([
             "docker", "run", "-d", "--name", container,
             "-e", f"MYSQL_ROOT_PASSWORD={root_password}",
             "-p", f"127.0.0.1:{mysql_port}:3306",
-            "-v", f"{volume}:/var/lib/mysql", MYSQL_IMAGE, "--skip-log-bin",
+            # Data lives only for this run's lifetime, so put it on tmpfs and turn off durability
+            # fsyncs; this is what actually dominates a bulk SQL import, not process-spawn overhead.
+            "--tmpfs", "/var/lib/mysql",
+            MYSQL_IMAGE, "--skip-log-bin",
+            "--innodb-flush-log-at-trx-commit=0", "--innodb-doublewrite=0", "--innodb-flush-method=nosync",
         ])
         container_id = result.stdout.decode().strip()
         wait_for_mysql(container, root_password)
@@ -454,7 +519,8 @@ def main() -> int:
             files = sorted(directory.glob("*.sql"))
             if not files:
                 return
-            payload = b"\n".join(path.read_bytes() for path in files)
+            payload = b"SET autocommit=0,unique_checks=0,foreign_key_checks=0;\n" \
+                + b"\n".join(path.read_bytes() for path in files) + b"\nCOMMIT;\n"
             mysql(container, root_password, payload, schema, timeout=900)
 
         def apply_updates(directory: Path, schema: str) -> None:
@@ -610,7 +676,8 @@ def main() -> int:
         base_pass = spawn_ok and actual_items == expected_items and arms_skill_present \
             and sorted(actual_actions) == expected_actions
 
-        negative_pass = run_negative_cases(auth_port, world_port)
+        negative_pass = run_negative_cases(auth_port, world_port, container, root_password,
+                                            characters_schema, auth_schema, int(guid))
 
         all_pass = base_pass and negative_pass
         print(f"OVERALL: {'PASS' if all_pass else 'FAIL'}")
@@ -619,10 +686,9 @@ def main() -> int:
         stop_process(worldserver_process)
         stop_process(authserver_process)
         run(["docker", "rm", "-f", container], check=False)
-        run(["docker", "volume", "rm", volume], check=False)
         if not args.keep_workdir:
             shutil.rmtree(workdir, ignore_errors=True)
-        print(f"cleaned up docker container {container} and volume {volume}")
+        print(f"cleaned up docker container {container}")
 
 
 if __name__ == "__main__":
