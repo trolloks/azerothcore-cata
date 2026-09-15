@@ -7247,6 +7247,60 @@ void ObjectMgr::LoadAreaTriggers()
     LOG_INFO("server.loading", " ");
 }
 
+void ObjectMgr::LoadPhaseAreas()
+{
+    uint32 oldMSTime = getMSTime();
+
+    _phasesByArea.clear();
+
+    QueryResult result = WorldDatabase.Query("SELECT AreaId, PhaseId FROM phase_area");
+
+    if (!result)
+    {
+        LOG_INFO("server.loading", ">> Loaded 0 phase area definitions. DB table `phase_area` is empty.");
+        LOG_INFO("server.loading", " ");
+        return;
+    }
+
+    uint32 count = 0;
+
+    do
+    {
+        Field* fields = result->Fetch();
+
+        uint32 areaId = fields[0].Get<uint32>();
+        uint32 phaseId = fields[1].Get<uint32>();
+
+        if (!sAreaTableStore.LookupEntry(areaId))
+        {
+            LOG_ERROR("sql.sql", "Table `phase_area` has AreaId {} not found in `AreaTable.dbc`, skipped.", areaId);
+            continue;
+        }
+
+        bool isPhaseGroup = false;
+        for (PhaseGroupEntry const* group : sPhaseGroupStore)
+        {
+            if (group->PhaseGroupID == phaseId)
+            {
+                isPhaseGroup = true;
+                break;
+            }
+        }
+
+        if (!sPhaseStore.LookupEntry(phaseId) && !isPhaseGroup)
+        {
+            LOG_ERROR("sql.sql", "Table `phase_area` has PhaseId {} not found in `Phase.dbc` or `PhaseXPhaseGroup.dbc`, skipped.", phaseId);
+            continue;
+        }
+
+        _phasesByArea[areaId].push_back(phaseId);
+        ++count;
+    } while (result->NextRow());
+
+    LOG_INFO("server.loading", ">> Loaded {} phase area definitions in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
+    LOG_INFO("server.loading", " ");
+}
+
 void ObjectMgr::LoadAreaTriggerTeleports()
 {
     uint32 oldMSTime = getMSTime();

@@ -96,6 +96,39 @@ TEST(InitialPacketsTest, WritesRuneModifierAndMoverPackets)
     EXPECT_EQ(PayloadHex(mover.Write()), "00");
 }
 
+TEST(InitialPacketsTest, WritesEmptyAndNonEmptyPhaseShiftChange)
+{
+    // All-nonzero guid bytes so WriteByteSeq emits every Client[i] byte (it silently skips zero
+    // bytes), keeping the fixed-field layout below a constant number of bytes:
+    // 1 (bits) + 1 (Client[7]) + 1 (Client[4]) + 4 (UiMapPhaseIDs size) + 1 (Client[1])
+    // + 4 (PhaseShiftFlags) + 1 (Client[2]) + 1 (Client[6]) + 4 (PreloadMapIDs size) = 18 bytes
+    // before the Phases size prefix; PhaseShiftFlags itself sits at offset 8.
+    ObjectGuid const guid(uint64(0x0807060504030201));
+
+    WorldPackets::Misc::PhaseShiftChange empty;
+    empty.Client = guid;
+    WorldPacket const* emptyPayload = empty.Write();
+    // 18 (fixed fields above) + 4 (Phases size, 0 entries) + 1 (Client[3]) + 1 (Client[0])
+    // + 4 (VisibleMapIDs size) + 1 (Client[5]) = 29 bytes.
+    EXPECT_EQ(emptyPayload->size(), 29u);
+    EXPECT_EQ(uint32(emptyPayload->contents()[8]) | uint32(emptyPayload->contents()[9]) << 8 |
+                  uint32(emptyPayload->contents()[10]) << 16 | uint32(emptyPayload->contents()[11]) << 24,
+              0x8u); // default PhaseShiftFlags::Unphased
+    EXPECT_EQ(uint32(emptyPayload->contents()[18]) | uint32(emptyPayload->contents()[19]) << 8 |
+                  uint32(emptyPayload->contents()[20]) << 16 | uint32(emptyPayload->contents()[21]) << 24,
+              0u); // no phases
+
+    WorldPackets::Misc::PhaseShiftChange withPhases;
+    withPhases.Client = guid;
+    withPhases.PhaseShiftFlags = 0;
+    withPhases.Phases = { 125, 171 };
+    WorldPacket const* payload = withPhases.Write();
+    EXPECT_EQ(payload->size(), emptyPayload->size() + 4u); // 2 extra uint16 phase entries
+    EXPECT_EQ(uint32(payload->contents()[18]) | uint32(payload->contents()[19]) << 8, 4u); // 2 phases * 2 bytes
+    EXPECT_EQ(uint16(payload->contents()[22]) | uint16(payload->contents()[23]) << 8, 125u);
+    EXPECT_EQ(uint16(payload->contents()[24]) | uint16(payload->contents()[25]) << 8, 171u);
+}
+
 TEST(InitialPacketsTest, WritesLoginVerifyWorld)
 {
     WorldPackets::Character::LoginVerifyWorld loginVerifyWorld;

@@ -1885,6 +1885,13 @@ public:
     void UpdateArea(uint32 newArea);
     void SetNeedZoneUpdate(bool needUpdate) { m_needZoneUpdate = needUpdate; }
 
+    // Cata Phase.dbc/PhaseXPhaseGroup.dbc membership (distinct from the legacy WotLK phase mask).
+    // Recomputed from `phase_area` + CONDITION_SOURCE_TYPE_PHASE conditions on every area change,
+    // so it naturally survives logout/login via the same area recompute the login path already does.
+    [[nodiscard]] std::vector<uint32> const& GetPhases() const { return m_phases; }
+    void UpdatePhasesForArea(uint32 areaId);
+    void SendPhaseShift();
+
     void UpdateZoneDependentAuras(uint32 zone_id);    // zones
     void UpdateAreaDependentAuras(uint32 area_id);    // subzones
 
@@ -2965,6 +2972,7 @@ private:
     uint32 m_zoneUpdateId;
     uint32 m_zoneUpdateTimer;
     uint32 m_areaUpdateId;
+    std::vector<uint32> m_phases;
 
     uint32 m_deathTimer;
     time_t m_deathExpireTime;

@@ -1150,6 +1150,20 @@ struct ItemEntry
     uint32 SheatheType;                                      // 7
 };
 
+struct PhaseEntry
+{
+    uint32 ID;                                               // 0
+    char const* Name;                                        // 1
+    uint32 Flags;                                             // 2
+};
+
+struct PhaseGroupEntry
+{
+    uint32 ID;                                               // 0
+    uint32 PhaseID;                                          // 1
+    uint32 PhaseGroupID;                                     // 2
+};
+
 struct ItemBagFamilyEntry
 {
     uint32   ID;                                            // 0

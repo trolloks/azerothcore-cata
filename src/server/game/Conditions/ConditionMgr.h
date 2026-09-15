@@ -272,6 +272,9 @@ public:
     ConditionList GetConditionsForVehicleSpell(uint32 creatureId, uint32 spellId);
     ConditionList GetConditionsForNpcVendorEvent(uint32 creatureId, uint32 itemId);
     ConditionList GetConditionsForObjectVisibility(WorldObject const* object) const;
+    // SourceGroup is the Phase.dbc/PhaseXPhaseGroup.dbc id; SourceEntry, if set, scopes the
+    // condition to one AreaTable.dbc id (0 applies to every area the phase is granted in).
+    ConditionList GetConditionsForPhase(uint32 phaseOrGroupId, uint32 areaId) const;
 
 private:
     bool isSourceTypeValid(Condition* cond);
@@ -279,6 +282,7 @@ private:
     bool addToGossipMenus(Condition* cond);
     bool addToGossipMenuItems(Condition* cond);
     bool addToSpellImplicitTargetConditions(Condition* cond);
+    bool addToPhases(Condition* cond);
     bool IsObjectMeetToConditionList(ConditionSourceInfo& sourceInfo, ConditionList const& conditions);
 
     void Clean(); // free up resources
@@ -291,6 +295,7 @@ private:
     NpcVendorConditionContainer        NpcVendorConditionContainerStore;
     SmartEventConditionContainer       SmartEventConditionStore;
     ObjectVisibilityConditionContainer ObjectVisibilityConditionStore;
+    CreatureSpellConditionContainer    PhaseConditionStore; // keyed by phase/group id, then by area id (0 = any area)
 };
 
 #define sConditionMgr ConditionMgr::instance()

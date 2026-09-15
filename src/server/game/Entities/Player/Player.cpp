@@ -11797,14 +11797,18 @@ void Player::SendInitialPacketsAfterAddToMap()
     // never dismisses its loading screen without these two. LoadCufProfiles is an
     // empty stub (no saved profiles yet); PhaseShiftChange mirrors TrinityCore's
     // PhasingHandler::OnMapChange, fired here since that hook does not exist in
-    // this fork -- a fresh character has no active phases, so Unphased (flag 8)
-    // alone is correct.
+    // this fork. UpdatePhasesForArea sends it itself when the login area grants a
+    // non-default phase; otherwise send the still-required default/Unphased packet here.
     WorldPackets::Misc::LoadCufProfiles cufProfiles;
     SendDirectMessage(cufProfiles.Write());
 
-    WorldPackets::Misc::PhaseShiftChange phaseShift;
-    phaseShift.Client = GetGUID();
-    SendDirectMessage(phaseShift.Write());
+    {
+        uint32 initZone, initArea;
+        GetZoneAndAreaId(initZone, initArea);
+        UpdatePhasesForArea(initArea);
+        if (GetPhases().empty())
+            SendPhaseShift();
+    }
 
     CastSpell(this, 836, true);                             // LOGINEFFECT
 

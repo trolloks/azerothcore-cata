@@ -40,6 +40,7 @@ DBCStorage <AreaGroupEntry> sAreaGroupStore(AreaGroupEntryfmt);
 DBCStorage <AreaPOIEntry> sAreaPOIStore(AreaPOIEntryfmt);
 
 static WMOAreaInfoByTripple sWMOAreaInfoByTripple;
+static std::unordered_map<uint32 /*phaseOrGroupId*/, std::vector<uint32> /*memberPhaseIds*/> sPhasesByGroup;
 
 DBCStorage <AchievementEntry> sAchievementStore(Achievementfmt);
 DBCStorage <AchievementCategoryEntry> sAchievementCategoryStore(AchievementCategoryfmt);
@@ -128,6 +129,8 @@ DBCStorage <NamesProfanityEntry> sNamesProfanityStore(NamesProfanityfmt);
 
 DBCStorage <OverrideSpellDataEntry> sOverrideSpellDataStore(OverrideSpellDatafmt);
 
+DBCStorage <PhaseEntry> sPhaseStore(Phasefmt);
+DBCStorage <PhaseGroupEntry> sPhaseGroupStore(PhaseGroupfmt);
 DBCStorage <PowerDisplayEntry> sPowerDisplayStore(PowerDisplayfmt);
 DBCStorage <PvPDifficultyEntry> sPvPDifficultyStore(PvPDifficultyfmt);
 
@@ -356,6 +359,8 @@ void LoadDBCStores(std::string const& dataPath)
     LOAD_DBC(sNamesReservedStore,                   "NamesReserved.dbc",                    "namesreserved_dbc");
     LOAD_DBC(sNamesProfanityStore,                  "NamesProfanity.dbc",                   "namesprofanity_dbc");
     LOAD_DBC(sOverrideSpellDataStore,               "OverrideSpellData.dbc",                "overridespelldata_dbc");
+    LOAD_DBC(sPhaseStore,                           "Phase.dbc",                             nullptr);
+    LOAD_DBC(sPhaseGroupStore,                      "PhaseXPhaseGroup.dbc",                  nullptr);
     LOAD_DBC(sPowerDisplayStore,                    "PowerDisplay.dbc",                     "powerdisplay_dbc");
     LOAD_DBC(sPvPDifficultyStore,                   "PvpDifficulty.dbc",                    "pvpdifficulty_dbc");
     LOAD_DBC(sQuestXPStore,                         "QuestXP.dbc",                          "questxp_dbc");
@@ -660,6 +665,9 @@ void LoadDBCStores(std::string const& dataPath)
     for (WMOAreaTableEntry const* entry : sWMOAreaTableStore)
         sWMOAreaInfoByTripple[WMOAreaTableKey(entry->rootId, entry->adtId, entry->groupId)] = entry;
 
+    for (PhaseGroupEntry const* group : sPhaseGroupStore)
+        sPhasesByGroup[group->PhaseGroupID].push_back(group->PhaseID);
+
     // error checks
     if (bad_dbc_files.size() >= DBCFileCount)
     {
@@ -868,6 +876,15 @@ WMOAreaTableEntry const* GetWMOAreaTableEntryByTripple(int32 rootid, int32 adtid
         return i->second;
 
     return nullptr;
+}
+
+std::vector<uint32> GetPhasesForGroup(uint32 phaseOrGroupId)
+{
+    auto itr = sPhasesByGroup.find(phaseOrGroupId);
+    if (itr != sPhasesByGroup.end())
+        return itr->second;
+
+    return { phaseOrGroupId };
 }
 
 uint32 GetVirtualMapForMapAndZone(uint32 mapid, uint32 zoneId)

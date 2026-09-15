@@ -273,7 +273,9 @@ WorldPacket const* WorldPackets::Misc::PhaseShiftChange::Write()
     _worldPacket.WriteByteSeq(Client[2]);
     _worldPacket.WriteByteSeq(Client[6]);
     _worldPacket << uint32(0); // PreloadMapIDs byte size: none
-    _worldPacket << uint32(0); // Phases byte size: none, covered by the Unphased flag
+    _worldPacket << uint32(Phases.size() * 2); // Phases byte size
+    for (uint32 phaseId : Phases)
+        _worldPacket << uint16(phaseId);
     _worldPacket.WriteByteSeq(Client[3]);
     _worldPacket.WriteByteSeq(Client[0]);
     _worldPacket << uint32(0); // VisibleMapIDs byte size: no terrain swaps
