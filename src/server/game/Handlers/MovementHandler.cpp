@@ -378,8 +378,11 @@ void WorldSession::HandleMovementOpcodes(WorldPacket& recvData)
     }
 
     /* extract packet */
+    // Cata bit-packs the mover guid into the same generic sequence as the rest of the movement
+    // fields for these opcodes, so unlike the legacy WotLK path there is no separate leading guid.
+    bool usesBitPackedCodec = opcode == MSG_MOVE_HEARTBEAT || WorldPackets::Movement::GetGroundMovementSequence(opcode) != nullptr;
     MovementInfo movementInfo;
-    if (opcode == MSG_MOVE_HEARTBEAT)
+    if (usesBitPackedCodec)
         ReadMovementInfo(recvData, &movementInfo);
     else
         recvData >> movementInfo.guid.ReadAsPacked();
@@ -399,7 +402,7 @@ void WorldSession::HandleMovementOpcodes(WorldPacket& recvData)
         return;
     }
 
-    if (opcode != MSG_MOVE_HEARTBEAT)
+    if (!usesBitPackedCodec)
         ReadMovementInfo(recvData, &movementInfo);
 
     if (!ProcessMovementInfo(movementInfo, mover, plrMover, recvData))
@@ -416,7 +419,13 @@ void WorldSession::HandleMovementOpcodes(WorldPacket& recvData)
     WriteMovementInfo(&data, &movementInfo);
     mover->SendMessageToSet(&data, _player);
     if (opcode == MSG_MOVE_HEARTBEAT)
-        LOG_DEBUG("network", "Accepted Cataclysm movement heartbeat after movement validation");
+        LOG_DEBUG("network", "Accepted Cataclysm movement heartbeat after movement validation: x={}, y={}, z={}, o={}",
+            movementInfo.pos.GetPositionX(), movementInfo.pos.GetPositionY(), movementInfo.pos.GetPositionZ(),
+            movementInfo.pos.GetOrientation());
+    else if (WorldPackets::Movement::GetGroundMovementSequence(opcode))
+        LOG_DEBUG("network", "Accepted Cataclysm ground movement {} after movement validation: x={}, y={}, z={}, o={}",
+            GetOpcodeNameForLogging(static_cast<OpcodeClient>(opcode)), movementInfo.pos.GetPositionX(),
+            movementInfo.pos.GetPositionY(), movementInfo.pos.GetPositionZ(), movementInfo.pos.GetOrientation());
 }
 
 void WorldSession::SynchronizeMovement(MovementInfo& movementInfo)

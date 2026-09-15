@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -141,13 +142,14 @@ MAP_INSERTION_MODE = "map-insertion-object-bootstrap"
 IN_WORLD_CONTROL_MODE = "in-world-control-bootstrap"
 BASIC_MOVEMENT_MODE = "basic-movement"
 RUN_SPEED_MODE = "run-speed-change"
+GROUND_MOVEMENT_MODE = "ground-movement"
 CHARACTER_CREATION_MODE = "character-creation"
 RUN_SPEED_AURA = 2983
 RUN_SPEED_AURA_AMOUNT = 50
 RUN_SPEED_AURA_DURATION_MS = 60000
 POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
-    IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
+    IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE,
 })
 CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
@@ -163,6 +165,8 @@ CHARACTER_ZONE = 12
 def plan_number(mode: str) -> str:
     if mode == CHARACTER_CREATION_MODE:
         return "22"
+    if mode == GROUND_MOVEMENT_MODE:
+        return "23"
     if mode == RUN_SPEED_MODE:
         return "16"
     if mode == BASIC_MOVEMENT_MODE:
@@ -833,7 +837,10 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         "SOAP.Enabled": "0",
         "Cluster.Enabled": "0",
         "Appender.Server": '2,5,0,WorldServer.log,w',
-        "Logger.network": "5,Server" if generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE} else "4,Server",
+        "Logger.network": (
+            "5,Server" if generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE}
+            else "4,Server"
+        ),
         "Logger.network.opcode": "4,Server",
     }
     auth_source = (REPO_ROOT / "src/server/apps/authserver/authserver.conf.dist").read_text()
@@ -1587,6 +1594,41 @@ def automate_character_selection(generation: Generation) -> None:
     connection.close()
 
 
+# Default 4.3.4 keybinds for the six directional actions ground movement routing covers,
+# paired with the key that ends that action (release-to-stop for forward/backward/strafe,
+# a turn key's own release also emits MSG_MOVE_STOP_TURN in this default binding scheme).
+GROUND_MOVEMENT_KEYS = ("w", "s", "q", "e", "a", "d")
+
+
+def automate_ground_movement(generation: Generation) -> None:
+    try:
+        from Xlib import X, XK, display
+        from Xlib.ext import xtest
+    except ImportError as error:
+        raise RuntimeError("ground movement requires the installed python3-xlib package") from error
+
+    window_id, *_ = focus_owned_window(generation)
+    connection = display.Display(str(generation["inputs"]["display"]))
+
+    def require_focus() -> None:
+        active = connection.screen().root.get_full_property(
+            connection.intern_atom("_NET_ACTIVE_WINDOW"), X.AnyPropertyType,
+        )
+        if active is None or not len(active.value) or int(active.value[0]) != int(window_id, 16):
+            raise RuntimeError("owned WoW window lost focus before input")
+
+    for key in GROUND_MOVEMENT_KEYS:
+        require_focus()
+        keycode = connection.keysym_to_keycode(XK.string_to_keysym(key))
+        xtest.fake_input(connection, X.KeyPress, keycode)
+        connection.sync()
+        time.sleep(0.6)
+        xtest.fake_input(connection, X.KeyRelease, keycode)
+        connection.sync()
+        time.sleep(0.4)
+    connection.close()
+
+
 def character_creation_points(x: int, y: int, width: int, height: int) -> dict[str, tuple[int, int]]:
     # Fractions calibrated against a 1800x1042 owned window on the Cataclysm 15595 creation
     # screen: Alliance/Human is the first race portrait, Warrior the first class icon (both
@@ -1765,6 +1807,7 @@ def run_client(args: argparse.Namespace) -> None:
         deadline = time.monotonic() + (args.no_login_seconds if generation["mode"] == "no-login" else args.timeout)
         character_hold_started: float | None = None
         selection_sent = False
+        ground_movement_sent = False
         post_marker_hold_started: float | None = None
         milestone_definition = CHARACTER_MILESTONES if generation["mode"] in CHARACTER_MODES else CLIENT_MILESTONES
         while time.monotonic() < deadline:
@@ -1793,6 +1836,12 @@ def run_client(args: argparse.Namespace) -> None:
                     and player_login_callbacks(generation)
                 ):
                     break
+                if (
+                    generation["mode"] == GROUND_MOVEMENT_MODE and selection_sent and not ground_movement_sent
+                    and in_world_control_marker_count(generation) > 0
+                ):
+                    automate_ground_movement(generation)
+                    ground_movement_sent = True
                 if generation["mode"] in POST_MARKER_MODES and selection_sent:
                     marker_count = POST_MARKER_COUNTERS[generation["mode"]](generation)
                     if marker_count and post_marker_hold_started is None:
@@ -1973,6 +2022,8 @@ def in_world_control_packet_prefix(generation: Generation) -> list[str]:
 
 
 MOVEMENT_HEARTBEAT_MARKER = "Accepted Cataclysm movement heartbeat after movement validation"
+MOVEMENT_SAMPLE_SUFFIX = r": x=([-+0-9.eE]+), y=([-+0-9.eE]+), z=([-+0-9.eE]+), o=([-+0-9.eE]+)"
+HEARTBEAT_SAMPLE_PATTERN = re.compile(re.escape(MOVEMENT_HEARTBEAT_MARKER) + MOVEMENT_SAMPLE_SUFFIX)
 
 
 def movement_heartbeat_count(generation: Generation) -> int:
@@ -2004,9 +2055,101 @@ def character_creation_marker_count(generation: Generation) -> int:
     return world_log_text(generation).count("[SMSG_CHAR_CREATE ")
 
 
+GROUND_MOVEMENT_MARKER = "Accepted Cataclysm ground movement"
+GROUND_MOVEMENT_OPCODES = (
+    "MSG_MOVE_START_FORWARD", "MSG_MOVE_STOP",
+    "MSG_MOVE_START_BACKWARD", "MSG_MOVE_STOP",
+    "MSG_MOVE_START_STRAFE_LEFT", "MSG_MOVE_STOP_STRAFE",
+    "MSG_MOVE_START_STRAFE_RIGHT", "MSG_MOVE_STOP_STRAFE",
+    "MSG_MOVE_START_TURN_LEFT", "MSG_MOVE_STOP_TURN",
+    "MSG_MOVE_START_TURN_RIGHT", "MSG_MOVE_STOP_TURN",
+)
+
+
+GROUND_MOVEMENT_SAMPLE_PATTERN = re.compile(
+    re.escape(GROUND_MOVEMENT_MARKER) + r" \[?(MSG_MOVE_[A-Z_]+)(?: 0x[0-9A-Fa-f]+ \(\d+\))?\]? after movement "
+    r"validation" + MOVEMENT_SAMPLE_SUFFIX
+)
+
+
+def ground_movement_marker_count(generation: Generation) -> int:
+    return len(ground_movement_sequence(generation))
+
+
+def ground_movement_samples(generation: Generation) -> list[dict[str, str | float]]:
+    after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
+    after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
+    return [
+        {"opcode": opcode, "x": float(x), "y": float(y), "z": float(z), "o": float(o)}
+        for opcode, x, y, z, o in GROUND_MOVEMENT_SAMPLE_PATTERN.findall(after_sync)
+    ]
+
+
+def ground_movement_sequence(generation: Generation) -> list[str]:
+    return [str(sample["opcode"]) for sample in ground_movement_samples(generation)]
+
+
+def _normalized_angle_delta(delta: float) -> float:
+    return (delta + math.pi) % (2 * math.pi) - math.pi
+
+
+def ground_movement_deltas_are_action_appropriate(samples: list[dict[str, str | float]]) -> bool:
+    """Each START opcode is paired with its terminating STOP opcode; verify the position/orientation
+    delta between them moved in the direction implied by the key that was pressed (forward/backward
+    along the facing vector, strafe along the perpendicular vector, turn changing orientation the
+    expected way), rather than merely checking that some movement was logged."""
+    epsilon = 0.05
+    for index in range(0, len(samples) - 1, 2):
+        start, stop = samples[index], samples[index + 1]
+        dx = float(stop["x"]) - float(start["x"])
+        dy = float(stop["y"]) - float(start["y"])
+        orientation = float(start["o"])
+        forward = (math.cos(orientation), math.sin(orientation))
+        left = (-math.sin(orientation), math.cos(orientation))
+        opcode = start["opcode"]
+        if opcode == "MSG_MOVE_START_FORWARD":
+            ok = dx * forward[0] + dy * forward[1] > epsilon
+        elif opcode == "MSG_MOVE_START_BACKWARD":
+            ok = dx * forward[0] + dy * forward[1] < -epsilon
+        elif opcode == "MSG_MOVE_START_STRAFE_LEFT":
+            ok = dx * left[0] + dy * left[1] > epsilon
+        elif opcode == "MSG_MOVE_START_STRAFE_RIGHT":
+            ok = dx * left[0] + dy * left[1] < -epsilon
+        elif opcode == "MSG_MOVE_START_TURN_LEFT":
+            ok = _normalized_angle_delta(float(stop["o"]) - orientation) > epsilon
+        elif opcode == "MSG_MOVE_START_TURN_RIGHT":
+            ok = _normalized_angle_delta(float(stop["o"]) - orientation) < -epsilon
+        else:
+            ok = False
+        if not ok:
+            return False
+    return True
+
+
+def ground_movement_is_stable_after_final_stop(generation: Generation, samples: list[dict[str, str | float]]) -> bool:
+    """The client keeps sending MSG_MOVE_HEARTBEAT during the post-run hold; confirm none of them
+    drifted away from the position/orientation the final MSG_MOVE_STOP_TURN left the character at."""
+    if not samples:
+        return False
+    final = samples[-1]
+    text = world_log_text(generation)
+    after_final_stop = text.rpartition(GROUND_MOVEMENT_MARKER)[2]
+    heartbeats = HEARTBEAT_SAMPLE_PATTERN.findall(after_final_stop)
+    if not heartbeats:
+        return False
+    tolerance = 1e-3
+    return all(
+        math.isclose(float(x), float(final["x"]), abs_tol=tolerance)
+        and math.isclose(float(y), float(final["y"]), abs_tol=tolerance)
+        and math.isclose(float(z), float(final["z"]), abs_tol=tolerance)
+        and math.isclose(float(o), float(final["o"]), abs_tol=tolerance)
+        for x, y, z, o in heartbeats
+    )
+
+
 POST_MARKER_MODES = frozenset({
     INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
-    CHARACTER_CREATION_MODE,
+    GROUND_MOVEMENT_MODE, CHARACTER_CREATION_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -2014,6 +2157,7 @@ POST_MARKER_COUNTERS = {
     IN_WORLD_CONTROL_MODE: in_world_control_marker_count,
     BASIC_MOVEMENT_MODE: movement_heartbeat_count,
     RUN_SPEED_MODE: lambda generation: len(run_speed_acknowledgements(generation)),
+    GROUND_MOVEMENT_MODE: ground_movement_marker_count,
     CHARACTER_CREATION_MODE: character_creation_marker_count,
 }
 
@@ -2154,7 +2298,10 @@ def sanitized_evidence(
     run_speed_mode = generation["mode"] == RUN_SPEED_MODE
     creation_mode = generation["mode"] == CHARACTER_CREATION_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
-    in_world_control_mode = generation["mode"] in {IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
+    ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
+    in_world_control_mode = generation["mode"] in {
+        IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE,
+    }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
         Path(generation["paths"]["raw_evidence"]) / "window.xprop"
@@ -2173,6 +2320,7 @@ def sanitized_evidence(
         "outcome": (
             "character_creation_candidate" if creation_mode and "characters_completed" in milestones
             else "run_speed_change_candidate" if run_speed_mode and "characters_completed" in milestones
+            else "ground_movement_pass_candidate" if ground_movement_mode and "characters_completed" in milestones
             else "basic_movement_pass_candidate" if basic_movement_mode and "characters_completed" in milestones
             else "in_world_control_bootstrap_candidate" if in_world_control_mode and "characters_completed" in milestones
             else "map_insertion_object_bootstrap_candidate" if map_insertion_mode and "characters_completed" in milestones
@@ -2201,6 +2349,7 @@ def sanitized_evidence(
         "in_world_control_marker_count": in_world_control_marker_count_value if in_world_control_mode else None,
         "movement_heartbeat_count": movement_heartbeat_count_value if basic_movement_mode else None,
         "run_speed_acknowledgements": run_speed_acknowledgements(generation) if run_speed_mode else None,
+        "ground_movement_sequence": ground_movement_sequence(generation) if ground_movement_mode else None,
         "creation_marker_count": creation_marker_count_value if creation_mode else None,
         "post_marker_hold_seconds": (
             generation.get("post_marker_hold_seconds", 0) if generation["mode"] in POST_MARKER_MODES else None
@@ -2246,7 +2395,10 @@ def verify(args: argparse.Namespace) -> None:
     run_speed_mode = generation["mode"] == RUN_SPEED_MODE
     creation_mode = generation["mode"] == CHARACTER_CREATION_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
-    in_world_control_mode = generation["mode"] in {IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
+    ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
+    in_world_control_mode = generation["mode"] in {
+        IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE,
+    }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     rows = character_row_count(manifest, generation) if character_mode else None
     realm_count = realm_character_count(manifest, generation) if populated_mode else None
@@ -2338,6 +2490,13 @@ def verify(args: argparse.Namespace) -> None:
             )
         if basic_movement_mode:
             character_ok = character_ok and evidence["movement_heartbeat_count"] > 0
+        if ground_movement_mode:
+            ground_movement_samples_value = ground_movement_samples(generation)
+            character_ok = character_ok and (
+                evidence["ground_movement_sequence"] == list(GROUND_MOVEMENT_OPCODES)
+                and ground_movement_deltas_are_action_appropriate(ground_movement_samples_value)
+                and ground_movement_is_stable_after_final_stop(generation, ground_movement_samples_value)
+            )
         if run_speed_mode:
             character_ok = character_ok and bool(evidence["run_speed_acknowledgements"])
         if creation_mode:
@@ -2353,6 +2512,7 @@ def verify(args: argparse.Namespace) -> None:
             evidence["outcome"] = (
                 "character_creation_pass" if creation_mode
                 else "run_speed_change_pass" if run_speed_mode
+                else "ground_movement_pass" if ground_movement_mode
                 else "basic_movement_pass" if basic_movement_mode
                 else "in_world_control_bootstrap_pass" if in_world_control_mode
                 else "map_insertion_object_bootstrap_pass" if map_insertion_mode
@@ -2979,7 +3139,8 @@ def parser() -> argparse.ArgumentParser:
         "--mode", choices=(
             "no-login", "authentication", "character-screen", CHARACTER_CREATION_MODE, POPULATED_MODE,
             CHARACTER_SELECTION_MODE,
-            INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
+            INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,
+            RUN_SPEED_MODE, GROUND_MOVEMENT_MODE,
         ), default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)
