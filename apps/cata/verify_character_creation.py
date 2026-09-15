@@ -269,10 +269,14 @@ def create_character(auth_port: int, world_port: int) -> dict:
         char_body = CHAR_NAME.encode() + b"\x00" + bytes([1, 1, 0, 0, 0, 0, 0, 0, 0])
         send_client_packet(CMSG_CHAR_CREATE, char_body)
 
-        # The server interleaves unrelated async session-setup packets (SMSG_ADDON_INFO,
-        # SMSG_CLIENTCACHE_VERSION, ...) before SMSG_CHAR_CREATE arrives; skip up to a bounded
-        # number of them rather than enumerating every opcode the server happens to send first.
-        for _ in range(10):
+        # Player::Create() runs several Init*ForLevel() helpers (talents, power, proficiencies,
+        # criteria) that unconditionally push their normal in-game update packets to the session
+        # if one is attached, since their "player is loading" guards only suppress the resend
+        # done later by SendInitialPacketsBeforeAddToMap - not character creation. This is
+        # pre-existing AC behavior (present since the WotLK "First Commit"), harmless because a
+        # real client on the character-creation screen ignores everything except
+        # SMSG_CHAR_CREATE; skip up to a bounded number of them here for the same reason.
+        for _ in range(500):
             create_opcode, create_body = recv_server_packet()
             if create_opcode == SMSG_CHAR_CREATE:
                 break
@@ -284,13 +288,14 @@ def create_character(auth_port: int, world_port: int) -> dict:
     return {"account_realm": peer["realm"]}
 
 
-def mysql(container: str, root_password: str, sql: str | bytes, schema: str | None = None) -> str:
+def mysql(container: str, root_password: str, sql: str | bytes, schema: str | None = None,
+          timeout: int = 300) -> str:
     command = ["docker", "exec", "-i", container, "mysql", "--batch", "--skip-column-names",
                "-uroot", f"-p{root_password}"]
     if schema:
         command.extend(["-D", schema])
     payload = sql.encode() if isinstance(sql, str) else sql
-    return run(command, input_bytes=payload, timeout=300).stdout.decode().rstrip("\n")
+    return run(command, input_bytes=payload, timeout=timeout).stdout.decode().rstrip("\n")
 
 
 def wait_for_mysql(container: str, root_password: str) -> None:
@@ -386,22 +391,30 @@ def main() -> int:
               f"GRANT ALL ON `{characters_schema}`.* TO '{mysql_user}'@'%';"
               f"GRANT ALL ON `{world_schema}`.* TO '{mysql_user}'@'%';")
 
+        # Each mysql() call is a separate `docker exec`, whose process-spawn overhead dominates
+        # runtime when applied per file across ~1500 base/update .sql files; batch every schema's
+        # files into one mysql client invocation instead.
         def import_dir(directory: Path, schema: str) -> None:
-            for path in sorted(directory.glob("*.sql")):
-                mysql(container, root_password, path.read_bytes(), schema)
+            files = sorted(directory.glob("*.sql"))
+            if not files:
+                return
+            payload = b"\n".join(path.read_bytes() for path in files)
+            mysql(container, root_password, payload, schema, timeout=900)
 
         def apply_updates(directory: Path, schema: str) -> None:
             if not directory.is_dir():
                 return
             applied = set(mysql(container, root_password, "SELECT `name` FROM `updates`;", schema).splitlines())
+            parts = []
             for path in sorted(directory.glob("*.sql")):
                 if path.name in applied:
                     continue
-                mysql(container, root_password, path.read_bytes(), schema)
                 file_hash = hashlib.sha1(path.read_bytes()).hexdigest().upper()
-                mysql(container, root_password,
-                      "INSERT INTO `updates` (`name`,`hash`,`state`,`speed`) "
-                      f"VALUES ('{path.name}','{file_hash}','RELEASED',0);", schema)
+                parts.append(path.read_bytes())
+                parts.append(f"\nINSERT INTO `updates` (`name`,`hash`,`state`,`speed`) "
+                              f"VALUES ('{path.name}','{file_hash}','RELEASED',0);\n".encode())
+            if parts:
+                mysql(container, root_password, b"".join(parts), schema, timeout=900)
 
         for key, schema in (("auth", auth_schema), ("characters", characters_schema), ("world", world_schema)):
             import_dir(REPO_ROOT / f"data/sql/base/db_{key}", schema)
