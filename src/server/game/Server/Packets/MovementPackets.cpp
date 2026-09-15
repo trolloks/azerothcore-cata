@@ -1206,6 +1206,78 @@ static MovementStatusElements const MovementSetWalkMode[] =
     MSEOrientation,
     MSEEnd,
 };
+static MovementStatusElements const MovementSetFacing[] =
+{
+    MSEPositionX,
+    MSEPositionY,
+    MSEPositionZ,
+    MSEHasGuidByte6,
+    MSEHasTransportData,
+    MSEHasGuidByte4,
+    MSEHasSpline,
+    MSEHasGuidByte0,
+    MSEHasOrientation,
+    MSEHasTimestamp,
+    MSEHasPitch,
+    MSEHasMovementFlags2,
+    MSEHasGuidByte5,
+    MSEHasGuidByte7,
+    MSEHasGuidByte2,
+    MSEHasFallData,
+    MSEHasSplineElevation,
+    MSEHasMovementFlags,
+    MSEHasGuidByte3,
+    MSEZeroBit,
+    MSEHasGuidByte1,
+    MSEHasVehicleId,
+    MSEHasTransportGuidByte3,
+    MSEHasTransportGuidByte7,
+    MSEHasTransportGuidByte5,
+    MSEHasTransportGuidByte2,
+    MSEHasTransportGuidByte6,
+    MSEHasTransportGuidByte0,
+    MSEHasTransportTime2,
+    MSEHasTransportGuidByte4,
+    MSEHasTransportGuidByte1,
+    MSEHasFallDirection,
+    MSEMovementFlags2,
+    MSEMovementFlags,
+    MSEGuidByte6,
+    MSEGuidByte7,
+    MSEGuidByte2,
+    MSEGuidByte0,
+    MSEGuidByte4,
+    MSEGuidByte1,
+    MSEGuidByte5,
+    MSEGuidByte3,
+    MSETransportGuidByte0,
+    MSETransportPositionX,
+    MSETransportGuidByte1,
+    MSETransportTime2,
+    MSETransportGuidByte4,
+    MSETransportPositionZ,
+    MSETransportOrientation,
+    MSETransportGuidByte2,
+    MSETransportVehicleId,
+    MSETransportGuidByte3,
+    MSETransportSeat,
+    MSETransportPositionY,
+    MSETransportGuidByte5,
+    MSETransportGuidByte6,
+    MSETransportTime,
+    MSETransportGuidByte7,
+    MSEFallHorizontalSpeed,
+    MSEFallCosAngle,
+    MSEFallSinAngle,
+    MSEFallTime,
+    MSEFallVerticalSpeed,
+    MSESplineElevation,
+    MSEOrientation,
+    MSETimestamp,
+    MSEPitch,
+    MSEEnd,
+};
+
 MovementStatusElements const* WorldPackets::Movement::GetGroundMovementSequence(uint16 opcode)
 {
     switch (opcode)
@@ -1221,6 +1293,7 @@ MovementStatusElements const* WorldPackets::Movement::GetGroundMovementSequence(
         case MSG_MOVE_STOP_TURN:          return MovementStopTurn;
         case MSG_MOVE_SET_RUN_MODE:       return MovementSetRunMode;
         case MSG_MOVE_SET_WALK_MODE:      return MovementSetWalkMode;
+        case MSG_MOVE_SET_FACING:         return MovementSetFacing;
         default:                         return nullptr;
     }
 }
