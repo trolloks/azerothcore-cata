@@ -378,12 +378,13 @@ void WorldSession::HandleGameobjectReportUse(WorldPacket& recvPacket)
 void WorldSession::HandleCastSpellOpcode(WorldPacket& recvPacket)
 {
     uint32 spellId;
+    uint32 misc; // Cata: unused word between SpellID and SendCastFlags, present on the wire since 4.x
     uint8  castCount, castFlags;
 
     if (recvPacket.empty())
         return;
 
-    recvPacket >> castCount >> spellId >> castFlags;
+    recvPacket >> castCount >> spellId >> misc >> castFlags;
     TriggerCastFlags triggerFlag = TRIGGERED_NONE;
 
     uint32 oldSpellId = spellId;
