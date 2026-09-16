@@ -2089,6 +2089,10 @@ bool WorldObject::IsPhaseVisibleTo(Player const* player) const
     if (!m_spawnPhaseId)
         return true;
 
+    // GMs see and interact with every Cata phase, mirroring the legacy PHASEMASK_ANYWHERE override
+    if (player->IsGameMaster())
+        return true;
+
     std::vector<uint32> const& playerPhases = player->GetPhases();
     for (uint32 phaseId : GetPhasesForGroup(m_spawnPhaseId))
         if (std::find(playerPhases.begin(), playerPhases.end(), phaseId) != playerPhases.end())
