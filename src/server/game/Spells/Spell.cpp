@@ -4921,6 +4921,7 @@ void Spell::SendSpellStart()
     data << uint8(m_cast_count);                            // pending spell cast?
     data << uint32(m_spellInfo->Id);                        // spellId
     data << uint32(castFlags);                              // cast flags
+    data << uint32(0);                                      // Cata: cast flags ex, unused
     data << int32(m_timer);                                 // delay?
 
     m_targets.Write(data);
@@ -5021,6 +5022,7 @@ void Spell::SendSpellGo()
     data << uint8(m_cast_count);                            // pending spell cast?
     data << uint32(m_spellInfo->Id);                        // spellId
     data << uint32(castFlags);                              // cast flags
+    data << uint32(0);                                      // Cata: cast flags ex, unused
     data << uint32(GameTime::GetGameTimeMS().count());                 // timestamp
 
     WriteSpellGoTargets(&data);
