@@ -2325,8 +2325,8 @@ void ObjectMgr::LoadCreatures()
     QueryResult result = WorldDatabase.Query("SELECT creature.guid, id, map, equipment_id, position_x, position_y, position_z, orientation, spawntimesecs, wander_distance, "
                          //      10            11       12          13           14         15         16          17             18                 19                    20
                          "currentwaypoint, curhealth, curmana, MovementType, spawnMask, phaseMask, eventEntry, pool_entry, creature.npcflag, creature.unit_flags, creature.dynamicflags, "
-                         //       21
-                         "creature.ScriptName "
+                         //       21                     22
+                         "creature.ScriptName, creature.PhaseId "
                          "FROM creature "
                          "LEFT OUTER JOIN game_event_creature ON creature.guid = game_event_creature.guid "
                          "LEFT OUTER JOIN pool_creature ON creature.guid = pool_creature.guid");
@@ -2387,7 +2387,14 @@ void ObjectMgr::LoadCreatures()
         data.unit_flags         = fields[19].Get<uint32>();
         data.dynamicflags       = fields[20].Get<uint32>();
         data.ScriptId           = GetScriptId(fields[21].Get<std::string>());
+        data.phaseId            = fields[22].Get<uint32>();
         data.spawnGroupId       = 0;
+
+        if (data.phaseId && !IsValidPhaseOrPhaseGroupId(data.phaseId))
+        {
+            LOG_ERROR("sql.sql", "Table `creature` has creature (SpawnId: {}) with non-existing Phase/PhaseGroup id {} in `PhaseId` field, set to 0.", spawnId, data.phaseId);
+            data.phaseId = 0;
+        }
 
         if (!data.ScriptId)
             data.ScriptId = cInfo->ScriptID;
@@ -2580,7 +2587,7 @@ CreatureData const* ObjectMgr::LoadCreatureDataFromDB(ObjectGuid::LowType spawnI
     QueryResult result = WorldDatabase.Query("SELECT creature.guid, id, map, equipment_id, "
         "position_x, position_y, position_z, orientation, spawntimesecs, wander_distance, "
         "currentwaypoint, curhealth, curmana, MovementType, spawnMask, phaseMask, "
-        "creature.npcflag, creature.unit_flags, creature.dynamicflags, creature.ScriptName "
+        "creature.npcflag, creature.unit_flags, creature.dynamicflags, creature.ScriptName, creature.PhaseId "
         "FROM creature WHERE creature.guid = {}", spawnId);
 
     if (!result)
@@ -2616,7 +2623,14 @@ CreatureData const* ObjectMgr::LoadCreatureDataFromDB(ObjectGuid::LowType spawnI
     creatureData.unit_flags       = fields[17].Get<uint32>();
     creatureData.dynamicflags     = fields[18].Get<uint32>();
     creatureData.ScriptId         = GetScriptId(fields[19].Get<std::string>());
+    creatureData.phaseId          = fields[20].Get<uint32>();
     creatureData.spawnGroupId     = 0;
+
+    if (creatureData.phaseId && !IsValidPhaseOrPhaseGroupId(creatureData.phaseId))
+    {
+        LOG_ERROR("sql.sql", "Table `creature` has creature (SpawnId: {}) with non-existing Phase/PhaseGroup id {} in `PhaseId` field, set to 0.", spawnId, creatureData.phaseId);
+        creatureData.phaseId = 0;
+    }
 
     if (!creatureData.ScriptId)
         creatureData.ScriptId = cInfo->ScriptID;
@@ -2925,8 +2939,8 @@ void ObjectMgr::LoadGameobjects()
     QueryResult result = WorldDatabase.Query("SELECT gameobject.guid, id, map, position_x, position_y, position_z, orientation, "
                          //   7          8          9          10         11             12            13     14         15         16          17
                          "rotation0, rotation1, rotation2, rotation3, spawntimesecs, animprogress, state, spawnMask, phaseMask, eventEntry, pool_entry, "
-                         //   18
-                         "ScriptName "
+                         //   18                19
+                         "ScriptName, gameobject.PhaseId "
                          "FROM gameobject LEFT OUTER JOIN game_event_gameobject ON gameobject.guid = game_event_gameobject.guid "
                          "LEFT OUTER JOIN pool_gameobject ON gameobject.guid = pool_gameobject.guid");
 
@@ -3037,6 +3051,13 @@ void ObjectMgr::LoadGameobjects()
         data.phaseMask      = fields[15].Get<uint32>();
         int16 gameEvent     = fields[16].Get<int16>();
         data.poolId         = fields[17].Get<uint32>();
+        data.phaseId        = fields[19].Get<uint32>();
+
+        if (data.phaseId && !IsValidPhaseOrPhaseGroupId(data.phaseId))
+        {
+            LOG_ERROR("sql.sql", "Table `gameobject` has gameobject (GUID: {} Entry: {}) with non-existing Phase/PhaseGroup id {} in `PhaseId` field, set to 0.", guid, data.id, data.phaseId);
+            data.phaseId = 0;
+        }
 
         if (data.rotation.x < -1.0f || data.rotation.x > 1.0f)
         {
@@ -3114,7 +3135,7 @@ GameObjectData const* ObjectMgr::LoadGameObjectDataFromDB(ObjectGuid::LowType sp
 
     QueryResult result = WorldDatabase.Query("SELECT gameobject.guid, id, map, position_x, position_y, position_z, orientation, "
         "rotation0, rotation1, rotation2, rotation3, spawntimesecs, animprogress, state, spawnMask, phaseMask, "
-        "ScriptName "
+        "ScriptName, gameobject.PhaseId "
         "FROM gameobject WHERE gameobject.guid = {}", spawnId);
 
     if (!result)
@@ -3180,6 +3201,13 @@ GameObjectData const* ObjectMgr::LoadGameObjectDataFromDB(ObjectGuid::LowType sp
 
     goData.spawnMask        = fields[14].Get<uint8>();
     goData.phaseMask        = fields[15].Get<uint32>();
+    goData.phaseId          = fields[17].Get<uint32>();
+
+    if (goData.phaseId && !IsValidPhaseOrPhaseGroupId(goData.phaseId))
+    {
+        LOG_ERROR("sql.sql", "Table `gameobject` has gameobject (GUID: {} Entry: {}) with non-existing Phase/PhaseGroup id {} in `PhaseId` field, set to 0.", spawnId, entry, goData.phaseId);
+        goData.phaseId = 0;
+    }
 
     if (goData.rotation.x < -1.0f || goData.rotation.x > 1.0f)
     {

@@ -37,6 +37,9 @@ public:
     {
         Object::_Create(guidLow, uint32(0), HighGuid::Player);
     }
+
+    // Set Cata phase membership directly, bypassing UpdatePhasesForArea's DB/singleton dependencies
+    void SetPhasesForTest(std::vector<uint32> phases) { m_phases = std::move(phases); }
 };
 
 #endif //AZEROTHCORE_TEST_PLAYER_H

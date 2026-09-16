@@ -2119,6 +2119,10 @@ Creature* Player::GetNPCIfCanInteractWith(ObjectGuid const& guid, uint32 npcflag
     if (!creature->IsWithinDistInMap(this, INTERACTION_DISTANCE))
         return nullptr;
 
+    // phased out of the creature's Cata phase/phase-group, so it must not be interactable either
+    if (!creature->IsPhaseVisibleTo(this))
+        return nullptr;
+
     return creature;
 }
 
@@ -2134,7 +2138,7 @@ GameObject* Player::GetGameObjectIfCanInteractWith(ObjectGuid const& guid, Gameo
                 return nullptr;
             }
 
-            if (go->IsWithinDistInMap(this))
+            if (go->IsWithinDistInMap(this) && go->IsPhaseVisibleTo(this))
             {
                 return go;
             }
@@ -8127,7 +8131,7 @@ void Player::SendLoot(ObjectGuid guid, LootType loot_type)
         Creature* creature = GetMap()->GetCreature(guid);
 
         // must be in range and creature must be alive for pickpocket and must be dead for another loot
-        if (!creature || creature->IsAlive() != (loot_type == LOOT_PICKPOCKETING) || !creature->IsWithinDistInMap(this, INTERACTION_DISTANCE))
+        if (!creature || creature->IsAlive() != (loot_type == LOOT_PICKPOCKETING) || !creature->IsWithinDistInMap(this, INTERACTION_DISTANCE) || !creature->IsPhaseVisibleTo(this))
         {
             SendLootRelease(guid);
             return;

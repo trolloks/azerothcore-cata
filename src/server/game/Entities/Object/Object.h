@@ -551,6 +551,12 @@ public:
     bool InSamePhase(WorldObject const* obj) const { return InSamePhase(obj->GetPhaseMask()); }
     [[nodiscard]] bool InSamePhase(uint32 phasemask) const { return m_useCombinedPhases ? GetPhaseMask() & phasemask : GetPhaseMask() == phasemask; }
 
+    // Cata Phase/PhaseGroup (see DBCStores::GetPhasesForGroup), independent of the legacy
+    // phasemask above. 0 means the spawn is not gated by a Cata phase (always visible).
+    void SetSpawnPhaseId(uint32 phaseId) { m_spawnPhaseId = phaseId; }
+    [[nodiscard]] uint32 GetSpawnPhaseId() const { return m_spawnPhaseId; }
+    [[nodiscard]] bool IsPhaseVisibleTo(Player const* player) const;
+
     [[nodiscard]] uint32 GetZoneId() const;
     [[nodiscard]] uint32 GetAreaId() const;
     void GetZoneAndAreaId(uint32& zoneid, uint32& areaid) const;
@@ -856,6 +862,7 @@ private:
     uint32 m_InstanceId;                                // in map copy with instance id
     uint32 m_phaseMask;                                 // in area phase state
     bool m_useCombinedPhases;                           // true (default): use phaseMask as bit mask combining up to 32 phases
+    uint32 m_spawnPhaseId;                              // Cata Phase/PhaseGroup id from spawn data; 0 = not phase-gated
     // false: use phaseMask to represent single phases only (up to 4294967295 phases)
 
     uint16 m_notifyflags;
