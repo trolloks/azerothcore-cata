@@ -873,6 +873,14 @@ public:
         return nullptr;
     }
 
+    // Raw `phase_area` rows for one area id (not yet condition-checked or phase-group expanded).
+    [[nodiscard]] std::vector<uint32> const& GetPhasesForArea(uint32 areaId) const
+    {
+        static std::vector<uint32> const empty;
+        PhaseAreaContainer::const_iterator itr = _phasesByArea.find(areaId);
+        return itr != _phasesByArea.end() ? itr->second : empty;
+    }
+
     [[nodiscard]] AreaTriggerTeleport const* GetAreaTriggerTeleport(uint32 trigger) const
     {
         AreaTriggerTeleportContainer::const_iterator itr = _areaTriggerTeleportStore.find(trigger);
@@ -1080,6 +1088,7 @@ public:
     void LoadGossipText();
 
     void LoadAreaTriggers();
+    void LoadPhaseAreas();
     void LoadAreaTriggerTeleports();
     void LoadAccessRequirements();
     void LoadQuestAreaTriggers();
@@ -1563,6 +1572,8 @@ private:
     GossipTextContainer _gossipTextStore;
     QuestGreetingContainer _questGreetingStore;
     AreaTriggerContainer _areaTriggerStore;
+    typedef std::unordered_map<uint32 /*areaId*/, std::vector<uint32> /*phase or phase-group ids*/> PhaseAreaContainer;
+    PhaseAreaContainer _phasesByArea;
     AreaTriggerTeleportContainer _areaTriggerTeleportStore;
     AreaTriggerScriptContainer _areaTriggerScriptStore;
     DungeonProgressionRequirementsContainer _accessRequirementStore;

@@ -22,6 +22,7 @@
 #include "Packet.h"
 #include "Weather.h"
 #include <optional>
+#include <vector>
 
 enum WeatherState : uint32;
 
@@ -312,9 +313,8 @@ namespace WorldPackets
         };
 
         // Sent by PhasingHandler::OnMapChange during AddPlayerToMap, and whenever the
-        // player's phase changes. A fresh character has no active phases and no terrain
-        // swaps: Flags = PhaseShiftFlags::Unphased (8) alone tells the client to use its
-        // default phase, so every list here stays empty.
+        // player's phase changes. A character with no active phases has PhaseShiftFlags::Unphased
+        // (8) set and every list stays empty, matching a fresh character's default phase.
         class PhaseShiftChange final : public ServerPacket
         {
         public:
@@ -324,6 +324,7 @@ namespace WorldPackets
 
             ObjectGuid Client;
             uint32 PhaseShiftFlags = 0x8; // PhaseShiftFlags::Unphased
+            std::vector<uint32> Phases;
         };
 
         // Empty stub: no saved Compact Unit Frames profiles for a fresh character.

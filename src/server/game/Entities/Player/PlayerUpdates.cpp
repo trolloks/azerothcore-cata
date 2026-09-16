@@ -27,6 +27,9 @@
 #include "Guild.h"
 #include "InstanceScript.h"
 #include "Language.h"
+#include "ConditionMgr.h"
+#include "DBCStores.h"
+#include "MiscPackets.h"
 #include "OutdoorPvPMgr.h"
 #include "Pet.h"
 #include "Player.h"
@@ -40,6 +43,7 @@
 #include "WeatherMgr.h"
 #include "WorldState.h"
 #include "WorldStatePackets.h"
+#include <algorithm>
 
 /// @todo: this import is not necessary for compilation and marked as unused by the IDE
 //  however, for some reasons removing it would cause a damn linking issue
@@ -1278,6 +1282,42 @@ void Player::UpdateArea(uint32 newArea)
         SetRestFlag(REST_FLAG_IN_FACTION_AREA);
     else
         RemoveRestFlag(REST_FLAG_IN_FACTION_AREA);
+
+    UpdatePhasesForArea(newArea);
+}
+
+bool Player::UpdatePhasesForArea(uint32 areaId)
+{
+    std::vector<uint32> newPhases;
+
+    for (uint32 areaPhase : sObjectMgr->GetPhasesForArea(areaId))
+    {
+        for (uint32 phaseId : GetPhasesForGroup(areaPhase))
+        {
+            ConditionList conditions = sConditionMgr->GetConditionsForPhase(phaseId, areaId);
+            if (conditions.empty() || sConditionMgr->IsObjectMeetToConditions(this, conditions))
+                if (std::find(newPhases.begin(), newPhases.end(), phaseId) == newPhases.end())
+                    newPhases.push_back(phaseId);
+        }
+    }
+
+    if (newPhases != m_phases)
+    {
+        m_phases = std::move(newPhases);
+        SendPhaseShift();
+        return true;
+    }
+
+    return false;
+}
+
+void Player::SendPhaseShift()
+{
+    WorldPackets::Misc::PhaseShiftChange phaseShift;
+    phaseShift.Client = GetGUID();
+    phaseShift.PhaseShiftFlags = m_phases.empty() ? 0x8 /*Unphased*/ : 0x0;
+    phaseShift.Phases.assign(m_phases.begin(), m_phases.end());
+    SendDirectMessage(phaseShift.Write());
 }
 
 void Player::UpdateZone(uint32 newZone, uint32 newArea, bool force)

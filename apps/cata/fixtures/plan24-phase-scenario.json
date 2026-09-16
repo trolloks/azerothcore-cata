@@ -1,0 +1,41 @@
+{
+  "client_build": 15595,
+  "client_extraction_manifest": "apps/cata/fixtures/plan22-client-extraction.json",
+  "source_sha256": {
+    "Phase.dbc": "182ee74281c6a43579c287b956d0da14ba915d4ce82e6a90de1c00cb23909c9a",
+    "PhaseXPhaseGroup.dbc": "4015a62fbff892ffff259e26fe41dabd57b7ff4c457140ef76778445a08942c2"
+  },
+  "phase_dbc_records": [
+    {
+      "ID": 125,
+      "Name": "Test Phase",
+      "Flags": 0
+    }
+  ],
+  "phase_x_phase_group_dbc_records": [
+    {
+      "ID": 1656,
+      "PhaseID": 171,
+      "PhaseGroupID": 367
+    },
+    {
+      "ID": 1657,
+      "PhaseID": 172,
+      "PhaseGroupID": 367
+    }
+  ],
+  "scenario": {
+    "single_phase": {
+      "area_id": 12,
+      "area_name": "Elwynn Forest",
+      "phase_id": 125
+    },
+    "phase_group": {
+      "area_id": 1519,
+      "area_name": "Stormwind City",
+      "phase_group_id": 367,
+      "member_phase_ids": [171, 172]
+    }
+  },
+  "notes": "Records read directly from the pinned build-15595 Phase.dbc/PhaseXPhaseGroup.dbc extracted per apps/cata/fixtures/plan22-client-extraction.json; re-extracted three independent times with identical sha256, confirming stability. phase_area (data/sql/updates/pending_db_world/rev_1789504651422747395.sql) reuses these same ids."
+}

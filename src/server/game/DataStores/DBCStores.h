@@ -23,6 +23,7 @@
 #include "DBCStructure.h"
 #include <list>
 #include <unordered_map>
+#include <vector>
 #include <unordered_set>
 
 typedef std::list<uint32> SimpleFactionsList;
@@ -57,6 +58,13 @@ bool IsSharedDifficultyMap(uint32 mapid);
 uint32 const* /*[MAX_TALENT_TABS]*/ GetTalentTabPages(uint8 cls);
 
 uint32 GetLiquidFlags(uint32 liquidType);
+
+// Expands a Phase.dbc id or a PhaseXPhaseGroup.dbc group id into its member phase ids.
+// A plain phase id (not a group) expands to itself.
+std::vector<uint32> GetPhasesForGroup(uint32 phaseOrGroupId);
+
+// True if phaseOrGroupId identifies a real Phase.dbc entry or PhaseXPhaseGroup.dbc group.
+bool IsValidPhaseOrPhaseGroupId(uint32 phaseOrGroupId);
 
 PvPDifficultyEntry const* GetBattlegroundBracketByLevel(uint32 mapid, uint32 level);
 PvPDifficultyEntry const* GetBattlegroundBracketById(uint32 mapid, BattlegroundBracketId id);
@@ -145,6 +153,8 @@ extern DBCStorage <MovieEntry>                   sMovieStore;
 extern DBCStorage <NamesReservedEntry>           sNamesReservedStore;
 extern DBCStorage <NamesProfanityEntry>          sNamesProfanityStore;
 extern DBCStorage <OverrideSpellDataEntry>       sOverrideSpellDataStore;
+extern DBCStorage <PhaseEntry>                   sPhaseStore;
+extern DBCStorage <PhaseGroupEntry>              sPhaseGroupStore;
 extern DBCStorage <PowerDisplayEntry>            sPowerDisplayStore;
 extern DBCStorage <QuestSortEntry>               sQuestSortStore;
 extern DBCStorage <QuestXPEntry>                 sQuestXPStore;
