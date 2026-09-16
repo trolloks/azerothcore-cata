@@ -2119,6 +2119,10 @@ Creature* Player::GetNPCIfCanInteractWith(ObjectGuid const& guid, uint32 npcflag
     if (!creature->IsWithinDistInMap(this, INTERACTION_DISTANCE))
         return nullptr;
 
+    // phased out of the creature's Cata phase/phase-group, so it must not be interactable either
+    if (!creature->IsPhaseVisibleTo(this))
+        return nullptr;
+
     return creature;
 }
 
@@ -2134,7 +2138,7 @@ GameObject* Player::GetGameObjectIfCanInteractWith(ObjectGuid const& guid, Gameo
                 return nullptr;
             }
 
-            if (go->IsWithinDistInMap(this))
+            if (go->IsWithinDistInMap(this) && go->IsPhaseVisibleTo(this))
             {
                 return go;
             }

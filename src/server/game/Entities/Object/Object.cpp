@@ -63,6 +63,7 @@
 //  there is probably some underlying problem with imports which should properly addressed
 //  see: https://github.com/azerothcore/azerothcore-wotlk/issues/9766
 #include "GridNotifiersImpl.h"
+#include <algorithm>
 
 constexpr float VisibilityDistances[AsUnderlyingType(VisibilityDistanceType::Max)] =
 {
@@ -1194,7 +1195,7 @@ WorldObject::WorldObject() : WorldLocation(),
     LastUsedScriptID(0), m_name(""), m_isActive(false), _visibilityDistanceOverrideType(VisibilityDistanceType::Normal), m_zoneScript(nullptr),
     _zoneId(0), _areaId(0), _floorZ(INVALID_HEIGHT), _outdoors(false), _liquidData(), _updatePositionData(false), m_transport(nullptr),
     m_currMap(nullptr), _heartbeatTimer(HEARTBEAT_INTERVAL), m_InstanceId(0), m_phaseMask(PHASEMASK_NORMAL), m_useCombinedPhases(true),
-    m_notifyflags(0), m_executed_notifies(0), _objectVisibilityContainer(this)
+    m_spawnPhaseId(0), m_notifyflags(0), m_executed_notifies(0), _objectVisibilityContainer(this)
 {
     m_serverSideVisibility.SetValue(SERVERSIDE_VISIBILITY_GHOST, GHOST_VISIBILITY_ALIVE | GHOST_VISIBILITY_GHOST);
     m_serverSideVisibilityDetect.SetValue(SERVERSIDE_VISIBILITY_GHOST, GHOST_VISIBILITY_ALIVE);
@@ -2083,6 +2084,19 @@ bool WorldObject::CanSeeOrDetect(WorldObject const* obj, bool ignoreStealth, boo
     return true;
 }
 
+bool WorldObject::IsPhaseVisibleTo(Player const* player) const
+{
+    if (!m_spawnPhaseId)
+        return true;
+
+    std::vector<uint32> const& playerPhases = player->GetPhases();
+    for (uint32 phaseId : GetPhasesForGroup(m_spawnPhaseId))
+        if (std::find(playerPhases.begin(), playerPhases.end(), phaseId) != playerPhases.end())
+            return true;
+
+    return false;
+}
+
 bool WorldObject::CanNeverSee(WorldObject const* obj) const
 {
     if (!IsInWorld())
@@ -2090,6 +2104,10 @@ bool WorldObject::CanNeverSee(WorldObject const* obj) const
 
     if (obj->IsNeverVisible())
         return true;
+
+    if (Player const* player = ToPlayer())
+        if (!obj->IsPhaseVisibleTo(player))
+            return true;
 
     if (IsCreature() && obj->IsCreature())
         return GetMap() != obj->GetMap() || (!InSamePhase(obj) && ToUnit()->GetVehicleBase() != obj && this != obj->ToUnit()->GetVehicleBase());

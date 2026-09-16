@@ -1133,6 +1133,8 @@ bool GameObject::LoadGameObjectFromDB(ObjectGuid::LowType spawnId, Map* map, boo
     if (!Create(map->GenerateLowGuid<HighGuid::GameObject>(), entry, map, phaseMask, x, y, z, ang, data->rotation, animprogress, go_state, artKit))
         return false;
 
+    SetSpawnPhaseId(data->phaseId);
+
     if (data->spawntimesecs >= 0)
     {
         m_spawnedByDefault = true;
