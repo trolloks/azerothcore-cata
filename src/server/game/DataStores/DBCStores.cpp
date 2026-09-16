@@ -887,6 +887,11 @@ std::vector<uint32> GetPhasesForGroup(uint32 phaseOrGroupId)
     return { phaseOrGroupId };
 }
 
+bool IsValidPhaseOrPhaseGroupId(uint32 phaseOrGroupId)
+{
+    return sPhaseStore.LookupEntry(phaseOrGroupId) || sPhasesByGroup.find(phaseOrGroupId) != sPhasesByGroup.end();
+}
+
 uint32 GetVirtualMapForMapAndZone(uint32 mapid, uint32 zoneId)
 {
     if (mapid != MAP_OUTLAND && mapid != MAP_NORTHREND)                        // speed for most cases

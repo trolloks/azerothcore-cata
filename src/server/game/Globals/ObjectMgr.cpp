@@ -7277,17 +7277,7 @@ void ObjectMgr::LoadPhaseAreas()
             continue;
         }
 
-        bool isPhaseGroup = false;
-        for (PhaseGroupEntry const* group : sPhaseGroupStore)
-        {
-            if (group->PhaseGroupID == phaseId)
-            {
-                isPhaseGroup = true;
-                break;
-            }
-        }
-
-        if (!sPhaseStore.LookupEntry(phaseId) && !isPhaseGroup)
+        if (!IsValidPhaseOrPhaseGroupId(phaseId))
         {
             LOG_ERROR("sql.sql", "Table `phase_area` has PhaseId {} not found in `Phase.dbc` or `PhaseXPhaseGroup.dbc`, skipped.", phaseId);
             continue;

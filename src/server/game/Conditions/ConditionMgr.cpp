@@ -1589,9 +1589,9 @@ bool ConditionMgr::isSourceTypeValid(Condition* cond)
     }
     case CONDITION_SOURCE_TYPE_PHASE:
     {
-        if (!cond->SourceGroup)
+        if (!cond->SourceGroup || !IsValidPhaseOrPhaseGroupId(cond->SourceGroup))
         {
-            LOG_ERROR("sql.sql", "SourceGroup in `condition` table for a CONDITION_SOURCE_TYPE_PHASE (source id 0) must hold a Phase.dbc or PhaseXPhaseGroup.dbc id, ignoring.");
+            LOG_ERROR("sql.sql", "SourceGroup {} in `condition` table for a CONDITION_SOURCE_TYPE_PHASE must hold a valid Phase.dbc or PhaseXPhaseGroup.dbc id, ignoring.", cond->SourceGroup);
             return false;
         }
 

@@ -63,6 +63,9 @@ uint32 GetLiquidFlags(uint32 liquidType);
 // A plain phase id (not a group) expands to itself.
 std::vector<uint32> GetPhasesForGroup(uint32 phaseOrGroupId);
 
+// True if phaseOrGroupId identifies a real Phase.dbc entry or PhaseXPhaseGroup.dbc group.
+bool IsValidPhaseOrPhaseGroupId(uint32 phaseOrGroupId);
+
 PvPDifficultyEntry const* GetBattlegroundBracketByLevel(uint32 mapid, uint32 level);
 PvPDifficultyEntry const* GetBattlegroundBracketById(uint32 mapid, BattlegroundBracketId id);
 
