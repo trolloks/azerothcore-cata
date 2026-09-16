@@ -1426,6 +1426,7 @@ void Creature::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask)
     data.id = GetEntry();
     data.mapid = mapid;
     data.phaseMask = phaseMask;
+    data.phaseId = GetSpawnPhaseId();
     data.displayid = displayId;
     data.equipmentId = GetCurrentEquipmentId();
     if (!GetTransport())
@@ -1472,6 +1473,7 @@ void Creature::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask)
     stmt->SetData(index++, uint16(mapid));
     stmt->SetData(index++, spawnMask);
     stmt->SetData(index++, GetPhaseMask());
+    stmt->SetData(index++, GetSpawnPhaseId());
     stmt->SetData(index++, int32(GetCurrentEquipmentId()));
     stmt->SetData(index++, GetPositionX());
     stmt->SetData(index++, GetPositionY());

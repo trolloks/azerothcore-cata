@@ -1049,6 +1049,7 @@ void GameObject::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask, bool 
     data.id = GetEntry();
     data.mapid = mapid;
     data.phaseMask = phaseMask;
+    data.phaseId = GetSpawnPhaseId();
     data.posX = GetPositionX();
     data.posY = GetPositionY();
     data.posZ = GetPositionZ();
@@ -1075,6 +1076,7 @@ void GameObject::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask, bool 
     stmt->SetData(index++, uint16(mapid));
     stmt->SetData(index++, spawnMask);
     stmt->SetData(index++, GetPhaseMask());
+    stmt->SetData(index++, GetSpawnPhaseId());
     stmt->SetData(index++, GetPositionX());
     stmt->SetData(index++, GetPositionY());
     stmt->SetData(index++, GetPositionZ());
