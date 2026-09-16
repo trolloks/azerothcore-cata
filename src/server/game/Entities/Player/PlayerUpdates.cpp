@@ -1286,7 +1286,7 @@ void Player::UpdateArea(uint32 newArea)
     UpdatePhasesForArea(newArea);
 }
 
-void Player::UpdatePhasesForArea(uint32 areaId)
+bool Player::UpdatePhasesForArea(uint32 areaId)
 {
     std::vector<uint32> newPhases;
 
@@ -1305,7 +1305,10 @@ void Player::UpdatePhasesForArea(uint32 areaId)
     {
         m_phases = std::move(newPhases);
         SendPhaseShift();
+        return true;
     }
+
+    return false;
 }
 
 void Player::SendPhaseShift()

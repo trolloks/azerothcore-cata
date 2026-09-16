@@ -1889,7 +1889,8 @@ public:
     // Recomputed from `phase_area` + CONDITION_SOURCE_TYPE_PHASE conditions on every area change,
     // so it naturally survives logout/login via the same area recompute the login path already does.
     [[nodiscard]] std::vector<uint32> const& GetPhases() const { return m_phases; }
-    void UpdatePhasesForArea(uint32 areaId);
+    // Returns true if membership changed and a phase-shift packet was already sent.
+    bool UpdatePhasesForArea(uint32 areaId);
     void SendPhaseShift();
 
     void UpdateZoneDependentAuras(uint32 zone_id);    // zones

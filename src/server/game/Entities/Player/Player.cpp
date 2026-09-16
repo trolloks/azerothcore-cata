@@ -11805,8 +11805,7 @@ void Player::SendInitialPacketsAfterAddToMap()
     {
         uint32 initZone, initArea;
         GetZoneAndAreaId(initZone, initArea);
-        UpdatePhasesForArea(initArea);
-        if (GetPhases().empty())
+        if (!UpdatePhasesForArea(initArea))
             SendPhaseShift();
     }
 
