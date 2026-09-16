@@ -7253,7 +7253,8 @@ void ObjectMgr::LoadPhaseAreas()
 
     _phasesByArea.clear();
 
-    QueryResult result = WorldDatabase.Query("SELECT AreaId, PhaseId FROM phase_area");
+    WorldDatabasePreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_SEL_PHASE_AREA);
+    PreparedQueryResult result = WorldDatabase.Query(stmt);
 
     if (!result)
     {
