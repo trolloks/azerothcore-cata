@@ -73,3 +73,24 @@ TEST(OpcodeTableTest, AcceptsCataclysmGuildQueriesSentAfterWorldEntry)
     for (std::size_t index = 0; index < packet->size(); ++index)
         EXPECT_EQ(packet->contents()[index], 0xFF);
 }
+
+// Locks in the Cata 4.3.4 melee auto-attack opcode values (verified against the cata-js test
+// client). These previously carried over the WotLK 3.3.5 values unchanged, so the real 4.3.4
+// client's CMSG_ATTACKSWING packet (sent as 0x0926) was rejected as an unknown opcode and the
+// session dropped as soon as the player attacked.
+TEST(OpcodeTableTest, UsesCataclysmMeleeAttackOpcodeValues)
+{
+    EXPECT_EQ(uint16(CMSG_ATTACKSWING), 0x0926);
+    EXPECT_EQ(uint16(CMSG_ATTACKSTOP), 0x4106);
+    EXPECT_EQ(uint16(SMSG_ATTACKSTART), 0x2D15);
+    EXPECT_EQ(uint16(SMSG_ATTACKSTOP), 0x0934);
+    EXPECT_EQ(uint16(SMSG_ATTACKERSTATEUPDATE), 0x0B25);
+
+    OpcodeTable table;
+    table.Initialize();
+
+    OpcodeHandler const* attackSwing = table.GetIncomingOpcode(0x0926);
+    ASSERT_NE(attackSwing, nullptr);
+    EXPECT_STREQ(attackSwing->Name, "CMSG_ATTACKSWING");
+    EXPECT_EQ(attackSwing->Status, STATUS_LOGGEDIN);
+}
