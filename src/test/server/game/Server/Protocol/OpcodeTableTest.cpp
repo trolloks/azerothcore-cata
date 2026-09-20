@@ -94,3 +94,44 @@ TEST(OpcodeTableTest, UsesCataclysmMeleeAttackOpcodeValues)
     EXPECT_STREQ(attackSwing->Name, "CMSG_ATTACKSWING");
     EXPECT_EQ(attackSwing->Status, STATUS_LOGGEDIN);
 }
+
+// Locks in the Cata 4.3.4 per-chat-type opcode split (verified against the pinned
+// TrinityCore-Cata reference). WotLK's single CMSG_MESSAGECHAT = 0x095 carried the chat type as
+// the first packet field; the real 4.3.4 client instead sends one distinct opcode per chat type,
+// so a real client's ordinary /say (CMSG_MESSAGECHAT_SAY, 0x1154) was rejected as an unknown
+// opcode and the connection dropped as soon as the player sent a chat message (issue #89).
+TEST(OpcodeTableTest, UsesCataclysmChatOpcodeValues)
+{
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_SAY), 0x1154);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_YELL), 0x3544);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_CHANNEL), 0x1D44);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_WHISPER), 0x0D56);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_GUILD), 0x3956);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_OFFICER), 0x1946);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_AFK), 0x0D44);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_DND), 0x2946);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_EMOTE), 0x1156);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_PARTY), 0x1D46);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_RAID), 0x2D44);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_BATTLEGROUND), 0x2156);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_RAID_WARNING), 0x0944);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_ADDON_BATTLEGROUND), 0x0D46);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_ADDON_GUILD), 0x0544);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_ADDON_OFFICER), 0x3954);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_ADDON_PARTY), 0x0546);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_ADDON_RAID), 0x1D56);
+    EXPECT_EQ(uint16(CMSG_MESSAGECHAT_ADDON_WHISPER), 0x2146);
+
+    OpcodeTable table;
+    table.Initialize();
+
+    OpcodeHandler const* say = table.GetIncomingOpcode(0x1154);
+    ASSERT_NE(say, nullptr);
+    EXPECT_STREQ(say->Name, "CMSG_MESSAGECHAT_SAY");
+    EXPECT_EQ(say->Status, STATUS_LOGGEDIN);
+
+    OpcodeHandler const* addonGuild = table.GetIncomingOpcode(0x0544);
+    ASSERT_NE(addonGuild, nullptr);
+    EXPECT_STREQ(addonGuild->Name, "CMSG_MESSAGECHAT_ADDON_GUILD");
+    EXPECT_EQ(addonGuild->Status, STATUS_LOGGEDIN);
+}
