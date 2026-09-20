@@ -145,12 +145,54 @@ RUN_SPEED_MODE = "run-speed-change"
 GROUND_MOVEMENT_MODE = "ground-movement"
 JUMP_FALL_LAND_MODE = "jump-fall-land"
 CHARACTER_CREATION_MODE = "character-creation"
+BASIC_SPELL_CAST_MODE = "basic-spell-cast"
 RUN_SPEED_AURA = 2983
 RUN_SPEED_AURA_AMOUNT = 50
 RUN_SPEED_AURA_DURATION_MS = 60000
+# Evocation: self-only (no enemy target required, so a bare keypress can cast it) and free
+# (0 mana cost, so it works regardless of the fixture's class/power pool). Channeled with a
+# real duration, so the round trip still exercises SMSG_SPELL_START (channel begin) as well as
+# SMSG_SPELL_GO (channel start-of-effect), not just an instant-cast fire-and-forget. Fireball
+# (id 133, used by SpellCastPacketFormatTest) was tried first but is enemy-targeted: with no
+# target selected the client never sends CMSG_CAST_SPELL at all (confirmed empirically -
+# generation 5 showed zero CMSG_CAST_SPELL/SMSG_CAST_FAILED packets after the in-world-control
+# marker). The fixture character does not otherwise know any spells (see
+# populated_character_seed_sql), so this is granted directly via character_spell/character_action
+# rather than through class/race starting-spell data (see basic_spell_cast_seed_sql).
+BASIC_SPELL_CAST_SPELL_ID = 12051
+BASIC_SPELL_CAST_ACTION_BUTTON = 0
+BASIC_SPELL_CAST_CLASS = 8  # Mage: Evocation's skill line requires this, see basic_spell_cast_seed_sql
+TARGET_TARGETED_SPELL_CAST_MODE = "target-targeted-spell-cast"
+# Fireball (id 133, used by SpellCastPacketFormatTest): enemy-only-targeted with a real,
+# non-zero cast time (unlike the self-only Evocation basic-spell-cast uses), which lets
+# this mode cover both remaining issue #85 acceptance items in one pass: a target-targeted cast
+# that completes (SMSG_SPELL_GO) and a cast-time cancellation. Cancelling mid-cast is the client's
+# built-in Escape behavior, which sends CMSG_CANCEL_CAST; server-side that hits Spell::cancel's
+# SPELL_STATE_PREPARING branch, which calls SendCastResult(SPELL_FAILED_INTERRUPTED) - a genuine
+# SMSG_CAST_FAILED, not a client-only UI cancel. Requires a live, Tab-targetable, in-range hostile
+# unit near the fixture's spawn point -
+# see target_targeted_spell_cast_world_seed_sql. An earlier version of this mode pinned the
+# nearby Rabbit (guid 79947) stationary instead, but generation 17 showed zero
+# CMSG_CAST_SPELL/SMSG_CAST_FAILED/SMSG_SPELL_GO packets after the marker: the Rabbit's faction
+# (31, a critter faction) is not hostile, so "target nearest enemy" never selects it and the
+# enemy-only Fireball hotkey silently goes into targeting-reticle mode instead of casting.
+TARGET_TARGETED_SPELL_CAST_SPELL_ID = 133
+TARGET_TARGETED_SPELL_CAST_ACTION_BUTTON = 0
+# Entry 2673 "Target Dummy" (ScriptName npc_target_dummy) was tried first for the hostile fixture
+# below, but generation 18 still showed zero SMSG_CAST_FAILED after the marker: that AI's Reset()
+# schedules a KillSelf() 15s after every spawn (npcs_special.cpp) - it's meant for a dummy a player
+# summons and is not designed to persist as a static DB spawn, so by the time the harness logs in
+# and reaches the cast sequence it is already dead and un-Tab-targetable. Entry 2809 "Boar" (faction
+# 14, same hostile-to-all monster faction, no ScriptName/special AI) has no such lifespan and is
+# inserted fresh near CHARACTER_POSITION instead, rather than reusing a creature already spawned
+# nearby - the only ones near this fixture's spawn point are friendly NPCs and non-hostile critters
+# (see above).
+TARGET_TARGETED_SPELL_CAST_DUMMY_GUID = 99990001
+TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY = 2809
 POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
     IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
+    BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE,
 })
 CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
@@ -164,6 +206,8 @@ CHARACTER_ZONE = 12
 
 
 def plan_number(mode: str) -> str:
+    if mode in {BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE}:
+        return "25"
     if mode == CHARACTER_CREATION_MODE:
         return "22"
     if mode in {GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE}:
@@ -528,6 +572,48 @@ def run_speed_aura_seed_sql() -> str:
         f"VALUES ({CHARACTER_GUID},{CHARACTER_GUID},{RUN_SPEED_AURA},1,0,1,"
         f"{RUN_SPEED_AURA_AMOUNT},{RUN_SPEED_AURA_AMOUNT - 1},"
         f"{RUN_SPEED_AURA_DURATION_MS},{RUN_SPEED_AURA_DURATION_MS});"
+    )
+
+
+def spell_grant_seed_sql(spell_id: int, action_button: int) -> str:
+    # The granted spell is a Mage spell, but the shared fixture (populated_character_seed_sql) is
+    # a Human Warrior. Player::_LoadSpells (via CheckSkillLearnedBySpell) deletes any learned
+    # spell whose skill line doesn't match the character's race/class at every login (confirmed
+    # empirically: generation 5's WorldServer.log logged "has spell (12051) that teach skill
+    # (237) which is invalid for the race/class combination (Race: 1, Class: 1). Will be
+    # deleted." and character_spell/character_action were empty afterwards). Switching this
+    # fixture to Mage makes the granted spell's skill line legitimate so it survives login.
+    return (
+        f"UPDATE `characters` SET `class`={BASIC_SPELL_CAST_CLASS} WHERE `guid`={CHARACTER_GUID};"
+        f"DELETE FROM `character_spell` WHERE `guid`={CHARACTER_GUID} AND `spell`={spell_id};"
+        "INSERT INTO `character_spell` (`guid`,`spell`,`specMask`) "
+        f"VALUES ({CHARACTER_GUID},{spell_id},1);"
+        f"DELETE FROM `character_action` WHERE `guid`={CHARACTER_GUID} AND `spec`=0 "
+        f"AND `button`={action_button};"
+        "INSERT INTO `character_action` (`guid`,`spec`,`button`,`action`,`type`) "
+        f"VALUES ({CHARACTER_GUID},0,{action_button},{spell_id},0);"
+    )
+
+
+def basic_spell_cast_seed_sql() -> str:
+    return spell_grant_seed_sql(BASIC_SPELL_CAST_SPELL_ID, BASIC_SPELL_CAST_ACTION_BUTTON)
+
+
+def target_targeted_spell_cast_seed_sql() -> str:
+    return spell_grant_seed_sql(TARGET_TARGETED_SPELL_CAST_SPELL_ID, TARGET_TARGETED_SPELL_CAST_ACTION_BUTTON)
+
+
+def target_targeted_spell_cast_world_seed_sql() -> str:
+    x, y, z = CHARACTER_POSITION
+    dummy_x, dummy_y = x + 3, y + 3
+    return (
+        "INSERT INTO `creature` "
+        "(`guid`,`id`,`map`,`zoneId`,`areaId`,`position_x`,`position_y`,`position_z`,"
+        "`wander_distance`,`MovementType`) "
+        f"VALUES ({TARGET_TARGETED_SPELL_CAST_DUMMY_GUID},{TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY},"
+        f"{CHARACTER_MAP},{CHARACTER_ZONE},{CHARACTER_ZONE},{dummy_x},{dummy_y},{z},0,0) "
+        "ON DUPLICATE KEY UPDATE `position_x`=VALUES(`position_x`),`position_y`=VALUES(`position_y`),"
+        "`position_z`=VALUES(`position_z`);"
     )
 
 
@@ -1504,6 +1590,20 @@ def focus_owned_window(generation: Generation, timeout: float = 30) -> tuple[str
     )
 
 
+def capture_desktop_screenshot(generation: Generation, name: str) -> None:
+    if shutil.which("gnome-screenshot") is None:
+        return
+
+    focus_owned_window(generation)
+    raw = Path(generation["paths"]["raw_evidence"])
+    result = run_command(
+        ["gnome-screenshot", "-w", "-f", str(raw / name)],
+        check=False, env=wine_environment(generation), timeout=30,
+    )
+    if result.returncode:
+        raise RuntimeError(f"failed to capture {name}: {result.stderr.decode(errors='replace').strip()}")
+
+
 def automate_client_login(generation: Generation) -> None:
     try:
         from Xlib import X, XK, display
@@ -1604,9 +1704,13 @@ GROUND_MOVEMENT_KEYS = ("w", "s", "q", "e", "a", "d")
 # Default 4.3.4 keybind for jumping; a single press-release in place emits MSG_MOVE_JUMP, and the
 # client sends MSG_MOVE_FALL_LAND on its own once the character lands.
 JUMP_FALL_LAND_KEYS = ("space",)
+# Default 4.3.4 keybind for action bar button 1 (index 0), matching BASIC_SPELL_CAST_ACTION_BUTTON.
+BASIC_SPELL_CAST_KEYS = ("1",)
 
 
-def automate_key_sequence(generation: Generation, keys: tuple[str, ...]) -> None:
+def automate_key_sequence(
+    generation: Generation, keys: tuple[str, ...], hold_seconds: float = 0.6, gap_seconds: float = 0.4,
+) -> None:
     try:
         from Xlib import X, XK, display
         from Xlib.ext import xtest
@@ -1628,10 +1732,10 @@ def automate_key_sequence(generation: Generation, keys: tuple[str, ...]) -> None
         keycode = connection.keysym_to_keycode(XK.string_to_keysym(key))
         xtest.fake_input(connection, X.KeyPress, keycode)
         connection.sync()
-        time.sleep(0.6)
+        time.sleep(hold_seconds)
         xtest.fake_input(connection, X.KeyRelease, keycode)
         connection.sync()
-        time.sleep(0.4)
+        time.sleep(gap_seconds)
     connection.close()
 
 
@@ -1641,6 +1745,36 @@ def automate_ground_movement(generation: Generation) -> None:
 
 def automate_jump_fall_land(generation: Generation) -> None:
     automate_key_sequence(generation, JUMP_FALL_LAND_KEYS)
+
+
+def automate_spell_cast(generation: Generation) -> None:
+    automate_key_sequence(generation, BASIC_SPELL_CAST_KEYS)
+
+
+# Default 4.3.4 keybinds for "target nearest enemy", action bar button 1, and cancelling a cast.
+# Action keys use short taps below so Escape reaches the client while Fireball is still preparing.
+TARGET_TARGETED_SPELL_CAST_TARGET_KEY = "Tab"
+TARGET_TARGETED_SPELL_CAST_CAST_KEYS = ("1",)
+TARGET_TARGETED_SPELL_CAST_CANCEL_KEYS = ("Escape",)
+TARGET_TARGETED_SPELL_CAST_COMPLETE_DELAY_SECONDS = 5.0
+
+
+def automate_target_targeted_spell_cast(generation: Generation) -> None:
+    capture_desktop_screenshot(generation, "desktop-before-target.png")
+    automate_key_sequence(generation, (TARGET_TARGETED_SPELL_CAST_TARGET_KEY,))
+    time.sleep(1.0)  # let the client register the new target before casting
+    capture_desktop_screenshot(generation, "desktop-after-target.png")
+    # Short taps deliver Escape while the first Fireball is still preparing.
+    automate_key_sequence(
+        generation, TARGET_TARGETED_SPELL_CAST_CAST_KEYS + TARGET_TARGETED_SPELL_CAST_CANCEL_KEYS,
+        hold_seconds=0.05, gap_seconds=0.05,
+    )
+    capture_desktop_screenshot(generation, "desktop-after-cancel-input.png")
+    automate_key_sequence(
+        generation, TARGET_TARGETED_SPELL_CAST_CAST_KEYS, hold_seconds=0.05, gap_seconds=0.05,
+    )
+    capture_desktop_screenshot(generation, "desktop-after-recast-input.png")
+    time.sleep(TARGET_TARGETED_SPELL_CAST_COMPLETE_DELAY_SECONDS)  # let the second cast complete
 
 
 def character_creation_points(x: int, y: int, width: int, height: int) -> dict[str, tuple[int, int]]:
@@ -1777,6 +1911,11 @@ def run_client(args: argparse.Namespace) -> None:
     if generation["mode"] == RUN_SPEED_MODE:
         # Re-seed on a transient retry too; a previous login may have consumed the saved aura.
         mysql(manifest, generation, run_speed_aura_seed_sql(), generation["schemas"]["characters"])
+    if generation["mode"] == BASIC_SPELL_CAST_MODE:
+        mysql(manifest, generation, basic_spell_cast_seed_sql(), generation["schemas"]["characters"])
+    if generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE:
+        mysql(manifest, generation, target_targeted_spell_cast_seed_sql(), generation["schemas"]["characters"])
+        mysql(manifest, generation, target_targeted_spell_cast_world_seed_sql(), generation["schemas"]["world"])
     popens: dict[str, subprocess.Popen[bytes]] = {}
     outputs: list[object] = []
     try:
@@ -1823,6 +1962,8 @@ def run_client(args: argparse.Namespace) -> None:
         selection_sent = False
         ground_movement_sent = False
         jump_fall_land_sent = False
+        spell_cast_sent = False
+        target_targeted_spell_cast_sent = False
         post_marker_hold_started: float | None = None
         milestone_definition = CHARACTER_MILESTONES if generation["mode"] in CHARACTER_MODES else CLIENT_MILESTONES
         while time.monotonic() < deadline:
@@ -1863,6 +2004,18 @@ def run_client(args: argparse.Namespace) -> None:
                 ):
                     automate_jump_fall_land(generation)
                     jump_fall_land_sent = True
+                if (
+                    generation["mode"] == BASIC_SPELL_CAST_MODE and selection_sent and not spell_cast_sent
+                    and in_world_control_marker_count(generation) > 0
+                ):
+                    automate_spell_cast(generation)
+                    spell_cast_sent = True
+                if (
+                    generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE and selection_sent
+                    and not target_targeted_spell_cast_sent and in_world_control_marker_count(generation) > 0
+                ):
+                    automate_target_targeted_spell_cast(generation)
+                    target_targeted_spell_cast_sent = True
                 if generation["mode"] in POST_MARKER_MODES and selection_sent:
                     marker_count = POST_MARKER_COUNTERS[generation["mode"]](generation)
                     if marker_count and post_marker_hold_started is None:
@@ -2101,6 +2254,24 @@ def ground_movement_marker_count(generation: Generation) -> int:
     return len(ground_movement_sequence(generation))
 
 
+SPELL_CAST_PACKET = re.compile(r"\bS->C:\s+.*?\bSMSG_SPELL_GO\b")
+
+
+def spell_cast_marker_count(generation: Generation) -> int:
+    after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
+    after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
+    return len(SPELL_CAST_PACKET.findall(after_sync))
+
+
+CAST_FAILED_PACKET = re.compile(r"\bS->C:\s+.*?\bSMSG_CAST_FAILED\b")
+
+
+def cast_failed_marker_count(generation: Generation) -> int:
+    after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
+    after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
+    return len(CAST_FAILED_PACKET.findall(after_sync))
+
+
 def ground_movement_samples(generation: Generation) -> list[dict[str, str | float]]:
     after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
     after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
@@ -2216,9 +2387,23 @@ def ground_movement_is_stable_after_final_stop(generation: Generation, samples: 
     )
 
 
+TARGET_TARGETED_SPELL_CAST_SEQUENCE = re.compile(
+    r"\bCMSG_SET_SELECTION\b.*?\bCMSG_CAST_SPELL\b.*?\bCMSG_CANCEL_CAST\b.*?"
+    r"\bSMSG_CAST_FAILED\b.*?\bCMSG_CAST_SPELL\b.*?\bSMSG_SPELL_GO\b",
+    re.DOTALL,
+)
+
+
+def target_targeted_spell_cast_marker_count(generation: Generation) -> int:
+    after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
+    after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
+    return len(TARGET_TARGETED_SPELL_CAST_SEQUENCE.findall(after_sync))
+
+
 POST_MARKER_MODES = frozenset({
     INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
-    GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, CHARACTER_CREATION_MODE,
+    GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, CHARACTER_CREATION_MODE, BASIC_SPELL_CAST_MODE,
+    TARGET_TARGETED_SPELL_CAST_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -2229,6 +2414,8 @@ POST_MARKER_COUNTERS = {
     GROUND_MOVEMENT_MODE: ground_movement_marker_count,
     JUMP_FALL_LAND_MODE: ground_movement_marker_count,
     CHARACTER_CREATION_MODE: character_creation_marker_count,
+    BASIC_SPELL_CAST_MODE: spell_cast_marker_count,
+    TARGET_TARGETED_SPELL_CAST_MODE: target_targeted_spell_cast_marker_count,
 }
 
 
@@ -2370,8 +2557,11 @@ def sanitized_evidence(
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
     jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
+    basic_spell_cast_mode = generation["mode"] == BASIC_SPELL_CAST_MODE
+    target_targeted_spell_cast_mode = generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
+        BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
@@ -2391,6 +2581,9 @@ def sanitized_evidence(
         "outcome": (
             "character_creation_candidate" if creation_mode and "characters_completed" in milestones
             else "run_speed_change_candidate" if run_speed_mode and "characters_completed" in milestones
+            else "basic_spell_cast_pass_candidate" if basic_spell_cast_mode and "characters_completed" in milestones
+            else "target_targeted_spell_cast_pass_candidate" if target_targeted_spell_cast_mode
+            and "characters_completed" in milestones
             else "jump_fall_land_pass_candidate" if jump_fall_land_mode and "characters_completed" in milestones
             else "ground_movement_pass_candidate" if ground_movement_mode and "characters_completed" in milestones
             else "basic_movement_pass_candidate" if basic_movement_mode and "characters_completed" in milestones
@@ -2423,6 +2616,13 @@ def sanitized_evidence(
         "run_speed_acknowledgements": run_speed_acknowledgements(generation) if run_speed_mode else None,
         "ground_movement_sequence": ground_movement_sequence(generation) if ground_movement_mode else None,
         "jump_fall_land_sequence": ground_movement_sequence(generation) if jump_fall_land_mode else None,
+        "spell_cast_marker_count": (
+            spell_cast_marker_count(generation) if basic_spell_cast_mode or target_targeted_spell_cast_mode else None
+        ),
+        "cast_failed_marker_count": cast_failed_marker_count(generation) if target_targeted_spell_cast_mode else None,
+        "target_targeted_spell_cast_sequence_count": (
+            target_targeted_spell_cast_marker_count(generation) if target_targeted_spell_cast_mode else None
+        ),
         "creation_marker_count": creation_marker_count_value if creation_mode else None,
         "post_marker_hold_seconds": (
             generation.get("post_marker_hold_seconds", 0) if generation["mode"] in POST_MARKER_MODES else None
@@ -2470,8 +2670,11 @@ def verify(args: argparse.Namespace) -> None:
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
     jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
+    basic_spell_cast_mode = generation["mode"] == BASIC_SPELL_CAST_MODE
+    target_targeted_spell_cast_mode = generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
+        BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     rows = character_row_count(manifest, generation) if character_mode else None
@@ -2581,6 +2784,14 @@ def verify(args: argparse.Namespace) -> None:
             )
         if run_speed_mode:
             character_ok = character_ok and bool(evidence["run_speed_acknowledgements"])
+        if basic_spell_cast_mode:
+            character_ok = character_ok and evidence["spell_cast_marker_count"] > 0
+        if target_targeted_spell_cast_mode:
+            character_ok = character_ok and (
+                evidence["spell_cast_marker_count"] > 0
+                and evidence["cast_failed_marker_count"] > 0
+                and evidence["target_targeted_spell_cast_sequence_count"] > 0
+            )
         if creation_mode:
             character_ok = character_ok and (
                 any(item == {"direction": "c2s", "opcode": "CMSG_CHAR_CREATE"} for item in transcript)
@@ -2594,6 +2805,8 @@ def verify(args: argparse.Namespace) -> None:
             evidence["outcome"] = (
                 "character_creation_pass" if creation_mode
                 else "run_speed_change_pass" if run_speed_mode
+                else "basic_spell_cast_pass" if basic_spell_cast_mode
+                else "target_targeted_spell_cast_pass" if target_targeted_spell_cast_mode
                 else "jump_fall_land_pass" if jump_fall_land_mode
                 else "ground_movement_pass" if ground_movement_mode
                 else "basic_movement_pass" if basic_movement_mode
@@ -3155,6 +3368,39 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             pass
         else:
             raise AssertionError("non-speed aura fixture was accepted")
+        assert plan_number(BASIC_SPELL_CAST_MODE) == "25"
+        for log, expected in (
+            ("", 0),
+            (IN_WORLD_CONTROL_MARKER + "\nS->C: 1.2.3.4 [SMSG_SPELL_GO 0x0925 (2341)]\n", 0),
+            ("Finished object update bootstrap after adding to map\n" + IN_WORLD_CONTROL_MARKER +
+             "\nS->C: 1.2.3.4 [SMSG_SPELL_GO 0x0925 (2341)]\n", 1),
+        ):
+            (raw / "WorldServer.log").write_text(log)
+            assert spell_cast_marker_count(enum_generation) == expected
+        assert "INSERT INTO `character_spell`" in basic_spell_cast_seed_sql()
+        assert f"VALUES ({CHARACTER_GUID},{BASIC_SPELL_CAST_SPELL_ID},1)" in basic_spell_cast_seed_sql()
+        assert plan_number(TARGET_TARGETED_SPELL_CAST_MODE) == "25"
+        assert "INSERT INTO `character_spell`" in target_targeted_spell_cast_seed_sql()
+        assert (
+            f"VALUES ({CHARACTER_GUID},{TARGET_TARGETED_SPELL_CAST_SPELL_ID},1)"
+            in target_targeted_spell_cast_seed_sql()
+        )
+        assert str(TARGET_TARGETED_SPELL_CAST_DUMMY_GUID) in target_targeted_spell_cast_world_seed_sql()
+        assert (
+            f"VALUES ({TARGET_TARGETED_SPELL_CAST_DUMMY_GUID},{TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY},"
+            in target_targeted_spell_cast_world_seed_sql()
+        )
+        assert "INSERT INTO `creature`" in target_targeted_spell_cast_world_seed_sql()
+        for log, expected in (
+            ("", 0),
+            (
+                "Finished object update bootstrap after adding to map\n" + IN_WORLD_CONTROL_MARKER +
+                "\nC->S: CMSG_SET_SELECTION\nC->S: CMSG_CAST_SPELL\nC->S: CMSG_CANCEL_CAST"
+                "\nS->C: SMSG_CAST_FAILED\nC->S: CMSG_CAST_SPELL\nS->C: SMSG_SPELL_GO\n", 1
+            ),
+        ):
+            (raw / "WorldServer.log").write_text(log)
+            assert target_targeted_spell_cast_marker_count(enum_generation) == expected
     auth_keys = (
         "RealmServerPort", "BindIP", "LogsDir", "PidFile", "RealmsStateUpdateDelay",
         "LoginDatabaseInfo", "Updates.EnableDatabases", "Updates.AutoSetup", "StrictVersionCheck",
@@ -3223,7 +3469,8 @@ def parser() -> argparse.ArgumentParser:
             "no-login", "authentication", "character-screen", CHARACTER_CREATION_MODE, POPULATED_MODE,
             CHARACTER_SELECTION_MODE,
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,
-            RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
+            RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, BASIC_SPELL_CAST_MODE,
+            TARGET_TARGETED_SPELL_CAST_MODE,
         ), default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)
