@@ -201,6 +201,69 @@ heartbeat, followed by a stable hold. Use `--stability-seconds 30 --timeout 180`
 The fixture checks Sprint's effect against the current server DBC before preparation. It does
 not modify the source DBC or claim that 60 seconds is Sprint's retail duration.
 
+`--mode basic-spell-cast` (Plan 25, issue #85) seeds the fixture character with a known
+spell (Evocation, id 12051) via `character_spell`/`character_action` directly — the fixture
+never goes through real character creation, so it has no class/race starting spells to rely
+on (see the note above: `Player::Create()`, and therefore `CharStartOutfit.dbc`, is only
+exercised by `character-creation` mode). Once in world control, the harness presses `1`
+(action button 0's default keybind) to cast it; acceptance requires an observed
+`SMSG_SPELL_GO` after the in-world-control marker. Fireball (id 133) was tried first since it
+has a nonzero cast time, but it is enemy-targeted: generation 5 showed zero
+`CMSG_CAST_SPELL`/`SMSG_CAST_FAILED` packets after the marker, because the client refuses to
+send an enemy-targeted cast with no target selected — the fixture spawns with no target, and
+this harness only presses one key, it does not tab-target a hostile. Evocation is self-only
+(no target needed) and free (0 mana), and channeled with a real duration, so the round trip
+still exercises `SMSG_SPELL_START` (channel begin) as well as `SMSG_SPELL_GO`, not just an
+instant-cast fire-and-forget. Evocation still failed on generation 5 for a second reason: the
+shared fixture (`populated_character_seed_sql`) is a Human Warrior, and
+`Player::_LoadSpells`/`CheckSkillLearnedBySpell` deletes any learned spell whose skill line
+doesn't match the character's race/class at every login, gated by
+`CONFIG_VALIDATE_SKILL_LEARNED_BY_SPELLS` (confirmed via `WorldServer.log`: `"has spell (12051)
+that teach skill (237) which is invalid for the race/class combination (Race: 1, Class: 1).
+Will be deleted."`) — `character_spell`/`character_action` were empty by the time the client
+logged in, so the action bar had nothing bound to button 0. `basic_spell_cast_seed_sql` now
+also switches this fixture's `characters.class` to Mage (8) so Evocation's skill line is
+legitimate and survives login. Issue #85 additionally asks for a target-targeted spell cast and
+cast-time cancellation — those need a live, in-range hostile target near the fixture's spawn
+point and are not yet covered by this mode.
+
+Issue #85's invalid-cast negative case is deferred to issue #89. The real client rejects no-target,
+friendly-target, dead-target, out-of-range, and unlearned-spell attempts locally without sending
+`CMSG_CAST_SPELL`. The remaining known path uses the `.cast` GM command, which requires working
+4.3.4 chat opcodes.
+
+`--mode target-targeted-spell-cast` (Plan 25, issue #85) covers the remaining two acceptance
+items: a target-targeted spell cast that lands, and cast-time cancellation. Grants Fireball (id
+133, same spell used above — enemy-only-targeted, with a real, non-zero cast time, unlike
+Evocation) via the same seeding approach. Generation 17 first tried pinning the nearby Rabbit
+(guid 79947, stationary via `wander_distance`/`MovementType`) as the target, but that produced
+zero `CMSG_CAST_SPELL`/`SMSG_CAST_FAILED`/`SMSG_SPELL_GO` packets after the marker: the Rabbit's
+faction (31, a critter faction) isn't hostile, so "target nearest enemy" never selects it and the
+enemy-only Fireball hotkey silently enters targeting-reticle mode instead of casting. Every
+creature actually spawned near `CHARACTER_POSITION` is either friendly (trainers, a deputy NPC) or a non-hostile
+critter, so generation 18 tried inserting a fresh entry-2673 Target Dummy (faction 14,
+hostile-to-all; `npc_target_dummy`) instead — but that also produced zero `SMSG_CAST_FAILED` after
+the marker: that AI's `Reset()` schedules a `KillSelf()` 15s after every spawn (`npcs_special.cpp`),
+since it's meant for a dummy a player summons, not a static DB spawn, so by the time the harness
+logs in and reaches the cast sequence it's already dead and un-Tab-targetable. The fix instead
+inserts a fresh entry-2809 Boar (same faction 14, no `ScriptName`/special AI, so no lifespan limit)
+a few yards from the fixture's spawn point. Automation originally pressed `1` to start the cast,
+then `Escape` (the client's built-in cancel-current-cast behavior) partway through the cast time to
+produce `SMSG_CAST_FAILED`, then `1` again to let the cast complete for `SMSG_SPELL_GO`. Generation
+19 showed that doesn't hold up live: WorldServer.log had exactly one `CMSG_CAST_SPELL` total and
+zero `SMSG_CAST_FAILED`, and a live-observed run confirmed `Escape` opened the game menu instead of
+cancelling. The fix keeps Escape but uses short key taps. The shared movement-oriented helper held
+each key for 0.6 seconds and waited 0.4 seconds after release, so the original Escape arrived after rank-1
+Fireball had completed and opened the menu. With 0.05-second holds and gaps, the real client sends
+`CMSG_CAST_SPELL`, `CMSG_CANCEL_CAST`, receives `SMSG_CAST_FAILED`, then sends a fresh
+`CMSG_CAST_SPELL` that completes with `SMSG_SPELL_GO`. Movement modes retain their existing timing.
+The mode also captures focused-window screenshots before targeting, after targeting, after cancel,
+and after the completing recast. Acceptance requires both server markers after the in-world-control
+marker. Generation 22 passed with one Fireball action binding, stock Boar health, one
+`CMSG_CANCEL_CAST`, one `SMSG_CAST_FAILED`, and the completing `SMSG_SPELL_GO`. Its screenshots show
+the first-time combat tutorial remained open throughout, confirming it does not block these keyboard
+bindings and needs no click workaround.
+
 ## The exact harness invocation
 
 Recovering these arguments from scratch is slow and they are not stored anywhere the
