@@ -969,6 +969,7 @@ public:                                                 // opcodes handlers
     void HandleQuestPushResult(WorldPackets::Quest::QuestPushResultClient& packet);
 
     void HandleMessagechatOpcode(WorldPacket& recvPacket);
+    void HandleAddonMessagechatOpcode(WorldPacket& recvPacket);
     void SendPlayerNotFoundNotice(std::string const& name);
     void SendPlayerAmbiguousNotice(std::string const& name);
     void SendWrongFactionNotice();

@@ -189,10 +189,16 @@ TARGET_TARGETED_SPELL_CAST_ACTION_BUTTON = 0
 # (see above).
 TARGET_TARGETED_SPELL_CAST_DUMMY_GUID = 99990001
 TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY = 2809
+CHAT_MESSAGE_MODE = "chat-message"
+# Plain lowercase letters only: automate_key_sequence maps each character straight to its own
+# X11 keysym name (no digits/space/shift handling needed), and no chat command prefix, so the
+# real client submits an ordinary CMSG_MESSAGECHAT_SAY - the packet that disconnected the real
+# client outright before issue #89's opcode split fix (server saw it as an unknown opcode).
+CHAT_MESSAGE_TEXT = "chatcheck"
 POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
     IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
-    BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE,
+    BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
 })
 CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
@@ -206,6 +212,8 @@ CHARACTER_ZONE = 12
 
 
 def plan_number(mode: str) -> str:
+    if mode == CHAT_MESSAGE_MODE:
+        return "89"
     if mode in {BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE}:
         return "25"
     if mode == CHARACTER_CREATION_MODE:
@@ -1751,6 +1759,17 @@ def automate_spell_cast(generation: Generation) -> None:
     automate_key_sequence(generation, BASIC_SPELL_CAST_KEYS)
 
 
+# Default 4.3.4 keybind "Enter" opens the chat edit box defaulted to /say; a second "Enter" sends it.
+CHAT_MESSAGE_KEYS = ("Return", *tuple(CHAT_MESSAGE_TEXT), "Return")
+
+
+def automate_chat_message(generation: Generation) -> None:
+    capture_desktop_screenshot(generation, "desktop-before-chat.png")
+    automate_key_sequence(generation, CHAT_MESSAGE_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(1.0)  # let the server echo (or reject) the message before capturing
+    capture_desktop_screenshot(generation, "desktop-after-chat.png")
+
+
 # Default 4.3.4 keybinds for "target nearest enemy", action bar button 1, and cancelling a cast.
 # Action keys use short taps below so Escape reaches the client while Fireball is still preparing.
 TARGET_TARGETED_SPELL_CAST_TARGET_KEY = "Tab"
@@ -1964,6 +1983,7 @@ def run_client(args: argparse.Namespace) -> None:
         jump_fall_land_sent = False
         spell_cast_sent = False
         target_targeted_spell_cast_sent = False
+        chat_message_sent = False
         post_marker_hold_started: float | None = None
         milestone_definition = CHARACTER_MILESTONES if generation["mode"] in CHARACTER_MODES else CLIENT_MILESTONES
         while time.monotonic() < deadline:
@@ -2016,6 +2036,12 @@ def run_client(args: argparse.Namespace) -> None:
                 ):
                     automate_target_targeted_spell_cast(generation)
                     target_targeted_spell_cast_sent = True
+                if (
+                    generation["mode"] == CHAT_MESSAGE_MODE and selection_sent and not chat_message_sent
+                    and in_world_control_marker_count(generation) > 0
+                ):
+                    automate_chat_message(generation)
+                    chat_message_sent = True
                 if generation["mode"] in POST_MARKER_MODES and selection_sent:
                     marker_count = POST_MARKER_COUNTERS[generation["mode"]](generation)
                     if marker_count and post_marker_hold_started is None:
@@ -2272,6 +2298,15 @@ def cast_failed_marker_count(generation: Generation) -> int:
     return len(CAST_FAILED_PACKET.findall(after_sync))
 
 
+CHAT_MESSAGE_PACKET = re.compile(r"\bS->C:\s+.*?\bSMSG_MESSAGECHAT\b")
+
+
+def chat_message_marker_count(generation: Generation) -> int:
+    after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
+    after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
+    return len(CHAT_MESSAGE_PACKET.findall(after_sync))
+
+
 def ground_movement_samples(generation: Generation) -> list[dict[str, str | float]]:
     after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
     after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
@@ -2403,7 +2438,7 @@ def target_targeted_spell_cast_marker_count(generation: Generation) -> int:
 POST_MARKER_MODES = frozenset({
     INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
     GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, CHARACTER_CREATION_MODE, BASIC_SPELL_CAST_MODE,
-    TARGET_TARGETED_SPELL_CAST_MODE,
+    TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -2416,6 +2451,7 @@ POST_MARKER_COUNTERS = {
     CHARACTER_CREATION_MODE: character_creation_marker_count,
     BASIC_SPELL_CAST_MODE: spell_cast_marker_count,
     TARGET_TARGETED_SPELL_CAST_MODE: target_targeted_spell_cast_marker_count,
+    CHAT_MESSAGE_MODE: chat_message_marker_count,
 }
 
 
@@ -2559,9 +2595,10 @@ def sanitized_evidence(
     jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
     basic_spell_cast_mode = generation["mode"] == BASIC_SPELL_CAST_MODE
     target_targeted_spell_cast_mode = generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE
+    chat_message_mode = generation["mode"] == CHAT_MESSAGE_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
-        BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE,
+        BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
@@ -2584,6 +2621,7 @@ def sanitized_evidence(
             else "basic_spell_cast_pass_candidate" if basic_spell_cast_mode and "characters_completed" in milestones
             else "target_targeted_spell_cast_pass_candidate" if target_targeted_spell_cast_mode
             and "characters_completed" in milestones
+            else "chat_message_pass_candidate" if chat_message_mode and "characters_completed" in milestones
             else "jump_fall_land_pass_candidate" if jump_fall_land_mode and "characters_completed" in milestones
             else "ground_movement_pass_candidate" if ground_movement_mode and "characters_completed" in milestones
             else "basic_movement_pass_candidate" if basic_movement_mode and "characters_completed" in milestones
@@ -2623,6 +2661,7 @@ def sanitized_evidence(
         "target_targeted_spell_cast_sequence_count": (
             target_targeted_spell_cast_marker_count(generation) if target_targeted_spell_cast_mode else None
         ),
+        "chat_message_marker_count": chat_message_marker_count(generation) if chat_message_mode else None,
         "creation_marker_count": creation_marker_count_value if creation_mode else None,
         "post_marker_hold_seconds": (
             generation.get("post_marker_hold_seconds", 0) if generation["mode"] in POST_MARKER_MODES else None
@@ -2672,9 +2711,10 @@ def verify(args: argparse.Namespace) -> None:
     jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
     basic_spell_cast_mode = generation["mode"] == BASIC_SPELL_CAST_MODE
     target_targeted_spell_cast_mode = generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE
+    chat_message_mode = generation["mode"] == CHAT_MESSAGE_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
-        BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE,
+        BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     rows = character_row_count(manifest, generation) if character_mode else None
@@ -2792,6 +2832,8 @@ def verify(args: argparse.Namespace) -> None:
                 and evidence["cast_failed_marker_count"] > 0
                 and evidence["target_targeted_spell_cast_sequence_count"] > 0
             )
+        if chat_message_mode:
+            character_ok = character_ok and evidence["chat_message_marker_count"] > 0
         if creation_mode:
             character_ok = character_ok and (
                 any(item == {"direction": "c2s", "opcode": "CMSG_CHAR_CREATE"} for item in transcript)
@@ -2807,6 +2849,7 @@ def verify(args: argparse.Namespace) -> None:
                 else "run_speed_change_pass" if run_speed_mode
                 else "basic_spell_cast_pass" if basic_spell_cast_mode
                 else "target_targeted_spell_cast_pass" if target_targeted_spell_cast_mode
+                else "chat_message_pass" if chat_message_mode
                 else "jump_fall_land_pass" if jump_fall_land_mode
                 else "ground_movement_pass" if ground_movement_mode
                 else "basic_movement_pass" if basic_movement_mode
@@ -3380,6 +3423,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         assert "INSERT INTO `character_spell`" in basic_spell_cast_seed_sql()
         assert f"VALUES ({CHARACTER_GUID},{BASIC_SPELL_CAST_SPELL_ID},1)" in basic_spell_cast_seed_sql()
         assert plan_number(TARGET_TARGETED_SPELL_CAST_MODE) == "25"
+        assert plan_number(CHAT_MESSAGE_MODE) == "89"
         assert "INSERT INTO `character_spell`" in target_targeted_spell_cast_seed_sql()
         assert (
             f"VALUES ({CHARACTER_GUID},{TARGET_TARGETED_SPELL_CAST_SPELL_ID},1)"
@@ -3470,7 +3514,7 @@ def parser() -> argparse.ArgumentParser:
             CHARACTER_SELECTION_MODE,
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,
             RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, BASIC_SPELL_CAST_MODE,
-            TARGET_TARGETED_SPELL_CAST_MODE,
+            TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
         ), default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)
