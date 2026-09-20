@@ -264,6 +264,22 @@ marker. Generation 22 passed with one Fireball action binding, stock Boar health
 the first-time combat tutorial remained open throughout, confirming it does not block these keyboard
 bindings and needs no click workaround.
 
+Issue #85's remaining checklist item audits aura, cooldown, and failure packets reached by these
+cast paths against the pinned TrinityCore reference (`c699217775d9`). `SMSG_CAST_FAILED`
+(`Spell::WriteCastResultInfo`) and `SMSG_SPELL_COOLDOWN`/`SMSG_COOLDOWN_EVENT`
+(`Unit::BuildCooldownPacket`) are byte-for-byte identical to TC's layout, including the
+no-extra-fields case for `SPELL_FAILED_INTERRUPTED` that the cast-time cancellation above
+produces. `SMSG_AURA_UPDATE` (`AuraApplication::BuildUpdatePacket`) still uses AC's pre-refactor
+plain-field layout rather than TC's newer typed `WorldPackets::Spells::AuraUpdate` class, but this
+is the same aura-application path already exercised and visually confirmed correct against the
+real client by the run-speed-change and #37 ground-spell-tick acceptance work; Evocation and
+Fireball add no new risk here, and both runs rendered auras/damage correctly with zero
+`ByteBufferException`s in `WorldServer.log`. No protocol bugs found in this packet family.
+
+Issue #85's invalid-target negative case (deferred above, pending #89) is now unblocked: issue #89
+fixed the real 4.3.4 client's chat opcodes, so the `.cast` GM command path this negative case
+needs is no longer blocked. Not yet exercised with a real-client run.
+
 ## The exact harness invocation
 
 Recovering these arguments from scratch is slow and they are not stored anywhere the
