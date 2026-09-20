@@ -276,9 +276,22 @@ real client by the run-speed-change and #37 ground-spell-tick acceptance work; E
 Fireball add no new risk here, and both runs rendered auras/damage correctly with zero
 `ByteBufferException`s in `WorldServer.log`. No protocol bugs found in this packet family.
 
-Issue #85's invalid-target negative case (deferred above, pending #89) is now unblocked: issue #89
-fixed the real 4.3.4 client's chat opcodes, so the `.cast` GM command path this negative case
-needs is no longer blocked. Not yet exercised with a real-client run.
+Issue #85's invalid-target negative case (deferred above, pending #89) is now exercised, but not via
+the `.cast` GM command: the fixture account has no RBAC/GM grant, and the issue text calls for the
+action bar specifically. `--mode invalid-target-spell-cast` (Plan 25) instead self-targets via the
+client-local `/target <name>` slash command (resolves against the client's own object cache, needs
+no server permission, still sends a genuine `CMSG_SET_SELECTION`) and then presses the same
+enemy-only Fireball hotkey used above. Generation 1 showed the original hypothesis was wrong: this
+never reaches `Spell::prepare()`/`CheckCast()` on the server at all. The 4.3.4 client already knows
+the spell's implicit-target type and the current target's reaction from local data, so it
+pre-validates the friend/foe mismatch client-side — red "Invalid target" text and a flashing action
+button, zero `CMSG_CAST_SPELL` in WorldServer.log, same as the no-target/dead-target/out-of-range
+cases already documented above. The negative-case evidence is therefore the combination of a real
+`CMSG_SET_SELECTION` reaching the server (proving the automation actually ran) with zero
+`CMSG_CAST_SPELL`/`SMSG_SPELL_GO`/`SMSG_CAST_FAILED` afterward (proving the client, not the server,
+rejected the cast). Generation 2 passed on this basis (`invalid_target_spell_cast_sequence_count:
+1`, `spell_cast_marker_count: 0`, `cast_failed_marker_count: 0`), with screenshots confirming the
+on-screen "Invalid target" flash. This closes out issue #85's real-client acceptance checklist.
 
 ## The exact harness invocation
 
