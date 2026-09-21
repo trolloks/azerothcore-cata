@@ -64,8 +64,21 @@ def check_rejects_drift_during_stability_hold() -> None:
         assert not runner.ground_movement_is_stable_after_final_stop(generation, samples)
 
 
+def check_accepts_no_heartbeats_after_final_stop() -> None:
+    # The real client only sends MSG_MOVE_HEARTBEAT while a movement flag is active; once idle it
+    # sends none at all, so an absence of post-stop heartbeats must not be treated as drift.
+    lines = [
+        _marker("MSG_MOVE_START_TURN_RIGHT", 0, 0, 0, 1), _marker("MSG_MOVE_STOP_TURN", 0, 0, 0, 0),
+    ]
+    generation = {}
+    with patch.object(runner, "world_log_text", return_value=_log(lines)):
+        samples = runner.ground_movement_samples(generation)
+        assert runner.ground_movement_is_stable_after_final_stop(generation, samples)
+
+
 if __name__ == "__main__":
     check_parses_samples_and_accepts_correct_deltas()
     check_rejects_wrong_direction_delta()
     check_rejects_drift_during_stability_hold()
+    check_accepts_no_heartbeats_after_final_stop()
     print("Ground movement acceptance checks passed")

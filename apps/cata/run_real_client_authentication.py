@@ -144,6 +144,7 @@ BASIC_MOVEMENT_MODE = "basic-movement"
 RUN_SPEED_MODE = "run-speed-change"
 GROUND_MOVEMENT_MODE = "ground-movement"
 JUMP_FALL_LAND_MODE = "jump-fall-land"
+WALK_RUN_MODE_SWITCH_MODE = "walk-run-mode-switch"
 CHARACTER_CREATION_MODE = "character-creation"
 BASIC_SPELL_CAST_MODE = "basic-spell-cast"
 RUN_SPEED_AURA = 2983
@@ -212,7 +213,8 @@ CHAT_MESSAGE_TEXT = "chatcheck"
 POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
     IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
-    BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
+    WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
+    INVALID_TARGET_SPELL_CAST_MODE,
 })
 CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
@@ -232,7 +234,7 @@ def plan_number(mode: str) -> str:
         return "25"
     if mode == CHARACTER_CREATION_MODE:
         return "22"
-    if mode in {GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE}:
+    if mode in {GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE}:
         return "23"
     if mode == RUN_SPEED_MODE:
         return "16"
@@ -949,6 +951,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         "Logger.network": (
             "5,Server" if generation["mode"] in {
                 BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
+                WALK_RUN_MODE_SWITCH_MODE,
             }
             else "4,Server"
         ),
@@ -1561,7 +1564,15 @@ def client_login_points(x: int, y: int, width: int, height: int) -> tuple[tuple[
     )
 
 
+# X11 keysym names for punctuation used in Lua string literals typed via "/script" (e.g. the
+# SetBinding("N","TOGGLERUN") call in WALK_RUN_BIND_SETUP_KEYS); "," has no keysym named "," so
+# string_to_keysym(",") silently fails to resolve and the keystroke is dropped without error.
+UNSHIFTED_PUNCTUATION_KEYSYM_NAMES = {",": "comma"}
+
+
 def x_keysym_name(value: str) -> str:
+    if value in UNSHIFTED_PUNCTUATION_KEYSYM_NAMES:
+        return UNSHIFTED_PUNCTUATION_KEYSYM_NAMES[value]
     return value.lower() if len(value) == 1 and value.isalpha() else value
 
 
@@ -1730,6 +1741,19 @@ JUMP_FALL_LAND_KEYS = ("space",)
 BASIC_SPELL_CAST_KEYS = ("1",)
 
 
+# string_to_keysym has no notion of a shifted character (typing "T" presses the same physical
+# key as "t"), and it does not resolve bare punctuation like "(" to a keysym at all - it needs
+# the X11 keysym name instead. "(" and ")" live on the shifted level of the "9"/"0" keys (US
+# layout), so this maps to the *digit* keysym (not "parenleft"/"parenright") and forces Shift -
+# keysym_to_keycode("parenleft") resolves to a spare/extra keycode that also carries that symbol
+# unshifted (observed keycode 187 on this host), which wine's virtual keyboard driver silently
+# drops instead of producing "(". Pressing the real "9" key with Shift held is what a physical
+# keyboard actually does and is what wine recognizes. All of this is needed to type a literal
+# Lua call such as SetBinding("N","TOGGLERUN") via the chat edit box (see WALK_RUN_BIND_SETUP_KEYS).
+# '"' lives on the shifted level of the apostrophe key, so it maps to "apostrophe" with Shift held.
+SHIFTED_KEYSYM_NAMES = {"(": "9", ")": "0", '"': "apostrophe"}
+
+
 def automate_key_sequence(
     generation: Generation, keys: tuple[str, ...], hold_seconds: float = 0.6, gap_seconds: float = 0.4,
 ) -> None:
@@ -1741,6 +1765,7 @@ def automate_key_sequence(
 
     window_id, *_ = focus_owned_window(generation)
     connection = display.Display(str(generation["inputs"]["display"]))
+    shift = connection.keysym_to_keycode(XK.string_to_keysym("Shift_L"))
 
     def require_focus() -> None:
         active = connection.screen().root.get_full_property(
@@ -1751,11 +1776,17 @@ def automate_key_sequence(
 
     for key in keys:
         require_focus()
-        keycode = connection.keysym_to_keycode(XK.string_to_keysym(key))
+        needs_shift = (len(key) == 1 and key.isalpha() and key.isupper()) or key in SHIFTED_KEYSYM_NAMES
+        symbol = XK.string_to_keysym(SHIFTED_KEYSYM_NAMES.get(key, x_keysym_name(key)))
+        keycode = connection.keysym_to_keycode(symbol)
+        if needs_shift:
+            xtest.fake_input(connection, X.KeyPress, shift)
         xtest.fake_input(connection, X.KeyPress, keycode)
         connection.sync()
         time.sleep(hold_seconds)
         xtest.fake_input(connection, X.KeyRelease, keycode)
+        if needs_shift:
+            xtest.fake_input(connection, X.KeyRelease, shift)
         connection.sync()
         time.sleep(gap_seconds)
     connection.close()
@@ -1767,6 +1798,66 @@ def automate_ground_movement(generation: Generation) -> None:
 
 def automate_jump_fall_land(generation: Generation) -> None:
     automate_key_sequence(generation, JUMP_FALL_LAND_KEYS)
+
+
+# ToggleRun() has no default keybind in 4.3.4. Confirmed via a live "/script print(...)" probe
+# against the real client that the walk/run toggle function is "ToggleRun" - "ToggleWalking" (the
+# more commonly assumed name) is nil in this build. Calling it directly via "/script ToggleRun()"
+# is rejected by the client with "A macro script has been blocked from an action only available to
+# the Blizzard UI" - it is a protected action, not just untainted Lua, so no amount of scripting
+# can invoke it. Instead SetBinding() (an ordinary, unprotected config setter used by every keybind
+# addon) binds it to a real key once via "/script", the same client-local, no-RBAC-needed trick
+# used for "/target <name>" in INVALID_TARGET_SPELL_CAST_KEYS; the harness then presses that real
+# key (WALK_RUN_TOGGLE_KEYS) to trigger the toggle through the normal secure keybind path, exactly
+# like a real player would.
+WALK_RUN_BIND_KEY = "N"
+WALK_RUN_BIND_SETUP_KEYS = (
+    "Return", "slash", *tuple("script"), "space",
+    *tuple(f'SetBinding("{WALK_RUN_BIND_KEY}","TOGGLERUN")SaveBindings(GetCurrentBindingSet())'),
+    "Return",
+)
+WALK_RUN_TOGGLE_KEYS = (WALK_RUN_BIND_KEY.lower(),)
+WALK_RUN_FORWARD_KEYS = ("w",)
+# Same hold duration for both legs so the two distances travelled are directly comparable;
+# real Cata run speed (7 yd/s) is close to 3x walk speed (2.5 yd/s), so 1s holds produce a
+# clearly distinguishable delta even with automation timing jitter.
+WALK_RUN_MODE_SWITCH_HOLD_SECONDS = 1.0
+
+
+# Wider hold/gap than other chat sequences: this is the first sequence to hold Shift for
+# uppercase letters and shifted punctuation, and wine's keyboard message pump needs more time
+# than a native X client to latch the Shift modifier state before the paired keycode arrives.
+WALK_RUN_TOGGLE_HOLD_SECONDS = 0.15
+WALK_RUN_TOGGLE_GAP_SECONDS = 0.15
+
+
+def automate_walk_run_mode_switch(generation: Generation) -> None:
+    automate_key_sequence(
+        generation, WALK_RUN_BIND_SETUP_KEYS,
+        hold_seconds=WALK_RUN_TOGGLE_HOLD_SECONDS, gap_seconds=WALK_RUN_TOGGLE_GAP_SECONDS,
+    )
+    time.sleep(0.5)  # let the client apply and save the new keybind before using it
+    capture_desktop_screenshot(generation, "desktop-before-walk-toggle.png")
+    automate_key_sequence(
+        generation, WALK_RUN_TOGGLE_KEYS,
+        hold_seconds=WALK_RUN_TOGGLE_HOLD_SECONDS, gap_seconds=WALK_RUN_TOGGLE_GAP_SECONDS,
+    )
+    time.sleep(0.5)  # let the client apply the walk-mode toggle before moving
+    capture_desktop_screenshot(generation, "desktop-after-walk-toggle.png")
+    automate_key_sequence(
+        generation, WALK_RUN_FORWARD_KEYS, hold_seconds=WALK_RUN_MODE_SWITCH_HOLD_SECONDS, gap_seconds=0.4,
+    )
+    capture_desktop_screenshot(generation, "desktop-after-walk-forward.png")
+    automate_key_sequence(
+        generation, WALK_RUN_TOGGLE_KEYS,
+        hold_seconds=WALK_RUN_TOGGLE_HOLD_SECONDS, gap_seconds=WALK_RUN_TOGGLE_GAP_SECONDS,
+    )
+    time.sleep(0.5)  # let the client apply the run-mode toggle before moving
+    capture_desktop_screenshot(generation, "desktop-after-run-toggle.png")
+    automate_key_sequence(
+        generation, WALK_RUN_FORWARD_KEYS, hold_seconds=WALK_RUN_MODE_SWITCH_HOLD_SECONDS, gap_seconds=0.4,
+    )
+    capture_desktop_screenshot(generation, "desktop-after-run-forward.png")
 
 
 def automate_spell_cast(generation: Generation) -> None:
@@ -2015,6 +2106,7 @@ def run_client(args: argparse.Namespace) -> None:
         selection_sent = False
         ground_movement_sent = False
         jump_fall_land_sent = False
+        walk_run_mode_switch_sent = False
         spell_cast_sent = False
         target_targeted_spell_cast_sent = False
         chat_message_sent = False
@@ -2059,6 +2151,12 @@ def run_client(args: argparse.Namespace) -> None:
                 ):
                     automate_jump_fall_land(generation)
                     jump_fall_land_sent = True
+                if (
+                    generation["mode"] == WALK_RUN_MODE_SWITCH_MODE and selection_sent
+                    and not walk_run_mode_switch_sent and in_world_control_marker_count(generation) > 0
+                ):
+                    automate_walk_run_mode_switch(generation)
+                    walk_run_mode_switch_sent = True
                 if (
                     generation["mode"] == BASIC_SPELL_CAST_MODE and selection_sent and not spell_cast_sent
                     and in_world_control_marker_count(generation) > 0
@@ -2443,16 +2541,16 @@ def jump_fall_land_is_stable_after_landing(generation: Generation, samples: list
 
 
 def ground_movement_is_stable_after_final_stop(generation: Generation, samples: list[dict[str, str | float]]) -> bool:
-    """The client keeps sending MSG_MOVE_HEARTBEAT during the post-run hold; confirm none of them
-    drifted away from the position/orientation the final MSG_MOVE_STOP_TURN left the character at."""
+    """The real client only sends MSG_MOVE_HEARTBEAT while a movement flag is active, not while
+    idle - confirmed by observing zero heartbeats for 12+ seconds after a real final stop. So the
+    absence of any post-stop heartbeat is normal, not a failure; only a heartbeat that drifted away
+    from the position/orientation the final STOP left the character at indicates instability."""
     if not samples:
         return False
     final = samples[-1]
     text = world_log_text(generation)
     after_final_stop = text.rpartition(GROUND_MOVEMENT_MARKER)[2]
     heartbeats = HEARTBEAT_SAMPLE_PATTERN.findall(after_final_stop)
-    if not heartbeats:
-        return False
     tolerance = 1e-3
     return all(
         math.isclose(float(x), float(final["x"]), abs_tol=tolerance)
@@ -2461,6 +2559,25 @@ def ground_movement_is_stable_after_final_stop(generation: Generation, samples: 
         and math.isclose(float(o), float(final["o"]), abs_tol=tolerance)
         for x, y, z, o in heartbeats
     )
+
+
+WALK_RUN_MODE_SWITCH_OPCODES = (
+    "MSG_MOVE_SET_WALK_MODE", "MSG_MOVE_START_FORWARD", "MSG_MOVE_STOP",
+    "MSG_MOVE_SET_RUN_MODE", "MSG_MOVE_START_FORWARD", "MSG_MOVE_STOP",
+)
+
+
+def walk_run_mode_switch_deltas_are_action_appropriate(samples: list[dict[str, str | float]]) -> bool:
+    """Both legs hold the same forward key for the same duration; if walk mode genuinely
+    reduced movement speed, the walk leg must cover materially less ground than the run leg
+    rather than merely having its MSG_MOVE_SET_WALK_MODE/MSG_MOVE_SET_RUN_MODE toggles accepted."""
+    if [sample["opcode"] for sample in samples] != list(WALK_RUN_MODE_SWITCH_OPCODES):
+        return False
+    walk_start, walk_stop, run_start, run_stop = samples[1], samples[2], samples[4], samples[5]
+    walk_dx, walk_dy = float(walk_stop["x"]) - float(walk_start["x"]), float(walk_stop["y"]) - float(walk_start["y"])
+    run_dx, run_dy = float(run_stop["x"]) - float(run_start["x"]), float(run_stop["y"]) - float(run_start["y"])
+    walk_distance, run_distance = math.hypot(walk_dx, walk_dy), math.hypot(run_dx, run_dy)
+    return walk_distance > 0.05 and run_distance > walk_distance * 1.5
 
 
 TARGET_TARGETED_SPELL_CAST_SEQUENCE = re.compile(
@@ -2490,8 +2607,8 @@ def invalid_target_spell_cast_marker_count(generation: Generation) -> int:
 
 POST_MARKER_MODES = frozenset({
     INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
-    GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, CHARACTER_CREATION_MODE, BASIC_SPELL_CAST_MODE,
-    TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
+    GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE, CHARACTER_CREATION_MODE,
+    BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -2501,6 +2618,7 @@ POST_MARKER_COUNTERS = {
     RUN_SPEED_MODE: lambda generation: len(run_speed_acknowledgements(generation)),
     GROUND_MOVEMENT_MODE: ground_movement_marker_count,
     JUMP_FALL_LAND_MODE: ground_movement_marker_count,
+    WALK_RUN_MODE_SWITCH_MODE: ground_movement_marker_count,
     CHARACTER_CREATION_MODE: character_creation_marker_count,
     BASIC_SPELL_CAST_MODE: spell_cast_marker_count,
     TARGET_TARGETED_SPELL_CAST_MODE: target_targeted_spell_cast_marker_count,
@@ -2647,13 +2765,15 @@ def sanitized_evidence(
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
     jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
+    walk_run_mode_switch_mode = generation["mode"] == WALK_RUN_MODE_SWITCH_MODE
     basic_spell_cast_mode = generation["mode"] == BASIC_SPELL_CAST_MODE
     target_targeted_spell_cast_mode = generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE
     chat_message_mode = generation["mode"] == CHAT_MESSAGE_MODE
     invalid_target_spell_cast_mode = generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
-        BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
+        WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
+        INVALID_TARGET_SPELL_CAST_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
@@ -2678,6 +2798,8 @@ def sanitized_evidence(
             and "characters_completed" in milestones
             else "chat_message_pass_candidate" if chat_message_mode and "characters_completed" in milestones
             else "invalid_target_spell_cast_pass_candidate" if invalid_target_spell_cast_mode
+            and "characters_completed" in milestones
+            else "walk_run_mode_switch_pass_candidate" if walk_run_mode_switch_mode
             and "characters_completed" in milestones
             else "jump_fall_land_pass_candidate" if jump_fall_land_mode and "characters_completed" in milestones
             else "ground_movement_pass_candidate" if ground_movement_mode and "characters_completed" in milestones
@@ -2711,6 +2833,9 @@ def sanitized_evidence(
         "run_speed_acknowledgements": run_speed_acknowledgements(generation) if run_speed_mode else None,
         "ground_movement_sequence": ground_movement_sequence(generation) if ground_movement_mode else None,
         "jump_fall_land_sequence": ground_movement_sequence(generation) if jump_fall_land_mode else None,
+        "walk_run_mode_switch_sequence": (
+            ground_movement_sequence(generation) if walk_run_mode_switch_mode else None
+        ),
         "spell_cast_marker_count": (
             spell_cast_marker_count(generation)
             if basic_spell_cast_mode or target_targeted_spell_cast_mode or invalid_target_spell_cast_mode else None
@@ -2773,13 +2898,15 @@ def verify(args: argparse.Namespace) -> None:
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
     jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
+    walk_run_mode_switch_mode = generation["mode"] == WALK_RUN_MODE_SWITCH_MODE
     basic_spell_cast_mode = generation["mode"] == BASIC_SPELL_CAST_MODE
     target_targeted_spell_cast_mode = generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE
     chat_message_mode = generation["mode"] == CHAT_MESSAGE_MODE
     invalid_target_spell_cast_mode = generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
-        BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
+        WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
+        INVALID_TARGET_SPELL_CAST_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     rows = character_row_count(manifest, generation) if character_mode else None
@@ -2887,6 +3014,18 @@ def verify(args: argparse.Namespace) -> None:
                 and jump_fall_land_deltas_are_action_appropriate(jump_fall_land_samples_value)
                 and jump_fall_land_is_stable_after_landing(generation, jump_fall_land_samples_value)
             )
+        if walk_run_mode_switch_mode:
+            # Like jump_fall_land_action_pair, drop the world-entry MSG_MOVE_FALL_LAND that
+            # precedes every action under test; only the trailing toggle/move pair is under test.
+            walk_run_mode_switch_samples_value = ground_movement_samples(generation)[
+                -len(WALK_RUN_MODE_SWITCH_OPCODES):
+            ]
+            character_ok = character_ok and (
+                evidence["walk_run_mode_switch_sequence"][-len(WALK_RUN_MODE_SWITCH_OPCODES):]
+                == list(WALK_RUN_MODE_SWITCH_OPCODES)
+                and walk_run_mode_switch_deltas_are_action_appropriate(walk_run_mode_switch_samples_value)
+                and ground_movement_is_stable_after_final_stop(generation, walk_run_mode_switch_samples_value)
+            )
         if run_speed_mode:
             character_ok = character_ok and bool(evidence["run_speed_acknowledgements"])
         if basic_spell_cast_mode:
@@ -2923,6 +3062,7 @@ def verify(args: argparse.Namespace) -> None:
                 else "chat_message_pass" if chat_message_mode
                 else "invalid_target_spell_cast_pass" if invalid_target_spell_cast_mode
                 else "jump_fall_land_pass" if jump_fall_land_mode
+                else "walk_run_mode_switch_pass" if walk_run_mode_switch_mode
                 else "ground_movement_pass" if ground_movement_mode
                 else "basic_movement_pass" if basic_movement_mode
                 else "in_world_control_bootstrap_pass" if in_world_control_mode
@@ -3550,6 +3690,25 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     )
     assert client_login_points(60, 1, 1800, 1042) == ((971, 560), (971, 650), (971, 785))
     assert x_keysym_name("A") == "a" and x_keysym_name("Escape") == "Escape"
+    assert plan_number(WALK_RUN_MODE_SWITCH_MODE) == "23"
+    assert WALK_RUN_TOGGLE_KEYS == ("n",)
+    assert "TOGGLERUN" in "".join(WALK_RUN_BIND_SETUP_KEYS)
+    assert SHIFTED_KEYSYM_NAMES["("] == "9" and SHIFTED_KEYSYM_NAMES[")"] == "0"
+    assert SHIFTED_KEYSYM_NAMES['"'] == "apostrophe"
+    assert UNSHIFTED_PUNCTUATION_KEYSYM_NAMES[","] == "comma"
+    walk_run_samples = [
+        {"opcode": opcode, "x": x, "y": y, "z": 0.0, "o": 0.0}
+        for opcode, x, y in zip(
+            WALK_RUN_MODE_SWITCH_OPCODES, (0, 0, 1, 1, 1, 1), (0, 0, 0, 0, 0, 4),
+        )
+    ]
+    assert walk_run_mode_switch_deltas_are_action_appropriate(walk_run_samples)
+    assert not walk_run_mode_switch_deltas_are_action_appropriate(
+        [{**sample, "opcode": "MSG_MOVE_STOP"} for sample in walk_run_samples],
+    )
+    slow_run_samples = [dict(sample) for sample in walk_run_samples]
+    slow_run_samples[5]["y"] = 1.3
+    assert not walk_run_mode_switch_deltas_are_action_appropriate(slow_run_samples)
     window_sample = "0x08400003 0 3597195 124 4 1800 1042 steam_proton.steam_proton host World of Warcraft"
     assert owned_wow_window(window_sample, {3597195}) == ("0x08400003", 124, 4, 1800, 1042)
     assert owned_wow_window(window_sample, {1}) is None
@@ -3596,8 +3755,9 @@ def parser() -> argparse.ArgumentParser:
             "no-login", "authentication", "character-screen", CHARACTER_CREATION_MODE, POPULATED_MODE,
             CHARACTER_SELECTION_MODE,
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,
-            RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, BASIC_SPELL_CAST_MODE,
-            TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
+            RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE,
+            BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
+            INVALID_TARGET_SPELL_CAST_MODE,
         ), default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)
