@@ -199,6 +199,10 @@ void WorldSession::HandleGameObjectQueryOpcode(WorldPacket& recvData)
             for (std::size_t i = 0; i < MAX_GAMEOBJECT_QUEST_ITEMS; ++i)
                 data << uint32(0);
 
+        // Build 15595 appends RequiredLevel after the quest-item array; this fork does not yet
+        // import that data column, so write zero to preserve the wire contract. See issue #109.
+        data << int32(0);                                    // RequiredLevel
+
         SendPacket(&data);
         LOG_DEBUG("network", "WORLD: Sent SMSG_GAMEOBJECT_QUERY_RESPONSE");
     }
