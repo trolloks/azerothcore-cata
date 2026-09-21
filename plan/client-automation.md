@@ -459,6 +459,37 @@ The focus regression check and runner self-check pass. SQL style checks pass. Th
 check reports only three pre-existing repeated blank lines in `UpdateFields.h`, also present
 in the starting commit; the changed files introduce no reported style violations.
 
+### Walk/run toggle is a protected action; heartbeats stop while idle, 2026-09-21
+
+Issue #96 needed the harness to drive the real client's walk/run toggle. The commonly
+assumed name, `ToggleWalking()`, is `nil` in build 15595; a live `/script print(...)` probe
+confirmed the real function is `ToggleRun()`. Calling it via `/script ToggleRun()` is
+rejected outright with "A macro script has been blocked from an action only available to
+the Blizzard UI" — this is a protected action, not a taint error, and no `/script` call can
+invoke it regardless of taint state.
+
+The workaround is to drive it the way a real player would: `SetBinding("N","TOGGLERUN")`
+followed by `SaveBindings(GetCurrentBindingSet())` (an ordinary, unprotected config setter)
+binds the toggle to a key via `/script`, then the harness presses that real key. This
+reaches the toggle through the normal secure keybind input path.
+
+Typing that Lua literal exposed two more keysym gaps in `automate_key_sequence()`, beyond
+the parens-drop quirk already documented in `x_keysym_name`/`SHIFTED_KEYSYM_NAMES`: comma
+has no keysym named `","` (it is `"comma"`), and `'"'` needs the shifted `"apostrophe"` key.
+Both silently drop the keystroke instead of erroring, so a typed string that looks right in
+the source can still arrive at the client missing characters — verify new typed literals in
+an isolated target window (e.g. a `wmctrl`-addressable terminal or Tk entry box) before
+spending a real-client run on them.
+
+Separately, real-client evidence showed `MSG_MOVE_HEARTBEAT` is sent only while a movement
+flag is actively engaged, never while idle — zero heartbeats were observed for 12+ seconds
+after a real stop, confirmed against an archived `ground-movement` generation log with the
+same pattern. `ground_movement_is_stable_after_final_stop()` previously required at least
+one post-stop heartbeat to pass, which real client behavior can never satisfy; it now treats
+an empty post-stop heartbeat list as vacuously stable and only fails on a heartbeat that
+actually drifted from the final stop position. This also unblocks `ground-movement-mode` and
+`jump-fall-land-mode`, which shared the same unsatisfiable check.
+
 ## Building before a run
 
 `prepare` refuses binaries whose `--version` does not report the current HEAD, so a build is
