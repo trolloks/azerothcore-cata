@@ -59,6 +59,37 @@ WorldPacket const* WorldPackets::Query::NameQueryResponse::Write()
     return &_worldPacket;
 }
 
+WorldPacket const* WorldPackets::Query::QueryCreatureResponse::Write()
+{
+    _worldPacket << uint32(CreatureID | (Allow ? 0x00000000 : 0x80000000)); // creature entry
+
+    if (Allow)
+    {
+        for (std::string const& name : Stats.Name)
+            _worldPacket << name;
+
+        for (std::string const& nameAlt : Stats.NameAlt)
+            _worldPacket << nameAlt;
+
+        _worldPacket << Stats.Title;
+        _worldPacket << Stats.CursorName;                                     // "Directions" for guard, string for Icons 2.3.0
+        _worldPacket.append(Stats.Flags.data(), Stats.Flags.size());          // flags
+        _worldPacket << uint32(Stats.CreatureType);                           // CreatureType.dbc
+        _worldPacket << uint32(Stats.CreatureFamily);                         // CreatureFamily.dbc
+        _worldPacket << uint32(Stats.Classification);                         // Creature Rank (elite, boss, etc)
+        _worldPacket.append(Stats.ProxyCreatureID.data(), Stats.ProxyCreatureID.size());
+        _worldPacket.append(Stats.CreatureDisplayID.data(), Stats.CreatureDisplayID.size()); // Modelid1-4
+        _worldPacket << float(Stats.HpMulti);                                 // dmg/hp modifier
+        _worldPacket << float(Stats.EnergyMulti);                             // dmg/mana modifier
+        _worldPacket << uint8(Stats.Leader);
+        _worldPacket.append(Stats.QuestItems.data(), Stats.QuestItems.size());
+        _worldPacket << uint32(Stats.CreatureMovementInfoID);                 // CreatureMovementInfo.dbc
+        _worldPacket << uint32(Stats.RequiredExpansion);
+    }
+
+    return &_worldPacket;
+}
+
 WorldPacket const* WorldPackets::Query::TimeQueryResponse::Write()
 {
     _worldPacket << ServerTime;

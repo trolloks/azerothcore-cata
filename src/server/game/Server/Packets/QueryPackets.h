@@ -18,8 +18,10 @@
 #ifndef QueryPackets_h__
 #define QueryPackets_h__
 
+#include "CreatureData.h"
 #include "Packet.h"
 #include "Unit.h"
+#include <array>
 
 namespace WorldPackets
 {
@@ -87,6 +89,38 @@ namespace WorldPackets
 
             uint32 ServerTime;
             uint32 TimeResponse;
+        };
+
+        struct CreatureStats
+        {
+            std::array<std::string, 4> Name = {};
+            std::array<std::string, 4> NameAlt = {};
+            std::string Title;
+            std::string CursorName;
+            std::array<uint32, 2> Flags = {};
+            uint32 CreatureType = 0;
+            uint32 CreatureFamily = 0;
+            uint32 Classification = 0;
+            std::array<uint32, MAX_KILL_CREDIT> ProxyCreatureID = {};
+            std::array<uint32, 4> CreatureDisplayID = {};
+            float HpMulti = 0.0f;
+            float EnergyMulti = 0.0f;
+            bool Leader = false;
+            std::array<uint32, MAX_CREATURE_QUEST_ITEMS> QuestItems = {};
+            uint32 CreatureMovementInfoID = 0;
+            uint32 RequiredExpansion = 0;
+        };
+
+        class QueryCreatureResponse final : public ServerPacket
+        {
+        public:
+            QueryCreatureResponse() : ServerPacket(SMSG_CREATURE_QUERY_RESPONSE, 100) { }
+
+            WorldPacket const* Write() override;
+
+            bool Allow = false;
+            CreatureStats Stats;
+            uint32 CreatureID = 0;
         };
 
         class CorpseMapPositionQuery final : public ClientPacket
