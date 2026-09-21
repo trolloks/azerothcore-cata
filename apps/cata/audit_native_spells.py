@@ -20,6 +20,16 @@ JOINS = {
 AUXILIARY_JOINS = {
     12: "SpellCastTimes", 13: "SpellDuration", 15: "SpellRange", 26: "SpellRuneCost",
 }
+# Confirmed against a real build-15595 client (locale + common MPQ chains, all wow-update
+# patches applied, direct StormLib hash lookups bypassing listfile enumeration; see #70):
+# these 4 join targets are genuinely absent from native data, not extraction drops. Native
+# id spaces are sparse and don't 1:1 match WotLK ids, so this is expected, not a regression.
+VERIFIED_ABSENT_JOINS = {
+    (2457, "SpellAuraOptions", 49),
+    (6603, "SpellClassOptions", 11774),
+    (76268, "SpellClassOptions", 9107),
+    (88163, "SpellClassOptions", 11768),
+}
 FORMATS = {
     "Spell": "SpellEntryfmt", "SpellEffect": "SpellEffectEntryfmt",
     **{name: name + "Entryfmt" for name in JOINS.values()},
@@ -152,6 +162,9 @@ def audit(root, sql_path):
             for field in (15, 16):
                 if effect[field] and effect[field] not in tables["SpellRadius"]:
                     unresolved.append({"spell": spell_id, "table": "SpellRadius", "id": effect[field]})
+    unexpected_unresolved = [
+        u for u in unresolved if (u["spell"], u["table"], u["id"]) not in VERIFIED_ABSENT_JOINS
+    ]
     return {
         "reference_commit": PIN,
         "source_provenance_manifest": "apps/cata/fixtures/plan22-starting-data-audit.json",
@@ -163,12 +176,14 @@ def audit(root, sql_path):
         "status": "INCONCLUSIVE",
         "limits": "Static input audit; AC loader, passive auras and persistence have not run. "
                   "Pinned TC defaults absent optional split records. Nonzero missing references "
-                  "remain unresolved here; extraction evidence is linked from the provenance manifest.",
+                  "remain unresolved here, except the 4 verified-absent joins in VERIFIED_ABSENT_JOINS "
+                  "(#70); extraction evidence is linked from the provenance manifest.",
         "matrix": {"race": 1, "class": 1, "level": 1, "genders": [0, 1]},
         "initial_skills": skills, "ignored_obsolete_skills": ignored,
         "direct_spells": sorted(direct), "dependency_spells": sorted(required),
         "trigger_edges": sorted(edges), "missing_spells": sorted(missing),
         "unresolved_nonzero_joins": unresolved,
+        "unexpected_unresolved_nonzero_joins": unexpected_unresolved,
         "unsupported_required_spells": sorted(required & unsupported),
         "unsupported_native_spells": sorted(unsupported),
         "source_sha256": hashes,
@@ -205,7 +220,7 @@ def main():
     if not args.dbc_root or not args.sql_update:
         parser.error("--dbc-root and --sql-update are required")
     result = audit(args.dbc_root, args.sql_update)
-    result["audit_exit_code"] = int(bool(result["missing_spells"] or result["unresolved_nonzero_joins"]
+    result["audit_exit_code"] = int(bool(result["missing_spells"] or result["unexpected_unresolved_nonzero_joins"]
                                          or result["unsupported_required_spells"]))
     print(json.dumps(result, indent=2, sort_keys=True))
     raise SystemExit(result["audit_exit_code"])
