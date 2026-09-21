@@ -29,6 +29,7 @@
 #include "MathUtil.h"
 #include "MovementPackets.h"
 #include "ObjectMgr.h"
+#include "ObjectVisibilityContainer.h"
 #include "Opcodes.h"
 #include "Pet.h"
 #include "Player.h"
@@ -677,7 +678,9 @@ bool WorldSession::ProcessMovementInfo(MovementInfo& movementInfo, Unit* mover, 
 
     if (movementInfo.GetMovementFlags() & MOVEMENTFLAG_MASK_MOVING_OR_TURN)
     {
-        if (mover->IsStandState())
+        // Only cancel a sit/sleep state; IsStandState() is already true while standing, so
+        // testing that would fire SMSG_STANDSTATE_UPDATE on every movement heartbeat. See issue #108.
+        if (mover->IsStandUpOnMovementState())
             mover->SetStandState(UNIT_STAND_STATE_STAND);
         mover->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_ONESHOT_NONE);
     }
@@ -829,15 +832,45 @@ void WorldSession::HandleForceSpeedChangeAck(WorldPacket& recvData)
 }
 
 // The client sends this when it received an SMSG_UPDATE_OBJECT block it could not
-// turn into a real object. Purely diagnostic here: log the reported GUID so a
-// malformed create block can be traced back to the specific entity that produced it.
-// See issue #40.
+// turn into a real object. Build 15595 bit-packs the GUID in an opcode-specific order
+// (WotLK sent a plain generic packed GUID), independently matched by AscEmu and by
+// Dramacydal/murlocs_434 commit decea51faf3bf986a9f3ffab4bfaf23a743c494d. See issue #106.
 void WorldSession::HandleObjectUpdateFailedOpcode(WorldPacket& recvData)
 {
     ObjectGuid guid;
-    recvData >> guid.ReadAsPacked();
+    guid[6] = recvData.ReadBit();
+    guid[7] = recvData.ReadBit();
+    guid[4] = recvData.ReadBit();
+    guid[0] = recvData.ReadBit();
+    guid[1] = recvData.ReadBit();
+    guid[5] = recvData.ReadBit();
+    guid[3] = recvData.ReadBit();
+    guid[2] = recvData.ReadBit();
+
+    recvData.ReadByteSeq(guid[6]);
+    recvData.ReadByteSeq(guid[7]);
+    recvData.ReadByteSeq(guid[2]);
+    recvData.ReadByteSeq(guid[3]);
+    recvData.ReadByteSeq(guid[1]);
+    recvData.ReadByteSeq(guid[4]);
+    recvData.ReadByteSeq(guid[0]);
+    recvData.ReadByteSeq(guid[5]);
 
     LOG_INFO("network", "CMSG_OBJECT_UPDATE_FAILED: client could not build object {}", guid.ToString());
+
+    // The server still believes this object is in the player's known-object set, but the
+    // client just told us it isn't. Drop the visibility reference so the next visibility
+    // update resends the create block (which rechecks phase visibility) instead of the
+    // object silently never appearing again.
+    if (Player* player = GetPlayer())
+    {
+        if (VisibleWorldObjectsMap* visibleObjects = player->GetObjectVisibilityContainer().GetVisibleWorldObjectsMap())
+        {
+            VisibleWorldObjectsMap::iterator itr = visibleObjects->find(guid);
+            if (itr != visibleObjects->end())
+                player->GetObjectVisibilityContainer().UnlinkVisibilityFromPlayer(itr->second, itr);
+        }
+    }
 }
 
 void WorldSession::HandleSetActiveMoverOpcode(WorldPacket& recvData)
