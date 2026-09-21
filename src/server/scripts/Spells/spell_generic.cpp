@@ -30,6 +30,7 @@
 #include "ReputationMgr.h"
 #include "SkillDiscovery.h"
 #include "SpellAuraEffects.h"
+#include "SpellPackets.h"
 #include "SpellScript.h"
 #include "SpellScriptLoader.h"
 #include "Unit.h"
@@ -2083,16 +2084,15 @@ class spell_pvp_trinket_wotf_shared_cd : public SpellScript
             }
             else
             {
-                WorldPacket data(SMSG_INITIAL_SPELLS, (1 + 2 + 2 + 4 + 2 + 2 + 4 + 4));
-                data << uint8(0);
-                data << uint16(0);
-                data << uint16(1);
-                data << uint32(42292); // PvP Trinket spell
-                data << uint16(0);                 // cast item id
-                data << uint16(GetSpellInfo()->GetCategory());                   // spell category
-                data << uint32(0);
-                data << uint32(GetSpellInfo()->CategoryRecoveryTime);
-                player->SendDirectMessage(&data);
+                WorldPackets::Spells::SendKnownSpells packet;
+                packet.InitialLogin = false;
+                WorldPackets::Spells::SpellHistoryEntry& entry = packet.SpellHistoryEntries.emplace_back();
+                entry.SpellID = 42292; // PvP Trinket spell
+                entry.ItemID = 0;
+                entry.Category = GetSpellInfo()->GetCategory();
+                entry.RecoveryTime = 0;
+                entry.CategoryRecoveryTime = GetSpellInfo()->CategoryRecoveryTime;
+                player->SendDirectMessage(packet.Write());
 
                 WorldPacket data2;
                 player->BuildCooldownPacket(data2, SPELL_COOLDOWN_FLAG_INCLUDE_GCD, SPELL_PVP_TRINKET, GetSpellInfo()->CategoryRecoveryTime); // PvP Trinket spell
