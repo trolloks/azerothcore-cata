@@ -187,7 +187,8 @@ namespace Movement
     inline void MoveSplineInit::SetAnimation(AnimTier anim)
     {
         args.time_perc = 0.f;
-        args.flags.EnableAnimation((uint8)anim);
+        args.flags.EnableAnimation();
+        args.flags.animId = (uint8)anim;
     }
 
     inline void MoveSplineInit::SetFacing(Vector3 const& spot)
