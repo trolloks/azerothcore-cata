@@ -93,6 +93,9 @@ void WorldSession::HandleCreatureQueryOpcode(WorldPacket& recvData)
     recvData >> guid;
 
     CreatureTemplate const* ci = sObjectMgr->GetCreatureTemplate(entry);
+    WorldPackets::Query::QueryCreatureResponse response;
+    response.CreatureID = entry;
+
     if (ci)
     {
         std::string Name, Title;
@@ -108,56 +111,42 @@ void WorldSession::HandleCreatureQueryOpcode(WorldPacket& recvData)
                 ObjectMgr::GetLocaleString(cl->Title, loc_idx, Title);
             }
         }
-        // guess size
-        WorldPacket data(SMSG_CREATURE_QUERY_RESPONSE, 100);
-        data << uint32(entry);                                       // creature entry
-        data << Name;
-        data << uint8(0) << uint8(0) << uint8(0);                    // name2, name3, name4, always empty
-        data << Title;
-        data << ci->IconName;                                        // "Directions" for guard, string for Icons 2.3.0
-        data << uint32(ci->type_flags);                              // flags
-        data << uint32(ci->type);                                    // CreatureType.dbc
-        data << uint32(ci->family);                                  // CreatureFamily.dbc
-        data << uint32(ci->rank);                                    // Creature Rank (elite, boss, etc)
-        data << uint32(ci->KillCredit[0]);                           // new in 3.1, kill credit
-        data << uint32(ci->KillCredit[1]);                           // new in 3.1, kill credit
-        if (ci->GetModelByIdx(0))
-            data << uint32(ci->GetModelByIdx(0)->CreatureDisplayID); // Modelid1
-        else
-            data << uint32(0);                                       // Modelid1
-        if (ci->GetModelByIdx(1))
-            data << uint32(ci->GetModelByIdx(1)->CreatureDisplayID); // Modelid2
-        else
-            data << uint32(0);                                       // Modelid2
-        if (ci->GetModelByIdx(2))
-            data << uint32(ci->GetModelByIdx(2)->CreatureDisplayID); // Modelid3
-        else
-            data << uint32(0);                                       // Modelid3
-        if (ci->GetModelByIdx(3))
-            data << uint32(ci->GetModelByIdx(3)->CreatureDisplayID); // Modelid4
-        else
-            data << uint32(0);                                       // Modelid4
-        data << float(ci->ModHealth);                                // dmg/hp modifier
-        data << float(ci->ModMana);                                  // dmg/mana modifier
-        data << uint8(ci->RacialLeader);
 
-        CreatureQuestItemList const* items = sObjectMgr->GetCreatureQuestItemList(entry);
-        if (items)
-            for (std::size_t i = 0; i < MAX_CREATURE_QUEST_ITEMS; ++i)
-                data << (i < items->size() ? uint32((*items)[i]) : uint32(0));
-        else
-            for (std::size_t i = 0; i < MAX_CREATURE_QUEST_ITEMS; ++i)
-                data << uint32(0);
+        response.Allow = true;
+        response.Stats.Name[0] = Name;
+        // NameAlt[0..3] left empty: this fork does not yet port a per-gender/locale alternate name column
+        response.Stats.Title = Title;
+        response.Stats.CursorName = ci->IconName;                    // "Directions" for guard, string for Icons 2.3.0
+        response.Stats.Flags[0] = ci->type_flags;
+        // Flags[1] left zero: this fork does not yet port a second creature type-flags column
+        response.Stats.CreatureType = ci->type;                      // CreatureType.dbc
+        response.Stats.CreatureFamily = ci->family;                  // CreatureFamily.dbc
+        response.Stats.Classification = ci->rank;                    // Creature Rank (elite, boss, etc)
+        response.Stats.ProxyCreatureID[0] = ci->KillCredit[0];
+        response.Stats.ProxyCreatureID[1] = ci->KillCredit[1];
 
-        data << uint32(ci->movementId);                              // CreatureMovementInfo.dbc
-        SendPacket(&data);
+        for (std::size_t i = 0; i < response.Stats.CreatureDisplayID.size(); ++i)
+        {
+            if (CreatureModel const* model = ci->GetModelByIdx(i))
+                response.Stats.CreatureDisplayID[i] = model->CreatureDisplayID;
+        }
+
+        response.Stats.HpMulti = ci->ModHealth;                      // dmg/hp modifier
+        response.Stats.EnergyMulti = ci->ModMana;                    // dmg/mana modifier
+        response.Stats.Leader = ci->RacialLeader;
+
+        if (CreatureQuestItemList const* items = sObjectMgr->GetCreatureQuestItemList(entry))
+            for (std::size_t i = 0; i < MAX_CREATURE_QUEST_ITEMS && i < items->size(); ++i)
+                response.Stats.QuestItems[i] = (*items)[i];
+
+        response.Stats.CreatureMovementInfoID = ci->movementId;      // CreatureMovementInfo.dbc
+        // RequiredExpansion left zero: this fork does not yet port the Cataclysm expansion-gate column
+        SendPacket(response.Write());
     }
     else
     {
         LOG_DEBUG("network", "WORLD: CMSG_CREATURE_QUERY - NO CREATURE INFO! ({})", guid.ToString());
-        WorldPacket data(SMSG_CREATURE_QUERY_RESPONSE, 4);
-        data << uint32(entry | 0x80000000);
-        SendPacket(&data);
+        SendPacket(response.Write());
         LOG_DEBUG("network", "WORLD: Sent SMSG_CREATURE_QUERY_RESPONSE");
     }
 }
