@@ -75,7 +75,7 @@ namespace Movement
 
         if (splineflags.animation)
         {
-            data << splineflags.getAnimationId();
+            data << splineflags.animId;
             data << move_spline.effect_start_time;
         }
 

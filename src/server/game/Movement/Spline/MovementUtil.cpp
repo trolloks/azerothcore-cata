@@ -139,40 +139,41 @@ namespace Movement
         STR(Unk10              ),
     };
 
+    // Bit meanings match Cataclysm build 15595 (see MoveSplineFlag.h).
     char const* g_SplineFlag_names[32] =
     {
-        STR(AnimBit1     ), // 0x00000001,
-        STR(AnimBit2     ), // 0x00000002,
-        STR(AnimBit3     ), // 0x00000004,
-        STR(AnimBit4     ), // 0x00000008,
-        STR(AnimBit5     ), // 0x00000010,
-        STR(AnimBit6     ), // 0x00000020,
-        STR(AnimBit7     ), // 0x00000040,
-        STR(AnimBit8     ), // 0x00000080,
-        STR(Done         ), // 0x00000100,
-        STR(Falling      ), // 0x00000200,           // Not Compartible With Trajectory Movement
-        STR(No_Spline    ), // 0x00000400,
-        STR(Trajectory   ), // 0x00000800,           // Not Compartible With Fall Movement
-        STR(CanSwim      ), // 0x00001000,
-        STR(Flying       ), // 0x00002000,           // Smooth Movement(Catmullrom Interpolation Mode), Flying Animation
-        STR(Knockback    ), // 0x00004000,           // Model Orientation Fixed
-        STR(Final_Point  ), // 0x00008000,
-        STR(Final_Target ), // 0x00010000,
-        STR(Final_Angle  ), // 0x00020000,
-        STR(Catmullrom   ), // 0x00040000,           // Used Catmullrom Interpolation Mode
-        STR(Cyclic       ), // 0x00080000,           // Movement By Cycled Spline
-        STR(Enter_Cycle  ), // 0x00100000,           // Everytime Appears With Cyclic Flag In Monster Move Packet
-        STR(Animation    ), // 0x00200000,           // Animationid (0...3), Uint32 Time, Not Compartible With Trajectory And Fall Movement
-        STR(Unknown4     ), // 0x00400000,           // Disables Movement By Path
-        STR(Unknown5     ), // 0x00800000,
-        STR(Unknown6     ), // 0x01000000,
-        STR(Unknown7     ), // 0x02000000,
-        STR(Unknown8     ), // 0x04000000,
-        STR(OrientationInversed ), // 0x08000000,           // Appears With Runmode Flag, Nodes ), // 1, Handles Orientation
-        STR(Unknown10    ), // 0x10000000,
-        STR(Unknown11    ), // 0x20000000,
-        STR(Unknown12    ), // 0x40000000,
-        STR(Unknown13    ), // 0x80000000,
+        STR(Unknown1            ), // 0x00000001,
+        STR(Unknown2            ), // 0x00000002,
+        STR(Unknown4            ), // 0x00000004,
+        STR(OrientationInversed ), // 0x00000008,
+        STR(FallingSlow         ), // 0x00000010,
+        STR(Done                ), // 0x00000020,
+        STR(Falling             ), // 0x00000040,           // Not compatible with Parabolic movement
+        STR(No_Spline           ), // 0x00000080,
+        STR(Unknown100          ), // 0x00000100,
+        STR(Flying              ), // 0x00000200,           // Smooth movement(Catmullrom interpolation mode), flying animation
+        STR(OrientationFixed    ), // 0x00000400,           // Model orientation fixed
+        STR(Catmullrom          ), // 0x00000800,           // Used Catmullrom interpolation mode
+        STR(Cyclic              ), // 0x00001000,           // Movement by cycled spline
+        STR(Enter_Cycle         ), // 0x00002000,           // Everytime appears with cyclic flag in monster move packet
+        STR(Frozen              ), // 0x00004000,           // Will never arrive
+        STR(TransportEnter      ), // 0x00008000,
+        STR(TransportExit       ), // 0x00010000,
+        STR(Unknown20000        ), // 0x00020000,
+        STR(Unknown40000        ), // 0x00040000,
+        STR(Backward            ), // 0x00080000,
+        STR(SmoothGroundPath    ), // 0x00100000,
+        STR(CanSwim             ), // 0x00200000,
+        STR(UncompressedPath    ), // 0x00400000,
+        STR(Unknown800000       ), // 0x00800000,
+        STR(Animation           ), // 0x01000000,           // Animation id, uint32 time, not compatible with Falling/Parabolic
+        STR(Parabolic           ), // 0x02000000,           // Not compatible with Falling movement
+        STR(FadeObject          ), // 0x04000000,
+        STR(Steering            ), // 0x08000000,
+        STR(UnlimitedSpeed      ), // 0x10000000,
+        STR(Final_Point         ), // 0x20000000,           // fork-local only, not sent on the wire
+        STR(Final_Target        ), // 0x40000000,           // fork-local only, not sent on the wire
+        STR(Final_Angle         ), // 0x80000000,           // fork-local only, not sent on the wire
     };
 
     template<class Flags, int N>
