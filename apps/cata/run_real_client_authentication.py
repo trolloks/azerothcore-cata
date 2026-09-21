@@ -189,6 +189,20 @@ TARGET_TARGETED_SPELL_CAST_ACTION_BUTTON = 0
 # (see above).
 TARGET_TARGETED_SPELL_CAST_DUMMY_GUID = 99990001
 TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY = 2809
+INVALID_TARGET_SPELL_CAST_MODE = "invalid-target-spell-cast"
+# Issue #85's remaining "invalid-target negative case" acceptance item, exercised via the action
+# bar like the other cast modes above. Reuses the Fireball grant from target_targeted_spell_cast_
+# seed_sql (enemy-only-targeted). Rather than a GM `.cast` command (the fixture account has no
+# RBAC/GM grant, and the issue calls for the action bar specifically), targeting is done with the
+# client-local "/target <name>" macro: it resolves against the client's own object cache and needs
+# no server permission, so it works for an ordinary player. Self-targeting sends a real
+# CMSG_SET_SELECTION, but generation 1 showed the client itself rejects the follow-up hotkey press
+# ("Invalid target" flashes on screen, action button flares red) and never sends CMSG_CAST_SPELL at
+# all: unlike range/cooldown/reagents, the 4.3.4 UI already knows the spell's implicit-target type
+# and the current target's reaction from data it has locally, so friend/foe target-type mismatches
+# are one of the checks it pre-validates instead of leaving to the server. That client-side refusal
+# (no CMSG_CAST_SPELL, no SMSG_SPELL_GO, no SMSG_CAST_FAILED - the cast simply never happens) is
+# itself the acceptance evidence for this negative case.
 CHAT_MESSAGE_MODE = "chat-message"
 # Plain lowercase letters only: automate_key_sequence maps each character straight to its own
 # X11 keysym name (no digits/space/shift handling needed), and no chat command prefix, so the
@@ -198,7 +212,7 @@ CHAT_MESSAGE_TEXT = "chatcheck"
 POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
     IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
-    BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
+    BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
 })
 CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
@@ -214,7 +228,7 @@ CHARACTER_ZONE = 12
 def plan_number(mode: str) -> str:
     if mode == CHAT_MESSAGE_MODE:
         return "89"
-    if mode in {BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE}:
+    if mode in {BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, INVALID_TARGET_SPELL_CAST_MODE}:
         return "25"
     if mode == CHARACTER_CREATION_MODE:
         return "22"
@@ -1796,6 +1810,24 @@ def automate_target_targeted_spell_cast(generation: Generation) -> None:
     time.sleep(TARGET_TARGETED_SPELL_CAST_COMPLETE_DELAY_SECONDS)  # let the second cast complete
 
 
+# "/target <name>" (lowercase; the client's name lookup is case-insensitive) self-targets via the
+# chat edit box, then action bar button 1 casts the enemy-only Fireball at that (friendly) target.
+INVALID_TARGET_SPELL_CAST_KEYS = (
+    "Return", "slash", *tuple("target"), "space", *tuple(CHARACTER_NAME.lower()), "Return",
+)
+INVALID_TARGET_SPELL_CAST_CAST_KEYS = ("1",)
+
+
+def automate_invalid_target_spell_cast(generation: Generation) -> None:
+    capture_desktop_screenshot(generation, "desktop-before-invalid-target.png")
+    automate_key_sequence(generation, INVALID_TARGET_SPELL_CAST_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(1.0)  # let the client resolve the self-target before casting
+    capture_desktop_screenshot(generation, "desktop-after-invalid-target.png")
+    automate_key_sequence(generation, INVALID_TARGET_SPELL_CAST_CAST_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(2.0)  # let SMSG_CAST_FAILED arrive
+    capture_desktop_screenshot(generation, "desktop-after-invalid-target-cast.png")
+
+
 def character_creation_points(x: int, y: int, width: int, height: int) -> dict[str, tuple[int, int]]:
     # Fractions calibrated against a 1800x1042 owned window on the Cataclysm 15595 creation
     # screen: Alliance/Human is the first race portrait, Warrior the first class icon (both
@@ -1935,6 +1967,8 @@ def run_client(args: argparse.Namespace) -> None:
     if generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE:
         mysql(manifest, generation, target_targeted_spell_cast_seed_sql(), generation["schemas"]["characters"])
         mysql(manifest, generation, target_targeted_spell_cast_world_seed_sql(), generation["schemas"]["world"])
+    if generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE:
+        mysql(manifest, generation, target_targeted_spell_cast_seed_sql(), generation["schemas"]["characters"])
     popens: dict[str, subprocess.Popen[bytes]] = {}
     outputs: list[object] = []
     try:
@@ -1984,6 +2018,7 @@ def run_client(args: argparse.Namespace) -> None:
         spell_cast_sent = False
         target_targeted_spell_cast_sent = False
         chat_message_sent = False
+        invalid_target_spell_cast_sent = False
         post_marker_hold_started: float | None = None
         milestone_definition = CHARACTER_MILESTONES if generation["mode"] in CHARACTER_MODES else CLIENT_MILESTONES
         while time.monotonic() < deadline:
@@ -2042,6 +2077,12 @@ def run_client(args: argparse.Namespace) -> None:
                 ):
                     automate_chat_message(generation)
                     chat_message_sent = True
+                if (
+                    generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE and selection_sent
+                    and not invalid_target_spell_cast_sent and in_world_control_marker_count(generation) > 0
+                ):
+                    automate_invalid_target_spell_cast(generation)
+                    invalid_target_spell_cast_sent = True
                 if generation["mode"] in POST_MARKER_MODES and selection_sent:
                     marker_count = POST_MARKER_COUNTERS[generation["mode"]](generation)
                     if marker_count and post_marker_hold_started is None:
@@ -2435,10 +2476,22 @@ def target_targeted_spell_cast_marker_count(generation: Generation) -> int:
     return len(TARGET_TARGETED_SPELL_CAST_SEQUENCE.findall(after_sync))
 
 
+INVALID_TARGET_SPELL_CAST_SEQUENCE = re.compile(r"\bC->S:\s+.*?\bCMSG_SET_SELECTION\b")
+
+
+def invalid_target_spell_cast_marker_count(generation: Generation) -> int:
+    # Proves the "/target" automation actually ran (a real self-selection reached the server);
+    # the negative case itself is the *absence* of any CMSG_CAST_SPELL/SMSG_SPELL_GO/SMSG_CAST_FAILED
+    # afterwards - see INVALID_TARGET_SPELL_CAST_MODE.
+    after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
+    after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
+    return len(INVALID_TARGET_SPELL_CAST_SEQUENCE.findall(after_sync))
+
+
 POST_MARKER_MODES = frozenset({
     INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
     GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, CHARACTER_CREATION_MODE, BASIC_SPELL_CAST_MODE,
-    TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
+    TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -2452,6 +2505,7 @@ POST_MARKER_COUNTERS = {
     BASIC_SPELL_CAST_MODE: spell_cast_marker_count,
     TARGET_TARGETED_SPELL_CAST_MODE: target_targeted_spell_cast_marker_count,
     CHAT_MESSAGE_MODE: chat_message_marker_count,
+    INVALID_TARGET_SPELL_CAST_MODE: invalid_target_spell_cast_marker_count,
 }
 
 
@@ -2596,9 +2650,10 @@ def sanitized_evidence(
     basic_spell_cast_mode = generation["mode"] == BASIC_SPELL_CAST_MODE
     target_targeted_spell_cast_mode = generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE
     chat_message_mode = generation["mode"] == CHAT_MESSAGE_MODE
+    invalid_target_spell_cast_mode = generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
-        BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
+        BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
@@ -2622,6 +2677,8 @@ def sanitized_evidence(
             else "target_targeted_spell_cast_pass_candidate" if target_targeted_spell_cast_mode
             and "characters_completed" in milestones
             else "chat_message_pass_candidate" if chat_message_mode and "characters_completed" in milestones
+            else "invalid_target_spell_cast_pass_candidate" if invalid_target_spell_cast_mode
+            and "characters_completed" in milestones
             else "jump_fall_land_pass_candidate" if jump_fall_land_mode and "characters_completed" in milestones
             else "ground_movement_pass_candidate" if ground_movement_mode and "characters_completed" in milestones
             else "basic_movement_pass_candidate" if basic_movement_mode and "characters_completed" in milestones
@@ -2655,13 +2712,20 @@ def sanitized_evidence(
         "ground_movement_sequence": ground_movement_sequence(generation) if ground_movement_mode else None,
         "jump_fall_land_sequence": ground_movement_sequence(generation) if jump_fall_land_mode else None,
         "spell_cast_marker_count": (
-            spell_cast_marker_count(generation) if basic_spell_cast_mode or target_targeted_spell_cast_mode else None
+            spell_cast_marker_count(generation)
+            if basic_spell_cast_mode or target_targeted_spell_cast_mode or invalid_target_spell_cast_mode else None
         ),
-        "cast_failed_marker_count": cast_failed_marker_count(generation) if target_targeted_spell_cast_mode else None,
+        "cast_failed_marker_count": (
+            cast_failed_marker_count(generation)
+            if target_targeted_spell_cast_mode or invalid_target_spell_cast_mode else None
+        ),
         "target_targeted_spell_cast_sequence_count": (
             target_targeted_spell_cast_marker_count(generation) if target_targeted_spell_cast_mode else None
         ),
         "chat_message_marker_count": chat_message_marker_count(generation) if chat_message_mode else None,
+        "invalid_target_spell_cast_sequence_count": (
+            invalid_target_spell_cast_marker_count(generation) if invalid_target_spell_cast_mode else None
+        ),
         "creation_marker_count": creation_marker_count_value if creation_mode else None,
         "post_marker_hold_seconds": (
             generation.get("post_marker_hold_seconds", 0) if generation["mode"] in POST_MARKER_MODES else None
@@ -2712,9 +2776,10 @@ def verify(args: argparse.Namespace) -> None:
     basic_spell_cast_mode = generation["mode"] == BASIC_SPELL_CAST_MODE
     target_targeted_spell_cast_mode = generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE
     chat_message_mode = generation["mode"] == CHAT_MESSAGE_MODE
+    invalid_target_spell_cast_mode = generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
-        BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
+        BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     rows = character_row_count(manifest, generation) if character_mode else None
@@ -2834,6 +2899,12 @@ def verify(args: argparse.Namespace) -> None:
             )
         if chat_message_mode:
             character_ok = character_ok and evidence["chat_message_marker_count"] > 0
+        if invalid_target_spell_cast_mode:
+            character_ok = character_ok and (
+                evidence["invalid_target_spell_cast_sequence_count"] > 0
+                and evidence["spell_cast_marker_count"] == 0
+                and evidence["cast_failed_marker_count"] == 0
+            )
         if creation_mode:
             character_ok = character_ok and (
                 any(item == {"direction": "c2s", "opcode": "CMSG_CHAR_CREATE"} for item in transcript)
@@ -2850,6 +2921,7 @@ def verify(args: argparse.Namespace) -> None:
                 else "basic_spell_cast_pass" if basic_spell_cast_mode
                 else "target_targeted_spell_cast_pass" if target_targeted_spell_cast_mode
                 else "chat_message_pass" if chat_message_mode
+                else "invalid_target_spell_cast_pass" if invalid_target_spell_cast_mode
                 else "jump_fall_land_pass" if jump_fall_land_mode
                 else "ground_movement_pass" if ground_movement_mode
                 else "basic_movement_pass" if basic_movement_mode
@@ -3445,6 +3517,17 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         ):
             (raw / "WorldServer.log").write_text(log)
             assert target_targeted_spell_cast_marker_count(enum_generation) == expected
+        assert plan_number(INVALID_TARGET_SPELL_CAST_MODE) == "25"
+        assert "slash" in INVALID_TARGET_SPELL_CAST_KEYS and "space" in INVALID_TARGET_SPELL_CAST_KEYS
+        for log, expected in (
+            ("", 0),
+            (
+                "Finished object update bootstrap after adding to map\n" + IN_WORLD_CONTROL_MARKER +
+                "\nC->S: 1.2.3.4 [CMSG_SET_SELECTION 0x0506 (1286)]\n", 1
+            ),
+        ):
+            (raw / "WorldServer.log").write_text(log)
+            assert invalid_target_spell_cast_marker_count(enum_generation) == expected
     auth_keys = (
         "RealmServerPort", "BindIP", "LogsDir", "PidFile", "RealmsStateUpdateDelay",
         "LoginDatabaseInfo", "Updates.EnableDatabases", "Updates.AutoSetup", "StrictVersionCheck",
@@ -3514,7 +3597,7 @@ def parser() -> argparse.ArgumentParser:
             CHARACTER_SELECTION_MODE,
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,
             RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, BASIC_SPELL_CAST_MODE,
-            TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
+            TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
         ), default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)
