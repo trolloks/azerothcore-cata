@@ -26,7 +26,7 @@ class WorldPacket;
 enum OBJECT_UPDATE_TYPE
 {
     // Cata 4.3.4 dropped the WotLK UPDATETYPE_MOVEMENT=1 variant from this byte
-    // (movement travels over separate MSG_MOVE_*/SMSG_MONSTER_MOVE opcodes instead),
+    // (movement travels over separate MSG_MOVE_*/SMSG_ON_MONSTER_MOVE opcodes instead),
     // which shifts every other value down by one versus WotLK -- verified against
     // cata-js's proven-working reference (docs/smsg-update-object.md). Sending the
     // old WotLK numbering (CREATE_OBJECT2=3) makes the real client read a player's

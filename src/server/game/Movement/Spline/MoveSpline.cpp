@@ -199,7 +199,7 @@ namespace Movement
 
     /// ============================================================================================
 
-    bool MoveSplineInitArgs::Validate(Unit* unit) const
+    bool MoveSplineInitArgs::Validate(Unit* unit)
     {
 #define CHECK(exp) \
         if (!(exp)) \
@@ -213,28 +213,43 @@ namespace Movement
         CHECK(path.size() > 1);
         CHECK(velocity > 0.01f);
         CHECK(time_perc >= 0.f && time_perc <= 1.f);
-        //CHECK(_checkPathBounds());
+        CHECK(_checkPathLengths());
         return true;
 #undef CHECK
     }
 
-    // MONSTER_MOVE packet format limitation for not CatmullRom movement:
-    // each vertex offset packed into 11 bytes
-    bool MoveSplineInitArgs::_checkPathBounds() const
+    // check path lengths and whether each vertex offset from the path midpoint still fits the
+    // packed 11-bit XY / 10-bit Z monster-move format; fall back to the uncompressed wire format
+    // (raw floats per vertex) rather than rejecting the spline, per Cata build 15595.
+    bool MoveSplineInitArgs::_checkPathLengths()
     {
-        if (!(flags & MoveSplineFlag::Mask_CatmullRom) && path.size() > 2)
+        constexpr float MIN_XY_OFFSET = -(1 << 11) / 4.0f;
+        constexpr float MIN_Z_OFFSET = -(1 << 10) / 4.0f;
+
+        // positive values have 1 less bit limit (if the highest bit was set, value would be sign extended into negative when decompressing)
+        constexpr float MAX_XY_OFFSET = (1 << 10) / 4.0f;
+        constexpr float MAX_Z_OFFSET = (1 << 9) / 4.0f;
+
+        auto isValidPackedXYOffset = [](float coord) -> bool { return coord > MIN_XY_OFFSET && coord < MAX_XY_OFFSET; };
+        auto isValidPackedZOffset = [](float coord) -> bool { return coord > MIN_Z_OFFSET && coord < MAX_Z_OFFSET; };
+
+        if (path.size() > 2)
         {
-            constexpr auto MAX_OFFSET = (1 << 11) / 2;
+            if ((path[2] - path[1]).length() < 0.1f)
+                return false;
+
             Vector3 middle = (path.front() + path.back()) / 2;
-            Vector3 offset;
             for (uint32 i = 1; i < path.size() - 1; ++i)
             {
-                offset = path[i] - middle;
-                if (std::fabs(offset.x) >= MAX_OFFSET || std::fabs(offset.y) >= MAX_OFFSET || std::fabs(offset.z) >= MAX_OFFSET)
-                {
-                    LOG_ERROR("movement", "MoveSplineInitArgs::_checkPathBounds check failed");
+                if ((path[i + 1] - path[i]).length() < 0.1f)
                     return false;
-                }
+
+                // when compression is enabled, each point coord is packed into 11 bits (10 for Z)
+                if (!flags.uncompressedPath)
+                    if (!isValidPackedXYOffset(middle.x - path[i].x)
+                        || !isValidPackedXYOffset(middle.y - path[i].y)
+                        || !isValidPackedZOffset(middle.z - path[i].z))
+                        flags.uncompressedPath = true;
             }
         }
         return true;

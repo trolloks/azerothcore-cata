@@ -199,7 +199,7 @@ void AuraApplication::BuildUpdatePacket(ByteBuffer& data, bool remove) const
     Aura const* aura = GetBase();
     data << uint32(aura->GetId());
     uint32 flags = _flags;
-    if (aura->GetMaxDuration() > 0 && !aura->GetSpellInfo()->HasAttribute(SPELL_ATTR5_DO_NOT_DISPLAY_DURATION))
+    if (aura->GetType() != DYNOBJ_AURA_TYPE && aura->GetMaxDuration() > 0 && !aura->GetSpellInfo()->HasAttribute(SPELL_ATTR5_DO_NOT_DISPLAY_DURATION))
         flags |= AFLAG_DURATION;
 
     // paladin auras are positive for self-cast only
@@ -212,7 +212,11 @@ void AuraApplication::BuildUpdatePacket(ByteBuffer& data, bool remove) const
     // stack amount has priority over charges (checked on retail with spell 50262)
     data << uint8(aura->GetSpellInfo()->StackAmount ? aura->GetStackAmount() : aura->GetCharges());
 
-    if (!(flags & AFLAG_CASTER))
+    // Cata 4.3.4: client always expects a caster-GUID field for non-Unit casters (GameObject/Item/etc.),
+    // even when AFLAG_CASTER is set; a real caster GUID is sent only for Unit casters when the flag is clear.
+    if (!aura->GetCasterGUID().IsUnit())
+        data << ObjectGuid::Empty.WriteAsPacked();
+    else if (!(flags & AFLAG_CASTER))
         data << aura->GetCasterGUID().WriteAsPacked();
 
     if (flags & AFLAG_DURATION)

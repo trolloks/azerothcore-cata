@@ -18,6 +18,7 @@
 #include "MovementPacketBuilder.h"
 #include "ByteBuffer.h"
 #include "MoveSpline.h"
+#include "ObjectGuid.h"
 
 namespace Movement
 {
@@ -40,14 +41,14 @@ namespace Movement
         MonsterMoveFacingAngle  = 4
     };
 
-    void PacketBuilder::WriteCommonMonsterMovePart(MoveSpline const& move_spline, ByteBuffer& data)
+    // Cata build 15595 SMSG_ON_MONSTER_MOVE / SMSG_ON_MONSTER_MOVE_TRANSPORT spline-data body
+    // (splineId, facing, flags, duration, [animation], [jump], path). Caller writes the mover
+    // GUID / transport info / position ahead of this.
+    void PacketBuilder::WriteMonsterMove(MoveSpline const& move_spline, ByteBuffer& data)
     {
-        MoveSplineFlag splineflags = move_spline.splineflags;
-
-        data << uint8(0);                                       // sets/unsets MOVEMENTFLAG2_UNK7 (0x40)
-        data << move_spline.spline.getPoint(move_spline.spline.first());
         data << move_spline.GetId();
 
+        MoveSplineFlag splineflags = move_spline.splineflags;
         switch (splineflags & MoveSplineFlag::Mask_Final_Facing)
         {
             case MoveSplineFlag::Final_Target:
@@ -67,10 +68,6 @@ namespace Movement
                 break;
         }
 
-        // add fake Enter_Cycle flag - needed for client-side cyclic movement (client will erase first spline vertex after first cycle done)
-        // Xinef: this flag breaks cycle for ground movement, client teleports npc between last and first point instead of using smooth movement
-        if (splineflags & MoveSplineFlag::Flying)
-            splineflags.enter_cycle = move_spline.isCyclic();
         data << uint32(splineflags & uint32(~MoveSplineFlag::Mask_No_Monster_Move));
 
         if (splineflags.animation)
@@ -86,117 +83,150 @@ namespace Movement
             data << move_spline.vertical_acceleration;
             data << move_spline.effect_start_time;
         }
-    }
-
-    void PacketBuilder::WriteStopMovement(Vector3 const& pos, uint32 splineId, ByteBuffer& data)
-    {
-        data << uint8(0);                                       // sets/unsets MOVEMENTFLAG2_UNK7 (0x40)
-        data << pos;
-        data << splineId;
-        data << uint8(MonsterMoveStop);
-    }
-
-    void WriteLinearPath(Spline<int32> const& spline, ByteBuffer& data)
-    {
-        uint32 last_idx = spline.getPointCount() - 3;
-        Vector3 const* real_path = &spline.getPoint(1);
-
-        data << last_idx;
-        data << real_path[last_idx];   // destination
-        if (last_idx > 1)
-        {
-            Vector3 middle = (real_path[0] + real_path[last_idx]) / 2.f;
-            Vector3 offset;
-            // first and last points already appended
-            for (uint32 i = 1; i < last_idx; ++i)
-            {
-                offset = middle - real_path[i];
-                data.appendPackXYZ(offset.x, offset.y, offset.z);
-            }
-        }
-    }
-
-    void WriteCatmullRomPath(Spline<int32> const& spline, ByteBuffer& data)
-    {
-        uint32 count = spline.getPointCount() - 3;
-        data << count;
-        data.append<Vector3>(&spline.getPoint(2), count);
-    }
-
-    void WriteCatmullRomCyclicPath(Spline<int32> const& spline, ByteBuffer& data, bool flying)
-    {
-        uint32 count = spline.getPointCount() - 3;
-        data << uint32(count + 1);
-        if (flying)
-        {
-            data << spline.getPoint(1); // fake point, client will erase it from the spline after first cycle done
-            data.append<Vector3>(&spline.getPoint(2), count);
-        }
-        else
-        {
-            data.append<Vector3>(&spline.getPoint(2), count);
-            data << Vector3::zero(); //Xinef: fake point
-        }
-    }
-
-    void PacketBuilder::WriteMonsterMove(MoveSpline const& move_spline, ByteBuffer& data)
-    {
-        WriteCommonMonsterMovePart(move_spline, data);
 
         Spline<int32> const& spline = move_spline.spline;
-        MoveSplineFlag splineflags = move_spline.splineflags;
-        if (splineflags & MoveSplineFlag::Mask_CatmullRom)
+        std::vector<Vector3> const& array = spline.getPoints();
+        uint32 cyclicOffset = splineflags.cyclic ? 4 : 3;
+
+        if (splineflags.uncompressedPath)
         {
-            if (splineflags.cyclic)
-                WriteCatmullRomCyclicPath(spline, data, splineflags & MoveSplineFlag::Flying);
-            else
-                WriteCatmullRomPath(spline, data);
+            uint32 count = spline.getPointCount() - cyclicOffset;
+            data << count;
+            for (uint32 i = 0; i < count; ++i)
+                data << array[i + 2];
         }
         else
-            WriteLinearPath(spline, data);
+        {
+            uint32 last_idx = spline.getPointCount() - cyclicOffset;
+            Vector3 const* real_path = &spline.getPoint(1);
+
+            data << last_idx;
+            data << real_path[last_idx];   // destination
+            if (last_idx > 1)
+            {
+                Vector3 middle = (real_path[0] + real_path[last_idx]) / 2.f;
+                // first and last points already appended
+                for (uint32 i = 1; i < last_idx; ++i)
+                {
+                    Vector3 offset = middle - real_path[i];
+                    data.appendPackXYZ(offset.x, offset.y, offset.z);
+                }
+            }
+        }
     }
 
-    void PacketBuilder::WriteCreate(MoveSpline const& move_spline, ByteBuffer& data)
+    void PacketBuilder::WriteStopMovement(uint32 splineId, ByteBuffer& data)
     {
-        //WriteClientStatus(mov, data);
-        //data.append<float>(&mov.m_float_values[SpeedWalk], SpeedMaxCount);
-        //if (mov.SplineEnabled())
+        data << splineId;
+        data << uint8(MonsterMoveStop);
+        data << uint32(0);   // flags
+        data << uint32(0);   // duration
+        data << uint32(0);   // path count
+    }
+
+    void PacketBuilder::WriteCreateBits(MoveSpline const& moveSpline, ByteBuffer& data)
+    {
+        bool hasSplineMove = data.WriteBit(!moveSpline.Finalized());
+        if (!hasSplineMove)
+            return;
+
+        data.WriteBits(uint8(moveSpline.spline.mode()), 2);
+        data.WriteBit(moveSpline.splineflags.parabolic || moveSpline.splineflags.animation);
+        data.WriteBits(moveSpline.getPath().size(), 22);
+
+        switch (moveSpline.splineflags & MoveSplineFlag::Mask_Final_Facing)
         {
-            MoveSplineFlag const& splineFlags = move_spline.splineflags;
-
-            data << splineFlags.raw();
-
-            if (splineFlags.final_angle)
+            case MoveSplineFlag::Final_Target:
             {
-                data << move_spline.facing.angle;
+                ObjectGuid targetGuid(moveSpline.facing.target);
+                data.WriteBits(2, 2);
+                data.WriteBit(targetGuid[4]);
+                data.WriteBit(targetGuid[3]);
+                data.WriteBit(targetGuid[7]);
+                data.WriteBit(targetGuid[2]);
+                data.WriteBit(targetGuid[6]);
+                data.WriteBit(targetGuid[1]);
+                data.WriteBit(targetGuid[0]);
+                data.WriteBit(targetGuid[5]);
+                break;
             }
-            else if (splineFlags.final_target)
-            {
-                data << move_spline.facing.target;
-            }
-            else if (splineFlags.final_point)
-            {
-                data << move_spline.facing.f.x << move_spline.facing.f.y << move_spline.facing.f.z;
-            }
-
-            data << move_spline.timePassed();
-            data << move_spline.Duration();
-            data << move_spline.GetId();
-
-            data << float(1.f);                             // splineInfo.duration_mod; added in 3.1
-            data << float(1.f);                             // splineInfo.duration_mod_next; added in 3.1
-
-            data << move_spline.vertical_acceleration;      // added in 3.1
-            data << move_spline.effect_start_time;          // added in 3.1
-
-            uint32 nodes = move_spline.getPath().size();
-            data << nodes;
-            if (nodes)
-            {
-                data.append<Vector3>(&move_spline.getPath()[0], nodes);
-            }
-            data << uint8(move_spline.spline.mode());       // added in 3.1
-            data << (move_spline.isCyclic() ? Vector3::zero() : move_spline.FinalDestination());
+            case MoveSplineFlag::Final_Angle:
+                data.WriteBits(0, 2);
+                break;
+            case MoveSplineFlag::Final_Point:
+                data.WriteBits(1, 2);
+                break;
+            default:
+                data.WriteBits(3, 2);
+                break;
         }
+
+        data.WriteBit(moveSpline.splineflags.parabolic && moveSpline.effect_start_time < moveSpline.Duration());
+        data.WriteBits(moveSpline.splineflags.raw(), 25);
+    }
+
+    void PacketBuilder::WriteCreateData(MoveSpline const& moveSpline, ByteBuffer& data)
+    {
+        if (!moveSpline.Finalized())
+        {
+            MoveSplineFlag const& splineFlags = moveSpline.splineflags;
+
+            if (splineFlags.parabolic && moveSpline.effect_start_time < moveSpline.Duration())
+                data << moveSpline.vertical_acceleration;
+
+            data << moveSpline.timePassed();
+
+            switch (splineFlags & MoveSplineFlag::Mask_Final_Facing)
+            {
+                case MoveSplineFlag::Final_Angle:
+                    data << moveSpline.facing.angle;
+                    break;
+                case MoveSplineFlag::Final_Target:
+                {
+                    ObjectGuid facingGuid(moveSpline.facing.target);
+                    data.WriteByteSeq(facingGuid[5]);
+                    data.WriteByteSeq(facingGuid[3]);
+                    data.WriteByteSeq(facingGuid[7]);
+                    data.WriteByteSeq(facingGuid[1]);
+                    data.WriteByteSeq(facingGuid[6]);
+                    data.WriteByteSeq(facingGuid[4]);
+                    data.WriteByteSeq(facingGuid[2]);
+                    data.WriteByteSeq(facingGuid[0]);
+                    break;
+                }
+                default:
+                    break;
+            }
+
+            uint32 nodes = moveSpline.getPath().size();
+            for (uint32 i = 0; i < nodes; ++i)
+            {
+                data << float(moveSpline.getPath()[i].z);
+                data << float(moveSpline.getPath()[i].x);
+                data << float(moveSpline.getPath()[i].y);
+            }
+
+            if ((splineFlags & MoveSplineFlag::Mask_Final_Facing) == MoveSplineFlag::Final_Point)
+                data << moveSpline.facing.f.x << moveSpline.facing.f.z << moveSpline.facing.f.y;
+
+            data << float(1.f);                             // splineInfo.duration_mod_next
+            data << moveSpline.Duration();
+            if (splineFlags.parabolic || splineFlags.animation)
+                data << moveSpline.effect_start_time;
+
+            data << float(1.f);                             // splineInfo.duration_mod
+        }
+
+        if (!moveSpline.isCyclic())
+        {
+            Vector3 dest = moveSpline.FinalDestination();
+            data << float(dest.z);
+            data << float(dest.x);
+            data << float(dest.y);
+        }
+        else
+            data << Vector3::zero();
+
+        data << moveSpline.GetId();
     }
 }

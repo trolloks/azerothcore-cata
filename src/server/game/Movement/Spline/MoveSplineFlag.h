@@ -76,13 +76,13 @@ namespace Movement
 
             // Masks
             Mask_Final_Facing   = Final_Point | Final_Target | Final_Angle,
-            // flags that shouldn't be appended into SMSG_MONSTER_MOVE\SMSG_MONSTER_MOVE_TRANSPORT packet, should be more probably
+            // flags that shouldn't be appended into SMSG_ON_MONSTER_MOVE\SMSG_ON_MONSTER_MOVE_TRANSPORT packet, should be more probably
             Mask_No_Monster_Move = Mask_Final_Facing | Done,
             // CatmullRom interpolation mode used
             Mask_CatmullRom     = Flying | Catmullrom,
             // Unused, not supported flags
             Mask_Unused         = No_Spline | Enter_Cycle | Frozen | Unknown1 | Unknown2 | Unknown4 | Unknown100 | Unknown20000
-                                | Unknown40000 | Unknown800000 | Backward | SmoothGroundPath | UncompressedPath | FadeObject
+                                | Unknown40000 | Unknown800000 | Backward | SmoothGroundPath | FadeObject
                                 | Steering | UnlimitedSpeed
         };
 
@@ -157,7 +157,7 @@ namespace Movement
         bool final_target        : 1;
         bool final_angle         : 1;
 
-        // Not part of the wire flags word in build 15595; SMSG_MONSTER_MOVE sends this separately
+        // Not part of the wire flags word in build 15595; SMSG_ON_MONSTER_MOVE sends this separately
         // (see MovementPacketBuilder::WriteCommonMonsterMovePart).
         uint8 animId = 0;
     };

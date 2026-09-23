@@ -430,7 +430,7 @@ void OpcodeTable::Initialize()
     DEFINE_BIDIRECTIONAL_OPCODE(MSG_MOVE_SET_PITCH, MSG_MOVE_SET_PITCH, MSG_MOVE_SET_PITCH_SERVER);
     /*0x2411*/ DEFINE_HANDLER(MSG_MOVE_WORLDPORT_ACK,                                                STATUS_TRANSFER,   PROCESS_THREADUNSAFE,   &WorldSession::HandleMoveWorldportAckOpcode             );
     DEFINE_BIDIRECTIONAL_OPCODE(MSG_MOVE_WORLDPORT_ACK, MSG_MOVE_WORLDPORT_ACK, MSG_MOVE_WORLDPORT_ACK_SERVER);
-    /*0x6E17*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_MONSTER_MOVE,                                       STATUS_NEVER);
+    /*0x6E17*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_ON_MONSTER_MOVE,                                    STATUS_NEVER);
     /*0x75B1*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_MOVE_WATER_WALK,                                    STATUS_NEVER);
     /*0x34B7*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_MOVE_LAND_WALK,                                     STATUS_NEVER);
     /*0x00E0*/ DEFINE_HANDLER(CMSG_MOVE_CHARM_PORT_CHEAT,                                            STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
@@ -932,7 +932,7 @@ void OpcodeTable::Initialize()
     /*0x6F27*/ DEFINE_HANDLER(CMSG_SUMMON_RESPONSE,                                                  STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleSummonResponseOpcode               );
     /*0x02AD*/ DEFINE_HANDLER(MSG_DEV_SHOWLABEL,                                                     STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     DEFINE_BIDIRECTIONAL_OPCODE(MSG_DEV_SHOWLABEL, MSG_DEV_SHOWLABEL, MSG_DEV_SHOWLABEL_SERVER);
-    /*0x02AE*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_MONSTER_MOVE_TRANSPORT,                             STATUS_NEVER);
+    /*0x2004*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_ON_MONSTER_MOVE_TRANSPORT,                          STATUS_NEVER);
     /*0x2E27*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_PET_BROKEN,                                         STATUS_NEVER);
     /*0x02B0*/ DEFINE_HANDLER(MSG_MOVE_FEATHER_FALL,                                                 STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     DEFINE_BIDIRECTIONAL_OPCODE(MSG_MOVE_FEATHER_FALL, MSG_MOVE_FEATHER_FALL, MSG_MOVE_FEATHER_FALL_SERVER);
