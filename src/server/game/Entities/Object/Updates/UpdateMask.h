@@ -38,17 +38,31 @@ public:
     {
         SetCount(right.GetCount());
         memcpy(_bits, right._bits, sizeof(uint8) * _blockCount * 32);
+        _lastSetBit = right._lastSetBit;
+        _hasSetBit = right._hasSetBit;
     }
 
     ~UpdateMask() { delete[] _bits; }
 
-    void SetBit(uint32 index) { _bits[index] = 1; }
+    void SetBit(uint32 index)
+    {
+        _bits[index] = 1;
+        if (!_hasSetBit || index > _lastSetBit)
+            _lastSetBit = index;
+        _hasSetBit = true;
+    }
     void UnsetBit(uint32 index) { _bits[index] = 0; }
     [[nodiscard]] bool GetBit(uint32 index) const { return _bits[index] != 0; }
 
+    // Cata build 15595: the client only expects mask blocks up to the highest set bit
+    // (trailing all-zero blocks are omitted), unlike WotLK which always sent GetBlockCount()
+    // (i.e. every block for the object's full field count).
     void AppendToPacket(ByteBuffer* data)
     {
-        for (uint32 i = 0; i < GetBlockCount(); ++i)
+        uint32 usedBlockCount = _hasSetBit ? (_lastSetBit / CLIENT_UPDATE_MASK_BITS) + 1 : 0;
+        *data << uint8(usedBlockCount);
+
+        for (uint32 i = 0; i < usedBlockCount; ++i)
         {
             ClientUpdateMaskType maskPart = 0;
             for (uint32 j = 0; j < CLIENT_UPDATE_MASK_BITS; ++j)
@@ -71,12 +85,16 @@ public:
 
         _bits = new uint8[_blockCount * CLIENT_UPDATE_MASK_BITS];
         memset(_bits, 0, sizeof(uint8) * _blockCount * CLIENT_UPDATE_MASK_BITS);
+        _lastSetBit = 0;
+        _hasSetBit = false;
     }
 
     void Clear()
     {
         if (_bits)
             memset(_bits, 0, sizeof(uint8) * _blockCount * CLIENT_UPDATE_MASK_BITS);
+        _lastSetBit = 0;
+        _hasSetBit = false;
     }
 
     UpdateMask& operator=(UpdateMask const& right)
@@ -86,6 +104,8 @@ public:
 
         SetCount(right.GetCount());
         memcpy(_bits, right._bits, sizeof(uint8) * _blockCount * CLIENT_UPDATE_MASK_BITS);
+        _lastSetBit = right._lastSetBit;
+        _hasSetBit = right._hasSetBit;
         return *this;
     }
 
@@ -118,6 +138,8 @@ private:
     uint32 _fieldCount{0};
     uint32 _blockCount{0};
     uint8* _bits{nullptr};
+    uint32 _lastSetBit{0};
+    bool _hasSetBit{false};
 };
 
 #endif

@@ -16437,7 +16437,6 @@ void Unit::BuildValuesUpdate(uint8 updateType, ByteBuffer* data, Player* target)
         }
     }
 
-    cacheValue.buffer << uint8(updateMask.GetBlockCount());
     updateMask.AppendToPacket(&cacheValue.buffer);
     int32 fieldBufferPos = static_cast<int32>(cacheValue.buffer.wpos());
     cacheValue.buffer.append(fieldBuffer);
