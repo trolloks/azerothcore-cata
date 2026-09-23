@@ -348,12 +348,7 @@ void Object::BuildMovementUpdate(ByteBuffer* data, CreateObjectBits flags) const
     bool hasFallDirection = false;
     bool hasFallData = false;
     bool hasPitch = false;
-    // Our Movement::PacketBuilder only implements the WotLK-shaped combined WriteCreate();
-    // it has no split WriteCreateBits/WriteCreateData for Cata's bit-packed header, so a
-    // unit's own spline data cannot be embedded in this block yet. Not reached for a fresh
-    // player's own self-create (never mid-spline), only for observing another unit already
-    // spline-moving -- deferred rather than emitting a corrupt/mismatched bit stream.
-    bool const hasSpline = false;
+    bool hasSpline = false;
     bool hasSplineElevation = false;
 
     // Bit content -- ported from the pinned TrinityCore Cata reference
@@ -386,6 +381,7 @@ void Object::BuildMovementUpdate(ByteBuffer* data, CreateObjectBits flags) const
         hasFallDirection = self->HasUnitMovementFlag(MOVEMENTFLAG_FALLING);
         hasFallData = hasFallDirection || self->m_movementInfo.fallTime != 0;
         hasSplineElevation = self->HasUnitMovementFlag(MOVEMENTFLAG_SPLINE_ELEVATION);
+        hasSpline = self->IsSplineEnabled();
 
         data->WriteBit(!movementFlags);                                         // !Has MoveFlags0
         data->WriteBit(G3D::fuzzyEq(self->GetOrientation(), 0.0f));             // Has Orientation
@@ -422,7 +418,8 @@ void Object::BuildMovementUpdate(ByteBuffer* data, CreateObjectBits flags) const
 
         data->WriteBit(guid[4]);
 
-        // hasSpline is always false here; see comment above.
+        if (hasSpline)
+            Movement::PacketBuilder::WriteCreateBits(*self->movespline, *data);
 
         data->WriteBit(guid[6]);
         if (hasFallData)
@@ -492,7 +489,8 @@ void Object::BuildMovementUpdate(ByteBuffer* data, CreateObjectBits flags) const
         if (hasSplineElevation)
             *data << float(self->m_movementInfo.splineElevation);
 
-        // hasSpline is always false here; see comment above.
+        if (hasSpline)
+            Movement::PacketBuilder::WriteCreateData(*self->movespline, *data);
 
         *data << float(self->GetPositionZ());
         data->WriteByteSeq(guid[5]);
