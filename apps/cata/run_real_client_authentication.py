@@ -2144,7 +2144,11 @@ def run_client(args: argparse.Namespace) -> None:
                     generation["mode"] == IN_WORLD_CONTROL_MODE and selection_sent and not sustained_forward_sent
                     and in_world_control_marker_count(generation) > 0
                 ):
-                    automate_key_sequence(generation, ("w",), hold_seconds=45.0)
+                    # A single 45s-long keydown produced no MSG_MOVE_START_FORWARD in generation 62:
+                    # a synthetic XTest press has no OS-level autorepeat, so the whole hold is one
+                    # long-lived key-down instead of repeated presses. GROUND_MOVEMENT_MODE's proven
+                    # 0.6s taps do register reliably, so chain enough of them to cover ~45s instead.
+                    automate_key_sequence(generation, ("w",) * 45, hold_seconds=0.6, gap_seconds=0.4)
                     sustained_forward_sent = True
                 if (
                     generation["mode"] == GROUND_MOVEMENT_MODE and selection_sent and not ground_movement_sent
