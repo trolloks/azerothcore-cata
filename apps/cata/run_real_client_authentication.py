@@ -947,7 +947,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         "Ra.Enable": "0",
         "SOAP.Enabled": "0",
         "Cluster.Enabled": "0",
-        "Appender.Server": '2,5,0,WorldServer.log,w',
+        "Appender.Server": '2,5,1,WorldServer.log,w',
         "Logger.network": (
             "5,Server" if generation["mode"] in {
                 BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
@@ -2105,6 +2105,7 @@ def run_client(args: argparse.Namespace) -> None:
         character_hold_started: float | None = None
         selection_sent = False
         ground_movement_sent = False
+        sustained_forward_sent = False
         jump_fall_land_sent = False
         walk_run_mode_switch_sent = False
         spell_cast_sent = False
@@ -2139,6 +2140,16 @@ def run_client(args: argparse.Namespace) -> None:
                     and player_login_callbacks(generation)
                 ):
                     break
+                if (
+                    generation["mode"] == IN_WORLD_CONTROL_MODE and selection_sent and not sustained_forward_sent
+                    and in_world_control_marker_count(generation) > 0
+                ):
+                    # A single 45s-long keydown produced no MSG_MOVE_START_FORWARD in generation 62:
+                    # a synthetic XTest press has no OS-level autorepeat, so the whole hold is one
+                    # long-lived key-down instead of repeated presses. GROUND_MOVEMENT_MODE's proven
+                    # 0.6s taps do register reliably, so chain enough of them to cover ~45s instead.
+                    automate_key_sequence(generation, ("w",) * 45, hold_seconds=0.6, gap_seconds=0.4)
+                    sustained_forward_sent = True
                 if (
                     generation["mode"] == GROUND_MOVEMENT_MODE and selection_sent and not ground_movement_sent
                     and in_world_control_marker_count(generation) > 0
