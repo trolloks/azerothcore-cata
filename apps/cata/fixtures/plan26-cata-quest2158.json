@@ -20,7 +20,10 @@
     "295": 1291,
     "6774": 5526
   },
-  "creature_profile_scope": "Names, quest flags, script/AI selection and matching native display IDs; combat/stat parity is not claimed.",
+  "creature_profile_scope": [
+    "Names, quest flags, script/AI selection and matching native display IDs; ",
+    "combat/stat parity is not claimed."
+  ],
   "creature_questender": {
     "id": 295,
     "quest": 2158
@@ -195,7 +198,10 @@
       "unit_flags2": "2048"
     }
   },
-  "item_derivation": "Armor and durability follow the pinned ItemTemplate/GetEffectiveArmor and FillMaxDurability formulas; fixed quality 1, item level 5, wrists/hands.",
+  "item_derivation": [
+    "Armor and durability follow the pinned ItemTemplate/GetEffectiveArmor and ",
+    "FillMaxDurability formulas; fixed quality 1, item level 5, wrists/hands."
+  ],
   "items": {
     "159": {
       "Item": {
@@ -1353,6 +1359,7 @@
       }
     }
   },
+  "long_string_format": "Arrays of string chunks concatenate in order to reproduce the original scalar.",
   "migration_check": {
     "cleanup": "disposable schema removed",
     "quest": "2158\tRest and Relaxation\t30\t1\t890\t878\t57397\t57396\t57395\t15595",
@@ -1360,6 +1367,10 @@
     "result": "passed",
     "unrelated_row_preserved": true
   },
+  "poi_audit": [
+    "Native 4.3.4 TDB release retains VerifiedBuild 19831 for these POI rows.",
+    "Selected fields match the AC rows; this is source comparison, not build-15595 sniff proof."
+  ],
   "quest_details": {
     "Emote1": "1",
     "Emote2": "1",
@@ -1383,9 +1394,35 @@
     "EmoteDelay3": "0",
     "EmoteDelay4": "0",
     "ID": "2158",
-    "RewardText": "'Rest and relaxation for the tired and cold -- that\\'s our motto! Please, take a seat by the fire and rest your weary bones.$B$BWould you like to try a sampling of some of our fine food and drink?'",
+    "RewardText": [
+      "'Rest and relaxation for the tired and cold -- that\\'s our motto! Please, take a",
+      " seat by the fire and rest your weary bones.$B$BWould you like to try a sampling",
+      " of some of our fine food and drink?'"
+    ],
     "VerifiedBuild": "15595"
   },
+  "quest_poi": {
+    "Flags": "1",
+    "Floor": "0",
+    "MapID": "0",
+    "ObjectiveIndex": "-1",
+    "Priority": "0",
+    "QuestID": "2158",
+    "VerifiedBuild": "19831",
+    "WorldMapAreaId": "30",
+    "id": "0"
+  },
+  "quest_poi_points": [
+    {
+      "BlobIndex": "0",
+      "Idx1": "0",
+      "Idx2": "0",
+      "QuestID": "2158",
+      "VerifiedBuild": "19831",
+      "X": "-9463",
+      "Y": "16"
+    }
+  ],
   "quest_request_items": {
     "CompletionText": "''",
     "EmoteOnComplete": "2",
@@ -1418,7 +1455,13 @@
     "POIx": "0",
     "POIy": "0",
     "QuestCompletionLog": "NULL",
-    "QuestDescription": "'Every adventurer should rest when exhaustion sets in - and there is no finer place to get rest and relaxation than at the Lion\\'s Pride Inn!$B$BMy best friend, Innkeeper Farley, runs the Lion\\'s Pride. If you tell him I sent you, he may give you the special discounted rates on food and drink.$B$BTo find the Lion\\'s Pride Inn, travel south along the road from here -- you can\\'t miss it!'",
+    "QuestDescription": [
+      "'Every adventurer should rest when exhaustion sets in - and there is no finer ",
+      "place to get rest and relaxation than at the Lion\\'s Pride Inn!$B$BMy best ",
+      "friend, Innkeeper Farley, runs the Lion\\'s Pride. If you tell him I sent you, he",
+      " may give you the special discounted rates on food and drink.$B$BTo find the ",
+      "Lion\\'s Pride Inn, travel south along the road from here -- you can\\'t miss it!'"
+    ],
     "QuestGiverPortrait": "0",
     "QuestGiverTargetName": "NULL",
     "QuestGiverTextWindow": "NULL",
