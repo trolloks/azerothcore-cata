@@ -80,6 +80,7 @@ class Generation(TypedDict, total=False):
     paths: dict[str, str]
     released_updates: dict[str, list[str]]
     database_cache: dict[str, str]
+    issue97_stages: list[dict[str, object]]
     evidence: dict[str, object] | None
     failure: dict[str, str] | None
     isolation_unchanged: bool
@@ -108,7 +109,7 @@ TRANSITIONS: dict[str, set[str]] = {
     "observed": {"accepted", "failed", "inconclusive", "reset"},
     "accepted": {"replayed", "failed", "inconclusive", "reset"},
     "failed": {"reset"},
-    "inconclusive": {"reset"},
+    "inconclusive": {"accepted", "failed", "inconclusive", "reset"},
     "replayed": {"reset"},
     "reset": set(),
 }
@@ -225,6 +226,15 @@ CHARACTER_RACE = 1
 CHARACTER_CLASS = 1
 CHARACTER_MAP = 0
 CHARACTER_ZONE = 12
+CHARACTER_ORIENTATION = 0
+# Opt-in Plan 24 acceptance starts beside the measured area 9/12 boundary, facing west.
+ISSUE97 = os.environ.get("ISSUE97") == "1"
+if ISSUE97:
+    CHARACTER_POSITION = (-9054.0, -36.5, 88.8)
+    CHARACTER_ORIENTATION = 3.14159
+ISSUE97_PHASED_CREATURE_GUID, ISSUE97_CONTROL_CREATURE_GUID, ISSUE97_PHASED_GO_GUID = 9970001, 9970002, 9970001
+ISSUE97_CREATURE_ENTRY, ISSUE97_CONTROL_CREATURE_ENTRY = 197, 823
+ISSUE97_GO_ENTRY, ISSUE97_PHASE_ID = 2843, 125
 
 
 def plan_number(mode: str) -> str:
@@ -641,6 +651,28 @@ def target_targeted_spell_cast_world_seed_sql() -> str:
     )
 
 
+def issue97_world_seed_sql() -> str:
+    # Keep the scratch fixtures within interaction range of the measured inside stop.
+    creature = (
+        "INSERT INTO `creature` (`guid`,`id`,`map`,`zoneId`,`areaId`,`position_x`,`position_y`,`position_z`,"
+        "`wander_distance`,`MovementType`,`PhaseId`) VALUES "
+        f"({ISSUE97_PHASED_CREATURE_GUID},{ISSUE97_CREATURE_ENTRY},0,12,12,-9072,-39,88.7,0,0,{ISSUE97_PHASE_ID}),"
+        f"({ISSUE97_CONTROL_CREATURE_GUID},{ISSUE97_CONTROL_CREATURE_ENTRY},0,12,12,-9072,-42,88.7,0,0,0);"
+    )
+    gameobject = (
+        "INSERT INTO `gameobject` (`guid`,`id`,`map`,`zoneId`,`areaId`,`position_x`,`position_y`,`position_z`,"
+        "`orientation`,`rotation0`,`rotation1`,`rotation2`,`rotation3`,`spawntimesecs`,`animprogress`,`state`,"
+        f"`PhaseId`) VALUES ({ISSUE97_PHASED_GO_GUID},{ISSUE97_GO_ENTRY},0,12,12,-9072,-34,89.7,0,0,0,0,1,300,255,1,"
+        f"{ISSUE97_PHASE_ID});"
+    )
+    return (
+        f"DELETE FROM `creature` WHERE `id` IN ({ISSUE97_CREATURE_ENTRY},{ISSUE97_CONTROL_CREATURE_ENTRY},11260) "
+        f"AND `guid` IN ({ISSUE97_PHASED_CREATURE_GUID},{ISSUE97_CONTROL_CREATURE_GUID});"
+        f"DELETE FROM `gameobject` WHERE `id` IN ({ISSUE97_GO_ENTRY},21008) "
+        f"AND `guid`={ISSUE97_PHASED_GO_GUID};" + creature + gameobject
+    )
+
+
 def populated_character_seed_sql() -> str:
     x, y, z = CHARACTER_POSITION
     return (
@@ -665,7 +697,8 @@ def populated_character_seed_sql() -> str:
         # The cinematic path is not what this harness exercises, so skip it.
         "`health`,`cinematic`) "
         f"VALUES ({CHARACTER_GUID},{ACCOUNT_ID},'{CHARACTER_NAME}',{CHARACTER_RACE},{CHARACTER_CLASS},0,1,0,0,0,0,0,0,"
-        f"{x},{y},{z},{CHARACTER_MAP},0,'',0,{CHARACTER_ZONE},0,'','','',{CHARACTER_LIST_POSITION},0,10000,1);"
+        f"{x},{y},{z},{CHARACTER_MAP},{CHARACTER_ORIENTATION},'',0,{CHARACTER_ZONE},0,'','','',"
+        f"{CHARACTER_LIST_POSITION},0,10000,1);"
     )
 
 
@@ -678,7 +711,8 @@ def verify_populated_character_seed(manifest: Manifest, generation: Generation) 
         f"AND `race`={CHARACTER_RACE} AND `class`={CHARACTER_CLASS} AND `gender`=0 AND `level`=1 "
         "AND `skin`=0 AND `face`=0 AND `hairStyle`=0 AND `hairColor`=0 AND `facialStyle`=0 "
         f"AND ABS(`position_x`-({x}))<0.001 AND ABS(`position_y`-({y}))<0.001 "
-        f"AND ABS(`position_z`-({z}))<0.001 AND `map`={CHARACTER_MAP} AND `zone`={CHARACTER_ZONE} AND `orientation`=0 "
+        f"AND ABS(`position_z`-({z}))<0.001 AND `map`={CHARACTER_MAP} AND `zone`={CHARACTER_ZONE} "
+        f"AND ABS(`orientation`-({CHARACTER_ORIENTATION}))<0.001 "
         "AND `playerFlags`=0 AND `at_login`=0 AND `extra_flags`=0 AND COALESCE(`order`,0)=7 "
         "AND `taximask`='' AND `innTriggerId`=0 AND `equipmentCache`='' AND `exploredZones`='' "
         "AND `knownTitles`='' AND `cinematic`=1 AND `deleteDate` IS NULL;",
@@ -748,12 +782,13 @@ def apply_released_updates(
         if path.name in applied:
             continue
         contents = path.read_bytes()
-        mysql(manifest, generation, contents, schema)
         file_hash = hashlib.sha1(contents).hexdigest().upper()
         mysql(
             manifest, generation,
-            "INSERT INTO `updates` (`name`,`hash`,`state`,`speed`) "
-            f"VALUES ('{path.name}','{file_hash}','RELEASED',0);",
+            contents + b"\nDELIMITER ;\n" + (
+                "INSERT INTO `updates` (`name`,`hash`,`state`,`speed`) "
+                f"VALUES ('{path.name}','{file_hash}','RELEASED',0);"
+            ).encode(),
             schema,
         )
         added.append(path.name)
@@ -872,7 +907,12 @@ def restore_database_cache(
         "docker", "exec", "-i", str(generation["docker"]["container"]), "mysql",
         "-uroot", f"-p{manifest['mysql_root_password']}",
     ]
-    with path.open("rb") as handle:
+    # Group dump inserts between its table locks instead of flushing every insert separately.
+    with tempfile.TemporaryFile(dir=manifest["root"]) as handle, path.open("rb") as source:
+        handle.write(b"SET autocommit=0;\n")
+        shutil.copyfileobj(source, handle)
+        handle.write(b"\nCOMMIT;\n")
+        handle.seek(0)
         result = subprocess.run(
             command, stdin=handle, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             check=False, timeout=1800,
@@ -949,7 +989,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         "Cluster.Enabled": "0",
         "Appender.Server": '2,5,1,WorldServer.log,w',
         "Logger.network": (
-            "5,Server" if generation["mode"] in {
+            "5,Server" if ISSUE97 or generation["mode"] in {
                 BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
                 WALK_RUN_MODE_SWITCH_MODE,
             }
@@ -1279,12 +1319,14 @@ def preflight_prepare(args: argparse.Namespace) -> dict[str, object]:
 
 
 def prepare(args: argparse.Namespace) -> None:
+    started = time.monotonic()
     inputs = preflight_prepare(args)
+    print(f"prepare preflight: {time.monotonic() - started:.1f}s", flush=True)
     manifest_path = args.manifest.resolve()
     if manifest_path.exists():
         manifest = load_manifest(manifest_path)
-        latest = active_generation(manifest)
-        if latest["state"] != "reset":
+        latest = active_generation(manifest) if manifest["generations"] else None
+        if latest is not None and latest["state"] != "reset":
             if latest["state"] == "prepared":
                 print(f"generation {latest['number']} is already prepared")
                 return
@@ -1447,6 +1489,7 @@ def prepare(args: argparse.Namespace) -> None:
             verify_populated_character_seed(manifest, generation)
             if character_row_count(manifest, generation) != 1 or realm_character_count(manifest, generation) != 1:
                 raise RuntimeError("owned populated character seed counts do not equal one")
+        print(f"prepare database ready: {time.monotonic() - started:.1f}s elapsed", flush=True)
         data_destination = Path(paths["data"])
         data_destination.mkdir()
         copy_tree(Path(str(inputs["server_dbc_root"])), data_destination / "dbc")
@@ -1470,6 +1513,7 @@ def prepare(args: argparse.Namespace) -> None:
         for key in ("xdg_data", "xdg_config", "xdg_cache", "xdg_state", "raw_evidence"):
             Path(paths[key]).mkdir(parents=True, exist_ok=True)
         write_configs(manifest, generation)
+        print(f"prepare files ready: {time.monotonic() - started:.1f}s elapsed", flush=True)
         run_command(
             [str(inputs["wine"]), "wineboot", "-u"], timeout=300, env=wine_environment(generation),
         )
@@ -1484,7 +1528,7 @@ def prepare(args: argparse.Namespace) -> None:
         raise
     print(
         f"prepared Plan {plan_number(args.mode)} generation {number} in {generation_root} "
-        f"(database cache {generation['database_cache']['result']})"
+        f"(database cache {generation['database_cache']['result']}, {time.monotonic() - started:.1f}s)"
     )
 
 
@@ -1627,7 +1671,7 @@ def capture_desktop_screenshot(generation: Generation, name: str) -> None:
     if shutil.which("gnome-screenshot") is None:
         return
 
-    focus_owned_window(generation)
+    window_id, *_ = focus_owned_window(generation)
     raw = Path(generation["paths"]["raw_evidence"])
     result = run_command(
         ["gnome-screenshot", "-w", "-f", str(raw / name)],
@@ -1635,6 +1679,13 @@ def capture_desktop_screenshot(generation: Generation, name: str) -> None:
     )
     if result.returncode:
         raise RuntimeError(f"failed to capture {name}: {result.stderr.decode(errors='replace').strip()}")
+    active = run_command(
+        ["xprop", "-root", "_NET_ACTIVE_WINDOW"], check=False, env=wine_environment(generation),
+    )
+    match = re.search(r"0x[0-9a-fA-F]+", active.stdout.decode(errors="replace"))
+    if not match or int(match.group(), 16) != int(window_id, 16):
+        (raw / name).unlink(missing_ok=True)
+        print(f"discarded {name}: owned window lost focus during capture", flush=True)
 
 
 def automate_client_login(generation: Generation) -> None:
@@ -1682,7 +1733,7 @@ def automate_client_login(generation: Generation) -> None:
             time.sleep(0.05)
 
     movie_seen = False
-    no_movie_deadline = time.monotonic() + 30
+    no_movie_deadline = time.monotonic() + 3
     movie_deadline = time.monotonic() + 240
     while time.monotonic() < movie_deadline:
         movie_active = any(
@@ -1794,6 +1845,109 @@ def automate_key_sequence(
 
 def automate_ground_movement(generation: Generation) -> None:
     automate_key_sequence(generation, GROUND_MOVEMENT_KEYS)
+
+
+def automate_issue97_phases(generation: Generation, deadline: float) -> None:
+    # Measure accepted stops; startup input can cover much less distance than later taps.
+    stages = []
+    phase_packets = len(re.findall(r"S->C:.*\[SMSG_PHASE_SHIFT_CHANGE\b", world_log_text(generation)))
+    for key, target, phases in (("w", -9070, [125]), ("s", -9066.3, []), ("w", -9070, [125])):
+        stalled = 0
+        while time.monotonic() < deadline:
+            samples = ground_movement_samples(generation)
+            previous = len(samples)
+            previous_x = float(samples[-1]["x"]) if samples else CHARACTER_POSITION[0]
+            automate_key_sequence(generation, (key,), hold_seconds=0.6, gap_seconds=0.1)
+            stop_deadline = min(deadline, time.monotonic() + 3)
+            sample = None
+            while time.monotonic() < stop_deadline:
+                stops = [s for s in ground_movement_samples(generation)[previous:] if s["opcode"] == "MSG_MOVE_STOP"]
+                if stops:
+                    sample = stops[-1]
+                    break
+                time.sleep(0.1)
+            if sample is None:
+                raise RuntimeError("phase walk did not produce an accepted movement stop")
+            if abs(float(sample["y"]) - CHARACTER_POSITION[1]) > 3:
+                raise RuntimeError("phase walk left the measured boundary corridor")
+            stalled = stalled + 1 if abs(float(sample["x"]) - previous_x) < 0.1 else 0
+            if stalled >= 2:
+                raise RuntimeError("phase walk stalled before reaching its destination")
+            if (key == "w" and float(sample["x"]) <= target) or (key == "s" and float(sample["x"]) >= target):
+                break
+        else:
+            raise RuntimeError("phase walk timed out before reaching its destination")
+        while time.monotonic() < deadline:
+            count = len(re.findall(r"S->C:.*\[SMSG_PHASE_SHIFT_CHANGE\b", world_log_text(generation)))
+            if count > phase_packets:
+                phase_packets = count
+                break
+            time.sleep(0.1)
+        else:
+            raise RuntimeError("phase walk reached its destination without a phase change packet")
+        stages.append({"expected_phases": phases, "stop": sample, "phase_packet_count": phase_packets})
+        generation["issue97_stages"] = stages
+        if len(stages) <= 2:
+            automate_phase_relogin(generation, deadline)
+            phase_packets = len(re.findall(r"S->C:.*\[SMSG_PHASE_SHIFT_CHANGE\b", world_log_text(generation)))
+        automate_key_sequence(
+            generation, ("Return", "slash", *'run', "space", *'SetBinding("G","INTERACTTARGET")', "Return"),
+            hold_seconds=0.02, gap_seconds=0.02,
+        )
+        automate_key_sequence(
+            generation, ("Return", "slash", *"targetexact", "space", *"Marshal", "space", *"McBride", "Return", "g"),
+            hold_seconds=0.05, gap_seconds=0.05,
+        )
+        time.sleep(0.5)
+        capture_desktop_screenshot(generation, f"phase-stage-{len(stages)}.png")
+        automate_key_sequence(generation, ("Escape",), hold_seconds=0.05, gap_seconds=0.05)
+        automate_phase_chest_click(generation)
+        time.sleep(3.5)
+        capture_desktop_screenshot(generation, f"phase-chest-{len(stages)}.png")
+        automate_key_sequence(generation, ("Escape",), hold_seconds=0.05, gap_seconds=0.05)
+
+
+def automate_phase_relogin(generation: Generation, deadline: float) -> None:
+    before = len(re.findall(r"S->C:.*\[SMSG_LOGOUT_COMPLETE\b", world_log_text(generation)))
+    automate_key_sequence(
+        generation, ("Return", "slash", *"logout", "Return"), hold_seconds=0.05, gap_seconds=0.05,
+    )
+    while time.monotonic() < deadline:
+        if len(re.findall(r"S->C:.*\[SMSG_LOGOUT_COMPLETE\b", world_log_text(generation))) > before:
+            break
+        time.sleep(0.2)
+    else:
+        raise RuntimeError("phase restoration logout did not complete")
+    before = len(re.findall(r"S->C:.*\[SMSG_PHASE_SHIFT_CHANGE\b", world_log_text(generation)))
+    time.sleep(1)
+    automate_key_sequence(generation, ("Return",), hold_seconds=0.05, gap_seconds=0.05)
+    while time.monotonic() < deadline:
+        if len(re.findall(r"S->C:.*\[SMSG_PHASE_SHIFT_CHANGE\b", world_log_text(generation))) > before:
+            time.sleep(1)
+            return
+        time.sleep(0.2)
+    raise RuntimeError("phase restoration login did not send membership")
+
+
+def automate_phase_chest_click(generation: Generation) -> None:
+    from Xlib import X, display
+    from Xlib.ext import xtest
+
+    window_id, x, y, width, height = focus_owned_window(generation)
+    connection = display.Display(str(generation["inputs"]["display"]))
+    try:
+        active = connection.screen().root.get_full_property(
+            connection.intern_atom("_NET_ACTIVE_WINDOW"), X.AnyPropertyType,
+        )
+        if active is None or not len(active.value) or int(active.value[0]) != int(window_id, 16):
+            raise RuntimeError("owned WoW window lost focus before chest interaction")
+        # shortcut: click is calibrated for this fixture and camera; recalibrate after changing either.
+        xtest.fake_input(connection, X.MotionNotify, x=x + int(width * 0.74), y=y + int(height * 0.40))
+        xtest.fake_input(connection, X.ButtonPress, 3)
+        xtest.fake_input(connection, X.ButtonRelease, 3)
+        connection.sync()
+    finally:
+        connection.close()
 
 
 def automate_jump_fall_land(generation: Generation) -> None:
@@ -2022,14 +2176,28 @@ def run_client(args: argparse.Namespace) -> None:
     generation = active_generation(manifest)
     if generation["mode"] in CHARACTER_MODES and args.stability_seconds < 5:
         raise RuntimeError("--stability-seconds must be at least 5")
-    retryable = generation["state"] in {"failed", "inconclusive"}
+    retryable = generation["state"] in {"observed", "accepted", "failed", "inconclusive"}
     if retryable:
         stop_servers(generation)
         if any(process.get("active", False) for process in generation["processes"]):
             raise RuntimeError("cannot retry a diagnostic generation with active processes")
+        archives = Path(generation["root"]) / "previous-runs"
+        archives.mkdir(exist_ok=True)
+        archive = archives / str(len(list(archives.iterdir())) + 1)
+        archive.mkdir()
+        (archive / "generation.json").write_text(json.dumps(generation, indent=2) + "\n")
+        for name in ("raw_evidence", "logs"):
+            source = Path(generation["paths"][name])
+            if source.exists():
+                shutil.copytree(source, archive / name)
+        for name in ("Logs", "Errors"):
+            source = Path(generation["paths"]["client"]) / name
+            if source.exists():
+                shutil.copytree(source, archive / f"client-{name}")
         for path in (
             Path(generation["paths"]["raw_evidence"]),
             Path(generation["paths"]["client"]) / "Logs",
+            Path(generation["paths"]["client"]) / "Errors",
         ):
             if path.exists():
                 remove_owned_path(path, generation)
@@ -2037,9 +2205,14 @@ def run_client(args: argparse.Namespace) -> None:
         generation["state"] = "prepared"
         generation["failure"] = None
         generation["evidence"] = None
+        generation.pop("issue97_stages", None)
     if generation["state"] != "prepared":
         raise RuntimeError(f"cannot run from state {generation['state']}")
     assert_container_owned(manifest, generation)
+    for name in ("authserver", "worldserver"):
+        binary = generation["inputs"][name]
+        if sha256(Path(str(binary["path"]))) != binary["sha256"]:
+            raise RuntimeError(f"{name} binary changed; prepare a fresh generation")
     ensure_client_base(manifest, generation)
     save_manifest(manifest_path, manifest)
     write_client_config(Path(generation["paths"]["client"]))
@@ -2060,6 +2233,10 @@ def run_client(args: argparse.Namespace) -> None:
         mysql(manifest, generation, target_targeted_spell_cast_world_seed_sql(), generation["schemas"]["world"])
     if generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE:
         mysql(manifest, generation, target_targeted_spell_cast_seed_sql(), generation["schemas"]["characters"])
+    if ISSUE97 and generation["mode"] == IN_WORLD_CONTROL_MODE:
+        mysql(manifest, generation, populated_character_seed_sql(), generation["schemas"]["characters"])
+        verify_populated_character_seed(manifest, generation)
+        mysql(manifest, generation, issue97_world_seed_sql(), generation["schemas"]["world"])
     popens: dict[str, subprocess.Popen[bytes]] = {}
     outputs: list[object] = []
     try:
@@ -2144,11 +2321,11 @@ def run_client(args: argparse.Namespace) -> None:
                     generation["mode"] == IN_WORLD_CONTROL_MODE and selection_sent and not sustained_forward_sent
                     and in_world_control_marker_count(generation) > 0
                 ):
-                    # A single 45s-long keydown produced no MSG_MOVE_START_FORWARD in generation 62:
-                    # a synthetic XTest press has no OS-level autorepeat, so the whole hold is one
-                    # long-lived key-down instead of repeated presses. GROUND_MOVEMENT_MODE's proven
-                    # 0.6s taps do register reliably, so chain enough of them to cover ~45s instead.
-                    automate_key_sequence(generation, ("w",) * 45, hold_seconds=0.6, gap_seconds=0.4)
+                    # Short repeated taps deliver movement reliably without a fixed 45-second walk.
+                    if ISSUE97:
+                        automate_issue97_phases(generation, deadline)
+                    else:
+                        automate_key_sequence(generation, ("w",) * 3, hold_seconds=0.6, gap_seconds=0.4)
                     sustained_forward_sent = True
                 if (
                     generation["mode"] == GROUND_MOVEMENT_MODE and selection_sent and not ground_movement_sent
@@ -2892,7 +3069,7 @@ def verify(args: argparse.Namespace) -> None:
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
     generation = active_generation(manifest)
-    if generation["state"] not in {"observed", "accepted"}:
+    if generation["state"] not in {"observed", "accepted", "inconclusive"}:
         raise RuntimeError(f"cannot verify from state {generation['state']}")
     raw_log = Path(generation["paths"]["raw_evidence"]) / "connection.log"
     text = raw_log.read_text(errors="replace") if raw_log.is_file() else ""
