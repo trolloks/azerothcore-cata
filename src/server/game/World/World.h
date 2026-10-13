@@ -213,7 +213,6 @@ public:
     static float GetMaxVisibleDistanceOnContinents()    { return _maxVisibleDistanceOnContinents; }
     static float GetMaxVisibleDistanceInInstances()     { return _maxVisibleDistanceInInstances;  }
     static float GetMaxVisibleDistanceInBGArenas()      { return _maxVisibleDistanceInBGArenas;   }
-    static float GetMaxVisibleDistanceForGameObjects()  { return _maxVisibleDistanceForGameObjects; }
 
     // our: needed for arena spectator subscriptions
     uint32 GetNextWhoListUpdateDelaySecs() override;
@@ -286,7 +285,6 @@ private:
     static float _maxVisibleDistanceOnContinents;
     static float _maxVisibleDistanceInInstances;
     static float _maxVisibleDistanceInBGArenas;
-    static float _maxVisibleDistanceForGameObjects;
 
     std::string _realmName;
 

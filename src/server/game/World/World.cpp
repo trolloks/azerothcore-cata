@@ -111,10 +111,6 @@ uint32 World::m_worldLoopCounter = 0;
 float World::_maxVisibleDistanceOnContinents = DEFAULT_VISIBILITY_DISTANCE;
 float World::_maxVisibleDistanceInInstances  = DEFAULT_VISIBILITY_INSTANCE;
 float World::_maxVisibleDistanceInBGArenas   = DEFAULT_VISIBILITY_BGARENAS;
-// Floor for how far gameobjects are created for a player. The 4.3.4 client only binds a model for a
-// gameobject whose model is already resident when the object is created, so gameobjects must reach the
-// client while it is still loading (see issue #118).
-float World::_maxVisibleDistanceForGameObjects = DEFAULT_VISIBILITY_GAMEOBJECTS;
 
 Realm realm;
 
@@ -258,14 +254,6 @@ void World::LoadConfigSettings(bool reload)
     {
         LOG_ERROR("server.loading", "Visibility.Distance.BGArenas can't be greater {}", MAX_VISIBILITY_DISTANCE);
         _maxVisibleDistanceInBGArenas = MAX_VISIBILITY_DISTANCE;
-    }
-
-    //visibility of gameobjects (never lower than the map's own visibility distance)
-    _maxVisibleDistanceForGameObjects = sConfigMgr->GetOption<float>("Visibility.Distance.GameObjects", DEFAULT_VISIBILITY_GAMEOBJECTS);
-    if (_maxVisibleDistanceForGameObjects > MAX_VISIBILITY_DISTANCE)
-    {
-        LOG_ERROR("server.loading", "Visibility.Distance.GameObjects can't be greater {}", MAX_VISIBILITY_DISTANCE);
-        _maxVisibleDistanceForGameObjects = MAX_VISIBILITY_DISTANCE;
     }
 
     LOG_INFO("server.loading", "Will clear `logs` table of entries older than {} seconds every {} minutes.",

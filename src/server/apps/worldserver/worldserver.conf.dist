@@ -1297,19 +1297,6 @@ Visibility.Distance.Instances = 170
 Visibility.Distance.BGArenas = 250
 
 #
-#    Visibility.Distance.GameObjects
-#        Description: Minimum distance at which gameobjects are created for a player, independent of the
-#                     map visibility distance above (players and creatures keep using that one).
-#                     The 4.3.4 client only binds a model to a gameobject whose model it already has
-#                     loaded when the object is created and never retries, so gameobjects that first
-#                     appear while the player is walking can crash it. Creating them earlier (while the
-#                     client is still loading) avoids that.
-#                     Max: 250
-#        Default:     250
-
-Visibility.Distance.GameObjects = 250
-
-#
 #    Visibility.ObjectSparkles
 #        Description: Whether or not to display sparkles on gameobjects related to active quests.
 #        Default:     1 - (Show Sparkles)
