@@ -343,6 +343,7 @@ void Object::BuildMovementUpdate(ByteBuffer* data, CreateObjectBits flags) const
     ObjectGuid guid = GetGUID();
     uint32 movementFlags = 0;
     uint16 movementFlagsExtra = 0;
+    float orientation = 0.0f;
 
     bool hasTransportTime2 = false;
     bool hasFallDirection = false;
@@ -372,6 +373,8 @@ void Object::BuildMovementUpdate(ByteBuffer* data, CreateObjectBits flags) const
     if (flags.MovementUpdate)
     {
         self = ToUnit();
+        // the 4.3.4 client rejects the whole update packet if the orientation is outside [0, 2pi)
+        orientation = Position::NormalizeOrientation(self->GetOrientation());
         movementFlags = WorldPackets::Movement::MovementFlagsToClient(self->m_movementInfo.GetMovementFlags());
         movementFlagsExtra = WorldPackets::Movement::ExtraMovementFlagsToClient(
             self->m_movementInfo.GetExtraMovementFlags()) & 0x0FFF;
@@ -384,7 +387,7 @@ void Object::BuildMovementUpdate(ByteBuffer* data, CreateObjectBits flags) const
         hasSpline = self->IsSplineEnabled();
 
         data->WriteBit(!movementFlags);                                         // !Has MoveFlags0
-        data->WriteBit(G3D::fuzzyEq(self->GetOrientation(), 0.0f));             // Has Orientation
+        data->WriteBit(G3D::fuzzyEq(orientation, 0.0f));                       // Has Orientation
         data->WriteBit(guid[7]);
         data->WriteBit(guid[3]);
         data->WriteBit(guid[2]);
@@ -536,8 +539,8 @@ void Object::BuildMovementUpdate(ByteBuffer* data, CreateObjectBits flags) const
         *data << self->GetSpeed(MOVE_TURN_RATE);
         data->WriteByteSeq(guid[6]);
         *data << self->GetSpeed(MOVE_FLIGHT);
-        if (!G3D::fuzzyEq(self->GetOrientation(), 0.0f))
-            *data << float(self->GetOrientation());
+        if (!G3D::fuzzyEq(orientation, 0.0f))
+            *data << orientation;
 
         *data << self->GetSpeed(MOVE_RUN);
         if (hasPitch)
