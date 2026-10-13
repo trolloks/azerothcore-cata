@@ -40,6 +40,7 @@
 #define DEFAULT_VISIBILITY_INSTANCE  170.0f                 // default visible distance in instances, 170 yards
 #define VISIBILITY_DIST_WINTERGRASP  175.0f
 #define DEFAULT_VISIBILITY_BGARENAS  250.0f                 // default visible distance in BG/Arenas, roughly 250 yards
+#define DEFAULT_VISIBILITY_GAMEOBJECTS 250.0f               // default distance gameobjects are created for a player (build 15595 client needs them before it walks)
 
 #define DEFAULT_WORLD_OBJECT_SIZE   0.388999998569489f      // player size, also currently used (correctly?) for any non Unit world objects
 #define DEFAULT_COMBAT_REACH        1.5f

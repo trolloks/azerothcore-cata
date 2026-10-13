@@ -41,6 +41,7 @@
 #include "Vehicle.h"
 #include "Weather.h"
 #include "WeatherMgr.h"
+#include "World.h"
 #include "WorldState.h"
 #include "WorldStatePackets.h"
 #include <algorithm>
@@ -1679,7 +1680,9 @@ void Player::UpdateVisibilityForPlayer(bool mapChange)
         m_seer = this;
 
     Acore::VisibleNotifier notifier(*this, mapChange);
-    Cell::VisitObjects(GetSightPosition().GetPositionX(), GetSightPosition().GetPositionY(), GetMap(), notifier, GetSightRange());
+    // Search at least as far as gameobjects are sent; CanSeeOrDetect still applies the per-type range.
+    float const searchRange = std::max(GetSightRange(), World::GetMaxVisibleDistanceForGameObjects());
+    Cell::VisitObjects(GetSightPosition().GetPositionX(), GetSightPosition().GetPositionY(), GetMap(), notifier, searchRange);
     Cell::VisitFarVisibleObjects(GetSightPosition().GetPositionX(), GetSightPosition().GetPositionY(), GetMap(), notifier, VISIBILITY_DISTANCE_GIGANTIC);
     notifier.SendToSelf();
 
