@@ -705,6 +705,8 @@ void OpcodeTable::Initialize()
     /*0x0715*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_SPELL_DELAYED,                                      STATUS_NEVER);
     /*0x4037*/ DEFINE_HANDLER(CMSG_QUEST_POI_QUERY,                                                  STATUS_LOGGEDIN,   PROCESS_INPLACE,        &WorldSession::HandleQuestPOIQuery                      );
     /*0x6304*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_QUEST_POI_QUERY_RESPONSE,                           STATUS_NEVER);
+    DEFINE_HANDLER(CMSG_QUEST_NPC_QUERY, STATUS_LOGGEDIN, PROCESS_THREADSAFE, &WorldSession::HandleQuestNPCQuery);
+    DEFINE_SERVER_OPCODE_HANDLER(SMSG_QUEST_NPC_QUERY_RESPONSE, STATUS_NEVER);
     /*0x0000*/ DEFINE_HANDLER(CMSG_GHOST,                                                            STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x0000*/ DEFINE_HANDLER(CMSG_GM_INVIS,                                                         STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x6F25*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_INVALID_PROMOTION_CODE,                             STATUS_NEVER);

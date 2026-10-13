@@ -401,6 +401,34 @@ void WorldSession::HandleCorpseMapPositionQuery(WorldPackets::Query::CorpseMapPo
     SendPacket(&data);
 }
 
+void WorldSession::HandleQuestNPCQuery(WorldPacket& recvData)
+{
+    uint32 count = recvData.ReadBits(24);
+    if (count > MAX_QUEST_LOG_SIZE || count > (recvData.size() - recvData.rpos()) / sizeof(uint32))
+    {
+        recvData.rfinish();
+        return;
+    }
+
+    WorldPackets::Query::QuestNPCQueryResponse response;
+    std::unordered_set<uint32> questIds;
+    for (uint32 i = 0; i < count; ++i)
+    {
+        uint32 questId = recvData.read<uint32>();
+        if (!questIds.insert(questId).second || !sObjectMgr->GetQuestTemplate(questId))
+            continue;
+
+        // Reuse the live relation maps so reloads cannot leave a reverse cache stale.
+        for (auto const& [entry, quest] : *sObjectMgr->GetCreatureQuestInvolvedRelationMap())
+            if (quest == questId)
+                response.Quests[questId].push_back(entry);
+        for (auto const& [entry, quest] : *sObjectMgr->GetGOQuestInvolvedRelationMap())
+            if (quest == questId)
+                response.Quests[questId].push_back(entry | 0x80000000);
+    }
+    SendPacket(response.Write());
+}
+
 void WorldSession::HandleQuestPOIQuery(WorldPacket& recvData)
 {
     uint32 count;

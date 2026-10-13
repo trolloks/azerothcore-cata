@@ -17,6 +17,22 @@
 
 #include "QueryPackets.h"
 
+WorldPacket const* WorldPackets::Query::QuestNPCQueryResponse::Write()
+{
+    _worldPacket.WriteBits(Quests.size(), 23);
+    for (auto const& [quest, entries] : Quests)
+        _worldPacket.WriteBits(entries.size(), 24);
+    _worldPacket.FlushBits();
+
+    for (auto const& [quest, entries] : Quests)
+    {
+        _worldPacket << quest;
+        for (uint32 entry : entries)
+            _worldPacket << entry;
+    }
+    return &_worldPacket;
+}
+
 WorldPacket const* WorldPackets::Query::HotfixNotifyBlob::Write()
 {
     _worldPacket.WriteBits(Hotfixes.size(), 22);

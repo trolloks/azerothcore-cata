@@ -22,11 +22,22 @@
 #include "Packet.h"
 #include "Unit.h"
 #include <array>
+#include <map>
 
 namespace WorldPackets
 {
     namespace Query
     {
+        class QuestNPCQueryResponse final : public ServerPacket
+        {
+        public:
+            QuestNPCQueryResponse() : ServerPacket(SMSG_QUEST_NPC_QUERY_RESPONSE, 3) { }
+
+            WorldPacket const* Write() override;
+
+            std::map<uint32, std::vector<uint32>> Quests;
+        };
+
         class HotfixNotifyBlob final : public ServerPacket
         {
         public:

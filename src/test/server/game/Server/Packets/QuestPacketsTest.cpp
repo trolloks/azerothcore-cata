@@ -16,11 +16,26 @@
  */
 
 #include "QuestPackets.h"
+#include "QueryPackets.h"
 #include "QuestDef.h"
 #include "Field.h"
 #include "World.h"
 #include "WorldMock.h"
 #include "gtest/gtest.h"
+
+TEST(QuestPacketsTest, NPCQueryResponseUsesCataBitCountsAndGameObjectMask)
+{
+    WorldPackets::Query::QuestNPCQueryResponse response;
+    response.Quests[2158] = {295, 42 | 0x80000000u};
+    WorldPacket packet = *response.Write();
+    EXPECT_EQ(packet.GetOpcode(), SMSG_QUEST_NPC_QUERY_RESPONSE);
+    ASSERT_EQ(packet.size(), 18u);
+    EXPECT_EQ(packet.ReadBits(23), 1u);
+    EXPECT_EQ(packet.ReadBits(24), 2u);
+    EXPECT_EQ(packet.read<uint32>(), 2158u);
+    EXPECT_EQ(packet.read<uint32>(), 295u);
+    EXPECT_EQ(packet.read<uint32>(), 42u | 0x80000000u);
+}
 
 TEST(QuestPacketsTest, RewardChoiceRejectsEmptyAndOutOfRangeSlots)
 {
