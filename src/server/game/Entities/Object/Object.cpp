@@ -1844,7 +1844,7 @@ float WorldObject::GetVisibilityRange() const
         else if (IsVisibilityOverridden())
             return GetVisibilityOverrideDistance();
         else
-            return GetMap()->GetVisibilityRange();
+            return std::max(GetMap()->GetVisibilityRange(), World::GetMaxVisibleDistanceForGameObjects());
     }
     else
         return IsInWintergrasp() ? VISIBILITY_DIST_WINTERGRASP : GetMap()->GetVisibilityRange();
@@ -1869,7 +1869,7 @@ float WorldObject::GetSightRange(WorldObject const* target) const
                     else if (ToPlayer()->GetCinematicMgr().IsOnCinematic())
                         return DEFAULT_VISIBILITY_INSTANCE;
                     else
-                        return GetMap()->GetVisibilityRange();
+                        return std::max(GetMap()->GetVisibilityRange(), World::GetMaxVisibleDistanceForGameObjects());
                 }
 
                 return IsInWintergrasp() && target->IsInWintergrasp() ? VISIBILITY_DIST_WINTERGRASP : GetMap()->GetVisibilityRange();
