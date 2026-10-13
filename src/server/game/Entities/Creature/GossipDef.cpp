@@ -22,9 +22,57 @@
 #include "Opcodes.h"
 #include "Player.h"
 #include "QuestDef.h"
+#include "QuestPackets.h"
 #include "ScriptMgr.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
+
+namespace
+{
+WorldPackets::Quest::QuestRewards BuildQuestRewards(Quest const* quest, Player* player, bool hidden)
+{
+    WorldPackets::Quest::QuestRewards rewards;
+    if (!hidden)
+    {
+        rewards.ChoiceItemCount = quest->GetRewChoiceItemsCount();
+        for (uint32 i = 0; i < QUEST_REWARD_CHOICES_COUNT; ++i)
+        {
+            rewards.ChoiceItemId[i] = quest->RewardChoiceItemId[i];
+            rewards.ChoiceItemQuantity[i] = quest->RewardChoiceItemCount[i];
+            if (ItemTemplate const* item = sObjectMgr->GetItemTemplate(rewards.ChoiceItemId[i]))
+                rewards.ChoiceItemDisplay[i] = item->DisplayInfoID;
+        }
+        rewards.ItemCount = quest->GetRewItemsCount();
+        for (uint32 i = 0; i < QUEST_REWARDS_COUNT; ++i)
+        {
+            rewards.ItemId[i] = quest->RewardItemId[i];
+            rewards.ItemQuantity[i] = quest->RewardItemIdCount[i];
+            if (ItemTemplate const* item = sObjectMgr->GetItemTemplate(rewards.ItemId[i]))
+                rewards.ItemDisplay[i] = item->DisplayInfoID;
+        }
+        if (player && (player->GetLevel() >= sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL) ||
+            sScriptMgr->OnPlayerShouldBeRewardedWithMoneyInsteadOfExp(player)))
+            rewards.Money = quest->GetRewMoneyMaxLevel();
+        rewards.Money += quest->GetRewOrReqMoney(player ? player->GetLevel() : 0);
+        if (player && !sScriptMgr->OnPlayerShouldBeRewardedWithMoneyInsteadOfExp(player))
+            rewards.Experience = player->CalculateQuestRewardXP(quest);
+        sScriptMgr->OnPlayerQuestComputeXP(player, quest, rewards.Experience);
+    }
+    rewards.Title = quest->GetCharTitleId();
+    rewards.BonusTalents = quest->GetBonusTalents();
+    rewards.FactionFlags = quest->RewardReputationMask;
+    for (uint32 i = 0; i < QUEST_REPUTATIONS_COUNT; ++i)
+    {
+        rewards.FactionId[i] = quest->RewardFactionId[i];
+        rewards.FactionValue[i] = quest->RewardFactionValueId[i];
+        rewards.FactionOverride[i] = quest->RewardFactionValueIdOverride[i];
+    }
+    rewards.DisplaySpell = quest->GetRewSpell();
+    rewards.Spell = quest->GetRewSpellCast();
+    // shortcut: currency/skill rewards stay zero until their Cata data and award paths are converted.
+    return rewards;
+}
+}
 
 GossipMenu::GossipMenu()
 {
@@ -375,11 +423,11 @@ void PlayerMenu::SendQuestGiverQuestList(QEmote const& eEmote, std::string const
     LOG_DEBUG("network", "WORLD: Sent SMSG_QUESTGIVER_QUEST_LIST (QuestGiver: {})", guid.ToString());
 }
 
-void PlayerMenu::SendQuestGiverStatus(uint8 questStatus, ObjectGuid npcGUID) const
+void PlayerMenu::SendQuestGiverStatus(uint32 questStatus, ObjectGuid npcGUID) const
 {
-    WorldPacket data(SMSG_QUESTGIVER_STATUS, 9);
+    WorldPacket data(SMSG_QUESTGIVER_STATUS, 12);
     data << npcGUID;
-    data << uint8(questStatus);
+    data << uint32(questStatus);
 
     _session->SendPacket(&data);
     LOG_DEBUG("network", "WORLD: Sent SMSG_QUESTGIVER_STATUS NPC {}, status={}", npcGUID.ToString(), questStatus);
@@ -408,90 +456,16 @@ void PlayerMenu::SendQuestGiverQuestDetails(Quest const* quest, ObjectGuid npcGU
     data << questTitle;
     data << questDetails;
     data << questObjectives;
+    // shortcut: portrait data stays empty until Cata portrait columns are imported.
+    data << std::string() << std::string() << std::string() << std::string();
+    data << uint32(0) << uint32(0);
     data << uint8(activateAccept ? 1 : 0);                  // auto finish
     data << uint32(quest->GetFlags());                      // 3.3.3 questFlags
     data << uint32(quest->GetSuggestedPlayers());
     data << uint8(0);                                       // IsFinished? value is sent back to server in quest accept packet
+    data << uint8(0) << uint32(0);                          // DisplayPopup, RequiredSpellID
 
-    if (quest->HasFlag(QUEST_FLAGS_HIDDEN_REWARDS))
-    {
-        data << uint32(0);                                  // Rewarded chosen items hidden
-        data << uint32(0);                                  // Rewarded items hidden
-        data << uint32(0);                                  // Rewarded money hidden
-        data << uint32(0);                                  // Rewarded XP hidden
-    }
-    else
-    {
-        data << uint32(quest->GetRewChoiceItemsCount());
-        for (uint32 i = 0; i < QUEST_REWARD_CHOICES_COUNT; ++i)
-        {
-            if (!quest->RewardChoiceItemId[i])
-                continue;
-
-            data << uint32(quest->RewardChoiceItemId[i]);
-            data << uint32(quest->RewardChoiceItemCount[i]);
-
-            if (ItemTemplate const* itemTemplate = sObjectMgr->GetItemTemplate(quest->RewardChoiceItemId[i]))
-                data << uint32(itemTemplate->DisplayInfoID);
-            else
-                data << uint32(0x00);
-        }
-
-        data << uint32(quest->GetRewItemsCount());
-
-        for (uint32 i = 0; i < QUEST_REWARDS_COUNT; ++i)
-        {
-            if (!quest->RewardItemId[i])
-                continue;
-
-            data << uint32(quest->RewardItemId[i]);
-            data << uint32(quest->RewardItemIdCount[i]);
-
-            if (ItemTemplate const* itemTemplate = sObjectMgr->GetItemTemplate(quest->RewardItemId[i]))
-                data << uint32(itemTemplate->DisplayInfoID);
-            else
-                data << uint32(0);
-        }
-
-        uint32 moneyRew = 0;
-        Player* player = _session->GetPlayer();
-        if (player && (player->GetLevel() >= sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL) || sScriptMgr->OnPlayerShouldBeRewardedWithMoneyInsteadOfExp(player)))
-        {
-            moneyRew = quest->GetRewMoneyMaxLevel();
-        }
-        moneyRew += quest->GetRewOrReqMoney(player ? player->GetLevel() : 0); // reward money (below max lvl)
-        data << moneyRew;
-        uint32 questXp;
-        if (player && !sScriptMgr->OnPlayerShouldBeRewardedWithMoneyInsteadOfExp(player))
-        {
-            questXp = player->CalculateQuestRewardXP(quest);
-        }
-        else
-        {
-            questXp = 0;
-        }
-        sScriptMgr->OnPlayerQuestComputeXP(player, quest, questXp);
-        data << questXp;
-    }
-
-    // rewarded honor points. Multiply with 10 to satisfy client
-    data << uint32(10 * quest->CalculateHonorGain(_session->GetPlayer()->GetQuestLevel(quest)));
-    data << float(0.0f);                                    // unk, honor multiplier?
-    data << uint32(quest->GetRewSpell());                   // reward spell, this spell will display (icon) (casted if RewSpellCast == 0)
-    data << int32(quest->GetRewSpellCast());                // casted spell
-    data << uint32(quest->GetCharTitleId());                // CharTitleId, new 2.4.0, player gets this title (id from CharTitles)
-    data << uint32(quest->GetBonusTalents());               // bonus talents
-    data << uint32(quest->GetRewArenaPoints());             // reward arena points
-    data << uint32(0);                                      // unk
-
-    for (uint32 i = 0; i < QUEST_REPUTATIONS_COUNT; ++i)
-        data << uint32(quest->RewardFactionId[i]);
-
-    for (uint32 i = 0; i < QUEST_REPUTATIONS_COUNT; ++i)
-        data << int32(quest->RewardFactionValueId[i]);
-
-    for (uint32 i = 0; i < QUEST_REPUTATIONS_COUNT; ++i)
-        data << int32(quest->RewardFactionValueIdOverride[i]);
+    BuildQuestRewards(quest, _session->GetPlayer(), quest->HasFlag(QUEST_FLAGS_HIDDEN_REWARDS)).Write(data);
 
     data << uint32(QUEST_EMOTE_COUNT);
     for (uint32 i = 0; i < QUEST_EMOTE_COUNT; ++i)
@@ -563,7 +537,7 @@ void PlayerMenu::SendQuestQueryResponse(Quest const* quest) const
         data << moneyRew;
     }
 
-    data << uint32(quest->GetRewMoneyMaxLevel());           // used in XP calculation at client
+    data << quest->RewardBonusMoney;
     data << uint32(quest->GetRewSpell());                   // reward spell, this spell will display (icon) (cast if RewSpellCast == 0)
     data << int32(quest->GetRewSpellCast());                // cast spell
 
@@ -571,12 +545,15 @@ void PlayerMenu::SendQuestQueryResponse(Quest const* quest) const
     data << uint32(quest->GetRewHonorAddition());
     data << float(quest->GetRewHonorMultiplier());
     data << uint32(quest->GetSrcItemId());                  // source item id
-    data << uint32(quest->GetFlags() & 0xFFFF);             // quest flags
+    data << uint32(quest->GetFlags());             // quest flags
+    data << uint32(0);                                      // MinimapTargetMark
     data << uint32(quest->GetCharTitleId());                // CharTitleId, new 2.4.0, player gets this title (id from CharTitles)
     data << uint32(quest->GetPlayersSlain());               // players slain
     data << uint32(quest->GetBonusTalents());               // bonus talents
     data << uint32(quest->GetRewArenaPoints());             // bonus arena points
-    data << uint32(0);                                      // review rep show mask
+    data << uint32(0) << uint32(0);                          // RewardSkillLineID, RewardNumSkillUps
+    data << quest->RewardReputationMask;
+    data << uint32(0) << uint32(0);                          // PortraitGiver, PortraitTurnIn
 
     if (quest->HasFlag(QUEST_FLAGS_HIDDEN_REWARDS))
     {
@@ -628,7 +605,7 @@ void PlayerMenu::SendQuestQueryResponse(Quest const* quest) const
 
         data << uint32(quest->RequiredNpcOrGoCount[i]);
         data << uint32(quest->ItemDrop[i]);
-        data << uint32(0);                                  // req source count?
+        data << uint32(quest->ItemDropQuantity[i]);
     }
 
     for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
@@ -637,8 +614,13 @@ void PlayerMenu::SendQuestQueryResponse(Quest const* quest) const
         data << uint32(quest->RequiredItemCount[i]);
     }
 
+    data << uint32(0);                                      // RequiredSpell
     for (uint8 i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
         data << questObjectiveText[i];
+    for (uint32 i = 0; i < 8; ++i)
+        data << uint32(0) << uint32(0);                     // reward/required currencies
+    data << std::string() << std::string() << std::string() << std::string();
+    data << quest->SoundAccept << quest->SoundTurnIn;
 
     _session->SendPacket(&data);
     LOG_DEBUG("network", "WORLD: Sent SMSG_QUEST_QUERY_RESPONSE questid={}", quest->GetQuestId());
@@ -662,6 +644,9 @@ void PlayerMenu::SendQuestGiverOfferReward(Quest const* quest, ObjectGuid npcGUI
     data << questTitle;
     data << RewardText;
 
+    data << std::string() << std::string() << std::string() << std::string();
+    data << uint32(0) << uint32(0);                         // PortraitGiver, PortraitTurnIn
+
     data << uint8(enableNext ? 1 : 0);                      // Auto Finish
     data << uint32(quest->GetFlags());                      // 3.3.3 questFlags
     data << uint32(quest->GetSuggestedPlayers());           // SuggestedGroupNum
@@ -681,69 +666,7 @@ void PlayerMenu::SendQuestGiverOfferReward(Quest const* quest, ObjectGuid npcGUI
         data << uint32(quest->OfferRewardEmote[i]);
     }
 
-    data << uint32(quest->GetRewChoiceItemsCount());
-    for (uint32 i = 0; i < quest->GetRewChoiceItemsCount(); ++i)
-    {
-        data << uint32(quest->RewardChoiceItemId[i]);
-        data << uint32(quest->RewardChoiceItemCount[i]);
-
-        if (ItemTemplate const* itemTemplate = sObjectMgr->GetItemTemplate(quest->RewardChoiceItemId[i]))
-            data << uint32(itemTemplate->DisplayInfoID);
-        else
-            data << uint32(0);
-    }
-
-    data << uint32(quest->GetRewItemsCount());
-    for (uint32 i = 0; i < quest->GetRewItemsCount(); ++i)
-    {
-        data << uint32(quest->RewardItemId[i]);
-        data << uint32(quest->RewardItemIdCount[i]);
-
-        if (ItemTemplate const* itemTemplate = sObjectMgr->GetItemTemplate(quest->RewardItemId[i]))
-            data << uint32(itemTemplate->DisplayInfoID);
-        else
-            data << uint32(0);
-    }
-
-    uint32 moneyRew = 0;
-    Player* player = _session->GetPlayer();
-    if (player && (player->GetLevel() >= sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL) || sScriptMgr->OnPlayerShouldBeRewardedWithMoneyInsteadOfExp(player)))
-    {
-        moneyRew = quest->GetRewMoneyMaxLevel();
-    }
-    moneyRew += quest->GetRewOrReqMoney(player ? player->GetLevel() : 0); // reward money (below max lvl)
-    data << moneyRew;
-    uint32 questXp;
-    if (player && !sScriptMgr->OnPlayerShouldBeRewardedWithMoneyInsteadOfExp(player))
-    {
-        questXp = player->CalculateQuestRewardXP(quest);
-    }
-    else
-    {
-        questXp = 0;
-    }
-    sScriptMgr->OnPlayerQuestComputeXP(player, quest, questXp);
-    data << questXp;
-
-    // rewarded honor points. Multiply with 10 to satisfy client
-    data << uint32(10 * quest->CalculateHonorGain(_session->GetPlayer()->GetQuestLevel(quest)));
-    data << float(0.0f);                                    // unk, honor multiplier?
-    data << uint32(0x08);                                   // unused by client?
-    data << uint32(quest->GetRewSpell());                   // reward spell, this spell will display (icon) (casted if RewSpellCast == 0)
-    data << int32(quest->GetRewSpellCast());                // casted spell
-    data << uint32(quest->GetCharTitleId());                // CharTitleId, new 2.4.0, player gets this title (id from CharTitles)
-    data << uint32(quest->GetBonusTalents());               // bonus talents
-    data << uint32(quest->GetRewArenaPoints());             // arena points
-    data << uint32(0);
-
-    for (uint32 i = 0; i < QUEST_REPUTATIONS_COUNT; ++i)    // reward factions ids
-        data << uint32(quest->RewardFactionId[i]);
-
-    for (uint32 i = 0; i < QUEST_REPUTATIONS_COUNT; ++i)    // columnid in QuestFactionReward.dbc (zero based)?
-        data << int32(quest->RewardFactionValueId[i]);
-
-    for (uint32 i = 0; i < QUEST_REPUTATIONS_COUNT; ++i)    // reward reputation override?
-        data << uint32(quest->RewardFactionValueIdOverride[i]);
+    BuildQuestRewards(quest, _session->GetPlayer(), false).Write(data);
 
     _session->SendPacket(&data);
     LOG_DEBUG("network", "WORLD: Sent SMSG_QUESTGIVER_OFFER_REWARD {}, questid={}", npcGUID.ToString(), quest->GetQuestId());
@@ -826,6 +749,8 @@ void PlayerMenu::SendQuestGiverRequestItems(Quest const* quest, ObjectGuid npcGU
         else
             data << uint32(0);
     }
+
+    data << uint32(0);                                   // required currency count
 
     if (!canComplete)
         data << uint32(0x00);

@@ -7854,7 +7854,7 @@ void Player::SendQuestGiverStatusMultiple()
             questStatus = GetQuestDialogStatus(questgiver);
 
             data << questgiver->GetGUID();
-            data << uint8(questStatus);
+            data << uint32(questStatus);
             ++count;
         }
         else if (worldObject->IsGameObject())
@@ -7866,7 +7866,7 @@ void Player::SendQuestGiverStatusMultiple()
             questStatus = GetQuestDialogStatus(questgiver);
 
             data << questgiver->GetGUID();
-            data << uint8(questStatus);
+            data << uint32(questStatus);
             ++count;
         }
     });

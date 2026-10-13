@@ -5098,7 +5098,8 @@ void ObjectMgr::LoadQuests()
                          //      87               88               89               90               91               92                93                  94                  95                  96                  97                  98
                          "RequiredItemId1, RequiredItemId2, RequiredItemId3, RequiredItemId4, RequiredItemId5, RequiredItemId6, RequiredItemCount1, RequiredItemCount2, RequiredItemCount3, RequiredItemCount4, RequiredItemCount5, RequiredItemCount6, "
                          //  99           100             101             102             103
-                         "Unknown0, ObjectiveText1, ObjectiveText2, ObjectiveText3, ObjectiveText4"
+                         "Unknown0, ObjectiveText1, ObjectiveText2, ObjectiveText3, ObjectiveText4, "
+                         "RewardReputationMask, SoundAccept, SoundTurnIn, RewardBonusMoney"
                          " FROM quest_template");
     if (!result)
     {

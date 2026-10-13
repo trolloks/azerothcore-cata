@@ -11,6 +11,10 @@ depart from upstream only where Cataclysm protocol, data, or gameplay difference
 
 ## Branch workflow
 
+Use Graphify when tracing conversion subsystems, callers, and ownership. Query an existing graph before
+rebuilding it, then verify findings against current source and the pinned reference. Record missing graph
+coverage rather than treating a declaration or inferred edge as proof of runtime behavior.
+
 GitHub issues in `trolloks/azerothcore-cata` are the canonical numbered plans and progress records.
 Keep `plan/github-issues.tsv` as the repository index. Numbered Markdown files may retain short
 issue-reference stubs for stable historical paths, but must not duplicate complete issue bodies.

@@ -21,11 +21,40 @@
 #include "ObjectGuid.h"
 #include "Packet.h"
 #include "QuestDef.h"
+#include <array>
 
 namespace WorldPackets
 {
     namespace Quest
     {
+        struct QuestRewards
+        {
+            uint32 ChoiceItemCount = 0;
+            std::array<uint32, QUEST_REWARD_CHOICES_COUNT> ChoiceItemId{};
+            std::array<uint32, QUEST_REWARD_CHOICES_COUNT> ChoiceItemQuantity{};
+            std::array<uint32, QUEST_REWARD_CHOICES_COUNT> ChoiceItemDisplay{};
+            uint32 ItemCount = 0;
+            std::array<uint32, QUEST_REWARDS_COUNT> ItemId{};
+            std::array<uint32, QUEST_REWARDS_COUNT> ItemQuantity{};
+            std::array<uint32, QUEST_REWARDS_COUNT> ItemDisplay{};
+            uint32 Money = 0;
+            uint32 Experience = 0;
+            uint32 Title = 0;
+            uint32 BonusTalents = 0;
+            uint32 FactionFlags = 0;
+            std::array<uint32, QUEST_REPUTATIONS_COUNT> FactionId{};
+            std::array<int32, QUEST_REPUTATIONS_COUNT> FactionValue{};
+            std::array<uint32, QUEST_REPUTATIONS_COUNT> FactionOverride{};
+            uint32 DisplaySpell = 0;
+            uint32 Spell = 0;
+            std::array<uint32, 4> CurrencyId{};
+            std::array<uint32, 4> CurrencyQuantity{};
+            uint32 SkillLine = 0;
+            uint32 SkillUps = 0;
+
+            void Write(ByteBuffer& data) const;
+        };
+
         class QuestLogFull final : public ServerPacket
         {
         public:
@@ -47,16 +76,18 @@ namespace WorldPackets
         class QuestGiverQuestComplete final : public ServerPacket
         {
         public:
-            QuestGiverQuestComplete() : ServerPacket(SMSG_QUESTGIVER_QUEST_COMPLETE, 4 + 4 + 4 + 4 + 4 + 4) {}
+            QuestGiverQuestComplete() : ServerPacket(SMSG_QUESTGIVER_QUEST_COMPLETE, 25) {}
 
             WorldPacket const* Write() override;
 
             uint32 QuestId = 0;
             uint32 Experience = 0;
             uint32 RewardMoney = 0;
-            uint32 RewardHonor = 0;
             uint32 RewardTalents = 0;
-            uint32 RewardArena = 0;
+            uint32 RewardSkillUps = 0;
+            uint32 RewardSkillLine = 0;
+            bool LaunchGossip = false;
+            bool UseQuestReward = false;
         };
 
         class QuestGiverQuestFailed final : public ServerPacket

@@ -73,7 +73,7 @@ void WorldSession::HandleQuestgiverStatusQueryOpcode(WorldPacket& recvData)
     }
 
     // inform client about status of quest
-    _player->PlayerTalkClass->SendQuestGiverStatus(uint8(questStatus), guid);
+    _player->PlayerTalkClass->SendQuestGiverStatus(questStatus, guid);
 }
 
 void WorldSession::HandleQuestgiverHelloOpcode(WorldPacket& recvData)
@@ -286,7 +286,7 @@ void WorldSession::HandleQuestgiverChooseRewardOpcode(WorldPacket& recvData)
             // Special dialog status update (client does not query this)
             if (!quest->GetQuestMethod())
             {
-                _player->PlayerTalkClass->SendQuestGiverStatus(uint8(_player->GetQuestDialogStatus(object)), guid);
+                _player->PlayerTalkClass->SendQuestGiverStatus(_player->GetQuestDialogStatus(object), guid);
             }
 
             switch (object->GetTypeId())
@@ -479,10 +479,12 @@ void WorldSession::HandleQuestgiverCompleteQuest(WorldPacket& recvData)
 {
     uint32 questId;
     ObjectGuid guid;
+    bool fromScript;
 
-    recvData >> guid >> questId;
+    recvData >> guid >> questId >> fromScript;
 
-    LOG_DEBUG("network", "WORLD: Received CMSG_QUESTGIVER_COMPLETE_QUEST npc {}, quest = {}", guid.ToString(), questId);
+    LOG_DEBUG("network", "WORLD: Received CMSG_QUESTGIVER_COMPLETE_QUEST npc {}, quest = {}, fromScript = {}",
+        guid.ToString(), questId, fromScript);
 
     Object* object = ObjectAccessor::GetObjectByTypeMask(*_player, guid, TYPEMASK_UNIT | TYPEMASK_GAMEOBJECT);
     if (!object || !object->hasInvolvedQuest(questId))
