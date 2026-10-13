@@ -16,7 +16,27 @@
  */
 
 #include "QuestPackets.h"
+#include "QuestDef.h"
+#include "Field.h"
 #include "gtest/gtest.h"
+
+TEST(QuestPacketsTest, RewardChoiceRejectsEmptyAndOutOfRangeSlots)
+{
+    Field fields[108];
+    Quest quest(fields);
+    EXPECT_TRUE(quest.IsValidRewardChoice(0));
+    EXPECT_FALSE(quest.IsValidRewardChoice(1));
+    EXPECT_FALSE(quest.IsValidRewardChoice(QUEST_REWARD_CHOICES_COUNT));
+
+    quest.RewardChoiceItemId[0] = 57397;
+    quest.RewardChoiceItemId[1] = 57396;
+    quest.RewardChoiceItemId[2] = 57395;
+    for (uint32 choice = 0; choice < 3; ++choice)
+        EXPECT_TRUE(quest.IsValidRewardChoice(choice));
+    for (uint32 choice = 3; choice <= QUEST_REWARD_CHOICES_COUNT; ++choice)
+        EXPECT_FALSE(quest.IsValidRewardChoice(choice));
+    EXPECT_FALSE(quest.IsValidRewardChoice(uint32(-1)));
+}
 
 TEST(QuestPacketsTest, LifecycleOpcodesMatchBuild15595)
 {

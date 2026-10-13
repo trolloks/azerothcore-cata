@@ -323,6 +323,7 @@ public:
     [[nodiscard]] uint32 GetReqItemsCount() const { return _reqItemsCount; }
     [[nodiscard]] uint32 GetReqCreatureOrGOcount() const { return _reqCreatureOrGOcount; }
     [[nodiscard]] uint32 GetRewChoiceItemsCount() const { return _rewChoiceItemsCount; }
+    [[nodiscard]] bool IsValidRewardChoice(uint32 reward) const;
     [[nodiscard]] uint32 GetRewItemsCount() const { return _rewItemsCount; }
 
     typedef std::vector<int32> PrevQuests;

@@ -21,6 +21,21 @@
 #include "Player.h"
 #include "World.h"
 
+bool Quest::IsValidRewardChoice(uint32 reward) const
+{
+    if (reward >= QUEST_REWARD_CHOICES_COUNT)
+        return false;
+
+    if (RewardChoiceItemId[reward])
+        return true;
+
+    for (uint32 item : RewardChoiceItemId)
+        if (item)
+            return false;
+
+    return reward == 0;
+}
+
 Quest::Quest(Field* questRecord)
 {
     RewardReputationMask = questRecord[104].Get<uint32>();
