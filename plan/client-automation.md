@@ -329,6 +329,33 @@ configured, nor `var/build-mysql-isolated`, which has no CMake cache.
 
 ## Retrying a failed run — do not reset and re-prepare
 
+`run` also accepts an `observed` or `accepted` generation for another observation. It archives
+the previous generation record, server logs, raw evidence, and client Logs/Errors under
+`generation-N/previous-runs/` before clearing the current run's evidence. Reuse the same
+generation when the binaries and scenario inputs are unchanged; a new observation does not
+require another database restore, data copy, or Wine-prefix initialization.
+
+The default in-world-control input is three forward taps followed by the requested stability
+hold. Use `--stability-seconds 5` for the shortest supported hold. Login waits three seconds
+for a possible intro movie after acquiring the owned window; an observed movie retains its
+Escape handling and overall timeout. An inconclusive observation can be verified again with
+`--confirm-expected-screen` after actual visual confirmation, without launching the client again.
+
+`prepare` prints elapsed times for preflight, database readiness, file readiness, and completion.
+Database-cache restores group inserts between the dump's table locks and end with an explicit
+commit. Pending updates execute their SQL and bookkeeping in one MySQL invocation per file.
+Cache hashes, input-copy checks, and database durability settings remain enforced.
+
+For the pinned Plan 24 single-phase scenario, set `ISSUE97=1` for both `prepare` and `run`
+with `--mode in-world-control-bootstrap` at preparation. The scenario walks across the area
+9/12 boundary, logs out and in at both stops, and attempts normal NPC/chest interactions.
+Use `--timeout 150 --stability-seconds 5` for the run; the timeout includes both normal logout
+timers. It requires packet logging in the diagnostic server binary and `PacketLogFile` in the
+owned world configuration. The chest click is calibrated for the fixture and default camera;
+inspect the owned-window screenshots if either changes. The generic Plan 13 verifier checks
+bootstrap and isolation, while the phase capture requires separate inspection as documented
+in [the acceptance record](phase-97-client-acceptance.md).
+
 `run` accepts a generation already in `failed`/`inconclusive` state: it clears the raw
 evidence and client `Logs`, flips the state back to `prepared`, and proceeds. So a run that
 died on a transient environmental failure is retried by re-issuing the *same* `run` command
