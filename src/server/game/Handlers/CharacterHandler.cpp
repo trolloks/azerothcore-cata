@@ -65,26 +65,15 @@
 #include "WorldSession.h"
 #include "WorldSessionMgr.h"
 
-class LoginQueryHolder : public CharacterDatabaseQueryHolder
-{
-private:
-    uint32 m_accountId;
-    ObjectGuid m_guid;
-public:
-    LoginQueryHolder(uint32 accountId, ObjectGuid guid)
-        : m_accountId(accountId), m_guid(guid) { }
-
-    ObjectGuid GetGuid() const { return m_guid; }
-    uint32 GetAccountId() const { return m_accountId; }
-    bool Initialize();
-};
+LoginQueryHolder::LoginQueryHolder(uint32 accountId, ObjectGuid guid)
+    : _accountId(accountId), _guid(guid) { }
 
 bool LoginQueryHolder::Initialize()
 {
     SetSize(MAX_PLAYER_LOGIN_QUERY);
 
     bool res = true;
-    uint64 rawGUID = m_guid.GetRawValue();
+    uint64 rawGUID = _guid.GetRawValue();
 
     CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHARACTER);
     stmt->SetData(0, rawGUID);
@@ -207,7 +196,7 @@ bool LoginQueryHolder::Initialize()
     res &= SetPreparedQuery(PLAYER_LOGIN_QUERY_LOAD_BREW_OF_THE_MONTH, stmt);
 
     stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_ACCOUNT_INSTANCELOCKTIMES);
-    stmt->SetData(0, m_accountId);
+    stmt->SetData(0, _accountId);
     res &= SetPreparedQuery(PLAYER_LOGIN_QUERY_LOAD_INSTANCE_LOCK_TIMES, stmt);
 
     stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CORPSE_LOCATION);
@@ -957,6 +946,7 @@ void WorldSession::HandlePlayerLoginOpcode(WorldPackets::Character::PlayerLogin&
 
 void WorldSession::HandlePlayerLoginFromDB(LoginQueryHolder const& holder)
 {
+    m_playerLoading = true; // Set here for direct callers.
     LOG_INFO("network.opcode", "Player login callback for account {} character {}.",
         GetAccountId(), holder.GetGuid().ToString());
     ObjectGuid playerGuid = holder.GetGuid();
