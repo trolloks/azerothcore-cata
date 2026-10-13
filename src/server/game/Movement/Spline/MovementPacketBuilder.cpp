@@ -126,7 +126,7 @@ namespace Movement
 
     void PacketBuilder::WriteCreateBits(MoveSpline const& moveSpline, ByteBuffer& data)
     {
-        bool hasSplineMove = data.WriteBit(!moveSpline.Finalized());
+        bool hasSplineMove = data.WriteBit(!moveSpline.Finalized() && !moveSpline.splineIsFacingOnly);
         if (!hasSplineMove)
             return;
 
@@ -167,7 +167,7 @@ namespace Movement
 
     void PacketBuilder::WriteCreateData(MoveSpline const& moveSpline, ByteBuffer& data)
     {
-        if (!moveSpline.Finalized())
+        if (!moveSpline.Finalized() && !moveSpline.splineIsFacingOnly)
         {
             MoveSplineFlag const& splineFlags = moveSpline.splineflags;
 

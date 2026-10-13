@@ -167,6 +167,7 @@ namespace Movement
         vertical_acceleration = 0.f;
         effect_start_time = 0;
         velocity = args.velocity;
+        splineIsFacingOnly = args.path.size() == 2 && args.flags.isFacing() && (args.path[1] - args.path[0]).length() < 0.1f;
 
         // Check if its a stop spline
         if (args.flags.done)
@@ -192,7 +193,7 @@ namespace Movement
 
     MoveSpline::MoveSpline() : m_Id(0), time_passed(0),
         vertical_acceleration(0.f), initialOrientation(0.f), velocity(0.f), effect_start_time(0), point_Idx(0), point_Idx_offset(0),
-        onTransport(false)
+        onTransport(false), splineIsFacingOnly(false)
     {
         splineflags.done = true;
     }

@@ -936,7 +936,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         "DataDir": f'"{Path(paths["data"])}"',
         "LogsDir": f'"{log_dir}"',
         "PidFile": f'"{config_dir / "worldserver.pid"}"',
-        "Console.Enable": "0",
+        "Console.Enable": "1",
         "Updates.EnableDatabases": "0",
         "Updates.AutoSetup": "0",
         "Expansion": "3",
@@ -948,6 +948,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         "SOAP.Enabled": "0",
         "Cluster.Enabled": "0",
         "Appender.Server": '2,5,1,WorldServer.log,w',
+        "PacketLogFile": '"World.pkt"',
         "Logger.network": (
             "5,Server" if generation["mode"] in {
                 BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
@@ -1434,6 +1435,7 @@ def prepare(args: argparse.Namespace) -> None:
             "INSERT INTO `account` (`id`,`username`,`salt`,`verifier`,`email`,`reg_mail`,`expansion`,`Flags`) "
             f"VALUES ({ACCOUNT_ID},'{ACCOUNT}',UNHEX('{salt.hex()}'),UNHEX('{verifier.hex()}'),"
             "'plan7@example.invalid','plan7@example.invalid',3,0);"
+            f"INSERT INTO `account_access` (`id`,`gmlevel`,`RealmID`) VALUES ({ACCOUNT_ID},3,-1);"
             "INSERT INTO `realmlist` (`id`,`name`,`address`,`localAddress`,`localSubnetMask`,`port`,`icon`,"
             "`flag`,`timezone`,`allowedSecurityLevel`,`population`,`gamebuild`) "
             f"VALUES ({REALM_ID},'Plan 7 Realm','127.0.0.1','127.0.0.1','255.255.255.0',"
@@ -2017,6 +2019,7 @@ def character_row_count(manifest: Manifest, generation: Generation) -> int:
 
 
 def run_client(args: argparse.Namespace) -> None:
+    manual = getattr(args, "manual", False)
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
     generation = active_generation(manifest)
@@ -2114,9 +2117,17 @@ def run_client(args: argparse.Namespace) -> None:
         invalid_target_spell_cast_sent = False
         post_marker_hold_started: float | None = None
         milestone_definition = CHARACTER_MILESTONES if generation["mode"] in CHARACTER_MODES else CLIENT_MILESTONES
-        while time.monotonic() < deadline:
+        if manual:
+            print("Manual session: select your character and enter the world. No timeout or automated movement. "
+                  "Close the client or press Ctrl+C here to finish.", flush=True)
+        while manual or time.monotonic() < deadline:
             add_processes(generation, find_wine_processes(Path(paths["wine_prefix"])))
             capture_runtime(generation)
+            if manual:
+                if launcher.poll() is not None and not find_wine_processes(Path(paths["wine_prefix"])):
+                    break
+                time.sleep(1)
+                continue
             milestones = matched_milestones(connection_log(generation), milestone_definition)
             if generation["mode"] == "authentication" and len(milestones) == 4:
                 break
@@ -2238,6 +2249,10 @@ def run_client(args: argparse.Namespace) -> None:
             if source.is_file():
                 shutil.copy2(source, raw / name)
         set_state(generation, "observed")
+    except KeyboardInterrupt as error:
+        record_failure(manifest_path, manifest, error)
+        if not manual:
+            raise
     except BaseException as error:
         record_failure(manifest_path, manifest, error)
         raise
@@ -2256,7 +2271,10 @@ def run_client(args: argparse.Namespace) -> None:
             if generation["state"] not in ("failed", "inconclusive", "reset"):
                 record_failure(manifest_path, manifest, cleanup_error)
             raise cleanup_error
-    print(f"observed Plan {plan_number(str(generation['mode']))} generation {generation['number']}; run verify next")
+    if manual:
+        print(f"Manual session ended; inspect the client logs in {paths['logs']}")
+    else:
+        print(f"observed Plan {plan_number(str(generation['mode']))} generation {generation['number']}; run verify next")
 
 
 def world_log_text(generation: Generation) -> str:
@@ -3778,6 +3796,7 @@ def parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--no-login-seconds", type=int, default=20)
     run_parser.add_argument("--stability-seconds", type=stability_seconds, default=10)
     run_parser.add_argument("--auto-login", action="store_true")
+    run_parser.add_argument("--manual", action="store_true", help="Keep the client open for manual play without a timeout or automated movement")
     verify_parser = subcommands.add_parser("verify")
     verify_parser.add_argument("--manifest", type=Path, required=True)
     verify_parser.add_argument("--confirm-expected-screen", action="store_true")

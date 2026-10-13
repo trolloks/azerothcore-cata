@@ -177,7 +177,7 @@ void EncryptableAndCompressiblePacket::Compress(void* dst, uint32 *dst_size, voi
 
 WorldSocket::WorldSocket(IoContextTcpSocket&& socket)
     : Socket(std::move(socket)), _OverSpeedPings(0), _worldSession(nullptr), _authed(false),
-      _compressionStream(nullptr), _sendBufferSize(4096), _loggingPackets(false)
+      _compressionStream(nullptr), _sendBufferSize(4096), _loggingPackets(true) // TEMP #118 diag, revert
 {
     Acore::Crypto::GetRandomBytes(_authSeed);
     _headerBuffer.Resize(/*sizeof(ClientPktHeader)*/ 2);

@@ -3212,7 +3212,8 @@ void WorldObject::DestroyForVisiblePlayers()
     {
         Player* player = itr->second;
 
-        DestroyForPlayer(player);
+        if (player->HaveAtClient(this))
+            DestroyForPlayer(player);
 
         // Clean up visibility references now
         itr = GetObjectVisibilityContainer().UnlinkVisibilityFromWorldObject(player, itr);

@@ -207,6 +207,8 @@ void MessageDistDeliverer::Visit(VisiblePlayersMap const& m)
         Player const* target = kvPair.second;
         if (i_distSq != 0.0f && target->GetSightPosition().GetExactDist2dSq(i_source) > i_distSq)
             continue;
+        if (!target->HaveAtClient(i_source))
+            continue;
 
         // @todo: Might not need this check anymore
         if (skipped_receiver == target)

@@ -128,6 +128,7 @@ namespace Movement
         [[nodiscard]] uint8 GetAnimationType() const { return splineflags.animId; }
 
         bool onTransport;
+        bool splineIsFacingOnly; // turn-in-place spline, not sent in create blocks (build 15595 client)
         [[nodiscard]] std::string ToString() const;
         [[nodiscard]] bool HasStarted() const
         {

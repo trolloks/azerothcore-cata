@@ -189,6 +189,9 @@ void WorldSession::HandleGameObjectQueryOpcode(WorldPacket& recvData)
         data << CastBarCaption;                             // 2.0.3, string. Text will appear in Cast Bar when using GO (ex: "Collecting")
         data << info->unk1;                                 // 2.0.3, string
         data.append(info->raw.data, MAX_GAMEOBJECT_DATA);
+        // Build 15595 expects 32 data words; the current world schema stores 24.
+        for (uint32 i = MAX_GAMEOBJECT_DATA; i < 32; ++i)
+            data << uint32(0);
         data << float(info->size);                          // go size
 
         GameObjectQuestItemList const* items = sObjectMgr->GetGameObjectQuestItemList(entry);
