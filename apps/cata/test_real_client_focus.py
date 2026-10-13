@@ -29,6 +29,8 @@ def check_focus_wait(allow_focus: bool) -> None:
         elif args == ["xprop", "-root", "_NET_ACTIVE_WINDOW"]:
             active = window_id if allow_focus and elapsed >= 8 else "0x999"
             output = f"_NET_ACTIVE_WINDOW(WINDOW): window id # {active}\n"
+        elif args == ["xwininfo", "-id", window_id]:
+            output = "Absolute upper-left X: 2\nAbsolute upper-left Y: 3\nWidth: 800\nHeight: 600\n"
         else:
             assert args == ["wmctrl", "-i", "-a", window_id]
             activations.append(window_id)
@@ -44,7 +46,7 @@ def check_focus_wait(allow_focus: bool) -> None:
         patch.object(runner.time, "sleep", side_effect=sleep),
     ):
         if allow_focus:
-            assert runner.focus_owned_window(generation, timeout=10) == ("0x200", 10, 20, 800, 600)
+            assert runner.focus_owned_window(generation, timeout=10) == ("0x200", 2, 3, 800, 600)
             assert 8.5 <= elapsed < 10
         else:
             try:
