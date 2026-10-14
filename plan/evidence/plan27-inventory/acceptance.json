@@ -200,5 +200,13 @@
   "cleanup": {
     "generation_2": "reset; owned database container and volume removed; evidence preserved",
     "protected_inputs_unchanged": true
-  }
+  },
+  "database_cache_sha256": "816ea0e9860442fa4a54605ffffd97efc1d9148838ce8df2bd01821745389553",
+  "native_food_spell_records": "food-spell433.json",
+  "local_reproduction_commands": [
+    "python3 /tmp/plan27-prepare.py",
+    "python3 /tmp/plan27-client.py",
+    "python3 /tmp/plan27-operations.py",
+    "var/build-plan7/src/test/unit_tests --gtest_filter=ItemPacketsTest.*:ItemInventoryTest.*"
+  ]
 }

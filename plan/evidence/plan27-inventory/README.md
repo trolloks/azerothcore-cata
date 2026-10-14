@@ -16,6 +16,11 @@ sequence and exact inventory rows. [Before logout/relog](before-relog.tsv) and [
 match for item GUID, bag, slot, entry, count, durability, and charges. Seven unique items remain; pumpkins
 total seven after destroying two and consuming one. The vest and pouch remain equipped.
 
+The acceptance record pins the restored SQL cache hash. [Food spell 433](food-spell433.json) pins its
+native `Spell.dbc` and `SpellEffect.dbc` rows and source hashes. Rows are little-endian 32-bit words in the
+repository's native `SpellEntryfmt` and `SpellEffectEntryfmt` column order. Local preparation, client,
+and operation scripts are listed in the JSON; their procedural scenario is described above.
+
 The [focused test result](focused-tests.txt) covers the six packet and inventory tests, including invalid
 slot, insufficient space, required-level rejection, and a foreign bound item. The same six tests passed
 again during the continuation review. Both required codestyle checks passed.
