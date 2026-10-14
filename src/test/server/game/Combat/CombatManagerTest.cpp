@@ -14,6 +14,7 @@
  */
 
 #include "CombatManager.h"
+#include "CreatureAI.h"
 #include "IntegrationTestFixture.h"
 #include "WorldPacket.h"
 #include "ThreatManager.h"
@@ -1454,6 +1455,30 @@ TEST_F(MeleeRequestTest, NonAttackableTargetCannotStartAttack)
     EXPECT_FALSE(player->IsInCombat());
     EXPECT_EQ(target->GetHealth(), 10000u);
     GetTestMap()->GetObjectsStore().Remove<Creature>(target->GetGUID());
+}
+
+TEST_F(CombatManagerIntegrationTest, EvadeCleanupClearsThreatAndBothCombatReferences)
+{
+    class EvadeAI : public CreatureAI
+    {
+    public:
+        using CreatureAI::CreatureAI;
+        using CreatureAI::_EnterEvadeMode;
+        void UpdateAI(uint32 /*diff*/) override { }
+    };
+
+    _creatureA->TestGetThreatMgr().AddThreat(_creatureB, 100.0f);
+    ASSERT_TRUE(_creatureA->TestGetThreatMgr().IsThreatenedBy(_creatureB));
+    ASSERT_TRUE(_creatureB->IsInCombat());
+    EvadeAI ai(_creatureA);
+    EXPECT_TRUE(ai._EnterEvadeMode(CreatureAI::EVADE_REASON_NO_HOSTILES));
+    EXPECT_TRUE(_creatureA->HasUnitState(UNIT_STATE_EVADE));
+    EXPECT_EQ(_creatureA->TestGetThreatMgr().GetThreatListSize(), 0u);
+    EXPECT_FALSE(_creatureA->TestGetCombatMgr().HasCombat());
+    EXPECT_FALSE(_creatureB->TestGetCombatMgr().HasCombat());
+    EXPECT_FALSE(_creatureA->IsInCombat());
+    EXPECT_FALSE(_creatureB->IsInCombat());
+    EXPECT_FALSE(ai._EnterEvadeMode(CreatureAI::EVADE_REASON_NO_HOSTILES));
 }
 
 } // namespace
