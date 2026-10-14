@@ -6691,7 +6691,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* damageInfo)
     data << damageInfo->target->GetPackGUID();
     data << uint32(tmpDamage[0] + tmpDamage[1]);                    // Full damage
     int32 overkill = tmpDamage[0] + tmpDamage[1] - damageInfo->target->GetHealth();
-    data << uint32(overkill < 0 ? 0 : overkill);                    // Overkill
+    data << int32(overkill < 0 ? -1 : overkill);                    // Overkill
     data << uint8(count);                                           // Sub damage count
 
     for (uint32 i = 0; i < count; ++i)
