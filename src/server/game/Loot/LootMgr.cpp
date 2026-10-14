@@ -977,6 +977,7 @@ ByteBuffer& operator<<(ByteBuffer& b, LootView const& lv)
     {
         b << uint32(0);                                     //gold
         b << uint8(0);                                      // item count
+        b << uint8(0); // currency count
         return b;                                           // nothing output more
     }
 
@@ -988,6 +989,7 @@ ByteBuffer& operator<<(ByteBuffer& b, LootView const& lv)
 
     std::size_t count_pos = b.wpos();                            // pos of item count byte
     b << uint8(0);                                          // item count placeholder
+    b << uint8(0); // currency count
 
     switch (lv.permission)
     {

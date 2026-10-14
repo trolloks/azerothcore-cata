@@ -1,0 +1,46 @@
+Running main() from /home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/var/build-plan7/googletest/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = LootViewTest.*:ItemInventoryTest.*:ItemPacketsTest.*
+[==========] Running 15 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 2 tests from ItemPacketsTest
+[ RUN      ] ItemPacketsTest.DestroyReadsCataCountWithoutTruncation
+[       OK ] ItemPacketsTest.DestroyReadsCataCountWithoutTruncation (0 ms)
+[ RUN      ] ItemPacketsTest.DestroyRejectsTruncatedCataCount
+[       OK ] ItemPacketsTest.DestroyRejectsTruncatedCataCount (3 ms)
+[----------] 2 tests from ItemPacketsTest (4 ms total)
+
+[----------] 11 tests from ItemInventoryTest
+[ RUN      ] ItemInventoryTest.InvalidExplicitSlotIsRejected
+[       OK ] ItemInventoryTest.InvalidExplicitSlotIsRejected (17 ms)
+[ RUN      ] ItemInventoryTest.InsufficientSpaceDoesNotCreateItems
+[       OK ] ItemInventoryTest.InsufficientSpaceDoesNotCreateItems (0 ms)
+[ RUN      ] ItemInventoryTest.UnusableItemIsRejected
+[       OK ] ItemInventoryTest.UnusableItemIsRejected (0 ms)
+[ RUN      ] ItemInventoryTest.ForeignBoundItemCannotBeUsedOrStored
+[       OK ] ItemInventoryTest.ForeignBoundItemCannotBeUsedOrStored (0 ms)
+[ RUN      ] ItemInventoryTest.EmptyLootViewIncludesCurrencyCount
+[       OK ] ItemInventoryTest.EmptyLootViewIncludesCurrencyCount (0 ms)
+[ RUN      ] ItemInventoryTest.LootItemFollowsBothCounts
+[       OK ] ItemInventoryTest.LootItemFollowsBothCounts (1 ms)
+[ RUN      ] ItemInventoryTest.FullInventoryPreservesLoot
+[       OK ] ItemInventoryTest.FullInventoryPreservesLoot (1 ms)
+[ RUN      ] ItemInventoryTest.ForeignLootWinnerCannotTakeItem
+[       OK ] ItemInventoryTest.ForeignLootWinnerCannotTakeItem (0 ms)
+[ RUN      ] ItemInventoryTest.ForeignContainerCannotLoseItemsOrMoney
+[       OK ] ItemInventoryTest.ForeignContainerCannotLoseItemsOrMoney (0 ms)
+[ RUN      ] ItemInventoryTest.InvalidAndRepeatedLootSlotsPreserveItems
+[       OK ] ItemInventoryTest.InvalidAndRepeatedLootSlotsPreserveItems (0 ms)
+[ RUN      ] ItemInventoryTest.ForeignAndRepeatedReleaseCannotChangeLootState
+[       OK ] ItemInventoryTest.ForeignAndRepeatedReleaseCannotChangeLootState (0 ms)
+[----------] 11 tests from ItemInventoryTest (24 ms total)
+
+[----------] 2 tests from LootViewTest
+[ RUN      ] LootViewTest.NoPermissionIncludesBothCounts
+[       OK ] LootViewTest.NoPermissionIncludesBothCounts (0 ms)
+[ RUN      ] LootViewTest.CataNotificationOpcodes
+[       OK ] LootViewTest.CataNotificationOpcodes (0 ms)
+[----------] 2 tests from LootViewTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 15 tests from 3 test suites ran. (29 ms total)
+[  PASSED  ] 15 tests.
