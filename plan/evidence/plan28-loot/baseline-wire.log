@@ -1,0 +1,63 @@
+Running main() from /home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/var/build-plan7/googletest/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = LootViewTest.*:ItemInventoryTest.EmptyLootViewIncludesCurrencyCount:ItemInventoryTest.LootItemFollowsBothCounts
+[==========] Running 4 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 2 tests from ItemInventoryTest
+[ RUN      ] ItemInventoryTest.EmptyLootViewIncludesCurrencyCount
+/home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/src/test/server/game/Server/Packets/ItemPacketsTest.cpp:139: Failure
+Expected equality of these values:
+  response.size()
+    Which is: 5
+  6u
+    Which is: 6
+
+[  FAILED  ] ItemInventoryTest.EmptyLootViewIncludesCurrencyCount (1 ms)
+[ RUN      ] ItemInventoryTest.LootItemFollowsBothCounts
+/home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/src/test/server/game/Server/Packets/ItemPacketsTest.cpp:155: Failure
+Expected equality of these values:
+  response.size()
+    Which is: 27
+  28u
+    Which is: 28
+
+[  FAILED  ] ItemInventoryTest.LootItemFollowsBothCounts (0 ms)
+[----------] 2 tests from ItemInventoryTest (1 ms total)
+
+[----------] 2 tests from LootViewTest
+[ RUN      ] LootViewTest.NoPermissionIncludesBothCounts
+/home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/src/test/server/game/Server/Packets/ItemPacketsTest.cpp:128: Failure
+Expected equality of these values:
+  response.size()
+    Which is: 5
+  6u
+    Which is: 6
+
+[  FAILED  ] LootViewTest.NoPermissionIncludesBothCounts (0 ms)
+[ RUN      ] LootViewTest.CataNotificationOpcodes
+/home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/src/test/server/game/Server/Packets/ItemPacketsTest.cpp:245: Failure
+Expected equality of these values:
+  uint16(SMSG_LOOT_RELEASE_RESPONSE)
+    Which is: 353
+  0x6D25
+    Which is: 27941
+
+/home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/src/test/server/game/Server/Packets/ItemPacketsTest.cpp:246: Failure
+Expected equality of these values:
+  uint16(SMSG_LOOT_CLEAR_MONEY)
+    Which is: 357
+  0x2B37
+    Which is: 11063
+
+[  FAILED  ] LootViewTest.CataNotificationOpcodes (0 ms)
+[----------] 2 tests from LootViewTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 4 tests from 2 test suites ran. (1 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 4 tests, listed below:
+[  FAILED  ] ItemInventoryTest.EmptyLootViewIncludesCurrencyCount
+[  FAILED  ] ItemInventoryTest.LootItemFollowsBothCounts
+[  FAILED  ] LootViewTest.NoPermissionIncludesBothCounts
+[  FAILED  ] LootViewTest.CataNotificationOpcodes
+
+ 4 FAILED TESTS

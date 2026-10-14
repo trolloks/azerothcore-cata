@@ -1,0 +1,45 @@
+[  2%] Built target Detour
+[  2%] Built target argon2
+[  2%] Built target sfmt
+[  3%] Built target fmt
+[  4%] Built target gsoap
+[  5%] Built target libsidecar
+[ 12%] Built target jemalloc
+[ 21%] Built target g3dlib
+[ 31%] Built target common
+[ 35%] Built target database
+[ 37%] Built target shared
+[ 38%] Built target modules
+[ 38%] Built target scripts
+[ 38%] Built target revision.h
+[ 98%] Built target game
+[100%] Built target worldserver
+[  0%] Built target sfmt
+[  3%] Built target Detour
+[  6%] Built target argon2
+[  9%] Built target fmt
+[ 32%] Built target g3dlib
+[ 51%] Built target jemalloc
+[ 80%] Built target common
+[ 90%] Built target database
+[ 96%] Built target shared
+[ 96%] Built target revision.h
+[100%] Built target authserver
+[  1%] Built target sfmt
+[  1%] Built target argon2
+[  2%] Built target fmt
+[  2%] Built target gtest
+[  3%] Built target Detour
+[  9%] Built target jemalloc
+[ 10%] Built target libsidecar
+[ 17%] Built target g3dlib
+[ 18%] Built target gmock
+[ 18%] Built target gtest_main
+[ 18%] Built target gmock_main
+[ 28%] Built target common
+[ 31%] Built target database
+[ 33%] Built target shared
+[ 34%] Built target modules
+[ 34%] Built target revision.h
+[ 88%] Built target game
+[100%] Built target unit_tests

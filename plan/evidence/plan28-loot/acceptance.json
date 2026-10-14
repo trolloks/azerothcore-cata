@@ -1,0 +1,40 @@
+{
+  "result": "PASS",
+  "scope": "controlled single-player chest; item and money; zero currency count",
+  "client_build": 15595,
+  "ac_commit": "b65ae7070449e618da83db874c2340fc323c9f99",
+  "reference_commit": "c699217775d90794158422387b07a917e161b582",
+  "binary_sha256": {
+    "worldserver": "f57d2afeceb094f92c3b185608a2823935f0e0f72980f73a8ff8840372455f14",
+    "authserver": "a456649225f4947103cce4d9b41c545ca8d6a6e4d98aef2e378f3939ab94ba95"
+  },
+  "source": {
+    "entry": 2843,
+    "spawn_id": 900099,
+    "loot_id": 900099,
+    "lock_id": 57,
+    "item_id": 4656,
+    "count": 1,
+    "copper": 37,
+    "restock_seconds": 3600
+  },
+  "checks": {
+    "normal_chest_open": true,
+    "manual_item_and_money_take": true,
+    "release_and_reopen_before_award": true,
+    "empty_source_after_repeated_open": true,
+    "normal_logout_relog": true,
+    "exact_saved_award_after_repeated_open_and_second_logout": true,
+    "complete_inventory_identical_after_relog": true,
+    "protected_inputs_unchanged": true
+  },
+  "world_log_sha256": "da5f20e30642925637b3c43e364ca47a85d36e0dcc90c61df02db076209eb988",
+  "harness_mode": "character-creation",
+  "harness_state": "observed",
+  "note": "Plan 22 lifecycle harness reused for ownership and normal character creation; this is separate Plan 28 acceptance, not a Plan 22 verifier result. Prior fixture/input attempts were inconclusive and archived.",
+  "cleanup": {
+    "state": "reset",
+    "active_processes": 0,
+    "protected_inputs_unchanged": true
+  }
+}
