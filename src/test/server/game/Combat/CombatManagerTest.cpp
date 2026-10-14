@@ -14,6 +14,8 @@
  */
 
 #include "CombatManager.h"
+#include "IntegrationTestFixture.h"
+#include "WorldPacket.h"
 #include "ThreatManager.h"
 #include "DBCStores.h"
 #include "TestCreature.h"
@@ -1360,6 +1362,98 @@ TEST_F(CombatManagerIntegrationTest, SetEvadeState_SameState_DoesNotClearTimer)
     EXPECT_TRUE(cm.IsInEvadeMode());
 
     cm.StopEvade();
+}
+
+class MeleePacketCreature : public TestCreature
+{
+public:
+    void SendMessageToSet(WorldPacket const* packet, bool /*self*/) const override
+    {
+        response = *packet;
+    }
+
+    mutable WorldPacket response;
+};
+
+TEST_F(CombatManagerIntegrationTest, MeleeResultUsesCataOverkillSentinel)
+{
+    MeleePacketCreature attacker;
+    attacker.SetupForCombatTest(_map, 3, 12347);
+    _creatureB->SetMaxHealth(100);
+    _creatureB->SetHealth(100);
+    for (uint32 damage : {10u, 100u, 110u})
+    {
+        CalcDamageInfo info{};
+        info.attacker = &attacker;
+        info.target = _creatureB;
+        info.damages[0].damage = damage;
+        info.damages[0].damageSchoolMask = SPELL_SCHOOL_MASK_NORMAL;
+        info.TargetState = VICTIMSTATE_HIT;
+        attacker.SendAttackStateUpdate(&info);
+        WorldPacket& packet = attacker.response;
+        ASSERT_EQ(packet.GetOpcode(), SMSG_ATTACKERSTATEUPDATE);
+        packet.read<uint32>();
+        uint64 guid;
+        packet.readPackGUID(guid);
+        EXPECT_EQ(guid, attacker.GetGUID().GetRawValue());
+        packet.readPackGUID(guid);
+        EXPECT_EQ(guid, _creatureB->GetGUID().GetRawValue());
+        EXPECT_EQ(packet.read<uint32>(), damage);
+        EXPECT_EQ(packet.read<int32>(), damage < 100 ? -1 : int32(damage - 100));
+        EXPECT_EQ(packet.read<uint8>(), 1);
+        EXPECT_EQ(packet.read<uint32>(), uint32(SPELL_SCHOOL_MASK_NORMAL));
+        EXPECT_FLOAT_EQ(packet.read<float>(), float(damage));
+        EXPECT_EQ(packet.read<uint32>(), damage);
+        EXPECT_EQ(packet.read<uint8>(), VICTIMSTATE_HIT);
+        EXPECT_EQ(packet.read<uint32>(), 0u);
+        EXPECT_EQ(packet.read<uint32>(), 0u);
+        EXPECT_EQ(packet.rpos(), packet.size());
+    }
+}
+
+class MeleeRequestTest : public IntegrationTestFixture { };
+
+TEST_F(MeleeRequestTest, UnknownAndSpoofedTargetsCannotStartAttack)
+{
+    TestPlayer* player = CreateTestPlayer();
+    for (ObjectGuid target : {ObjectGuid::Create<HighGuid::Unit>(12345, 99),
+                             ObjectGuid::Create<HighGuid::GameObject>(2843, 99)})
+    {
+        WorldPacket request(CMSG_ATTACKSWING, 8);
+        request << target;
+        player->GetSession()->HandleAttackSwingOpcode(request);
+        EXPECT_EQ(player->GetVictim(), nullptr);
+        EXPECT_FALSE(player->HasUnitState(UNIT_STATE_MELEE_ATTACKING));
+        EXPECT_FALSE(player->IsInCombat());
+    }
+}
+
+TEST_F(MeleeRequestTest, AttackStopWithoutVictimIsIdempotent)
+{
+    TestPlayer* player = CreateTestPlayer();
+    WorldPacket stop(CMSG_ATTACKSTOP, 0);
+    player->GetSession()->HandleAttackStopOpcode(stop);
+    player->GetSession()->HandleAttackStopOpcode(stop);
+    EXPECT_EQ(player->GetVictim(), nullptr);
+    EXPECT_FALSE(player->HasUnitState(UNIT_STATE_MELEE_ATTACKING));
+    EXPECT_FALSE(player->IsInCombat());
+}
+
+TEST_F(MeleeRequestTest, NonAttackableTargetCannotStartAttack)
+{
+    TestPlayer* player = CreateTestPlayer();
+    player->SetFaction(TEST_FACTION_HOSTILE_TO_MONSTERS);
+    TestCreature* target = CreateTestCreature(10, 12345, TEST_FACTION_HOSTILE_TO_ALL);
+    target->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
+    GetTestMap()->GetObjectsStore().Insert<Creature>(target->GetGUID(), target);
+    WorldPacket request(CMSG_ATTACKSWING, 8);
+    request << target->GetGUID();
+    player->GetSession()->HandleAttackSwingOpcode(request);
+    EXPECT_EQ(player->GetVictim(), nullptr);
+    EXPECT_FALSE(player->HasUnitState(UNIT_STATE_MELEE_ATTACKING));
+    EXPECT_FALSE(player->IsInCombat());
+    EXPECT_EQ(target->GetHealth(), 10000u);
+    GetTestMap()->GetObjectsStore().Remove<Creature>(target->GetGUID());
 }
 
 } // namespace
