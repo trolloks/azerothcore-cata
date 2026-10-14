@@ -1244,7 +1244,7 @@ def preflight_prepare(args: argparse.Namespace) -> dict[str, object]:
     if image_result.returncode:
         raise RuntimeError(f"required local image is absent: {MYSQL_IMAGE}")
     mysql_image_id = json.loads(image_result.stdout)[0]["Id"]
-    for command in ("ss", "xprop", "wmctrl"):
+    for command in ("ss", "xprop", "wmctrl", "xwininfo"):
         if shutil.which(command) is None:
             raise RuntimeError(f"required evidence command is absent: {command}")
     head = run_command(["git", "rev-parse", "HEAD"], timeout=30).stdout.decode().strip()
@@ -1653,7 +1653,19 @@ def focus_owned_window(generation: Generation, timeout: float = 30) -> tuple[str
             if focused_since is None or previous_window != window_id:
                 focused_since = time.monotonic()
             elif time.monotonic() - focused_since >= 0.5:
-                return window
+                # WM frame coordinates can include decorations; clicks need the actual client origin.
+                geometry = run_command(
+                    ["xwininfo", "-id", window_id], env=environment,
+                ).stdout.decode(errors="replace")
+                coordinates = []
+                for label in ("Absolute upper-left X", "Absolute upper-left Y", "Width", "Height"):
+                    value = re.search(rf"^\s*{label}:\s*(-?\d+)\s*$", geometry, re.MULTILINE)
+                    if value is None:
+                        raise RuntimeError(f"owned WoW client geometry missing {label}")
+                    coordinates.append(int(value.group(1)))
+                if coordinates[2] <= 0 or coordinates[3] <= 0:
+                    raise RuntimeError("owned WoW client geometry has no usable area")
+                return (window_id, *coordinates)
         else:
             focused_since = None
             if window:
@@ -2074,21 +2086,14 @@ def automate_invalid_target_spell_cast(generation: Generation) -> None:
 
 
 def character_creation_points(x: int, y: int, width: int, height: int) -> dict[str, tuple[int, int]]:
-    # Fractions calibrated against a 1800x1042 owned window on the Cataclysm 15595 creation
+    # Fractions calibrated against a 1792x1008 owned client window on the Cataclysm 15595 creation
     # screen: Alliance/Human is the first race portrait, Warrior the first class icon (both
     # already match CHARACTER_RACE/CHARACTER_CLASS), male is the left gender icon, matching the
     # gender=0 used by the populated-mode SQL fixtures.
-    #
-    # The x fractions below are shifted ~59px left of the icons' true on-screen centers: the
-    # synthetic click (XWarpPointer + XTestFake ButtonPress/Release) consistently lands ~59px
-    # right of the requested point on this window, so aiming left compensates. Confirmed by
-    # comparing requested vs. actually-selected icon across several generations (race clicks
-    # landed in the dead gap between the Alliance/Horde columns; gender/class clicks landed one
-    # icon slot to the right of the target).
     return {
-        "race_human": (x + round(width * 0.0328), y + round(height * 0.0912)),
-        "gender_male": (x + round(width * 0.0433), y + round(height * 0.5566)),
-        "class_warrior": (x + round(width * 0.0006), y + round(height * 0.6449)),
+        "race_human": (x + round(width * 0.0636), y + round(height * 0.0912)),
+        "gender_male": (x + round(width * 0.0854), y + round(height * 0.5566)),
+        "class_warrior": (x + round(width * 0.0346), y + round(height * 0.6449)),
         "name_field": (x + round(width * 0.5000), y + round(height * 0.8974)),
         "accept": (x + round(width * 0.8972), y + round(height * 0.9357)),
     }

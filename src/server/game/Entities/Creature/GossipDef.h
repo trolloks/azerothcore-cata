@@ -278,7 +278,7 @@ public:
     /*********************************************************/
     /***                    QUEST SYSTEM                   ***/
     /*********************************************************/
-    void SendQuestGiverStatus(uint8 questStatus, ObjectGuid npcGUID) const;
+    void SendQuestGiverStatus(uint32 questStatus, ObjectGuid npcGUID) const;
 
     void SendQuestGiverQuestList(QEmote const& eEmote, std::string const& Title, ObjectGuid guid);
 

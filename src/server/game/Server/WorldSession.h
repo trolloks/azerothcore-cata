@@ -1213,6 +1213,7 @@ public:                                                 // opcodes handlers
     void HandleReadyForAccountDataTimes(WorldPacket& recvData);
     void HandleQueryQuestsCompleted(WorldPacket& recvData);
     void HandleQuestPOIQuery(WorldPacket& recvData);
+    void HandleQuestNPCQuery(WorldPacket& recvData);
     void HandleEjectPassenger(WorldPacket& data);
     void HandleEnterPlayerVehicle(WorldPacket& data);
     void HandleUpdateProjectilePosition(WorldPacket& recvPacket);

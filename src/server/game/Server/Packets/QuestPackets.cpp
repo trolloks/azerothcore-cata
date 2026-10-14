@@ -17,6 +17,37 @@
 
 #include "QuestPackets.h"
 
+void WorldPackets::Quest::QuestRewards::Write(ByteBuffer& data) const
+{
+    data << ChoiceItemCount;
+    for (uint32 value : ChoiceItemId)
+        data << value;
+    for (uint32 value : ChoiceItemQuantity)
+        data << value;
+    for (uint32 value : ChoiceItemDisplay)
+        data << value;
+    data << ItemCount;
+    for (uint32 value : ItemId)
+        data << value;
+    for (uint32 value : ItemQuantity)
+        data << value;
+    for (uint32 value : ItemDisplay)
+        data << value;
+    data << Money << Experience << Title << uint32(0) << float(0) << BonusTalents << uint32(0) << FactionFlags;
+    for (uint32 value : FactionId)
+        data << value;
+    for (int32 value : FactionValue)
+        data << value;
+    for (uint32 value : FactionOverride)
+        data << value;
+    data << DisplaySpell << Spell;
+    for (uint32 value : CurrencyId)
+        data << value;
+    for (uint32 value : CurrencyQuantity)
+        data << value;
+    data << SkillLine << SkillUps;
+}
+
 WorldPacket const* WorldPackets::Quest::QuestUpdateComplete::Write()
 {
     _worldPacket << QuestId;
@@ -26,12 +57,15 @@ WorldPacket const* WorldPackets::Quest::QuestUpdateComplete::Write()
 
 WorldPacket const* WorldPackets::Quest::QuestGiverQuestComplete::Write()
 {
-    _worldPacket << QuestId;
-    _worldPacket << Experience;
-    _worldPacket << RewardMoney;
-    _worldPacket << RewardHonor;
     _worldPacket << RewardTalents;
-    _worldPacket << RewardArena;
+    _worldPacket << RewardSkillUps;
+    _worldPacket << RewardMoney;
+    _worldPacket << Experience;
+    _worldPacket << QuestId;
+    _worldPacket << RewardSkillLine;
+    _worldPacket.WriteBit(LaunchGossip);
+    _worldPacket.WriteBit(UseQuestReward);
+    _worldPacket.FlushBits();
 
     return &_worldPacket;
 }
