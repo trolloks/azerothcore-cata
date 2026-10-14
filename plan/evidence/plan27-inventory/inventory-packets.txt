@@ -1,0 +1,12 @@
+2026-10-14 15:22:25 C->S: [Player: Cataplan GUID Full: 0x0000000000000001 Type: Player Low: 1, Account: 900000] [CMSG_SWAP_INV_ITEM 0x2614 (9748)]
+2026-10-14 15:22:46 C->S: [Player: Cataplan GUID Full: 0x0000000000000001 Type: Player Low: 1, Account: 900000] [CMSG_SPLIT_ITEM 0x0F17 (3863)]
+2026-10-14 15:23:03 C->S: [Player: Cataplan GUID Full: 0x0000000000000001 Type: Player Low: 1, Account: 900000] [CMSG_SWAP_ITEM 0x6326 (25382)]
+2026-10-14 15:23:14 C->S: [Player: Cataplan GUID Full: 0x0000000000000001 Type: Player Low: 1, Account: 900000] [CMSG_SWAP_ITEM 0x6326 (25382)]
+2026-10-14 15:23:26 C->S: [Player: Cataplan GUID Full: 0x0000000000000001 Type: Player Low: 1, Account: 900000] [CMSG_SWAP_ITEM 0x6326 (25382)]
+2026-10-14 15:23:40 C->S: [Player: Cataplan GUID Full: 0x0000000000000001 Type: Player Low: 1, Account: 900000] [CMSG_SWAP_INV_ITEM 0x2614 (9748)]
+2026-10-14 15:23:52 C->S: [Player: Cataplan GUID Full: 0x0000000000000001 Type: Player Low: 1, Account: 900000] [CMSG_SWAP_INV_ITEM 0x2614 (9748)]
+2026-10-14 15:24:04 C->S: [Player: Cataplan GUID Full: 0x0000000000000001 Type: Player Low: 1, Account: 900000] [CMSG_SWAP_INV_ITEM 0x2614 (9748)]
+2026-10-14 15:24:16 C->S: [Player: Cataplan GUID Full: 0x0000000000000001 Type: Player Low: 1, Account: 900000] [CMSG_SPLIT_ITEM 0x0F17 (3863)]
+2026-10-14 15:24:28 C->S: [Player: Cataplan GUID Full: 0x0000000000000001 Type: Player Low: 1, Account: 900000] [CMSG_DESTROYITEM 0x4A27 (18983)]
+2026-10-14 15:24:35 C->S: [Player: Cataplan GUID Full: 0x0000000000000001 Type: Player Low: 1, Account: 900000] [CMSG_USE_ITEM 0x2C06 (11270)]
+2026-10-14 15:24:35 WORLD: CMSG_USE_ITEM packet, bagIndex: 255, slot: 23, castCount: 1, spellId: 433, Item: 4656, glyphIndex: 0, data length = 24

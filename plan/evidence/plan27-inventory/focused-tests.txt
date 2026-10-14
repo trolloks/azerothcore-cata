@@ -1,0 +1,25 @@
+Running main() from /home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/var/build-plan7/googletest/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = ItemPacketsTest.*:ItemInventoryTest.*
+[==========] Running 6 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 2 tests from ItemPacketsTest
+[ RUN      ] ItemPacketsTest.DestroyReadsCataCountWithoutTruncation
+[       OK ] ItemPacketsTest.DestroyReadsCataCountWithoutTruncation (0 ms)
+[ RUN      ] ItemPacketsTest.DestroyRejectsTruncatedCataCount
+[       OK ] ItemPacketsTest.DestroyRejectsTruncatedCataCount (4 ms)
+[----------] 2 tests from ItemPacketsTest (4 ms total)
+
+[----------] 4 tests from ItemInventoryTest
+[ RUN      ] ItemInventoryTest.InvalidExplicitSlotIsRejected
+[       OK ] ItemInventoryTest.InvalidExplicitSlotIsRejected (17 ms)
+[ RUN      ] ItemInventoryTest.InsufficientSpaceDoesNotCreateItems
+[       OK ] ItemInventoryTest.InsufficientSpaceDoesNotCreateItems (0 ms)
+[ RUN      ] ItemInventoryTest.UnusableItemIsRejected
+[       OK ] ItemInventoryTest.UnusableItemIsRejected (0 ms)
+[ RUN      ] ItemInventoryTest.ForeignBoundItemCannotBeUsedOrStored
+[       OK ] ItemInventoryTest.ForeignBoundItemCannotBeUsedOrStored (0 ms)
+[----------] 4 tests from ItemInventoryTest (19 ms total)
+
+[----------] Global test environment tear-down
+[==========] 6 tests from 2 test suites ran. (24 ms total)
+[  PASSED  ] 6 tests.

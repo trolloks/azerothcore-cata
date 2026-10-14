@@ -1,0 +1,204 @@
+{
+  "schema": 1,
+  "issue": 98,
+  "client_build": 15595,
+  "tested_commit": "8a51207ef0a81cedde1755b79aae7ce53a2ca0e7",
+  "run_id": "224bd7db8ee6",
+  "generation": 2,
+  "reference_commit": "c699217775d90794158422387b07a917e161b582",
+  "scope": "Basic inventory operations and one consumable; fixture-assisted real-client acceptance",
+  "fixture_preconditions": {
+    "bag": {
+      "guid": 1,
+      "entry": 4496,
+      "slot": 24,
+      "count": 1
+    },
+    "food": {
+      "guid": 3,
+      "entry": 4656,
+      "slot": 25,
+      "count": 10
+    }
+  },
+  "operations": [
+    "equip pouch",
+    "split 10 pumpkins into 6 and 4",
+    "merge to 10",
+    "move backpack to bag",
+    "move bag to backpack",
+    "swap occupied slots",
+    "unequip vest",
+    "equip vest",
+    "split 2 pumpkins and destroy that stack",
+    "use one pumpkin with /use",
+    "logout and relog",
+    "logout and compare saves"
+  ],
+  "inventory": {
+    "columns": [
+      "bag",
+      "slot",
+      "item_guid",
+      "entry",
+      "count",
+      "durability",
+      "charges"
+    ],
+    "before_relog": [
+      [
+        "0",
+        "4",
+        "2",
+        "58231",
+        "1",
+        "0",
+        "0 0 0 0 0 "
+      ],
+      [
+        "0",
+        "6",
+        "4",
+        "39",
+        "1",
+        "25",
+        "0 0 0 0 0 "
+      ],
+      [
+        "0",
+        "7",
+        "6",
+        "40",
+        "1",
+        "0",
+        "0 0 0 0 0 "
+      ],
+      [
+        "0",
+        "15",
+        "8",
+        "49778",
+        "1",
+        "25",
+        "0 0 0 0 0 "
+      ],
+      [
+        "0",
+        "19",
+        "1",
+        "4496",
+        "1",
+        "0",
+        "0 0 0 0 0 "
+      ],
+      [
+        "0",
+        "23",
+        "3",
+        "4656",
+        "7",
+        "0",
+        "-1 0 0 0 0 "
+      ],
+      [
+        "0",
+        "25",
+        "10",
+        "6948",
+        "1",
+        "0",
+        "0 0 0 0 0 "
+      ]
+    ],
+    "after_relog": [
+      [
+        "0",
+        "4",
+        "2",
+        "58231",
+        "1",
+        "0",
+        "0 0 0 0 0 "
+      ],
+      [
+        "0",
+        "6",
+        "4",
+        "39",
+        "1",
+        "25",
+        "0 0 0 0 0 "
+      ],
+      [
+        "0",
+        "7",
+        "6",
+        "40",
+        "1",
+        "0",
+        "0 0 0 0 0 "
+      ],
+      [
+        "0",
+        "15",
+        "8",
+        "49778",
+        "1",
+        "25",
+        "0 0 0 0 0 "
+      ],
+      [
+        "0",
+        "19",
+        "1",
+        "4496",
+        "1",
+        "0",
+        "0 0 0 0 0 "
+      ],
+      [
+        "0",
+        "23",
+        "3",
+        "4656",
+        "7",
+        "0",
+        "-1 0 0 0 0 "
+      ],
+      [
+        "0",
+        "25",
+        "10",
+        "6948",
+        "1",
+        "0",
+        "0 0 0 0 0 "
+      ]
+    ],
+    "equal": true,
+    "unique_item_guids": 7,
+    "pumpkin_count": 7
+  },
+  "negative_cases": [
+    "invalid explicit slot",
+    "insufficient backpack space",
+    "required level prevents use",
+    "foreign bound item cannot be used or stored"
+  ],
+  "checks": {
+    "focused_unit_tests": "6 passed",
+    "cpp_codestyle": "passed",
+    "sql_codestyle": "passed",
+    "protected_inputs_unchanged": true,
+    "isolation_check_context": "Verified outside filesystem sandbox; sandbox metadata view differs"
+  },
+  "screenshots": {
+    "verified-split.png": "688f5436404853956e8dc245927cf5c59f3eb8b4c2893287dcebff398337e6d1",
+    "verified-unequipped.png": "d47af422a05786a17f807df58c0498b185f6522a569fc2fe5412332ea9e79c04",
+    "verified-relogged.png": "0a39bff762a4981b1b7f1e5cbe6932b6cc7a8c45340bbc3846fb936039e95864"
+  },
+  "cleanup": {
+    "generation_2": "reset; owned database container and volume removed; evidence preserved",
+    "protected_inputs_unchanged": true
+  }
+}
