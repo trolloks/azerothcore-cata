@@ -571,11 +571,11 @@ void OpcodeTable::Initialize()
     /*0x6227*/ DEFINE_HANDLER(CMSG_LOOT_MONEY,                                                       STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleLootMoneyOpcode                    );
     /*0x2007*/ DEFINE_HANDLER(CMSG_LOOT_RELEASE,                                                     STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleLootReleaseOpcode                  );
     /*0x4C16*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_LOOT_RESPONSE,                                      STATUS_NEVER);
-    /*0x0161*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_LOOT_RELEASE_RESPONSE,                              STATUS_NEVER);
+    /*0x6D25*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_LOOT_RELEASE_RESPONSE,                              STATUS_NEVER);
     /*0x6817*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_LOOT_REMOVED,                                       STATUS_NEVER);
     /*0x2836*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_LOOT_MONEY_NOTIFY,                                  STATUS_NEVER);
     /*0x6D15*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_LOOT_ITEM_NOTIFY,                                   STATUS_NEVER);
-    /*0x0165*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_LOOT_CLEAR_MONEY,                                   STATUS_NEVER);
+    /*0x2B37*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_LOOT_CLEAR_MONEY,                                   STATUS_NEVER);
     /*0x0E15*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_ITEM_PUSH_RESULT,                                   STATUS_NEVER);
     /*0x4504*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_DUEL_REQUESTED,                                     STATUS_NEVER);
     /*0x0C26*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_DUEL_OUTOFBOUNDS,                                   STATUS_NEVER);
