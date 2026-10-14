@@ -18,7 +18,9 @@
 #include "ItemPackets.h"
 #include "IntegrationTestFixture.h"
 #include "Item.h"
+#include "LootMgr.h"
 #include "ObjectMgr.h"
+#include "ScriptDefines/AchievementScript.h"
 #include "gtest/gtest.h"
 
 TEST(ItemPacketsTest, DestroyReadsCataCountWithoutTruncation)
@@ -48,6 +50,7 @@ protected:
     void SetUp() override
     {
         IntegrationTestFixture::SetUp();
+        ScriptRegistry<AchievementScript>::InitEnabledHooksIfNeeded(ACHIEVEMENTHOOK_END);
         _templates = const_cast<std::vector<ItemTemplate*>*>(sObjectMgr->GetItemTemplateStoreFast());
         _originalSize = _templates->size();
         if (_templates->size() <= 1)
@@ -117,4 +120,161 @@ TEST_F(ItemInventoryTest, ForeignBoundItemCannotBeUsedOrStored)
     EXPECT_EQ(item.GetOwnerGUID(), owner->GetGUID());
     EXPECT_EQ(item.GetCount(), 1u);
     EXPECT_EQ(_player->GetItemCount(1), 0u);
+}
+
+TEST(LootViewTest, NoPermissionIncludesBothCounts)
+{
+    Loot loot(123);
+    ByteBuffer response;
+    response << LootView(loot, nullptr, NONE_PERMISSION);
+    ASSERT_EQ(response.size(), 6u);
+    EXPECT_EQ(response.read<uint32>(), 0u);
+    EXPECT_EQ(response.read<uint8>(), 0);
+    EXPECT_EQ(response.read<uint8>(), 0);
+}
+
+TEST_F(ItemInventoryTest, EmptyLootViewIncludesCurrencyCount)
+{
+    Loot loot(123);
+    ByteBuffer response;
+    response << LootView(loot, _player);
+    ASSERT_EQ(response.size(), 6u);
+    EXPECT_EQ(response.read<uint32>(), 123u);
+    EXPECT_EQ(response.read<uint8>(), 0);
+    EXPECT_EQ(response.read<uint8>(), 0);
+}
+
+TEST_F(ItemInventoryTest, LootItemFollowsBothCounts)
+{
+    _template.DisplayInfoID = 123;
+    Loot loot(42);
+    LootItem item{};
+    item.itemid = 1;
+    item.count = 3;
+    loot.items.push_back(item);
+    ByteBuffer response;
+    response << LootView(loot, _player);
+    ASSERT_EQ(response.size(), 28u);
+    EXPECT_EQ(response.read<uint32>(), 42u);
+    EXPECT_EQ(response.read<uint8>(), 1);
+    EXPECT_EQ(response.read<uint8>(), 0);
+    EXPECT_EQ(response.read<uint8>(), 0);
+    EXPECT_EQ(response.read<uint32>(), 1u);
+    EXPECT_EQ(response.read<uint32>(), 3u);
+    EXPECT_EQ(response.read<uint32>(), 123u);
+    EXPECT_EQ(response.read<uint32>(), 0u);
+    EXPECT_EQ(response.read<int32>(), 0);
+    EXPECT_EQ(response.read<uint8>(), LOOT_SLOT_TYPE_ALLOW_LOOT);
+    EXPECT_EQ(response.rpos(), response.size());
+}
+
+TEST_F(ItemInventoryTest, FullInventoryPreservesLoot)
+{
+    ASSERT_TRUE(_player->AddItem(1, 16));
+    Loot loot;
+    LootItem item{};
+    item.itemid = 1;
+    item.count = 1;
+    loot.items.push_back(item);
+    loot.unlootedCount = 1;
+    InventoryResult result;
+    ASSERT_EQ(_player->StoreLootItem(0, &loot, result), &loot.items[0]);
+    EXPECT_EQ(result, EQUIP_ERR_INVENTORY_FULL);
+    EXPECT_FALSE(loot.items[0].is_looted);
+    EXPECT_EQ(loot.items[0].count, 1u);
+    EXPECT_EQ(loot.unlootedCount, 1);
+    EXPECT_EQ(_player->GetItemCount(1), 16u);
+}
+
+TEST_F(ItemInventoryTest, ForeignLootWinnerCannotTakeItem)
+{
+    Loot loot;
+    LootItem item{};
+    item.itemid = 1;
+    item.count = 1;
+    item.rollWinnerGUID = CreateTestPlayer(2)->GetGUID();
+    loot.items.push_back(item);
+    loot.unlootedCount = 1;
+    InventoryResult result;
+    EXPECT_EQ(_player->StoreLootItem(0, &loot, result), nullptr);
+    EXPECT_FALSE(loot.items[0].is_looted);
+    EXPECT_EQ(loot.unlootedCount, 1);
+    EXPECT_EQ(_player->GetItemCount(1), 0u);
+}
+
+TEST_F(ItemInventoryTest, ForeignContainerCannotLoseItemsOrMoney)
+{
+    TestPlayer* owner = CreateTestPlayer(2);
+    Item* container = new Item();
+    ASSERT_TRUE(container->Create(50, 1, owner));
+    ItemPosCountVec destination{{uint16((INVENTORY_SLOT_BAG_0 << 8) | INVENTORY_SLOT_ITEM_START), 1}};
+    owner->StoreItem(destination, container, false);
+    LootItem item{};
+    item.itemid = 1;
+    item.count = 1;
+    container->loot.items.push_back(item);
+    container->loot.unlootedCount = 1;
+    container->loot.gold = 37;
+    _player->SetLootGUID(container->GetGUID());
+
+    WorldPacket take(CMSG_AUTOSTORE_LOOT_ITEM, 1);
+    take << uint8(0);
+    _player->GetSession()->HandleAutostoreLootItemOpcode(take);
+    WorldPacket money(CMSG_LOOT_MONEY, 0);
+    _player->GetSession()->HandleLootMoneyOpcode(money);
+    EXPECT_FALSE(container->loot.items[0].is_looted);
+    EXPECT_EQ(container->loot.unlootedCount, 1);
+    EXPECT_EQ(container->loot.gold, 37u);
+    EXPECT_EQ(owner->GetItemCount(1), 1u);
+    EXPECT_EQ(_player->GetItemCount(1), 0u);
+    EXPECT_EQ(_player->GetMoney(), 0u);
+}
+
+TEST_F(ItemInventoryTest, InvalidAndRepeatedLootSlotsPreserveItems)
+{
+    Loot loot;
+    LootItem item{};
+    item.itemid = 1;
+    item.count = 1;
+    loot.items.push_back(item);
+    loot.unlootedCount = 1;
+    InventoryResult result;
+    EXPECT_EQ(_player->StoreLootItem(255, &loot, result), nullptr);
+    EXPECT_FALSE(loot.items[0].is_looted);
+    EXPECT_EQ(loot.unlootedCount, 1);
+    ASSERT_NE(_player->StoreLootItem(0, &loot, result), nullptr);
+    ASSERT_EQ(result, EQUIP_ERR_OK);
+    EXPECT_EQ(_player->GetItemCount(1), 1u);
+    EXPECT_EQ(loot.unlootedCount, 0);
+    EXPECT_EQ(_player->StoreLootItem(0, &loot, result), nullptr);
+    EXPECT_EQ(_player->StoreLootItem(255, &loot, result), nullptr);
+    EXPECT_EQ(_player->GetItemCount(1), 1u);
+    EXPECT_EQ(loot.unlootedCount, 0);
+}
+
+TEST_F(ItemInventoryTest, ForeignAndRepeatedReleaseCannotChangeLootState)
+{
+    ObjectGuid source = ObjectGuid::Create<HighGuid::GameObject>(2843, 10);
+    _player->SetLootGUID(source);
+    WorldPacket foreignRelease(CMSG_LOOT_RELEASE, 8);
+    foreignRelease << ObjectGuid::Create<HighGuid::GameObject>(2843, 11);
+    _player->GetSession()->HandleLootReleaseOpcode(foreignRelease);
+    EXPECT_EQ(_player->GetLootGUID(), source);
+    WorldPacket release(CMSG_LOOT_RELEASE, 8);
+    release << source;
+    _player->GetSession()->HandleLootReleaseOpcode(release);
+    EXPECT_TRUE(_player->GetLootGUID().IsEmpty());
+    release.rpos(0);
+    _player->GetSession()->HandleLootReleaseOpcode(release);
+    EXPECT_TRUE(_player->GetLootGUID().IsEmpty());
+    EXPECT_EQ(_player->GetItemCount(1), 0u);
+    EXPECT_EQ(_player->GetMoney(), 0u);
+}
+
+TEST(LootViewTest, CataNotificationOpcodes)
+{
+    EXPECT_EQ(uint16(SMSG_LOOT_RELEASE_RESPONSE), 0x6D25);
+    EXPECT_EQ(uint16(SMSG_LOOT_CLEAR_MONEY), 0x2B37);
+    EXPECT_EQ(uint16(SMSG_LOOT_RESPONSE), 0x4C16);
+    EXPECT_EQ(uint16(CMSG_AUTOSTORE_LOOT_ITEM), 0x0E34);
 }
