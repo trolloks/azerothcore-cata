@@ -54,7 +54,7 @@ protected:
             _templates->resize(2);
         _originalTemplate = (*_templates)[1];
         _template.ItemId = 1;
-        _template.Class = ITEM_CLASS_MISCELLANEOUS;
+        _template.Class = ITEM_CLASS_MISC;
         _template.AllowableClass = -1;
         _template.AllowableRace = -1;
         _template.Stackable = 1;
