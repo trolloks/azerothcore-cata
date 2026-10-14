@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "issue": 56,
+  "quest": 2158,
+  "client_build": 15595,
+  "runtime_commit": "3ba90d738a798e502c315e50abbbe839acf187cf",
+  "reference_commit": "c699217775d90794158422387b07a917e161b582",
+  "source_manifest": "apps/cata/fixtures/plan26-cata-quest2158.json",
+  "run_id": "44002726121c",
+  "generation": 2,
+  "prepare_seconds": 282.9,
+  "database_cache": "restored",
+  "preconditions": [
+    "Normal client creation of Human male Warrior Cataplan.",
+    "Run-owned world NPCs 6774 and 295 relocated near the native Human start for bounded interaction.",
+    "Run-owned backpack filled with native starter shirt copies before login.",
+    "After full-bag rejection, three fixture shirts removed while offline; quest rows never inserted or edited."
+  ],
+  "checks": {
+    "normal_autoaccept": "PASS",
+    "abandon_reaccept": "PASS",
+    "native_query_details": "PASS",
+    "npc_query_no_disconnect": "PASS",
+    "full_bags_no_reward": "PASS",
+    "normal_turn_in": "PASS",
+    "normal_logout_persistence": "PASS",
+    "relogin_preserves_rewards": "PASS",
+    "repeat_client_reward_attempt_no_extra_items": "PASS",
+    "invalid_reward_slots_unit_test": "PASS",
+    "invalid_reward_client_attempt": "blocked by client before transmission",
+    "conversion_auditor_self_check": "FAIL: same seven opcode-model issues reproduced on origin/master; baseline auditor is stale",
+    "eligibility": "Non-repeatable completed quest offers no further reward; other eligibility families excluded"
+  },
+  "final_database": {
+    "character": "1\t45\t0\t0",
+    "active_quest": "0",
+    "rewarded": "1",
+    "items": "159\t5\n4656\t5\n57397\t1",
+    "reputation": "27"
+  },
+  "cleanup": {
+    "owned_generation_reset": true,
+    "protected_inputs_unchanged": true
+  },
+  "limits": [
+    "No kill/collect objective or quest phase transition exists in quest 2158.",
+    "No crafted replay or invalid-slot network request was injected.",
+    "NPC proximity is a run-owned fixture, not proof of original world spawn placement.",
+    "Generic character-creation verifier was not used as the quest acceptance predicate.",
+    "Raw packet log contains only a header; protocol logs, screenshots, scoped unit tests and DB assertions are the evidence.",
+    "Observation deadlines and item-destruction disconnect were preserved in previous-runs; sessions resumed on the same owned character."
+  ],
+  "followup_issue": 98,
+  "artifact_sha256": {
+    "g2-success-reward.png": "a05b9ac727515e61aafdd73ffad521b4db63f4e7f144c108acd417e4c4d11fb9",
+    "g2-quest-details.png": "f0c16862aa2eb6161b7af569ad58576e77e0d2141cf997e4f84722b48f03976a",
+    "g2-replay-after-relog.png": "dcfee0c8cdbe0d401b8cf9718b29f23c2b04d35c4ecb2edd02953164d23fc7a1",
+    "g2-full-bags-rejection.png": "7c718579f44506dc635068c2b3575e24bb41bc52bc0d21e4c76e5001b686f94f"
+  },
+  "local_evidence_root": "/mnt/f79365ff-6a68-45da-925e-b9ddc6d5da6c/Fun/.plan26-quest56"
+}
