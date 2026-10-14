@@ -1,0 +1,31 @@
+[  1%] Built target Detour
+[  1%] Built target sfmt
+[  2%] Built target argon2
+[  3%] Built target fmt
+[  4%] Built target libsidecar
+[  5%] Built target gsoap
+[ 12%] Built target jemalloc
+[ 21%] Built target g3dlib
+[ 22%] Building CXX object src/common/CMakeFiles/common.dir/GitRevision.cpp.o
+[ 22%] Built target revision.h
+[ 22%] Linking CXX static library libcommon.a
+[ 31%] Built target common
+[ 35%] Built target database
+[ 37%] Built target shared
+[ 38%] Built target modules
+[ 38%] Built target scripts
+[ 98%] Built target game
+[100%] Linking CXX executable worldserver
+[100%] Built target worldserver
+[  3%] Built target Detour
+[  6%] Built target argon2
+[  9%] Built target fmt
+[  9%] Built target sfmt
+[ 29%] Built target jemalloc
+[ 51%] Built target g3dlib
+[ 80%] Built target common
+[ 90%] Built target database
+[ 96%] Built target shared
+[ 96%] Built target revision.h
+[100%] Linking CXX executable authserver
+[100%] Built target authserver

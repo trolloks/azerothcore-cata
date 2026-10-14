@@ -1,0 +1,66 @@
+{
+  "result": "PASS",
+  "issue": 100,
+  "production_commit": "da6beb28d",
+  "test_commit": "5f1416ed5",
+  "client_build": 15595,
+  "binary_sha256": {
+    "worldserver": "0cd364335009c90a93af0703967f61b0f97b21590add16cb30e72a4fcb4a3a1f",
+    "authserver": "b5470b8ac6262ed7bd4368bc0104b74b0a24d6dbafab8b3d7056573add4c2540"
+  },
+  "source": {
+    "creature_entry": 299,
+    "spawn": 900100,
+    "level": 1,
+    "health": 42,
+    "display": 31049,
+    "loot": {
+      "4656": 1,
+      "copper": 37
+    }
+  },
+  "checks": {
+    "normal_target_and_autoattack": true,
+    "landed_hits_and_normal_stop_resume": true,
+    "server_health_matches_client_log": true,
+    "server_threat_and_combat_cleanup": true,
+    "corpse_state_and_client_death_agree": true,
+    "normal_corpse_loot": true,
+    "repeated_open_no_duplicate": true,
+    "normal_relog_and_identical_persisted_awards": true,
+    "protected_inputs_unchanged": true
+  },
+  "damage": [
+    10,
+    9,
+    10,
+    9,
+    22
+  ],
+  "client_overkill": [
+    -1,
+    -1,
+    -1,
+    -1,
+    18
+  ],
+  "runtime_config": {
+    "Corpse.Decay.NORMAL": 300,
+    "reason": "retain the owned corpse long enough for observation; production default remains 60"
+  },
+  "harness_mode": "character-creation",
+  "harness_state": "observed",
+  "notes": [
+    "Parent debugger observes an unchanged executable using a separate matching-layout type object. Attaching to an existing server is rejected by this environment.",
+    "Owned client observer only records native combat events and target API fields in saved variables. Source Interface contents were copied before adding it; the personal client and bottle were not written.",
+    "Early first kill was inconclusive for loot because its default 60-second corpse expired. Subsequent diagnostic restarts retained its respawn timer. Only the owned spawn timer was reset before the final encounter; no earlier loot award occurred.",
+    "One disposable database generation was reused; no new e2e tests or repository SQL were added.",
+    "Normal logout saved awards and observer data; normal relog retained them. Harness shutdown followed the final quit request before a second logout completed, so the final saved snapshot is labelled after-relog-saved rather than a second normal-logout proof."
+  ],
+  "cleanup": {
+    "state": "reset",
+    "active_processes": 0,
+    "wine_processes": 0,
+    "protected_inputs_unchanged": true
+  }
+}
