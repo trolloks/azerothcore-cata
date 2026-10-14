@@ -231,7 +231,7 @@ enum OpcodeClient : uint16
     CMSG_SPLIT_ITEM                                 = 0xF17,
     CMSG_AUTOEQUIP_ITEM_SLOT                        = 0x4A17,
     CMSG_UNCLAIM_LICENSE                            = 0x110,
-    CMSG_DESTROYITEM                                = 0x111,
+    CMSG_DESTROYITEM                                = 0x4A27,
     CMSG_INSPECT                                    = 0x0927,
     CMSG_INITIATE_TRADE                             = 0x7916,
     CMSG_BEGIN_TRADE                                = 0x721E,

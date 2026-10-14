@@ -57,9 +57,6 @@ void WorldPackets::Item::DestroyItem::Read()
     _worldPacket >> Bag;
     _worldPacket >> Slot;
     _worldPacket >> Count;
-    _worldPacket >> Data1;
-    _worldPacket >> Data2;
-    _worldPacket >> Data3;
 }
 
 void WorldPackets::Item::ReadItem::Read()

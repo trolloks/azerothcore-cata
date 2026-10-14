@@ -95,10 +95,7 @@ namespace WorldPackets
 
             uint8 Bag = 0;
             uint8 Slot = 0;
-            uint8 Count = 0;
-            uint8 Data1 = 0;
-            uint8 Data2 = 0;
-            uint8 Data3 = 0;
+            uint32 Count = 0;
         };
 
         class ReadItem final : public ClientPacket

@@ -488,7 +488,7 @@ void OpcodeTable::Initialize()
     /*0x0F17*/ DEFINE_HANDLER(CMSG_SPLIT_ITEM,                                                       STATUS_LOGGEDIN,   PROCESS_INPLACE,        &WorldSession::HandleSplitItemOpcode                    );
     /*0x4A17*/ DEFINE_HANDLER(CMSG_AUTOEQUIP_ITEM_SLOT,                                              STATUS_LOGGEDIN,   PROCESS_INPLACE,        &WorldSession::HandleAutoEquipItemSlotOpcode            );
     /*0x0110*/ DEFINE_HANDLER(CMSG_UNCLAIM_LICENSE,                                                  STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
-    /*0x0111*/ DEFINE_HANDLER(CMSG_DESTROYITEM,                                                      STATUS_LOGGEDIN,   PROCESS_INPLACE,        &WorldSession::HandleDestroyItemOpcode                  );
+    /*0x4A27*/ DEFINE_HANDLER(CMSG_DESTROYITEM,                                                      STATUS_LOGGEDIN,   PROCESS_INPLACE,        &WorldSession::HandleDestroyItemOpcode                  );
     /*0x2236*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_INVENTORY_CHANGE_FAILURE,                           STATUS_NEVER);
     /*0x4714*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_OPEN_CONTAINER,                                     STATUS_NEVER);
     /*0x0927*/ DEFINE_HANDLER(CMSG_INSPECT,                                                          STATUS_LOGGEDIN,   PROCESS_INPLACE,        &WorldSession::HandleInspectOpcode                      );
