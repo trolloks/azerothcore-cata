@@ -28,7 +28,7 @@
     "repeat_client_reward_attempt_no_extra_items": "PASS",
     "invalid_reward_slots_unit_test": "PASS",
     "invalid_reward_client_attempt": "blocked by client before transmission",
-    "conversion_auditor_self_check": "FAIL: same seven opcode-model issues reproduced on origin/master; baseline auditor is stale",
+    "conversion_auditor_self_check": "FAIL: seven stale opcode-model issues also reproduced on origin/master",
     "eligibility": "Non-repeatable completed quest offers no further reward; other eligibility families excluded"
   },
   "final_database": {
@@ -47,8 +47,8 @@
     "No crafted replay or invalid-slot network request was injected.",
     "NPC proximity is a run-owned fixture, not proof of original world spawn placement.",
     "Generic character-creation verifier was not used as the quest acceptance predicate.",
-    "Raw packet log contains only a header; protocol logs, screenshots, scoped unit tests and DB assertions are the evidence.",
-    "Observation deadlines and item-destruction disconnect were preserved in previous-runs; sessions resumed on the same owned character."
+    "Packet log has only a header; proof uses protocol logs, screenshots, unit tests and DB assertions.",
+    "Resumed same character after timeouts and inventory disconnect; failures retained in previous-runs."
   ],
   "followup_issue": 98,
   "artifact_sha256": {
