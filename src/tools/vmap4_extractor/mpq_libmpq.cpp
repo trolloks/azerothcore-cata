@@ -16,32 +16,47 @@
  */
 
 #include "mpq_libmpq04.h"
+#include "StringFormat.h"
 #include <cstdio>
 #include <deque>
+#include <string>
 
 ArchiveSet gOpenArchives;
+
+// These extractor tools never start the server logger (LOG_* needs sLog->Initialize()), so the
+// diagnostics below go to stdout through the project string helper instead of printf specifiers.
+static void PrintMessage(std::string const& message)
+{
+    fputs(message.c_str(), stdout);
+    fputc('\n', stdout);
+}
 
 MPQArchive::MPQArchive(char const* filename):
     mpq_a(nullptr)
 {
-    printf("Opening %s\n", filename);
+    PrintMessage(Acore::StringFormat("Opening {}", filename));
     if (!SFileOpenArchive(filename, 0, MPQ_OPEN_READ_ONLY, &mpq_a))
     {
-        printf("Error opening archive '%s': error %u\n", filename, SErrGetLastError());
+        PrintMessage(Acore::StringFormat("Error opening archive '{}': error {}", filename, uint32(SErrGetLastError())));
         mpq_a = nullptr;
         return;
     }
     gOpenArchives.push_front(this);
 }
 
-void MPQArchive::ApplyPatch(char const* filename)
+bool MPQArchive::ApplyPatch(char const* filename)
 {
     if (!mpq_a)
-        return;
+        return false;
 
-    printf("Applying patch %s\n", filename);
+    PrintMessage(Acore::StringFormat("Applying patch {}", filename));
     if (!SFileOpenPatchArchive(mpq_a, filename, "", 0))
-        printf("Error applying patch '%s': error %u\n", filename, SErrGetLastError());
+    {
+        PrintMessage(Acore::StringFormat("Error applying patch '{}': error {}", filename, uint32(SErrGetLastError())));
+        return false;
+    }
+
+    return true;
 }
 
 void MPQArchive::close()
@@ -95,7 +110,17 @@ MPQFile::MPQFile(char const* filename):
         buffer = new char[size];
 
         DWORD transferred = 0;
-        SFileReadFile(hFile, buffer, static_cast<DWORD>(size), &transferred, nullptr);
+        if (!SFileReadFile(hFile, buffer, static_cast<DWORD>(size), &transferred, nullptr) || transferred != size)
+        {
+            PrintMessage(Acore::StringFormat("Error reading '{}': expected {} bytes, read {}",
+                filename, uint32(size), uint32(transferred)));
+            SFileCloseFile(hFile);
+            delete[] buffer;
+            buffer = nullptr;
+            size = 0;
+            eof = true;
+            return;
+        }
         SFileCloseFile(hFile);
         return;
     }

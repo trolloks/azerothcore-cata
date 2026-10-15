@@ -44,6 +44,7 @@
 #include "mpq_libmpq04.h"
 #include "wdtfile.h"
 #include "wmo.h"
+#include "StringFormat.h"
 
 //------------------------------------------------------------------------------
 // Defines
@@ -53,6 +54,14 @@
 //-----------------------------------------------------------------------------
 
 extern ArchiveSet gOpenArchives;
+
+// These extractor tools never start the server logger (LOG_* needs sLog->Initialize()), so the
+// diagnostics below go to stdout through the project string helper instead of printf specifiers.
+static void PrintMessage(std::string const& message)
+{
+    fputs(message.c_str(), stdout);
+    fputc('\n', stdout);
+}
 
 typedef struct
 {
@@ -69,6 +78,10 @@ bool preciseVectorData = false;
 std::unordered_map<std::string, WMODoodadData> WmoDoodads;
 
 // Constants
+
+// Build-15595 client: the base set was rebased at 15211, and this tool targets that client build.
+uint32 const NEW_BASE_SET_BUILD = 15211;
+uint32 const CLIENT_BUILD = 15595;
 
 char const* szWorkDirWmo = "./Buildings";
 
@@ -246,10 +259,10 @@ void getGamePath()
 #endif
 }
 
-// Discovers wow-update-<prefix><build>.MPQ archives in dir and attaches them to base in
-// ascending build order, so StormLib can reconstruct the patched files instead of reading
-// the raw base bytes.
-static void ApplyWowUpdateChain(MPQArchive* base, std::string const& dir, std::string const& prefix)
+// Discovers wow-update-<prefix><build>.MPQ archives in dir and attaches them to base in ascending
+// build order, so StormLib can reconstruct the patched files instead of reading the raw base bytes.
+// Returns false if a selected patch cannot be attached.
+static bool ApplyWowUpdateChain(MPQArchive* base, std::string const& dir, std::string const& prefix)
 {
     std::vector<std::pair<uint32, std::string>> updates;
 
@@ -264,25 +277,44 @@ static void ApplyWowUpdateChain(MPQArchive* base, std::string const& dir, std::s
             std::string buildStr = name.substr(prefix.size(), name.size() - prefix.size() - 4);
             if (!buildStr.empty() && std::all_of(buildStr.begin(), buildStr.end(),
                 [](unsigned char c) { return std::isdigit(c); }))
-                updates.emplace_back(static_cast<uint32>(std::stoul(buildStr)), entry.path().string());
+            {
+                uint32 const build = static_cast<uint32>(std::stoul(buildStr));
+
+                // Only the patches belonging to the target client's base generation are valid.
+                // Builds below NEW_BASE_SET_BUILD were merged into that base set and re-applying
+                // them on top of it reconstructs the wrong data; anything above CLIENT_BUILD is a
+                // different client.
+                if (build < NEW_BASE_SET_BUILD || build > CLIENT_BUILD)
+                {
+                    PrintMessage(Acore::StringFormat("Skipping out-of-range patch {} (build {})", name, build));
+                    continue;
+                }
+
+                updates.emplace_back(build, entry.path().string());
+            }
         }
     }
 
     std::sort(updates.begin(), updates.end());
     for (auto const& update : updates)
-        base->ApplyPatch(update.second.c_str());
+        if (!base->ApplyPatch(update.second.c_str()))
+            return false;
+
+    return true;
 }
 
-// Opens the build-15595 archive set the way the client and the map extractor do: world.MPQ is
-// the base archive and the remaining base sets plus the wow-update chains are attached to it as
+// Opens the build-15595 archive set the way the client and the map extractor do: world.MPQ is the
+// base archive and the remaining base sets plus the wow-update chains are attached to it as
 // patches. The previous WotLK list (common.MPQ/expansion.MPQ/lichking.MPQ) does not exist in a
 // Cataclysm install, so no map or model data was reachable through it.
-void OpenMPQArchives()
+// Returns false if a required archive is missing or cannot be opened/attached, so that an
+// incomplete or damaged client copy cannot look like a successful extraction.
+bool OpenMPQArchives()
 {
     if (!hasInputPathParam)
         getGamePath();
 
-    printf("\nGame path: %s\n", input_path);
+    PrintMessage(Acore::StringFormat("\nGame path: {}", input_path));
 
     std::string const dataPath(input_path);
     std::vector<std::string> locales;
@@ -298,34 +330,50 @@ void OpenMPQArchives()
         struct stat status;
         if (stat(localePath.c_str(), &status) || (status.st_mode & S_IFDIR) == 0)
             continue;
-        printf("Found locale '%s'\n", searchLocale);
+        PrintMessage(Acore::StringFormat("Found locale '{}'", searchLocale));
         locales.emplace_back(searchLocale);
     }
     printf("\n");
 
-    // Common archives: terrain, model and WMO data live here.
-    printf("Adding data files from common archives.\n");
+    // Common archives: terrain, model and WMO data live here. They are all part of the 15595 base
+    // set, so a missing one means an incomplete client rather than an optional archive.
+    PrintMessage("Adding data files from common archives.");
     static char const* const commonArchives[] =
     {
         "art.MPQ", "world2.MPQ", "expansion1.MPQ", "expansion2.MPQ", "expansion3.MPQ"
     };
 
     std::string const worldPath = dataPath + "world.MPQ";
-    MPQArchive* world = new MPQArchive(worldPath.c_str());
-    if (world->mpq_a)
+    if (!FileExists(worldPath.c_str()))
     {
-        for (auto const* archive : commonArchives)
-        {
-            std::string const archivePath = dataPath + archive;
-            if (FileExists(archivePath.c_str()))
-                world->ApplyPatch(archivePath.c_str());
-        }
-
-        ApplyWowUpdateChain(world, dataPath, "wow-update-base-");
+        PrintMessage(Acore::StringFormat("Error: required archive '{}' is missing", worldPath));
+        return false;
     }
 
+    MPQArchive* world = new MPQArchive(worldPath.c_str());
+    if (!world->mpq_a)
+        return false;
+
+    for (auto const* archive : commonArchives)
+    {
+        std::string const archivePath = dataPath + archive;
+        if (!FileExists(archivePath.c_str()))
+        {
+            PrintMessage(Acore::StringFormat("Error: required archive '{}' is missing", archivePath));
+            return false;
+        }
+
+        if (!world->ApplyPatch(archivePath.c_str()))
+            return false;
+    }
+
+    if (!ApplyWowUpdateChain(world, dataPath, "wow-update-base-"))
+        return false;
+
     // Locale archives carry the DBCs this tool reads.
-    printf("Adding data files from locale directories.\n");
+    PrintMessage("Adding data files from locale directories.");
+    bool localeOpened = false;
+
     for (auto const& locale : locales)
     {
         std::string const localeDir = dataPath + locale + "/";
@@ -335,19 +383,28 @@ void OpenMPQArchives()
 
         MPQArchive* base = new MPQArchive(localeMpq.c_str());
         if (!base->mpq_a)
-            continue;
+            return false;
+        localeOpened = true;
 
         for (int i = 1; i <= 9; ++i)
         {
             std::string patchName = localeDir + "patch-" + locale + (i > 1 ? "-" + std::to_string(i) : "") + ".MPQ";
-            if (FileExists(patchName.c_str()))
-                base->ApplyPatch(patchName.c_str());
+            if (FileExists(patchName.c_str()) && !base->ApplyPatch(patchName.c_str()))
+                return false;
         }
 
-        ApplyWowUpdateChain(base, localeDir, "wow-update-" + locale + "-");
+        if (!ApplyWowUpdateChain(base, localeDir, "wow-update-" + locale + "-"))
+            return false;
+    }
+
+    if (!localeOpened)
+    {
+        PrintMessage("Error: no locale archive found");
+        return false;
     }
 
     printf("\n");
+    return true;
 }
 
 bool processArgv(int argc, char** argv, char const* versionString)
@@ -446,12 +503,12 @@ int main(int argc, char** argv)
              ))
         success = (errno == EEXIST);
 
-    // open the Cataclysm base sets and their patch chains
-    OpenMPQArchives();
-
-    if (gOpenArchives.empty())
+    // open the Cataclysm base sets and their patch chains; a required archive that is missing or
+    // cannot be attached stops the run before parsing instead of yielding partial geometry
+    if (!OpenMPQArchives())
     {
-        printf("FATAL ERROR: None MPQ archive found by path '%s'. Use -d option with proper path.\n", input_path);
+        PrintMessage(Acore::StringFormat("FATAL ERROR: could not open the build-15595 archive set under '{}'; "
+            "nothing was extracted.", input_path));
         return 1;
     }
 

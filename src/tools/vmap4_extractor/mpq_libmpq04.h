@@ -40,7 +40,8 @@ public:
     // Attaches a Cataclysm-style incremental binary-diff patch (or a WotLK-style
     // full-replacement patch) directly onto this archive's handle, so StormLib can
     // reconstruct patched files instead of them being read as raw, unpatched bytes.
-    void ApplyPatch(char const* filename);
+    // Returns false if the patch could not be attached.
+    bool ApplyPatch(char const* filename);
 
     void GetFileListTo(vector<string>& filelist);
 };
