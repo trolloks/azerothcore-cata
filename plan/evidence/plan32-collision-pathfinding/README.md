@@ -1,15 +1,15 @@
 # Plan 32: reproducible Northshire collision and pathfinding (issue #134)
 
-Status: **object-ADT and archive-layer fixes done, tools build, VMAP extraction validated against the
-real client; native map-0 acceptance STILL UNRUN**. The tools were authorized, built and run once
-(finding 7), so findings 6 and 7 are compiled and the VMAP extraction now works. The server data,
-navmesh, harness geometry path and the client acceptance remain open.
+Status: **object-ADT, archive-layer and terrain-chunk fixes done, all validated by building and running
+against the real client; native map-0 acceptance STILL UNRUN**. Findings 4, 6 and 7 are now compiled
+and exercised: the map extractor produces a sane anchor tile and the VMAP extraction completes. The
+assembler/navmesh, server data placement, harness geometry path and the client acceptance remain open.
 
 This record covers "freeze the scenario, required data/artifact manifest and blockers", "audit the
 pinned reference and affected shared AC callers", and the Cata parser prerequisites that audit
-surfaced: the object-side `_obj0` ADT (finding 6) and the archive enumeration/patch reading
-(finding 7). Terrain chunk discovery (finding 4) is the next unverified parser question, and it
-comes before the extraction stage that is now partly exercised.
+surfaced: the object-side `_obj0` ADT (finding 6), the archive enumeration/patch reading (finding 7)
+and terrain chunk discovery (finding 4, which turned out to be a hard crash). All three are fixed and
+verified; nothing in the extraction path is left as an uninspected assumption.
 
 ## Frozen scenario
 
@@ -105,22 +105,28 @@ archive hashes, per-tile inventory, output file hashes, and the config used. The
    `target_link_libraries(${TOOL_PROJECT_NAME} PRIVATE acore-dependency-interface)` annotated
    "Need fix errors in maps tools", and the map tools must link `common/mpq/zlib/Recast/g3dlib/fkYAML`
    explicitly. Treat "the four tools build cleanly" as an unproven prerequisite.
-4. **ADT addressing uses the root file, but chunk discovery still differs from the pin.** `System.cpp`
-   reads `World\Maps\{map}\{map}_{x}_{y}.adt` and writes `{y:02}{x:02}` tiles. Cataclysm keeps that
-   root ADT name and moves only textures/objects into `_tex0`/`_obj0` side files, and the pin's
-   `map_extractor` reads the same root name (`System.cpp:1063`), so the file choice matches. The
-   member list matches too: the pin's `adt_MCNK` and this branch's carry the same 34 data fields in
-   the same order. **A matching member list does not mean the reader can find those chunks, though.**
-   This branch reaches them through the legacy `MCIN` index — `ConvertADT` takes
-   `adt.a_grid->getMCIN()` and then reads `cells->getMCNK(i, j)->areaid` (`System.cpp:420`,
-   `System.cpp:442`) — while the pin iterates the ADT's chunks directly
-   (`Trinity::Containers::MapEqualRange(adt.chunks, "MCNK")`, `System.cpp:488`). The local guard does
-   not cover an ADT without `MCIN`: `adt_MHDR::getMCIN()` returns
-   `reinterpret_cast<adt_MCIN*>(reinterpret_cast<uint8*>(&flags) + offsMCIN)` without checking
-   `offsMCIN` (unlike `getMH2O()`, which does), so it yields a non-null pointer into the MHDR that the
-   `if (!cells)` check at `System.cpp:421` cannot reject, and header bytes are then read as cell
-   pointers. Whether the selected 4.3.4 tiles still carry `MCIN` is therefore a real prerequisite,
-   not something the shared root filename and MCNK member list settle.
+4. **ADT addressing: the Cata root ADT has no MCIN — measured, and fixed in this branch.**
+   `System.cpp` reads `World\Maps\{map}\{map}_{x}_{y}.adt` and writes `{y:02}{x:02}` tiles; Cataclysm
+   keeps the root name and moves textures/objects into `_tex0`/`_obj0`, and the pin reads the same
+   root name, so the file choice is right. The member list matched too: `adt_MCNK` carries the same
+   34 fields in the same order as the pin's.
+   **Chunk discovery did not match, and it was fatal.** A real build-15595 ADT (extracted and dumped:
+   `World\Maps\Azeroth\Azeroth_32_48.adt` plus the three `wow-update-base` chains) lays out
+   `MVER → MHDR → MH2O → MCNK …` with `offsMCIN = 0`, `offsTex = 0` and `offsModels = 0`: Cataclysm
+   root ADTs have **no MCIN index at all**. The old reader reached cells through `MCIN`
+   (`adt.a_grid->getMCIN()` then `cells->getMCNK(i, j)`), and `adt_MHDR::getMCIN()` adds `offsMCIN`
+   without checking it, so the `if (!cells)` guard could not reject an MCIN-less file and MHDR bytes
+   were read as cell pointers. Run against the real client, `map_extractor` **segfaulted inside
+   `ConvertADT` on the first map and produced zero tiles**.
+   `ADT_file` now indexes the cells by walking the chunk list and recording each `MCNK` under its own
+   `ix`/`iy` (`ADT_file::getMCNK`), which also holds for layouts that do carry `MCIN`, and `ConvertADT`
+   rejects a file with no cells instead of dereferencing the header.
+   **Verified against the real client:** the same command now exits 0, processes all 206 maps and
+   writes 7,192 tiles. The anchor tile decodes to `MAPS` / version 10 / build 15595 with full area
+   data whose ids are plausible rather than garbage (Elwynn Forest 9 ×160, 59 ×46, 34 ×34, Northshire
+   12 ×16), `MHGT` heights 61.29–276.96 (the fixture's z=83.53 lies inside) and a `MLIQ` section. The
+   server's own `MapMagic`/`MapVersionMagic` (`GridTerrainData.h`) match, so `GridTerrainLoader` will
+   accept it. Raw evidence: `.../cata-runs/plan32-terrain-mcnk/`.
 5. **The route cannot be validated with geometry disabled.** The harness writes
    `MoveMaps.Enable=0`, `vmap.enableLOS=0`, `vmap.enableHeight=0`
    (`apps/cata/run_real_client_authentication.py`), while `worldserver.conf.dist` defaults them on.
@@ -176,16 +182,14 @@ archive hashes, per-tile inventory, output file hashes, and the config used. The
 ## Blockers (each needs explicit authorization or input)
 
 - **Build authorization — satisfied for the tools.** The four map tools build from this branch, so
-  findings 6 and 7 are compiled rather than inspected, and the VMAP run above used that binary. The
-  server/game targets were not built and `var/extractors/{maps,vmaps,mmaps}` were not populated.
-- **Terrain chunk discovery** (finding 4). Whether the selected 4.3.4 tiles still carry the legacy
-  `MCIN` index the converter dereferences, or need the pin's direct chunk traversal, is unchecked and
-  is now the first unverified parser question.
-- **Assembler, navmesh and data placement.** The VMAP stage produced its extracted model set, but
-  `vmap4_assembler` and `mmaps_generator` have not been run for the frozen tile and nothing has been
-  installed into the server's data directory.
+  findings 4, 6 and 7 are compiled rather than inspected, and both extraction runs above used that
+  binary. The server/game targets were not built and `var/extractors/{maps,vmaps,mmaps}` were not
+  populated.
+- **Assembler, navmesh and data placement.** The map and VMAP stages now produce their artifact sets,
+  but `vmap4_assembler` and `mmaps_generator` have not been run for the frozen tile and nothing has
+  been installed into the server's data directory.
 - **Client archives provenance** for the map tiles (the same gate the DBC extraction already has);
-  the bounded run above used the on-disk client copy without recording its provenance.
+  the runs above used the on-disk client copy without recording its provenance.
 - **Harness geometry path**: the accepted modes disable LOS/height/navmesh; enabling them (and
   keeping the anti-cheat/evade/path-query checks intact) is part of the acceptance work.
 - **Native acceptance**: the map-0 route, the LOS/height/navmesh queries and the pinned obstacle
