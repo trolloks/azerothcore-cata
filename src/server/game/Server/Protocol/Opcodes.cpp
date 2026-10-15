@@ -432,6 +432,7 @@ void OpcodeTable::Initialize()
     DEFINE_BIDIRECTIONAL_OPCODE(MSG_MOVE_WORLDPORT_ACK, MSG_MOVE_WORLDPORT_ACK, MSG_MOVE_WORLDPORT_ACK_SERVER);
     /*0x6E17*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_ON_MONSTER_MOVE,                                    STATUS_NEVER);
     /*0x75B1*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_MOVE_WATER_WALK,                                    STATUS_NEVER);
+    /*0x50B2*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_MOVE_UPDATE_TELEPORT,                               STATUS_NEVER);
     /*0x34B7*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_MOVE_LAND_WALK,                                     STATUS_NEVER);
     /*0x00E0*/ DEFINE_HANDLER(CMSG_MOVE_CHARM_PORT_CHEAT,                                            STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x00E1*/ DEFINE_HANDLER(CMSG_MOVE_SET_RAW_POSITION,                                            STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
@@ -442,9 +443,9 @@ void OpcodeTable::Initialize()
     /*0x00E5*/ DEFINE_HANDLER(CMSG_FORCE_RUN_BACK_SPEED_CHANGE_ACK,                                  STATUS_LOGGEDIN,   PROCESS_THREADSAFE,     &WorldSession::HandleForceSpeedChangeAck                );
     /*0x00E6*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_FORCE_SWIM_SPEED_CHANGE,                            STATUS_NEVER);
     /*0x00E7*/ DEFINE_HANDLER(CMSG_FORCE_SWIM_SPEED_CHANGE_ACK,                                      STATUS_LOGGEDIN,   PROCESS_THREADSAFE,     &WorldSession::HandleForceSpeedChangeAck                );
-    /*0x00E8*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_FORCE_MOVE_ROOT,                                    STATUS_NEVER);
+    /*0x7DA0*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_MOVE_ROOT,                                          STATUS_NEVER);
     /*0x701E*/ DEFINE_HANDLER(CMSG_FORCE_MOVE_ROOT_ACK,                                              STATUS_LOGGEDIN,   PROCESS_THREADSAFE,     &WorldSession::HandleMoveRootAck                        );
-    /*0x00EA*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_FORCE_MOVE_UNROOT,                                  STATUS_NEVER);
+    /*0x7DB4*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_MOVE_UNROOT,                                        STATUS_NEVER);
     /*0x7808*/ DEFINE_HANDLER(CMSG_FORCE_MOVE_UNROOT_ACK,                                            STATUS_LOGGEDIN,   PROCESS_THREADSAFE,     &WorldSession::HandleMoveRootAck                        );
     /*0x00EC*/ DEFINE_HANDLER(MSG_MOVE_ROOT,                                                         STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     DEFINE_BIDIRECTIONAL_OPCODE(MSG_MOVE_ROOT, MSG_MOVE_ROOT, MSG_MOVE_ROOT_SERVER);

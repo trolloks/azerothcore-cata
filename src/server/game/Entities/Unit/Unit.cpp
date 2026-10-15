@@ -14160,9 +14160,11 @@ void Unit::SendMoveRoot(bool apply)
     {
         uint32 const counter = client->GetSession()->GetOrderCounter();
 
-        WorldPacket data(apply ? SMSG_FORCE_MOVE_ROOT : SMSG_FORCE_MOVE_UNROOT, guid.size() + 4);
-        data << guid;
-        data << counter;
+        WorldPacket data(apply ? SMSG_MOVE_ROOT : SMSG_MOVE_UNROOT, guid.size() + 4);
+        MovementInfo info;
+        info.guid = GetGUID();
+        WorldPackets::Movement::WriteGroundMovement(data, info,
+            WorldPackets::Movement::GetMovementFlagSequence(data.GetOpcode()), counter);
         client->GetSession()->SendPacket(&data);
         client->GetSession()->IncrementOrderCounter();
     }
@@ -15631,9 +15633,12 @@ void Unit::SendTeleportPacket(Position& pos)
     {
         ToPlayer()->SetCanTeleport(true);
     }
-    WorldPacket data2(MSG_MOVE_TELEPORT, 38);
-    data2 << GetPackGUID();
-    BuildMovementPacket(&data2);
+    WorldPacket data2(SMSG_MOVE_UPDATE_TELEPORT, 38);
+    MovementInfo info = m_movementInfo;
+    info.guid = GetGUID();
+    info.pos.Relocate(GetPosition());
+    info.time = GameTime::GetGameTimeMS().count();
+    WorldPackets::Movement::WriteTeleportUpdate(data2, info);
     if (IsCreature())
         Relocate(&oldPos);
     if (IsPlayer())
@@ -16354,8 +16359,10 @@ void Unit::SetWaterWalking(bool enable)
             uint32 const counter = player->GetSession()->GetOrderCounter();
 
             WorldPacket data(enable ? SMSG_MOVE_WATER_WALK : SMSG_MOVE_LAND_WALK, GetPackGUID().size() + 4);
-            data << GetPackGUID();
-            data << counter;
+            MovementInfo info;
+            info.guid = GetGUID();
+            WorldPackets::Movement::WriteGroundMovement(data, info,
+                WorldPackets::Movement::GetMovementFlagSequence(data.GetOpcode()), counter);
             player->SendDirectMessage(&data);
             player->GetSession()->IncrementOrderCounter();
             return;

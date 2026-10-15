@@ -1348,10 +1348,11 @@ uint8 Player::GetChatTag() const
 
 void Player::SendTeleportAckPacket()
 {
-    WorldPacket data(MSG_MOVE_TELEPORT_ACK, 41);
-    data << GetPackGUID();
-    data << GetSession()->GetOrderCounter(); // movement counter
-    BuildMovementPacket(&data);
+    Position pos = GetPosition();
+    if (TransportBase* transport = GetDirectTransport())
+        transport->CalculatePassengerOffset(pos.m_positionX, pos.m_positionY, pos.m_positionZ, &pos.m_orientation);
+    WorldPacket data(MSG_MOVE_TELEPORT, 30);
+    WorldPackets::Movement::WriteTeleport(data, GetGUID(), GetSession()->GetOrderCounter(), pos, GetTransGUID());
     SendDirectMessage(&data);
     GetSession()->IncrementOrderCounter();
 }
@@ -4478,7 +4479,6 @@ void Player::BuildPlayerRepop()
     }
     corpse->ResetGhostTime(); // to prevent cheating
     StopMirrorTimers(); // disable timers on bars
-    SetByteValue(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_ANIM_TIER, UNIT_BYTE1_FLAG_ALWAYS_STAND); // set and clear other
     sScriptMgr->OnPlayerReleasedGhost(this);
 }
 
@@ -11860,7 +11860,7 @@ void Player::SendInitialPacketsAfterAddToMap()
     {
         uint32 const counter = GetSession()->GetOrderCounter();
         setCompoundState << uint8(2 + GetPackGUID().size() + 4);
-        setCompoundState << uint16(SMSG_FORCE_MOVE_ROOT);
+        setCompoundState << uint16(SMSG_MOVE_ROOT);
         setCompoundState << GetPackGUID();
         setCompoundState << uint32(counter);
         GetSession()->IncrementOrderCounter();

@@ -7,6 +7,17 @@
 
 #include "SpellPackets.h"
 
+WorldPacket const* WorldPackets::Spells::ResurrectRequest::Write()
+{
+    _worldPacket << ResurrectOffererGUID;
+    _worldPacket << uint32(Name.size() + 1);
+    _worldPacket << Name;
+    _worldPacket << uint8(Sickness);
+    _worldPacket << uint8(UseTimer);
+    _worldPacket << SpellID;
+    return &_worldPacket;
+}
+
 WorldPacket const* WorldPackets::Spells::SendKnownSpells::Write()
 {
     _worldPacket.reserve(1 + 2 + 6 * KnownSpells.size() + 2 + 18 * SpellHistoryEntries.size());

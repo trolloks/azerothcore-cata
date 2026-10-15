@@ -1121,10 +1121,10 @@ void WorldSession::HandleMoveRootAck(WorldPacket& recvData)
     ObjectGuid guid;
     uint32 counter;
     MovementInfo movementInfo;
-    recvData >> guid.ReadAsPacked();
-    recvData >> counter;
-    movementInfo.guid = guid;
-    ReadMovementInfo(recvData, &movementInfo);
+    WorldPackets::Movement::ReadGroundMovement(recvData, movementInfo,
+        WorldPackets::Movement::GetMovementFlagSequence(opcode), &counter);
+    SanitizeMovementFlags(&movementInfo);
+    guid = movementInfo.guid;
 
     Unit* mover = _player->m_mover;
 
@@ -1158,7 +1158,7 @@ void WorldSession::HandleMoveRootAck(WorldPacket& recvData)
     if (_player->IsExpectingChangeTransport())
         return;
 
-    WorldPacket data(opcode == CMSG_FORCE_MOVE_UNROOT_ACK ? MSG_MOVE_UNROOT : MSG_MOVE_ROOT);
-    WriteMovementInfo(&data, &movementInfo);
+    WorldPacket data(SMSG_MOVE_UPDATE);
+    WorldPackets::Movement::WriteMovementUpdate(data, movementInfo);
     mover->SendMessageToSet(&data, _player);
 }
