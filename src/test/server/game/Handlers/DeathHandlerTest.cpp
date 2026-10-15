@@ -1,0 +1,162 @@
+/*
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by the
+ * Free Software Foundation; either version 2 of the License, or (at your
+ * option) any later version.
+ */
+
+#include "Corpse.h"
+#include "IntegrationTestFixture.h"
+#include "SpellPackets.h"
+#include "WorldPacket.h"
+
+namespace
+{
+class DeathHandlerTest : public IntegrationTestFixture
+{
+protected:
+    void TearDown() override
+    {
+        for (Corpse* corpse : _corpses)
+        {
+            GetTestMap()->RemoveCorpse(corpse);
+            delete corpse;
+        }
+        IntegrationTestFixture::TearDown();
+    }
+
+    TestPlayer* CreateGhost(uint32 guid = 1)
+    {
+        TestPlayer* player = CreateTestPlayer(guid);
+        player->SetMaxHealth(100);
+        player->SetHealth(1);
+        player->SetDeathStateForTest(DeathState::Corpse);
+        player->SetPlayerFlag(PLAYER_FLAGS_GHOST);
+        return player;
+    }
+
+    Corpse* CreateCorpse(TestPlayer* owner)
+    {
+        auto* corpse = new Corpse(CORPSE_RESURRECTABLE_PVE);
+        EXPECT_TRUE(corpse->Create(uint32(_corpses.size()) + 100, owner));
+        GetTestMap()->AddCorpse(corpse);
+        _corpses.push_back(corpse);
+        return corpse;
+    }
+
+    std::vector<Corpse*> _corpses;
+};
+}
+
+TEST_F(DeathHandlerTest, PrematureReclaimKeepsOwnedCorpseAndGhostState)
+{
+    TestPlayer* player = CreateGhost();
+    Corpse* corpse = CreateCorpse(player);
+    ON_CALL(*GetWorldMock(), getBoolConfig(CONFIG_DEATH_CORPSE_RECLAIM_DELAY_PVE)).WillByDefault(Return(true));
+
+    WorldPacket request(CMSG_RECLAIM_CORPSE);
+    request << corpse->GetGUID();
+    player->GetSession()->HandleReclaimCorpseOpcode(request);
+
+    EXPECT_FALSE(player->IsAlive());
+    EXPECT_TRUE(player->HasPlayerFlag(PLAYER_FLAGS_GHOST));
+    EXPECT_EQ(player->GetHealth(), 1u);
+    EXPECT_EQ(player->GetCorpse(), corpse);
+}
+
+TEST_F(DeathHandlerTest, ForeignCorpseCannotResurrectRequesterWithoutOwnCorpse)
+{
+    TestPlayer* requester = CreateGhost();
+    TestPlayer* owner = CreateGhost(2);
+    Corpse* corpse = CreateCorpse(owner);
+
+    WorldPacket request(CMSG_RECLAIM_CORPSE);
+    request << corpse->GetGUID();
+    requester->GetSession()->HandleReclaimCorpseOpcode(request);
+
+    EXPECT_FALSE(requester->IsAlive());
+    EXPECT_TRUE(requester->HasPlayerFlag(PLAYER_FLAGS_GHOST));
+    EXPECT_EQ(requester->GetCorpse(), nullptr);
+    EXPECT_EQ(owner->GetCorpse(), corpse);
+    EXPECT_EQ(corpse->GetOwnerGUID(), owner->GetGUID());
+}
+
+TEST_F(DeathHandlerTest, DuplicateReleaseKeepsSingleOwnedCorpse)
+{
+    TestPlayer* player = CreateGhost();
+    Corpse* corpse = CreateCorpse(player);
+
+    for (uint32 attempt = 0; attempt < 2; ++attempt)
+    {
+        WorldPacket request(CMSG_REPOP_REQUEST);
+        request << uint8(0);
+        player->GetSession()->HandleRepopRequestOpcode(request);
+        EXPECT_EQ(player->GetCorpse(), corpse);
+        EXPECT_FALSE(player->IsAlive());
+        EXPECT_TRUE(player->HasPlayerFlag(PLAYER_FLAGS_GHOST));
+        EXPECT_EQ(player->GetHealth(), 1u);
+    }
+}
+
+TEST_F(DeathHandlerTest, WrongOffererCannotAcceptPendingResurrection)
+{
+    TestPlayer* player = CreateGhost();
+    ObjectGuid const offerer(uint64(2));
+    player->setResurrectRequestData(offerer, 0, 0, 0, 0, 50, 0);
+
+    WorldPacket request(CMSG_RESURRECT_RESPONSE);
+    request << ObjectGuid(uint64(3)) << uint8(1);
+    player->GetSession()->HandleResurrectResponseOpcode(request);
+
+    EXPECT_FALSE(player->IsAlive());
+    EXPECT_TRUE(player->isResurrectRequestedBy(offerer));
+    EXPECT_EQ(player->GetHealth(), 1u);
+}
+
+TEST_F(DeathHandlerTest, DuplicateResponseCannotResurrectLivingPlayerAgain)
+{
+    TestPlayer* player = CreateTestPlayer();
+    player->SetMaxHealth(100);
+    player->SetHealth(50);
+    ObjectGuid const offerer(uint64(2));
+    player->setResurrectRequestData(offerer, 0, 0, 0, 0, 100, 0);
+
+    for (uint32 attempt = 0; attempt < 2; ++attempt)
+    {
+        WorldPacket request(CMSG_RESURRECT_RESPONSE);
+        request << offerer << uint8(1);
+        player->GetSession()->HandleResurrectResponseOpcode(request);
+        EXPECT_TRUE(player->IsAlive());
+        EXPECT_EQ(player->GetHealth(), 50u);
+    }
+}
+
+TEST(ResurrectRequestTest, WritesCataNameSicknessTimerAndSpellId)
+{
+    for (std::string const& name : { std::string(), std::string("Spirit Healer") })
+        for (bool sickness : { false, true })
+            for (bool useTimer : { false, true })
+            {
+                WorldPackets::Spells::ResurrectRequest request;
+                request.ResurrectOffererGUID = ObjectGuid(uint64(0x0807060504030201));
+                request.Name = name;
+                request.Sickness = sickness;
+                request.UseTimer = useTimer;
+                request.SpellID = 2006;
+                WorldPacket payload = *request.Write();
+
+                ASSERT_EQ(payload.GetOpcode(), SMSG_RESURRECT_REQUEST);
+                ASSERT_EQ(payload.size(), 19u + name.size());
+                EXPECT_EQ(payload.read<uint64>(), 0x0807060504030201u);
+                EXPECT_EQ(payload.read<uint32>(), name.size() + 1);
+                std::string decodedName;
+                payload >> decodedName;
+                EXPECT_EQ(decodedName, name);
+                EXPECT_EQ(payload.read<uint8>(), uint8(sickness));
+                EXPECT_EQ(payload.read<uint8>(), uint8(useTimer));
+                EXPECT_EQ(payload.read<uint32>(), 2006u);
+                EXPECT_EQ(payload.rpos(), payload.size());
+            }
+}
