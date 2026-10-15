@@ -47,6 +47,19 @@ TestMap::~TestMap()
         return;
     initialized = true;
 
+    // Native build-15595 ChrClassesXPowerTypes.dbc order defines the visible slots.
+    uint32 powerId = 0;
+    for (auto const& [classId, power] : {
+        std::pair<uint32, uint32>{ 1, 1 }, { 1, 10 }, { 2, 0 }, { 2, 9 }, { 2, 10 },
+        { 3, 2 }, { 3, 10 }, { 4, 3 }, { 4, 10 }, { 5, 0 }, { 5, 10 },
+        { 6, 6 }, { 6, 10 }, { 7, 0 }, { 7, 10 }, { 8, 0 }, { 8, 10 },
+        { 9, 0 }, { 9, 7 }, { 9, 10 }, { 11, 0 }, { 11, 1 }, { 11, 3 }, { 11, 8 }, { 11, 10 } })
+    {
+        if (!sChrPowerTypesStore.LookupEntry(powerId))
+            sChrPowerTypesStore.SetEntry(powerId, new ChrPowerTypesEntry{ powerId, classId, power });
+        ++powerId;
+    }
+
     // Insert a fake MapEntry so Map constructor doesn't crash
     if (!sMapStore.LookupEntry(0))
     {

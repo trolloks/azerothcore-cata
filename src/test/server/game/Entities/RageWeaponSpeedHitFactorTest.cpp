@@ -22,6 +22,8 @@
 TEST_F(IntegrationTestFixture, HasteChangesIntervalNotRage)
 {
     TestPlayer* player = CreateTestPlayer(1, "RageTest", SEC_PLAYER);
+    player->SetByteValue(UNIT_FIELD_BYTES_0, 1, CLASS_WARRIOR);
+    player->SetByteValue(UNIT_FIELD_BYTES_0, 3, POWER_RAGE);
     player->SetUInt32Value(UNIT_FIELD_LEVEL, 80);
     player->SetMaxPower(POWER_RAGE, 10000);
     player->SetAttackTime(BASE_ATTACK, 2000);

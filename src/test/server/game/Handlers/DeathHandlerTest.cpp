@@ -50,6 +50,67 @@ protected:
 };
 }
 
+TEST_F(DeathHandlerTest, WarriorRecoveryCannotWriteInactiveEnergySlot)
+{
+    TestPlayer* player = CreateGhost();
+    player->SetByteValue(UNIT_FIELD_BYTES_0, 1, CLASS_WARRIOR);
+    player->SetMaxPower(POWER_RAGE, 1000);
+    player->SetPower(POWER_RAGE, 300, false);
+    player->SetMaxPower(POWER_ENERGY, 100);
+    player->SetPower(POWER_ENERGY, 50, false);
+
+    EXPECT_EQ(player->GetUInt32Value(UNIT_FIELD_POWER1), 300u);
+    EXPECT_EQ(player->GetUInt32Value(UNIT_FIELD_MAXPOWER1), 1000u);
+    EXPECT_EQ(player->GetUInt32Value(UNIT_FIELD_POWER4), 0u);
+    EXPECT_EQ(player->GetMaxPower(POWER_ENERGY), 0u);
+    EXPECT_EQ(player->GetPower(POWER_ENERGY), 0u);
+    EXPECT_EQ(player->GetPowerIndex(POWER_ALL), uint32(MAX_POWERS));
+    EXPECT_EQ(player->GetMaxHealth(), 100u);
+}
+
+TEST_F(DeathHandlerTest, PowerSlotsFollowClassDataRatherThanPowerEnum)
+{
+    struct Case
+    {
+        uint8 classId;
+        Powers power;
+        uint32 index;
+    };
+    uint32 guid = 1;
+    for (Case const& test : {
+        Case{ CLASS_WARRIOR, POWER_RAGE, 0 }, { CLASS_HUNTER, POWER_FOCUS, 0 },
+        { CLASS_ROGUE, POWER_ENERGY, 0 }, { CLASS_DEATH_KNIGHT, POWER_RUNIC_POWER, 0 },
+        { CLASS_DRUID, POWER_MANA, 0 }, { CLASS_DRUID, POWER_RAGE, 1 }, { CLASS_DRUID, POWER_ENERGY, 2 } })
+    {
+        TestPlayer* player = CreateTestPlayer(guid++);
+        player->SetByteValue(UNIT_FIELD_BYTES_0, 1, test.classId);
+        player->SetMaxHealth(100);
+        player->SetMaxPower(test.power, 1000);
+        player->SetPower(test.power, 300, false, true);
+
+        EXPECT_EQ(player->GetPowerIndex(test.power), test.index);
+        EXPECT_EQ(player->GetUInt32Value(UNIT_FIELD_POWER1 + test.index), 300u);
+        EXPECT_EQ(player->GetMaxPower(test.power), 1000u);
+        EXPECT_EQ(player->GetMaxHealth(), 100u);
+    }
+}
+
+TEST_F(DeathHandlerTest, NonPlayerPowersRetainExistingSlots)
+{
+    TestCreature* creature = CreateTestCreature(1, 299, TEST_FACTION_HOSTILE_TO_ALL);
+    creature->SetByteValue(UNIT_FIELD_BYTES_0, 3, POWER_ENERGY);
+    creature->SetMaxPower(POWER_ENERGY, 100);
+    creature->SetPower(POWER_ENERGY, 50, false);
+
+    creature->SetMaxPower(POWER_HAPPINESS, 200000);
+    creature->SetPower(POWER_HAPPINESS, 166500, false);
+
+    EXPECT_EQ(creature->GetUInt32Value(UNIT_FIELD_POWER1), 0u);
+    EXPECT_EQ(creature->GetUInt32Value(UNIT_FIELD_POWER4), 50u);
+    EXPECT_EQ(creature->GetPower(POWER_ENERGY), 50u);
+    EXPECT_EQ(creature->GetPower(POWER_HAPPINESS), 166500u);
+}
+
 TEST_F(DeathHandlerTest, PrematureReclaimKeepsOwnedCorpseAndGhostState)
 {
     TestPlayer* player = CreateGhost();
