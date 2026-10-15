@@ -1348,10 +1348,11 @@ uint8 Player::GetChatTag() const
 
 void Player::SendTeleportAckPacket()
 {
-    WorldPacket data(MSG_MOVE_TELEPORT_ACK, 41);
-    data << GetPackGUID();
-    data << GetSession()->GetOrderCounter(); // movement counter
-    BuildMovementPacket(&data);
+    Position pos = GetPosition();
+    if (TransportBase* transport = GetDirectTransport())
+        transport->CalculatePassengerOffset(pos.m_positionX, pos.m_positionY, pos.m_positionZ, &pos.m_orientation);
+    WorldPacket data(MSG_MOVE_TELEPORT, 30);
+    WorldPackets::Movement::WriteTeleport(data, GetGUID(), GetSession()->GetOrderCounter(), pos, GetTransGUID());
     SendDirectMessage(&data);
     GetSession()->IncrementOrderCounter();
 }
@@ -1841,6 +1842,7 @@ void Player::RegenerateAll()
 
 void Player::Regenerate(Powers power)
 {
+    uint32 index = GetPowerIndex(power);
     uint32 maxValue = GetMaxPower(power);
     if (!maxValue)
         return;
@@ -1853,7 +1855,7 @@ void Player::Regenerate(Powers power)
             //Set the value to 0 first then set it to max to force resend of packet as for range clients keeps removing rage
             if (power == POWER_RAGE || power == POWER_RUNIC_POWER)
             {
-                UpdateUInt32Value(static_cast<uint16>(UNIT_FIELD_POWER1) + power, 0);
+                UpdateUInt32Value(UNIT_FIELD_POWER1 + index, 0);
             }
 
             SetPower(power, maxValue);
@@ -1880,9 +1882,11 @@ void Player::Regenerate(Powers power)
                     ManaIncreaseRate = sWorld->getRate(RATE_POWER_MANA) * (2.066f - (GetLevel() * 0.066f));
 
                 if (recentCast) // Trinity Updates Mana in intervals of 2s, which is correct
-                    addvalue += GetFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER + AsUnderlyingType(POWER_MANA)) *  ManaIncreaseRate * 0.001f * m_regenTimer;
+                    addvalue += GetFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER + index) *
+                        ManaIncreaseRate * 0.001f * m_regenTimer;
                 else
-                    addvalue += GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER + AsUnderlyingType(POWER_MANA)) * ManaIncreaseRate * 0.001f * m_regenTimer;
+                    addvalue += GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER + index) *
+                        ManaIncreaseRate * 0.001f * m_regenTimer;
             }
             break;
         case POWER_RAGE:                                    // Regenerate rage
@@ -1896,7 +1900,7 @@ void Player::Regenerate(Powers power)
             break;
         case POWER_ENERGY:                                  // Regenerate energy (rogue)
             // Regen per second
-            addvalue += (GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER + AsUnderlyingType(POWER_ENERGY)) + 10.f);
+            addvalue += (GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER + index) + 10.f);
             // Regen per millisecond
             addvalue *= 0.001f;
             // Milliseconds passed
@@ -1978,7 +1982,7 @@ void Player::Regenerate(Powers power)
     if (m_regenTimerCount >= 2000 || curValue == 0 || curValue == maxValue)
         SetPower(power, curValue, true, true);
     else
-        UpdateUInt32Value(UNIT_FIELD_POWER1 + AsUnderlyingType(power), curValue);
+        UpdateUInt32Value(UNIT_FIELD_POWER1 + index, curValue);
 }
 
 void Player::RegenerateHealth()
@@ -4478,7 +4482,6 @@ void Player::BuildPlayerRepop()
     }
     corpse->ResetGhostTime(); // to prevent cheating
     StopMirrorTimers(); // disable timers on bars
-    SetByteValue(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_ANIM_TIER, UNIT_BYTE1_FLAG_ALWAYS_STAND); // set and clear other
     sScriptMgr->OnPlayerReleasedGhost(this);
 }
 
@@ -11857,14 +11860,7 @@ void Player::SendInitialPacketsAfterAddToMap()
 
     // manual send package (have code in HandleEffect(this, AURA_EFFECT_HANDLE_SEND_FOR_CLIENT, true); that must not be re-applied.
     if (IsImmobilizedState())
-    {
-        uint32 const counter = GetSession()->GetOrderCounter();
-        setCompoundState << uint8(2 + GetPackGUID().size() + 4);
-        setCompoundState << uint16(SMSG_FORCE_MOVE_ROOT);
-        setCompoundState << GetPackGUID();
-        setCompoundState << uint32(counter);
-        GetSession()->IncrementOrderCounter();
-    }
+        SendMoveRoot(true);
 
     if (HasAuraType(SPELL_AURA_FEATHER_FALL))
     {
@@ -11877,14 +11873,7 @@ void Player::SendInitialPacketsAfterAddToMap()
     }
 
     if (HasAuraType(SPELL_AURA_WATER_WALK) || HasAura(8326))
-    {
-        uint32 const counter = GetSession()->GetOrderCounter();
-        setCompoundState << uint8(2 + GetPackGUID().size() + 4);
-        setCompoundState << uint16(SMSG_MOVE_WATER_WALK);
-        setCompoundState << GetPackGUID();
-        setCompoundState << uint32(counter);
-        GetSession()->IncrementOrderCounter();
-    }
+        SetWaterWalking(true);
 
     if (HasAuraType(SPELL_AURA_HOVER))
     {

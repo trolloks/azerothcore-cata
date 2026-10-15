@@ -70,6 +70,7 @@ PvPDifficultyEntry const* GetBattlegroundBracketByLevel(uint32 mapid, uint32 lev
 PvPDifficultyEntry const* GetBattlegroundBracketById(uint32 mapid, BattlegroundBracketId id);
 
 CharStartOutfitEntry const* GetCharStartOutfitEntry(uint8 race, uint8 class_, uint8 gender);
+uint32 GetPowerIndexByClass(uint32 power, uint32 classId);
 
 LFGDungeonEntry const* GetLFGDungeon(uint32 mapId, Difficulty difficulty);
 LFGDungeonEntry const* GetZoneLFGDungeonEntry(std::string const& zoneName, LocaleConstant locale);
@@ -99,6 +100,7 @@ extern DBCStorage <CharStartOutfitEntry>         sCharStartOutfitStore;
 extern DBCStorage <CharSectionsEntry>            sCharSectionsStore;
 extern DBCStorage <CharTitlesEntry>              sCharTitlesStore;
 extern DBCStorage <ChrClassesEntry>              sChrClassesStore;
+extern DBCStorage <ChrPowerTypesEntry>           sChrPowerTypesStore;
 extern DBCStorage <ChrRacesEntry>                sChrRacesStore;
 extern DBCStorage <CinematicCameraEntry>         sCinematicCameraStore;
 extern DBCStorage <CinematicSequencesEntry>      sCinematicSequencesStore;

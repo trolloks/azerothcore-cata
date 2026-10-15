@@ -1,0 +1,131 @@
+{
+  "file": "ChrClassesXPowerTypes.dbc",
+  "sha256": "9379aace585f12ebbccdefb6ebc476ec4def529f05412b0f9c6758978a15db45",
+  "records": [
+    {
+      "ID": 0,
+      "ClassID": 1,
+      "PowerType": 1
+    },
+    {
+      "ID": 1,
+      "ClassID": 1,
+      "PowerType": 10
+    },
+    {
+      "ID": 2,
+      "ClassID": 2,
+      "PowerType": 0
+    },
+    {
+      "ID": 3,
+      "ClassID": 2,
+      "PowerType": 9
+    },
+    {
+      "ID": 4,
+      "ClassID": 2,
+      "PowerType": 10
+    },
+    {
+      "ID": 5,
+      "ClassID": 3,
+      "PowerType": 2
+    },
+    {
+      "ID": 6,
+      "ClassID": 3,
+      "PowerType": 10
+    },
+    {
+      "ID": 7,
+      "ClassID": 4,
+      "PowerType": 3
+    },
+    {
+      "ID": 8,
+      "ClassID": 4,
+      "PowerType": 10
+    },
+    {
+      "ID": 9,
+      "ClassID": 5,
+      "PowerType": 0
+    },
+    {
+      "ID": 10,
+      "ClassID": 5,
+      "PowerType": 10
+    },
+    {
+      "ID": 11,
+      "ClassID": 6,
+      "PowerType": 6
+    },
+    {
+      "ID": 12,
+      "ClassID": 6,
+      "PowerType": 10
+    },
+    {
+      "ID": 13,
+      "ClassID": 7,
+      "PowerType": 0
+    },
+    {
+      "ID": 14,
+      "ClassID": 7,
+      "PowerType": 10
+    },
+    {
+      "ID": 15,
+      "ClassID": 8,
+      "PowerType": 0
+    },
+    {
+      "ID": 16,
+      "ClassID": 8,
+      "PowerType": 10
+    },
+    {
+      "ID": 17,
+      "ClassID": 9,
+      "PowerType": 0
+    },
+    {
+      "ID": 18,
+      "ClassID": 9,
+      "PowerType": 7
+    },
+    {
+      "ID": 19,
+      "ClassID": 9,
+      "PowerType": 10
+    },
+    {
+      "ID": 20,
+      "ClassID": 11,
+      "PowerType": 0
+    },
+    {
+      "ID": 21,
+      "ClassID": 11,
+      "PowerType": 1
+    },
+    {
+      "ID": 22,
+      "ClassID": 11,
+      "PowerType": 3
+    },
+    {
+      "ID": 23,
+      "ClassID": 11,
+      "PowerType": 8
+    },
+    {
+      "ID": 24,
+      "ClassID": 11,
+      "PowerType": 10
+    }
+  ]
+}

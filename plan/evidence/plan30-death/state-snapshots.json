@@ -1,0 +1,640 @@
+{
+  "slot-fix-start": {
+    "characters": [
+      {
+        "map": 0,
+        "guid": 1,
+        "name": "Cataplan",
+        "zone": 12,
+        "level": 1,
+        "health": 1,
+        "online": 1,
+        "position_x": -8935.330078125,
+        "position_y": -188.64599609375,
+        "position_z": 80.41649627685547,
+        "orientation": 0.04239339381456375,
+        "playerFlags": 0,
+        "death_expire_time": 1792045742
+      }
+    ],
+    "corpses": [],
+    "items": [
+      {
+        "guid": 2,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 58231,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 4,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 39,
+        "durability": 21,
+        "owner_guid": 1
+      },
+      {
+        "guid": 6,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 40,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 8,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 49778,
+        "durability": 21,
+        "owner_guid": 1
+      },
+      {
+        "guid": 10,
+        "count": 1,
+        "flags": 1,
+        "itemEntry": 6948,
+        "durability": 0,
+        "owner_guid": 1
+      }
+    ]
+  },
+  "slot-dead-logout": {
+    "characters": [
+      {
+        "map": 0,
+        "guid": 1,
+        "name": "Cataplan",
+        "zone": 12,
+        "level": 1,
+        "health": 1,
+        "online": 0,
+        "position_x": -8935.330078125,
+        "position_y": -188.64599609375,
+        "position_z": 80.41649627685547,
+        "orientation": 6.281594276428223,
+        "playerFlags": 16,
+        "death_expire_time": 1792047685
+      }
+    ],
+    "corpses": [
+      {
+        "guid": 1,
+        "posX": -8917.234375,
+        "posY": -135.1002197265625,
+        "posZ": 80.47500610351562,
+        "time": 1792047429,
+        "flags": 4,
+        "mapId": 0,
+        "bytes1": 67109120,
+        "bytes2": 17106438,
+        "guildId": 0,
+        "dynFlags": 0,
+        "displayId": 49,
+        "itemCache": "0 0 0 0 83919390 0 117450404 134227869 0 0 0 0 0 0 0 285215052 0 0 0 ",
+        "phaseMask": 1,
+        "corpseType": 1,
+        "instanceId": 0,
+        "orientation": 6.281594276428223
+      }
+    ],
+    "items": [
+      {
+        "guid": 2,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 58231,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 4,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 39,
+        "durability": 19,
+        "owner_guid": 1
+      },
+      {
+        "guid": 6,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 40,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 8,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 49778,
+        "durability": 19,
+        "owner_guid": 1
+      },
+      {
+        "guid": 10,
+        "count": 1,
+        "flags": 1,
+        "itemEntry": 6948,
+        "durability": 0,
+        "owner_guid": 1
+      }
+    ]
+  },
+  "slot-dead-relog-ghost": {
+    "characters": [
+      {
+        "map": 0,
+        "guid": 1,
+        "name": "Cataplan",
+        "zone": 12,
+        "level": 1,
+        "health": 1,
+        "online": 1,
+        "position_x": -8935.330078125,
+        "position_y": -188.64599609375,
+        "position_z": 80.41649627685547,
+        "orientation": 6.281594276428223,
+        "playerFlags": 16,
+        "death_expire_time": 1792047685
+      }
+    ],
+    "corpses": [
+      {
+        "guid": 1,
+        "posX": -8917.234375,
+        "posY": -135.1002197265625,
+        "posZ": 80.47500610351562,
+        "time": 1792047429,
+        "flags": 4,
+        "mapId": 0,
+        "bytes1": 67109120,
+        "bytes2": 17106438,
+        "guildId": 0,
+        "dynFlags": 0,
+        "displayId": 49,
+        "itemCache": "0 0 0 0 83919390 0 117450404 134227869 0 0 0 0 0 0 0 285215052 0 0 0 ",
+        "phaseMask": 1,
+        "corpseType": 1,
+        "instanceId": 0,
+        "orientation": 6.281594276428223
+      }
+    ],
+    "items": [
+      {
+        "guid": 2,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 58231,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 4,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 39,
+        "durability": 19,
+        "owner_guid": 1
+      },
+      {
+        "guid": 6,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 40,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 8,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 49778,
+        "durability": 19,
+        "owner_guid": 1
+      },
+      {
+        "guid": 10,
+        "count": 1,
+        "flags": 1,
+        "itemEntry": 6948,
+        "durability": 0,
+        "owner_guid": 1
+      }
+    ]
+  },
+  "slot-after-reclaim1": {
+    "characters": [
+      {
+        "map": 0,
+        "guid": 1,
+        "name": "Cataplan",
+        "zone": 12,
+        "level": 1,
+        "health": 1,
+        "online": 1,
+        "position_x": -8935.330078125,
+        "position_y": -188.64599609375,
+        "position_z": 80.41649627685547,
+        "orientation": 6.281594276428223,
+        "playerFlags": 0,
+        "death_expire_time": 1792047685
+      }
+    ],
+    "corpses": [],
+    "items": [
+      {
+        "guid": 2,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 58231,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 4,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 39,
+        "durability": 19,
+        "owner_guid": 1
+      },
+      {
+        "guid": 6,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 40,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 8,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 49778,
+        "durability": 19,
+        "owner_guid": 1
+      },
+      {
+        "guid": 10,
+        "count": 1,
+        "flags": 1,
+        "itemEntry": 6948,
+        "durability": 0,
+        "owner_guid": 1
+      }
+    ]
+  },
+  "slot-ghost-logout": {
+    "characters": [
+      {
+        "map": 0,
+        "guid": 1,
+        "name": "Cataplan",
+        "zone": 12,
+        "level": 1,
+        "health": 1,
+        "online": 0,
+        "position_x": -8935.330078125,
+        "position_y": -188.64599609375,
+        "position_z": 80.41649627685547,
+        "orientation": 0.045530080795288086,
+        "playerFlags": 16,
+        "death_expire_time": 1792048014
+      }
+    ],
+    "corpses": [
+      {
+        "guid": 1,
+        "posX": -8917.3876953125,
+        "posY": -134.7056121826172,
+        "posZ": 80.49534606933594,
+        "time": 1792047741,
+        "flags": 4,
+        "mapId": 0,
+        "bytes1": 67109120,
+        "bytes2": 17106438,
+        "guildId": 0,
+        "dynFlags": 0,
+        "displayId": 49,
+        "itemCache": "0 0 0 0 83919390 0 117450404 134227869 0 0 0 0 0 0 0 285215052 0 0 0 ",
+        "phaseMask": 1,
+        "corpseType": 1,
+        "instanceId": 0,
+        "orientation": 0.045530080795288086
+      }
+    ],
+    "items": [
+      {
+        "guid": 2,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 58231,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 4,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 39,
+        "durability": 17,
+        "owner_guid": 1
+      },
+      {
+        "guid": 6,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 40,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 8,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 49778,
+        "durability": 17,
+        "owner_guid": 1
+      },
+      {
+        "guid": 10,
+        "count": 1,
+        "flags": 1,
+        "itemEntry": 6948,
+        "durability": 0,
+        "owner_guid": 1
+      }
+    ]
+  },
+  "slot-ghost-relog": {
+    "characters": [
+      {
+        "map": 0,
+        "guid": 1,
+        "name": "Cataplan",
+        "zone": 12,
+        "level": 1,
+        "health": 1,
+        "online": 1,
+        "position_x": -8935.330078125,
+        "position_y": -188.64599609375,
+        "position_z": 80.41649627685547,
+        "orientation": 0.045530080795288086,
+        "playerFlags": 16,
+        "death_expire_time": 1792048014
+      }
+    ],
+    "corpses": [
+      {
+        "guid": 1,
+        "posX": -8917.3876953125,
+        "posY": -134.7056121826172,
+        "posZ": 80.49534606933594,
+        "time": 1792047741,
+        "flags": 4,
+        "mapId": 0,
+        "bytes1": 67109120,
+        "bytes2": 17106438,
+        "guildId": 0,
+        "dynFlags": 0,
+        "displayId": 49,
+        "itemCache": "0 0 0 0 83919390 0 117450404 134227869 0 0 0 0 0 0 0 285215052 0 0 0 ",
+        "phaseMask": 1,
+        "corpseType": 1,
+        "instanceId": 0,
+        "orientation": 0.045530080795288086
+      }
+    ],
+    "items": [
+      {
+        "guid": 2,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 58231,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 4,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 39,
+        "durability": 17,
+        "owner_guid": 1
+      },
+      {
+        "guid": 6,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 40,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 8,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 49778,
+        "durability": 17,
+        "owner_guid": 1
+      },
+      {
+        "guid": 10,
+        "count": 1,
+        "flags": 1,
+        "itemEntry": 6948,
+        "durability": 0,
+        "owner_guid": 1
+      }
+    ]
+  },
+  "slot-alive-logout": {
+    "characters": [
+      {
+        "map": 0,
+        "guid": 1,
+        "name": "Cataplan",
+        "zone": 12,
+        "level": 1,
+        "health": 30,
+        "online": 0,
+        "position_x": -8947.4580078125,
+        "position_y": -148.04135131835938,
+        "position_z": 82.04874420166016,
+        "orientation": 3.190263032913208,
+        "playerFlags": 0,
+        "death_expire_time": 1792048014
+      }
+    ],
+    "corpses": [],
+    "items": [
+      {
+        "guid": 2,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 58231,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 4,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 39,
+        "durability": 17,
+        "owner_guid": 1
+      },
+      {
+        "guid": 6,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 40,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 8,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 49778,
+        "durability": 17,
+        "owner_guid": 1
+      },
+      {
+        "guid": 10,
+        "count": 1,
+        "flags": 1,
+        "itemEntry": 6948,
+        "durability": 0,
+        "owner_guid": 1
+      }
+    ]
+  },
+  "slot-alive-relog": {
+    "characters": [
+      {
+        "map": 0,
+        "guid": 1,
+        "name": "Cataplan",
+        "zone": 12,
+        "level": 1,
+        "health": 30,
+        "online": 1,
+        "position_x": -8947.4580078125,
+        "position_y": -148.04135131835938,
+        "position_z": 82.04874420166016,
+        "orientation": 3.190263032913208,
+        "playerFlags": 0,
+        "death_expire_time": 1792048014
+      }
+    ],
+    "corpses": [],
+    "items": [
+      {
+        "guid": 2,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 58231,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 4,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 39,
+        "durability": 17,
+        "owner_guid": 1
+      },
+      {
+        "guid": 6,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 40,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 8,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 49778,
+        "durability": 17,
+        "owner_guid": 1
+      },
+      {
+        "guid": 10,
+        "count": 1,
+        "flags": 1,
+        "itemEntry": 6948,
+        "durability": 0,
+        "owner_guid": 1
+      }
+    ]
+  },
+  "slot-final-logout": {
+    "characters": [
+      {
+        "map": 0,
+        "guid": 1,
+        "name": "Cataplan",
+        "zone": 12,
+        "level": 1,
+        "health": 30,
+        "online": 0,
+        "position_x": -8947.4580078125,
+        "position_y": -148.04135131835938,
+        "position_z": 82.04874420166016,
+        "orientation": 3.190263032913208,
+        "playerFlags": 0,
+        "death_expire_time": 1792048014
+      }
+    ],
+    "corpses": [],
+    "items": [
+      {
+        "guid": 2,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 58231,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 4,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 39,
+        "durability": 17,
+        "owner_guid": 1
+      },
+      {
+        "guid": 6,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 40,
+        "durability": 0,
+        "owner_guid": 1
+      },
+      {
+        "guid": 8,
+        "count": 1,
+        "flags": 0,
+        "itemEntry": 49778,
+        "durability": 17,
+        "owner_guid": 1
+      },
+      {
+        "guid": 10,
+        "count": 1,
+        "flags": 1,
+        "itemEntry": 6948,
+        "durability": 0,
+        "owner_guid": 1
+      }
+    ]
+  }
+}

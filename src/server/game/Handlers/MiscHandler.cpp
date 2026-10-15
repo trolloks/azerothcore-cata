@@ -36,6 +36,7 @@
 #include "Log.h"
 #include "LootMgr.h"
 #include "MapMgr.h"
+#include "MovementPackets.h"
 #include "MiscPackets.h"
 #include "Object.h"
 #include "ObjectAccessor.h"
@@ -1506,6 +1507,25 @@ void WorldSession::HandleMoveFlagChangeOpcode(WorldPacket& recv_data)
     LOG_DEBUG("network", "WORLD: {}", GetOpcodeNameForLogging(static_cast<OpcodeClient>(recv_data.GetOpcode())));
 
     OpcodeClient opcode = static_cast<OpcodeClient>(recv_data.GetOpcode());
+
+    if (opcode == CMSG_MOVE_WATER_WALK_ACK)
+    {
+        uint32 counter;
+        MovementInfo movementInfo;
+        WorldPackets::Movement::ReadGroundMovement(recv_data, movementInfo,
+            WorldPackets::Movement::GetMovementFlagSequence(opcode), &counter);
+        SanitizeMovementFlags(&movementInfo);
+        Unit* mover = _player->m_mover;
+        if (movementInfo.guid != mover->GetGUID() || counter <= _player->GetMapChangeOrderCounter())
+            return;
+        sScriptMgr->AnticheatSetCanFlybyServer(_player, movementInfo.HasMovementFlag(MOVEMENTFLAG_CAN_FLY));
+        if (!ProcessMovementInfo(movementInfo, mover, mover->ToPlayer(), recv_data))
+            return;
+        WorldPacket data(SMSG_MOVE_UPDATE);
+        WorldPackets::Movement::WriteMovementUpdate(data, movementInfo);
+        mover->SendMessageToSet(&data, _player);
+        return;
+    }
 
     ObjectGuid guid;
     uint32 counter;

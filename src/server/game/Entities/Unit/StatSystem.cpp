@@ -941,10 +941,14 @@ void Player::ApplyHealthRegenBonus(int32 amount, bool apply)
 
 void Player::UpdateManaRegen()
 {
+    uint32 index = GetPowerIndex(POWER_MANA);
+    if (index >= MAX_UNIT_POWER_FIELDS)
+        return;
+
     if (HasAuraTypeWithMiscvalue(SPELL_AURA_PREVENT_REGENERATE_POWER, POWER_MANA + 1))
     {
-        SetStatFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER, 0);
-        SetStatFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER, 0);
+        SetStatFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER + index, 0);
+        SetStatFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER + index, 0);
         return;
     }
 
@@ -968,19 +972,24 @@ void Player::UpdateManaRegen()
     int32 modManaRegenInterrupt = GetTotalAuraModifier(SPELL_AURA_MOD_MANA_REGEN_INTERRUPT);
     if (modManaRegenInterrupt > 100)
         modManaRegenInterrupt = 100;
-    SetStatFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER + AsUnderlyingType(POWER_MANA), power_regen_mp5 + CalculatePct(power_regen, modManaRegenInterrupt));
+    SetStatFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER + index,
+        power_regen_mp5 + CalculatePct(power_regen, modManaRegenInterrupt));
 
-    SetStatFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER + AsUnderlyingType(POWER_MANA), power_regen_mp5 + power_regen);
+    SetStatFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER + index, power_regen_mp5 + power_regen);
 }
 
 void Player::UpdateEnergyRegen()
 {
+    uint32 index = GetPowerIndex(POWER_ENERGY);
+    if (index >= MAX_UNIT_POWER_FIELDS)
+        return;
+
     float regenPerSecond = 10.f;   // +10 energy per second
     regenPerSecond *= GetTotalAuraMultiplierByMiscValue(SPELL_AURA_MOD_POWER_REGEN_PERCENT, POWER_ENERGY);
     regenPerSecond += static_cast<float>(GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_POWER_REGEN, POWER_ENERGY)) / static_cast<float>((5 * IN_MILLISECONDS));
 
-    SetStatFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER + AsUnderlyingType(POWER_ENERGY), regenPerSecond - 10.f);
-    SetStatFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER + AsUnderlyingType(POWER_ENERGY), regenPerSecond - 10.f);
+    SetStatFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER + index, regenPerSecond - 10.f);
+    SetStatFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER + index, regenPerSecond - 10.f);
 }
 
 void Player::UpdateRuneRegen(RuneType rune)

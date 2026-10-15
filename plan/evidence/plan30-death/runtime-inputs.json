@@ -1,0 +1,41 @@
+{
+  "binaries": {
+    "worldserver": {
+      "sha256": "f79dfb6d197b8dd64dbf155796c66fb81fbd531423e8b4011200303ebcfee2cf",
+      "version": "AzerothCore rev. ccbab84595be+ 2026-10-15 08:02:34 +0200 (plan/30-player-death-release-corpse-recovery-and-resurrection branch) (Unix, Release, Static)"
+    },
+    "authserver": {
+      "sha256": "078b3d8160e39b00c042fde998d88ce890f242c6cc78ac04cfb4ad0abbd46241",
+      "version": "AzerothCore rev. ccbab84595be+ 2026-10-15 08:02:34 +0200 (plan/30-player-death-release-corpse-recovery-and-resurrection branch) (Unix, Release, Static)"
+    },
+    "unit_tests": {
+      "sha256": "796b78da14083ca1136b63884e3759bf42d68d60a6cdf7d9552c609fd576ac2d"
+    }
+  },
+  "client_sha256": "0ea9cc0458cb137f4e0767e8a1896e2042480a4a22397480d7ee64c2e696192a",
+  "data_dbc_hash": "86bee8cd69fe0988b5e650b993390884594f45643fba60caf57d1ea852ca2475",
+  "data_maps_hash": "a8113db13679a3bb2a08b6e9f6a90c9b435eae43af3a4de413dd0ab56a8d0645",
+  "sql_cache_sha256": "816ea0e9860442fa4a54605ffffd97efc1d9148838ce8df2bd01821745389553",
+  "no_current_run_crash_reports": true,
+  "world_settings": {
+    "vmap.enableLOS": "0",
+    "vmap.enableHeight": "0",
+    "vmap.petLOS": "1",
+    "vmap.BlizzlikePvPLOS": "1",
+    "vmap.BlizzlikeLOSInOpenWorld": "1",
+    "vmap.enableIndoorCheck": "1",
+    "Rate.Health": "1",
+    "DurabilityLoss.InPvP": "0",
+    "DurabilityLoss.OnDeath": "10",
+    "DurabilityLoss.OnSpiritResurrect": "25",
+    "DurabilityLossChance.Damage": "0",
+    "DurabilityLossChance.Absorb": "0",
+    "DurabilityLossChance.Parry": "0",
+    "DurabilityLossChance.Block": "0",
+    "Death.SicknessLevel": "11",
+    "Death.CorpseReclaimDelay.PvP": "1",
+    "Death.CorpseReclaimDelay.PvE": "1",
+    "Death.Bones.World": "1",
+    "Death.Bones.BattlegroundOrArena": "1"
+  }
+}

@@ -1,0 +1,9379 @@
+{
+  "loaded": true,
+  "events": [
+    [
+      1792052618.516,
+      "SWING_DAMAGE",
+      false,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      11,
+      -1,
+      1
+    ],
+    [
+      1792052618.533,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052621.301,
+      "SWING_MISSED",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      "MISS"
+    ],
+    [
+      1792052621.301,
+      "SWING_MISSED",
+      false,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "MISS"
+    ],
+    [
+      1792052623.15,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    {
+      "1": 1792052625.016,
+      "2": "SWING_DAMAGE",
+      "3": false,
+      "4": "0xF13000012B00031A",
+      "5": "Diseased Young Wolf",
+      "6": 68136,
+      "7": 0,
+      "8": "0x0000000000000001",
+      "9": "Cataplan",
+      "10": 1297,
+      "11": 0,
+      "12": 2,
+      "13": -1,
+      "14": 1,
+      "18": 1
+    },
+    [
+      1792052627.168,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052629.287,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052631.384,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    {
+      "1": 1792052633.234,
+      "2": "SWING_DAMAGE",
+      "3": false,
+      "4": "0xF13000012B00031A",
+      "5": "Diseased Young Wolf",
+      "6": 68136,
+      "7": 0,
+      "8": "0x0000000000000001",
+      "9": "Cataplan",
+      "10": 1297,
+      "11": 0,
+      "12": 2,
+      "13": -1,
+      "14": 1,
+      "18": 1
+    },
+    [
+      1792052635.133,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052637.117,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052639.135,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052641.133,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052643.133,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052645.184,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052647.167,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052649.15,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052651.167,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052653.184,
+      "SWING_MISSED",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      "MISS"
+    ],
+    [
+      1792052655.263,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052657.167,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052659.172,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052661.219,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052663.202,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052665.184,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052667.285,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052669.201,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052671.202,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052673.234,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052675.234,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      -1,
+      1
+    ],
+    [
+      1792052677.284,
+      "SWING_DAMAGE",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      1,
+      0,
+      1
+    ]
+  ],
+  "states": [
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "subzone": "",
+      "time": 350083.564,
+      "attempt": "spirit-healer-final",
+      "max": 60,
+      "epoch": 1792052508,
+      "event": "PLAYER_ENTERING_WORLD",
+      "health": 30
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "subzone": "",
+      "time": 350083.564,
+      "attempt": "spirit-healer-final",
+      "max": 60,
+      "epoch": 1792052508,
+      "event": "PLAYER_ALIVE",
+      "health": 30
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "subzone": "",
+      "time": 350083.564,
+      "attempt": "spirit-healer-final",
+      "max": 60,
+      "epoch": 1792052508,
+      "event": "UNIT_AURA",
+      "health": 30
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "subzone": "",
+      "time": 350083.932,
+      "attempt": "spirit-healer-final",
+      "max": 60,
+      "epoch": 1792052508,
+      "event": "UNIT_AURA",
+      "health": 30
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052509,
+      "event": "tick",
+      "time": 350084.547,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052510,
+      "event": "tick",
+      "time": 350085.547,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052511,
+      "event": "tick",
+      "time": 350086.547,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052512,
+      "event": "tick",
+      "time": 350087.547,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052513,
+      "event": "tick",
+      "time": 350088.547,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052514,
+      "event": "tick",
+      "time": 350089.547,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052515,
+      "event": "tick",
+      "time": 350090.547,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052516,
+      "event": "tick",
+      "time": 350091.548,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052517,
+      "event": "tick",
+      "time": 350092.564,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052518,
+      "event": "tick",
+      "time": 350093.574,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052519,
+      "event": "tick",
+      "time": 350094.583,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052520,
+      "event": "tick",
+      "time": 350095.583,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052521,
+      "event": "tick",
+      "time": 350096.59,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052522,
+      "event": "tick",
+      "time": 350097.6,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052523,
+      "event": "tick",
+      "time": 350098.603,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052524,
+      "event": "tick",
+      "time": 350099.615,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052525,
+      "event": "tick",
+      "time": 350100.615,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052526,
+      "event": "tick",
+      "time": 350101.615,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052527,
+      "event": "tick",
+      "time": 350102.631,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052528,
+      "event": "tick",
+      "time": 350103.631,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052529,
+      "event": "tick",
+      "time": 350104.631,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052530,
+      "event": "tick",
+      "time": 350105.631,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052531,
+      "event": "tick",
+      "time": 350106.631,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052532,
+      "event": "tick",
+      "time": 350107.631,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052533,
+      "event": "tick",
+      "time": 350108.631,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052534,
+      "event": "tick",
+      "time": 350109.633,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052535,
+      "event": "tick",
+      "time": 350110.642,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052536,
+      "event": "tick",
+      "time": 350111.652,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052537,
+      "event": "tick",
+      "time": 350112.665,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052538,
+      "event": "tick",
+      "time": 350113.666,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052539,
+      "event": "tick",
+      "time": 350114.681,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052540,
+      "event": "tick",
+      "time": 350115.681,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052541,
+      "event": "tick",
+      "time": 350116.686,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052542,
+      "event": "tick",
+      "time": 350117.699,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052543,
+      "event": "tick",
+      "time": 350118.699,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052544,
+      "event": "tick",
+      "time": 350119.699,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052545,
+      "event": "tick",
+      "time": 350120.699,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052546,
+      "event": "tick",
+      "time": 350121.702,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052547,
+      "event": "tick",
+      "time": 350122.718,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052548,
+      "event": "tick",
+      "time": 350123.724,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052549,
+      "event": "tick",
+      "time": 350124.738,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052550,
+      "event": "tick",
+      "time": 350125.738,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052551,
+      "event": "tick",
+      "time": 350126.75,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052552,
+      "event": "tick",
+      "time": 350127.752,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052553,
+      "event": "tick",
+      "time": 350128.765,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052554,
+      "event": "tick",
+      "time": 350129.765,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052555,
+      "event": "tick",
+      "time": 350130.765,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052556,
+      "event": "tick",
+      "time": 350131.769,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052557,
+      "event": "tick",
+      "time": 350132.784,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052558,
+      "event": "tick",
+      "time": 350133.83,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052559,
+      "event": "tick",
+      "time": 350134.832,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052560,
+      "event": "tick",
+      "time": 350135.832,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052561,
+      "event": "tick",
+      "time": 350136.833,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052562,
+      "event": "tick",
+      "time": 350137.833,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052563,
+      "event": "tick",
+      "time": 350138.836,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052564,
+      "event": "tick",
+      "time": 350139.854,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052565,
+      "event": "tick",
+      "time": 350140.865,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052566,
+      "event": "tick",
+      "time": 350141.865,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052567,
+      "event": "tick",
+      "time": 350142.867,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052568,
+      "event": "tick",
+      "time": 350143.867,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052569,
+      "event": "tick",
+      "time": 350144.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052570,
+      "event": "tick",
+      "time": 350145.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052571,
+      "event": "tick",
+      "time": 350146.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052572,
+      "event": "tick",
+      "time": 350147.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052573,
+      "event": "tick",
+      "time": 350148.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052574,
+      "event": "tick",
+      "time": 350149.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052575,
+      "event": "tick",
+      "time": 350150.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052576,
+      "event": "tick",
+      "time": 350151.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052577,
+      "event": "tick",
+      "time": 350152.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052578,
+      "event": "tick",
+      "time": 350153.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052579,
+      "event": "tick",
+      "time": 350154.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052580,
+      "event": "tick",
+      "time": 350155.883,
+      "subzone": "Northshire Abbey",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052581,
+      "event": "tick",
+      "time": 350156.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052582,
+      "event": "tick",
+      "time": 350157.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052583,
+      "event": "tick",
+      "time": 350158.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052584,
+      "event": "tick",
+      "time": 350159.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052585,
+      "event": "tick",
+      "time": 350160.883,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052586,
+      "event": "tick",
+      "time": 350161.884,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052587,
+      "event": "tick",
+      "time": 350162.9,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052588,
+      "event": "tick",
+      "time": 350163.9,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052589,
+      "event": "tick",
+      "time": 350164.9,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052590,
+      "event": "tick",
+      "time": 350165.9,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052591,
+      "event": "tick",
+      "time": 350166.9,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052592,
+      "event": "tick",
+      "time": 350167.917,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052593,
+      "event": "tick",
+      "time": 350168.917,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052594,
+      "event": "tick",
+      "time": 350169.917,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052595,
+      "event": "tick",
+      "time": 350170.917,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052596,
+      "event": "tick",
+      "time": 350171.917,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052597,
+      "event": "tick",
+      "time": 350172.917,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052598,
+      "event": "tick",
+      "time": 350173.917,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052599,
+      "event": "tick",
+      "time": 350174.917,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052600,
+      "event": "tick",
+      "time": 350175.918,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052601,
+      "event": "tick",
+      "time": 350176.918,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052602,
+      "event": "tick",
+      "time": 350177.934,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052603,
+      "event": "tick",
+      "time": 350178.939,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052604,
+      "event": "tick",
+      "time": 350179.943,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052605,
+      "event": "tick",
+      "time": 350180.95,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052606,
+      "event": "tick",
+      "time": 350181.95,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052607,
+      "event": "tick",
+      "time": 350182.95,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052608,
+      "event": "tick",
+      "time": 350183.951,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052609,
+      "event": "tick",
+      "time": 350184.952,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052610,
+      "event": "tick",
+      "time": 350185.967,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052611,
+      "event": "tick",
+      "time": 350186.968,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052612,
+      "event": "UNIT_AURA",
+      "time": 350187.817,
+      "subzone": "Northshire Valley",
+      "health": 29,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052612,
+      "event": "tick",
+      "time": 350187.983,
+      "subzone": "Northshire Valley",
+      "health": 29,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052613,
+      "event": "tick",
+      "time": 350188.984,
+      "subzone": "Northshire Valley",
+      "health": 29,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052614,
+      "event": "tick",
+      "time": 350189.989,
+      "subzone": "Northshire Valley",
+      "health": 29,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052615,
+      "event": "tick",
+      "time": 350190.991,
+      "subzone": "Northshire Valley",
+      "health": 29,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052616,
+      "event": "tick",
+      "time": 350192.004,
+      "subzone": "Northshire Valley",
+      "health": 29,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052617,
+      "event": "UNIT_AURA",
+      "time": 350192.434,
+      "subzone": "Northshire Valley",
+      "health": 28,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052617,
+      "event": "tick",
+      "time": 350193.019,
+      "subzone": "Northshire Valley",
+      "health": 28,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052618,
+      "event": "tick",
+      "time": 350194.034,
+      "subzone": "Northshire Valley",
+      "health": 28,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052619,
+      "event": "UNIT_AURA",
+      "time": 350194.317,
+      "subzone": "Northshire Valley",
+      "health": 26,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052619,
+      "event": "tick",
+      "time": 350195.04,
+      "subzone": "Northshire Valley",
+      "health": 26,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052620,
+      "event": "tick",
+      "time": 350196.05,
+      "subzone": "Northshire Valley",
+      "health": 26,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052621,
+      "event": "UNIT_AURA",
+      "time": 350196.468,
+      "subzone": "Northshire Valley",
+      "health": 25,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052621,
+      "event": "tick",
+      "time": 350197.051,
+      "subzone": "Northshire Valley",
+      "health": 25,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052622,
+      "event": "tick",
+      "time": 350198.057,
+      "subzone": "Northshire Valley",
+      "health": 25,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052623,
+      "event": "UNIT_AURA",
+      "time": 350198.591,
+      "subzone": "Northshire Valley",
+      "health": 24,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052623,
+      "event": "tick",
+      "time": 350199.069,
+      "subzone": "Northshire Valley",
+      "health": 24,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052624,
+      "event": "tick",
+      "time": 350200.076,
+      "subzone": "Northshire Valley",
+      "health": 24,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052625,
+      "event": "UNIT_AURA",
+      "time": 350200.689,
+      "subzone": "Northshire Valley",
+      "health": 23,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052625,
+      "event": "tick",
+      "time": 350201.084,
+      "subzone": "Northshire Valley",
+      "health": 23,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052626,
+      "event": "tick",
+      "time": 350202.084,
+      "subzone": "Northshire Valley",
+      "health": 23,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052627,
+      "event": "UNIT_AURA",
+      "time": 350202.518,
+      "subzone": "Northshire Valley",
+      "health": 21,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052627,
+      "event": "tick",
+      "time": 350203.084,
+      "subzone": "Northshire Valley",
+      "health": 21,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052628,
+      "event": "tick",
+      "time": 350204.084,
+      "subzone": "Northshire Valley",
+      "health": 21,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052629,
+      "event": "UNIT_AURA",
+      "time": 350204.417,
+      "subzone": "Northshire Valley",
+      "health": 20,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052629,
+      "event": "tick",
+      "time": 350205.084,
+      "subzone": "Northshire Valley",
+      "health": 20,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052630,
+      "event": "tick",
+      "time": 350206.084,
+      "subzone": "Northshire Valley",
+      "health": 20,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052631,
+      "event": "UNIT_AURA",
+      "time": 350206.401,
+      "subzone": "Northshire Valley",
+      "health": 19,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052631,
+      "event": "tick",
+      "time": 350207.084,
+      "subzone": "Northshire Valley",
+      "health": 19,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052632,
+      "event": "tick",
+      "time": 350208.085,
+      "subzone": "Northshire Valley",
+      "health": 19,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052633,
+      "event": "UNIT_AURA",
+      "time": 350208.419,
+      "subzone": "Northshire Valley",
+      "health": 18,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052633,
+      "event": "tick",
+      "time": 350209.101,
+      "subzone": "Northshire Valley",
+      "health": 18,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052634,
+      "event": "tick",
+      "time": 350210.101,
+      "subzone": "Northshire Valley",
+      "health": 18,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052635,
+      "event": "UNIT_AURA",
+      "time": 350210.417,
+      "subzone": "Northshire Valley",
+      "health": 17,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052635,
+      "event": "tick",
+      "time": 350211.101,
+      "subzone": "Northshire Valley",
+      "health": 17,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052636,
+      "event": "tick",
+      "time": 350212.101,
+      "subzone": "Northshire Valley",
+      "health": 17,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052637,
+      "event": "UNIT_AURA",
+      "time": 350212.417,
+      "subzone": "Northshire Valley",
+      "health": 16,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052637,
+      "event": "tick",
+      "time": 350213.101,
+      "subzone": "Northshire Valley",
+      "health": 16,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052638,
+      "event": "tick",
+      "time": 350214.101,
+      "subzone": "Northshire Valley",
+      "health": 16,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052639,
+      "event": "UNIT_AURA",
+      "time": 350214.468,
+      "subzone": "Northshire Valley",
+      "health": 15,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052639,
+      "event": "tick",
+      "time": 350215.101,
+      "subzone": "Northshire Valley",
+      "health": 15,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052640,
+      "event": "tick",
+      "time": 350216.101,
+      "subzone": "Northshire Valley",
+      "health": 15,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052641,
+      "event": "UNIT_AURA",
+      "time": 350216.451,
+      "subzone": "Northshire Valley",
+      "health": 14,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052641,
+      "event": "tick",
+      "time": 350217.101,
+      "subzone": "Northshire Valley",
+      "health": 14,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052642,
+      "event": "tick",
+      "time": 350218.101,
+      "subzone": "Northshire Valley",
+      "health": 14,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052643,
+      "event": "UNIT_AURA",
+      "time": 350218.451,
+      "subzone": "Northshire Valley",
+      "health": 13,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052643,
+      "event": "tick",
+      "time": 350219.101,
+      "subzone": "Northshire Valley",
+      "health": 13,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052644,
+      "event": "tick",
+      "time": 350220.101,
+      "subzone": "Northshire Valley",
+      "health": 13,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052645,
+      "event": "UNIT_AURA",
+      "time": 350220.451,
+      "subzone": "Northshire Valley",
+      "health": 12,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052645,
+      "event": "tick",
+      "time": 350221.101,
+      "subzone": "Northshire Valley",
+      "health": 12,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052646,
+      "event": "tick",
+      "time": 350222.101,
+      "subzone": "Northshire Valley",
+      "health": 12,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052647,
+      "event": "tick",
+      "time": 350223.101,
+      "subzone": "Northshire Valley",
+      "health": 12,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052648,
+      "event": "tick",
+      "time": 350224.101,
+      "subzone": "Northshire Valley",
+      "health": 12,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052649,
+      "event": "UNIT_AURA",
+      "time": 350224.547,
+      "subzone": "Northshire Valley",
+      "health": 11,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052649,
+      "event": "tick",
+      "time": 350225.101,
+      "subzone": "Northshire Valley",
+      "health": 11,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052650,
+      "event": "tick",
+      "time": 350226.101,
+      "subzone": "Northshire Valley",
+      "health": 11,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052651,
+      "event": "UNIT_AURA",
+      "time": 350226.451,
+      "subzone": "Northshire Valley",
+      "health": 10,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052651,
+      "event": "tick",
+      "time": 350227.104,
+      "subzone": "Northshire Valley",
+      "health": 10,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052652,
+      "event": "tick",
+      "time": 350228.118,
+      "subzone": "Northshire Valley",
+      "health": 10,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052653,
+      "event": "UNIT_AURA",
+      "time": 350228.469,
+      "subzone": "Northshire Valley",
+      "health": 9,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052653,
+      "event": "tick",
+      "time": 350229.118,
+      "subzone": "Northshire Valley",
+      "health": 9,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052654,
+      "event": "tick",
+      "time": 350230.12,
+      "subzone": "Northshire Valley",
+      "health": 9,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052655,
+      "event": "UNIT_AURA",
+      "time": 350230.503,
+      "subzone": "Northshire Valley",
+      "health": 8,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052655,
+      "event": "tick",
+      "time": 350231.12,
+      "subzone": "Northshire Valley",
+      "health": 8,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052656,
+      "event": "tick",
+      "time": 350232.135,
+      "subzone": "Northshire Valley",
+      "health": 8,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052657,
+      "event": "UNIT_AURA",
+      "time": 350232.502,
+      "subzone": "Northshire Valley",
+      "health": 7,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052657,
+      "event": "tick",
+      "time": 350233.135,
+      "subzone": "Northshire Valley",
+      "health": 7,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052658,
+      "event": "tick",
+      "time": 350234.135,
+      "subzone": "Northshire Valley",
+      "health": 7,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052659,
+      "event": "UNIT_AURA",
+      "time": 350234.468,
+      "subzone": "Northshire Valley",
+      "health": 6,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052659,
+      "event": "tick",
+      "time": 350235.135,
+      "subzone": "Northshire Valley",
+      "health": 6,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052660,
+      "event": "tick",
+      "time": 350236.135,
+      "subzone": "Northshire Valley",
+      "health": 6,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052661,
+      "event": "UNIT_AURA",
+      "time": 350236.569,
+      "subzone": "Northshire Valley",
+      "health": 5,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052661,
+      "event": "tick",
+      "time": 350237.135,
+      "subzone": "Northshire Valley",
+      "health": 5,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052662,
+      "event": "tick",
+      "time": 350238.135,
+      "subzone": "Northshire Valley",
+      "health": 5,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052663,
+      "event": "UNIT_AURA",
+      "time": 350238.501,
+      "subzone": "Northshire Valley",
+      "health": 4,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052663,
+      "event": "tick",
+      "time": 350239.135,
+      "subzone": "Northshire Valley",
+      "health": 4,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052664,
+      "event": "tick",
+      "time": 350240.135,
+      "subzone": "Northshire Valley",
+      "health": 4,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052665,
+      "event": "UNIT_AURA",
+      "time": 350240.502,
+      "subzone": "Northshire Valley",
+      "health": 3,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052665,
+      "event": "tick",
+      "time": 350241.135,
+      "subzone": "Northshire Valley",
+      "health": 3,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052666,
+      "event": "tick",
+      "time": 350242.135,
+      "subzone": "Northshire Valley",
+      "health": 3,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052667,
+      "event": "UNIT_AURA",
+      "time": 350242.518,
+      "subzone": "Northshire Valley",
+      "health": 2,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052667,
+      "event": "tick",
+      "time": 350243.135,
+      "subzone": "Northshire Valley",
+      "health": 2,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052668,
+      "event": "tick",
+      "time": 350244.135,
+      "subzone": "Northshire Valley",
+      "health": 2,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052669,
+      "event": "UNIT_AURA",
+      "time": 350244.518,
+      "subzone": "Northshire Valley",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052669,
+      "event": "tick",
+      "time": 350245.144,
+      "subzone": "Northshire Valley",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052670,
+      "event": "tick",
+      "time": 350246.152,
+      "subzone": "Northshire Valley",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          17,
+          25
+        ],
+        "16": [
+          17,
+          25
+        ]
+      },
+      "combat": 1,
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052671,
+      "event": "UNIT_AURA",
+      "time": 350246.568,
+      "subzone": "Northshire Valley",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052671,
+      "event": "PLAYER_DEAD",
+      "time": 350246.585,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052671,
+      "event": "tick",
+      "time": 350247.152,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052672,
+      "event": "tick",
+      "time": 350248.152,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052673,
+      "event": "tick",
+      "time": 350249.152,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052674,
+      "event": "tick",
+      "time": 350250.152,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052675,
+      "event": "tick",
+      "time": 350251.152,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052676,
+      "event": "tick",
+      "time": 350252.152,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052677,
+      "event": "tick",
+      "time": 350253.153,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052678,
+      "event": "tick",
+      "time": 350254.171,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052679,
+      "event": "tick",
+      "time": 350255.185,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052680,
+      "event": "tick",
+      "time": 350256.185,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052681,
+      "event": "tick",
+      "time": 350257.186,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052682,
+      "event": "tick",
+      "time": 350258.186,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052684,
+      "event": "tick",
+      "time": 350259.202,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052685,
+      "event": "tick",
+      "time": 350260.202,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052686,
+      "event": "tick",
+      "time": 350261.206,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052687,
+      "event": "tick",
+      "time": 350262.219,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052688,
+      "event": "tick",
+      "time": 350263.219,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052689,
+      "event": "tick",
+      "time": 350264.219,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052690,
+      "event": "tick",
+      "time": 350265.219,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052691,
+      "event": "tick",
+      "time": 350266.219,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052692,
+      "event": "tick",
+      "time": 350267.219,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052693,
+      "event": "tick",
+      "time": 350268.219,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052694,
+      "event": "tick",
+      "time": 350269.219,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 60,
+      "dead": 1
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052694,
+      "event": "PLAYER_ALIVE",
+      "time": 350269.269,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052694,
+      "event": "UNIT_AURA",
+      "time": 350269.269,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052695,
+      "event": "tick",
+      "time": 350270.219,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052696,
+      "event": "tick",
+      "time": 350271.219,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052697,
+      "event": "tick",
+      "time": 350272.22,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052698,
+      "event": "tick",
+      "time": 350273.236,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052699,
+      "event": "tick",
+      "time": 350274.236,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052700,
+      "event": "tick",
+      "time": 350275.236,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052701,
+      "event": "tick",
+      "time": 350276.236,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052702,
+      "event": "tick",
+      "time": 350277.236,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052703,
+      "event": "tick",
+      "time": 350278.236,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052704,
+      "event": "tick",
+      "time": 350279.236,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052705,
+      "event": "tick",
+      "time": 350280.236,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052706,
+      "event": "tick",
+      "time": 350281.243,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052707,
+      "event": "tick",
+      "time": 350282.253,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052708,
+      "event": "tick",
+      "time": 350283.253,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052709,
+      "event": "tick",
+      "time": 350284.253,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052710,
+      "event": "tick",
+      "time": 350285.254,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052711,
+      "event": "tick",
+      "time": 350286.27,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052712,
+      "event": "tick",
+      "time": 350287.27,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052713,
+      "event": "tick",
+      "time": 350288.271,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052714,
+      "event": "tick",
+      "time": 350289.286,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052715,
+      "event": "tick",
+      "time": 350290.286,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052716,
+      "event": "tick",
+      "time": 350291.291,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052717,
+      "event": "tick",
+      "time": 350292.303,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052718,
+      "event": "tick",
+      "time": 350293.303,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052719,
+      "event": "tick",
+      "time": 350294.304,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052720,
+      "event": "tick",
+      "time": 350295.304,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052721,
+      "event": "tick",
+      "time": 350296.32,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052722,
+      "event": "tick",
+      "time": 350297.32,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052723,
+      "event": "tick",
+      "time": 350298.32,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052724,
+      "event": "tick",
+      "time": 350299.32,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052725,
+      "event": "tick",
+      "time": 350300.32,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052726,
+      "event": "tick",
+      "time": 350301.32,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052727,
+      "event": "tick",
+      "time": 350302.32,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052728,
+      "event": "tick",
+      "time": 350303.32,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052729,
+      "event": "tick",
+      "time": 350304.32,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052730,
+      "event": "tick",
+      "time": 350305.32,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052731,
+      "event": "tick",
+      "time": 350306.32,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052732,
+      "event": "tick",
+      "time": 350307.32,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052733,
+      "event": "tick",
+      "time": 350308.32,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052734,
+      "event": "tick",
+      "time": 350309.32,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052735,
+      "event": "tick",
+      "time": 350310.322,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052736,
+      "event": "tick",
+      "time": 350311.337,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052737,
+      "event": "tick",
+      "time": 350312.339,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052738,
+      "event": "tick",
+      "time": 350313.354,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052739,
+      "event": "tick",
+      "time": 350314.376,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052740,
+      "event": "tick",
+      "time": 350315.382,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052741,
+      "event": "tick",
+      "time": 350316.419,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052742,
+      "event": "tick",
+      "time": 350317.425,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052743,
+      "event": "tick",
+      "time": 350318.438,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052744,
+      "event": "tick",
+      "time": 350319.438,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052745,
+      "event": "tick",
+      "time": 350320.438,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052746,
+      "event": "tick",
+      "time": 350321.438,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052747,
+      "event": "tick",
+      "time": 350322.438,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052748,
+      "event": "tick",
+      "time": 350323.439,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052749,
+      "event": "tick",
+      "time": 350324.455,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052750,
+      "event": "tick",
+      "time": 350325.455,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052751,
+      "event": "tick",
+      "time": 350326.455,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052752,
+      "event": "tick",
+      "time": 350327.471,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052753,
+      "event": "tick",
+      "time": 350328.471,
+      "subzone": "Northshire Valley",
+      "zone": "Elwynn Forest",
+      "health": 1,
+      "max": 60
+    },
+    {
+      "durability": {},
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052754,
+      "event": "PLAYER_LEAVING_WORLD",
+      "time": 350329.256,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 0
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052794,
+      "event": "PLAYER_ENTERING_WORLD",
+      "time": 350369.679,
+      "max": 60,
+      "health": 1,
+      "subzone": ""
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052794,
+      "event": "PLAYER_ALIVE",
+      "time": 350369.679,
+      "max": 60,
+      "health": 1,
+      "subzone": ""
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052794,
+      "event": "UNIT_AURA",
+      "time": 350369.679,
+      "max": 60,
+      "health": 1,
+      "subzone": ""
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052795,
+      "event": "tick",
+      "time": 350370.25,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052796,
+      "event": "tick",
+      "time": 350371.257,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052797,
+      "event": "tick",
+      "time": 350372.272,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052798,
+      "event": "tick",
+      "time": 350373.291,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052799,
+      "event": "tick",
+      "time": 350374.39,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052800,
+      "event": "tick",
+      "time": 350375.413,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052801,
+      "event": "tick",
+      "time": 350376.422,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052802,
+      "event": "tick",
+      "time": 350377.422,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052803,
+      "event": "tick",
+      "time": 350378.438,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052804,
+      "event": "tick",
+      "time": 350379.442,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052805,
+      "event": "tick",
+      "time": 350380.456,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052806,
+      "event": "tick",
+      "time": 350381.457,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052807,
+      "event": "tick",
+      "time": 350382.461,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052808,
+      "event": "tick",
+      "time": 350383.463,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052809,
+      "event": "tick",
+      "time": 350384.472,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052810,
+      "event": "tick",
+      "time": 350385.479,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052811,
+      "event": "tick",
+      "time": 350386.489,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052812,
+      "event": "tick",
+      "time": 350387.516,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052813,
+      "event": "tick",
+      "time": 350388.522,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052814,
+      "event": "tick",
+      "time": 350389.522,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052815,
+      "event": "tick",
+      "time": 350390.522,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052816,
+      "event": "tick",
+      "time": 350391.523,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052817,
+      "event": "tick",
+      "time": 350392.524,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052818,
+      "event": "tick",
+      "time": 350393.539,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052819,
+      "event": "tick",
+      "time": 350394.539,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052820,
+      "event": "tick",
+      "time": 350395.539,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052821,
+      "event": "tick",
+      "time": 350396.539,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052822,
+      "event": "tick",
+      "time": 350397.539,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052823,
+      "event": "tick",
+      "time": 350398.539,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052824,
+      "event": "tick",
+      "time": 350399.539,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052825,
+      "event": "tick",
+      "time": 350400.539,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052826,
+      "event": "tick",
+      "time": 350401.539,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052827,
+      "event": "tick",
+      "time": 350402.542,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052828,
+      "event": "tick",
+      "time": 350403.546,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052828,
+      "event": "GOSSIP_SHOW",
+      "time": 350403.806,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052829,
+      "event": "tick",
+      "time": 350404.556,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052830,
+      "event": "tick",
+      "time": 350405.556,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052831,
+      "event": "tick",
+      "time": 350406.557,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052832,
+      "event": "tick",
+      "time": 350407.573,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052833,
+      "event": "tick",
+      "time": 350408.573,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052834,
+      "event": "tick",
+      "time": 350409.579,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052835,
+      "event": "tick",
+      "time": 350410.59,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052836,
+      "event": "tick",
+      "time": 350411.59,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052837,
+      "event": "tick",
+      "time": 350412.591,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052838,
+      "event": "tick",
+      "time": 350413.607,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052839,
+      "event": "tick",
+      "time": 350414.607,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052840,
+      "event": "tick",
+      "time": 350415.607,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052841,
+      "event": "tick",
+      "time": 350416.607,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052842,
+      "event": "tick",
+      "time": 350417.607,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052843,
+      "event": "tick",
+      "time": 350418.614,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052844,
+      "event": "tick",
+      "time": 350419.623,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052845,
+      "event": "tick",
+      "time": 350420.623,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052846,
+      "event": "tick",
+      "time": 350421.64,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052847,
+      "event": "tick",
+      "time": 350422.64,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052848,
+      "event": "tick",
+      "time": 350423.64,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052849,
+      "event": "tick",
+      "time": 350424.64,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052850,
+      "event": "tick",
+      "time": 350425.644,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052851,
+      "event": "tick",
+      "time": 350426.66,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052852,
+      "event": "tick",
+      "time": 350427.668,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052853,
+      "event": "tick",
+      "time": 350428.674,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052854,
+      "event": "tick",
+      "time": 350429.687,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052855,
+      "event": "tick",
+      "time": 350430.691,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052856,
+      "event": "tick",
+      "time": 350431.707,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052857,
+      "event": "tick",
+      "time": 350432.72,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052858,
+      "event": "tick",
+      "time": 350433.75,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052859,
+      "event": "UNIT_AURA",
+      "time": 350434.494,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          15,
+          25
+        ],
+        "16": [
+          15,
+          25
+        ]
+      },
+      "ghost": 1,
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052859,
+      "event": "GOSSIP_CLOSED",
+      "time": 350434.529,
+      "max": 60,
+      "health": 1,
+      "zone": "Elwynn Forest",
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052859,
+      "event": "PLAYER_UNGHOST",
+      "time": 350434.608,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052859,
+      "event": "tick",
+      "time": 350434.762,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052860,
+      "event": "tick",
+      "time": 350435.774,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052861,
+      "event": "tick",
+      "time": 350436.782,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052862,
+      "event": "tick",
+      "time": 350437.784,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052863,
+      "event": "tick",
+      "time": 350438.805,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052864,
+      "event": "tick",
+      "time": 350439.812,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052865,
+      "event": "tick",
+      "time": 350440.828,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052866,
+      "event": "tick",
+      "time": 350441.841,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052867,
+      "event": "tick",
+      "time": 350442.841,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052868,
+      "event": "tick",
+      "time": 350443.842,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052869,
+      "event": "tick",
+      "time": 350444.846,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052870,
+      "event": "tick",
+      "time": 350445.858,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052871,
+      "event": "tick",
+      "time": 350446.858,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052872,
+      "event": "tick",
+      "time": 350447.874,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052873,
+      "event": "tick",
+      "time": 350448.875,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052874,
+      "event": "tick",
+      "time": 350449.892,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052875,
+      "event": "tick",
+      "time": 350450.892,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052876,
+      "event": "tick",
+      "time": 350451.908,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052877,
+      "event": "tick",
+      "time": 350452.908,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052878,
+      "event": "tick",
+      "time": 350453.908,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052879,
+      "event": "tick",
+      "time": 350454.908,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052880,
+      "event": "tick",
+      "time": 350455.908,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052881,
+      "event": "tick",
+      "time": 350456.908,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052882,
+      "event": "tick",
+      "time": 350457.908,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052883,
+      "event": "tick",
+      "time": 350458.908,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052884,
+      "event": "tick",
+      "time": 350459.908,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052885,
+      "event": "tick",
+      "time": 350460.908,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052886,
+      "event": "tick",
+      "time": 350461.908,
+      "max": 60,
+      "health": 30,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {},
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052887,
+      "event": "PLAYER_LEAVING_WORLD",
+      "time": 350462.208,
+      "max": 0,
+      "health": 0,
+      "subzone": "Northshire Valley"
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052943,
+      "event": "PLAYER_ENTERING_WORLD",
+      "time": 350518.229,
+      "subzone": "",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052943,
+      "event": "PLAYER_ALIVE",
+      "time": 350518.229,
+      "subzone": "",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052943,
+      "event": "UNIT_AURA",
+      "time": 350518.229,
+      "subzone": "",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052943,
+      "event": "UNIT_AURA",
+      "time": 350518.794,
+      "subzone": "",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052944,
+      "event": "tick",
+      "time": 350519.227,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052945,
+      "event": "tick",
+      "time": 350520.23,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052946,
+      "event": "tick",
+      "time": 350521.234,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052947,
+      "event": "tick",
+      "time": 350522.244,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052948,
+      "event": "tick",
+      "time": 350523.271,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052949,
+      "event": "tick",
+      "time": 350524.276,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052950,
+      "event": "tick",
+      "time": 350525.276,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052951,
+      "event": "tick",
+      "time": 350526.276,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052952,
+      "event": "tick",
+      "time": 350527.276,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052953,
+      "event": "tick",
+      "time": 350528.276,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052954,
+      "event": "tick",
+      "time": 350529.276,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052955,
+      "event": "tick",
+      "time": 350530.277,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052956,
+      "event": "tick",
+      "time": 350531.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052957,
+      "event": "tick",
+      "time": 350532.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052958,
+      "event": "tick",
+      "time": 350533.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052959,
+      "event": "tick",
+      "time": 350534.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052960,
+      "event": "tick",
+      "time": 350535.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052961,
+      "event": "tick",
+      "time": 350536.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052962,
+      "event": "tick",
+      "time": 350537.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052963,
+      "event": "tick",
+      "time": 350538.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052964,
+      "event": "tick",
+      "time": 350539.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052965,
+      "event": "tick",
+      "time": 350540.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052966,
+      "event": "tick",
+      "time": 350541.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052967,
+      "event": "tick",
+      "time": 350542.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052968,
+      "event": "tick",
+      "time": 350543.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052969,
+      "event": "tick",
+      "time": 350544.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052970,
+      "event": "tick",
+      "time": 350545.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052971,
+      "event": "tick",
+      "time": 350546.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052972,
+      "event": "tick",
+      "time": 350547.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052973,
+      "event": "tick",
+      "time": 350548.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052974,
+      "event": "tick",
+      "time": 350549.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052975,
+      "event": "tick",
+      "time": 350550.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052976,
+      "event": "tick",
+      "time": 350551.293,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052977,
+      "event": "tick",
+      "time": 350552.294,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052978,
+      "event": "tick",
+      "time": 350553.294,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052979,
+      "event": "tick",
+      "time": 350554.295,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052980,
+      "event": "tick",
+      "time": 350555.297,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052981,
+      "event": "tick",
+      "time": 350556.316,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052982,
+      "event": "tick",
+      "time": 350557.329,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052983,
+      "event": "tick",
+      "time": 350558.346,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052984,
+      "event": "tick",
+      "time": 350559.36,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052985,
+      "event": "tick",
+      "time": 350560.36,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052986,
+      "event": "tick",
+      "time": 350561.36,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052987,
+      "event": "tick",
+      "time": 350562.36,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052988,
+      "event": "tick",
+      "time": 350563.36,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052989,
+      "event": "tick",
+      "time": 350564.36,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052990,
+      "event": "tick",
+      "time": 350565.361,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {
+        "7": [
+          9,
+          25
+        ],
+        "16": [
+          9,
+          25
+        ]
+      },
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052991,
+      "event": "tick",
+      "time": 350566.361,
+      "subzone": "Northshire Valley",
+      "health": 30,
+      "max": 60
+    },
+    {
+      "durability": {},
+      "zone": "Elwynn Forest",
+      "attempt": "spirit-healer-final",
+      "epoch": 1792052992,
+      "event": "PLAYER_LEAVING_WORLD",
+      "time": 350567.211,
+      "subzone": "Northshire Valley",
+      "health": 0,
+      "max": 0
+    }
+  ]
+}

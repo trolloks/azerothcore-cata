@@ -1,0 +1,144 @@
+{
+  "issue": 101,
+  "result": "PASS",
+  "client_build": 15595,
+  "accepted_source": {
+    "base": "ccbab84595be385e5f7b97d559cf0ea851356c86",
+    "committed_source": "41a4d6d401e0e680f801b198db587541a9afb4aa",
+    "patch_sha256": "53fc08a27659eb7da01e376ed0e65a76bc5a179900bfb24c0434b448dfc96da9",
+    "exact_patch_match": true
+  },
+  "trace_event_counts": {
+    "set_power": 91,
+    "power_packet": 33,
+    "incoming_swing": 32,
+    "durability_loss_enter": 2,
+    "durability_loss_return": 2,
+    "kill_enter": 2,
+    "kill_return": 2,
+    "release_enter": 2,
+    "release_return": 2,
+    "reclaim_request_enter": 2,
+    "resurrect_enter": 2,
+    "resurrect_return": 2,
+    "reclaim_request_return": 2,
+    "release_request_enter": 1,
+    "release_request_return": 1
+  },
+  "native_event_counts": {
+    "PLAYER_ENTERING_WORLD": 4,
+    "PLAYER_ALIVE": 5,
+    "PLAYER_DEAD": 2,
+    "PLAYER_LEAVING_WORLD": 4,
+    "CORPSE_IN_RANGE": 2,
+    "PLAYER_UNGHOST": 2,
+    "CORPSE_OUT_OF_RANGE": 2
+  },
+  "focused_tests": 18,
+  "unit_tests_run": 11493,
+  "unit_tests_passed": 6013,
+  "unit_tests_skipped": 5480,
+  "unit_tests_disabled": 1,
+  "logs": {
+    "unit-tests.log.gz": {
+      "uncompressed_sha256": "7f4e86cc23289f6952213e53e7a18e87b2511216f28b37bd91c15f8b29a63601"
+    },
+    "build.log.gz": {
+      "uncompressed_sha256": "17ed2ca44ee507aeff091e985adb3f3d16b082e2f52270abbdfb35920f1c16d0"
+    },
+    "worldserver-final-build.log.gz": {
+      "uncompressed_sha256": "28e33baeae60ff6ef0ee5e065815e04fbf36810c0004f177ad3c9e3053cad953"
+    },
+    "healer-final-build.log.gz": {
+      "uncompressed_sha256": "63d16c36d912b4a9e76b3dec8b13bcf75ea32fd159acfe955a9d8b20d63533c5"
+    },
+    "healer-spells-configure.log.gz": {
+      "uncompressed_sha256": "c48a967cc03d60348476c84208550c12acc7e15f453dfe9b1f4b7b2da50eec24"
+    },
+    "healer-spells-build.log.gz": {
+      "uncompressed_sha256": "0f35693b743e8ba84cdc5cbcdfe9b6d6601f7ebf8144267e573b93153b813fbc"
+    },
+    "spell-result-build.log.gz": {
+      "uncompressed_sha256": "50af451b38788ffcc88c0c778d3cf919f6296312aee9081450c80801a3b8c05f"
+    },
+    "final-identity-build.log.gz": {
+      "uncompressed_sha256": "b46803b8db44fce2ff85339c8e3dd450e96ea0a7a27396a6fb8639e556dfe985"
+    }
+  },
+  "cleanup": {
+    "state": "reset",
+    "container_removed": true,
+    "volume_removed": true,
+    "active_owned_processes": 0,
+    "owned_wine_processes": 0,
+    "protected_inputs_unchanged": true,
+    "recorded_ports_unused": true
+  },
+  "exclusions": [
+    "Battleground and mass resurrection",
+    "Cross-map corpses and other graveyards",
+    "Other classes in the native client",
+    "New Cata resource gameplay and creature/pet power conversion"
+  ],
+  "corpse_reclaim_result": "PASS",
+  "spirit_healer_result": "PASS",
+  "healer_source": "fb2cf10e638dd6a3ccd90de24b7c9153c8b65de3",
+  "healer_trace_event_counts": {
+    "set_power": 71,
+    "power_packet": 29,
+    "damage_stage_enter": 120,
+    "damage_stage_return": 120,
+    "incoming_swing": 30,
+    "durability_loss_enter": 2,
+    "durability_loss_return": 2,
+    "kill_enter": 1,
+    "kill_return": 1,
+    "release_request_enter": 1,
+    "release_enter": 1,
+    "release_return": 1,
+    "release_request_return": 1,
+    "healer_activate_enter": 1,
+    "spirit_resurrect_enter": 1,
+    "resurrect_enter": 1,
+    "resurrect_return": 1,
+    "spirit_resurrect_return": 1,
+    "healer_activate_return": 1
+  },
+  "healer_native_event_counts": {
+    "PLAYER_ENTERING_WORLD": 3,
+    "PLAYER_ALIVE": 4,
+    "UNIT_AURA": 35,
+    "tick": 384,
+    "PLAYER_DEAD": 1,
+    "PLAYER_LEAVING_WORLD": 3,
+    "GOSSIP_SHOW": 1,
+    "GOSSIP_CLOSED": 1,
+    "PLAYER_UNGHOST": 1
+  },
+  "healer_cleanup": {
+    "generation": 2,
+    "state": "reset",
+    "container_removed": true,
+    "volume_removed": true,
+    "active_owned_processes": 0,
+    "owned_wine_processes": 0,
+    "protected_inputs_unchanged": true,
+    "recorded_ports_unused": true
+  },
+  "final_source": "f57e62bfce73bbc8fd02ee0bd0d4aa225982bc71",
+  "spell_result_replay_result": "PASS",
+  "final_replay": {
+    "native_ui_errors": 0,
+    "incoming_swings": 63,
+    "incoming_damage": 60,
+    "starting_health": 60,
+    "recovered_health": 30,
+    "durability": [
+      25,
+      23,
+      17
+    ],
+    "ghost_and_living_relogs": true,
+    "runner_teardown_timeout": "worldserver subprocess wait, one second; independent scene proof and subsequent strict reset pass"
+  }
+}

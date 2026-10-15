@@ -25,6 +25,8 @@ class TestPlayer : public Player
 public:
     using Player::Player;
 
+    void SetDeathStateForTest(DeathState state) { m_deathState = state; }
+
     void UpdateObjectVisibility(bool /*forced*/ = true, bool /*fromUpdate*/ = false) override { }
 
     void AddToWorld() override { Object::AddToWorld(); }

@@ -1,0 +1,1106 @@
+{"event": "set_power", "power": 1, "requested": 0, "player": {"health": 0, "max_health": 0, "flags": 0, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [0, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050611.7220104}
+{"event": "set_power", "power": 0, "requested": 0, "player": {"health": 20, "max_health": 20, "flags": 8, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [0, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050611.725435}
+{"event": "set_power", "power": 3, "requested": 0, "player": {"health": 20, "max_health": 20, "flags": 8, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [0, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050611.7288885}
+{"event": "set_power", "power": 2, "requested": 0, "player": {"health": 20, "max_health": 20, "flags": 8, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [0, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050611.7301724}
+{"event": "set_power", "power": 4, "requested": 0, "player": {"health": 20, "max_health": 20, "flags": 8, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [0, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050611.731253}
+{"event": "set_power", "power": 6, "requested": 0, "player": {"health": 20, "max_health": 20, "flags": 8, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [0, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050611.7323198}
+{"event": "set_power", "power": 0, "requested": 0, "player": {"health": 60, "max_health": 60, "flags": 8, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [0, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050611.745134}
+{"event": "set_power", "power": 1, "requested": 0, "player": {"health": 60, "max_health": 60, "flags": 8, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [0, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050611.7463176}
+{"event": "set_power", "power": 2, "requested": 0, "player": {"health": 60, "max_health": 60, "flags": 8, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [0, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050611.7474556}
+{"event": "set_power", "power": 3, "requested": 0, "player": {"health": 60, "max_health": 60, "flags": 8, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [0, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050611.7489703}
+{"event": "set_power", "power": 4, "requested": 0, "player": {"health": 60, "max_health": 60, "flags": 8, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [0, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050611.7502172}
+{"event": "set_power", "power": 5, "requested": 0, "player": {"health": 60, "max_health": 60, "flags": 8, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [0, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050611.751501}
+{"event": "set_power", "power": 6, "requested": 0, "player": {"health": 60, "max_health": 60, "flags": 8, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [0, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050611.753138}
+{"event": "set_power", "power": 1, "requested": 100, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [0, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050647.8285797}
+{"event": "power_packet", "hex": "0101010000000164000000", "time": 1792050647.8296907}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050647.8474586}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050647.848575}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050647.850105}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050647.8511162}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050647.8522813}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050647.8532763}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050647.8542821}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050647.8550458}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [100, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050647.8584652}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050649.2021835}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050649.2032924}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050649.2043028}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050649.205394}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050649.2065406}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050649.2073681}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050649.2082467}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050649.2088196}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [100, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050649.2104971}
+{"event": "set_power", "power": 1, "requested": 205, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [100, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050649.219172}
+{"event": "power_packet", "hex": "01010100000001cd000000", "time": 1792050649.219768}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050651.99824}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050652.0051897}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050652.0060961}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050652.0074131}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050652.0104375}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050652.0135128}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050652.01437}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050652.0155838}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050652.0179937}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050653.605583}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050653.606441}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050653.607334}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050653.6079378}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050653.6087492}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050653.6092489}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050653.6098545}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050653.6103551}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050653.611862}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050655.3728642}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050655.3734565}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050655.3741632}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050655.3746192}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050655.3752337}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050655.3756633}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050655.3762388}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050655.376659}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 1, "hit_info": 16, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050655.3782346}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050657.3170366}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050657.3178074}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050657.3186083}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050657.3193598}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050657.3201108}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050657.3210175}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050657.3219194}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050657.3224757}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050657.324338}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050659.8567436}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050659.8577614}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050659.858964}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050659.8599973}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050659.8621538}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050659.8630567}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050659.8640513}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050659.8649268}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050659.869231}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050663.0893576}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050663.0899665}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050663.0905774}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050663.091017}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050663.0915875}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050663.0920293}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050663.092726}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050663.093204}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050663.0946634}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050664.441334}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050664.4418938}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050664.4425192}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050664.4429574}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050664.44375}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050664.4443204}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050664.4449747}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050664.4454896}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050664.4469898}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050666.5270407}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050666.5276775}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050666.5283408}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050666.5288274}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050666.5294862}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050666.5300593}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050666.5307887}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050666.5320175}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050666.5340943}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050668.5345402}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050668.5355167}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050668.5364575}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050668.537051}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050668.5377936}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050668.5387592}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050668.53982}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050668.5405197}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050668.5421002}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050670.40522}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050670.4060307}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050670.4069057}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050670.407529}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050670.4082987}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050670.40889}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050670.4100068}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050670.4106808}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050670.4123464}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050672.9919655}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050672.9926703}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050672.9934955}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050672.9941218}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050672.9948754}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050672.9954932}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050672.9965472}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050672.997119}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050672.9988904}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050675.2153704}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050675.216386}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050675.2173338}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050675.2181435}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050675.2193813}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050675.2201679}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050675.221019}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050675.2215092}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050675.222963}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050676.6869657}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050676.6877296}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050676.6885064}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050676.689041}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050676.689703}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050676.690208}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050676.690815}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050676.6913204}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 2, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050676.692855}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050678.706759}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050678.707699}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050678.7086527}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050678.7093449}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050678.7101228}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050678.7108123}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050678.711565}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050678.712134}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050678.713984}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050680.757966}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050680.7586741}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050680.7593713}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050680.7598498}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050680.7605083}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050680.7612543}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050680.7632096}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050680.7640402}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050680.766476}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050683.7391467}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050683.7400815}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050683.7409456}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050683.7416186}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050683.7423396}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050683.742996}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050683.74369}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050683.7441797}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 1, "hit_info": 16, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050683.7458808}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050685.6490421}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050685.6499014}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050685.651244}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050685.6520126}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050685.6528485}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050685.653499}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050685.6545825}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050685.6554825}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050685.6576257}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050687.5613453}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050687.5619042}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050687.5625384}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050687.5631473}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050687.5639248}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050687.56453}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050687.5652606}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050687.565826}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050687.5674765}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050689.5086808}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050689.509302}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050689.5100038}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050689.5105288}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050689.5112257}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050689.5117428}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050689.512392}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050689.5129251}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050689.514847}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050691.56011}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050691.5606496}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050691.5613477}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050691.5618837}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050691.5625746}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050691.563221}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050691.5639904}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050691.5646787}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050691.5665815}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050693.4939137}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050693.4945312}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050693.495256}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050693.4958274}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050693.496623}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050693.4973645}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050693.498129}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050693.498756}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050693.5005767}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050695.566756}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050695.5676398}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050695.5685005}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050695.569236}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050695.5700498}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050695.5715897}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050695.572576}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050695.5731697}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050695.57474}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050698.0168953}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050698.0178485}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050698.018757}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050698.019544}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050698.0204015}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050698.0210505}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050698.0218606}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050698.0227964}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050698.0279434}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050701.781164}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050701.7826343}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050701.7834778}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050701.7842731}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050701.7853634}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050701.7861178}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050701.786942}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050701.7875829}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050701.7913716}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050705.8566086}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050705.8575559}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050705.858462}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050705.8592656}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050705.860592}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050705.8640294}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050705.8660855}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050705.8668332}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050705.8685465}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050708.667886}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050708.6688569}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050708.6697307}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050708.6704652}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050708.6713939}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050708.6721718}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050708.672986}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050708.6737182}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050708.675652}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050710.1197321}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050710.1205523}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050710.1214473}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050710.1221786}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050710.1229918}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050710.1238108}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050710.1248877}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050710.1260037}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050710.1279001}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050712.4075036}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050712.4081562}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050712.4088936}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050712.4095023}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050712.4102254}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050712.4108338}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050712.4118705}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050712.4163353}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050712.4184308}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050713.9786713}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050713.9807706}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050713.9816818}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050713.983753}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050713.9851556}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050713.9858518}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050713.9872713}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050713.987873}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 1, "hit_info": 16, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050713.9893694}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050715.8874805}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050715.8888965}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050715.8899376}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050715.890629}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050715.8913429}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050715.8919458}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050715.8927145}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050715.8932414}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 6, "hit_info": 514, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050715.8964515}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050717.9024081}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050717.9031765}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050717.9039702}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050717.9046404}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050717.905291}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050717.9058368}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050717.906469}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050717.90698}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 2, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050717.9085195}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050719.9398108}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050719.940458}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050719.9411235}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050719.941675}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050719.942459}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050719.943083}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050719.9438527}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050719.9445124}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050719.947017}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050721.779696}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050721.7804081}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050721.7812252}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050721.7819352}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050721.783399}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050721.7840624}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050721.784895}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050721.786217}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 1, "hit_info": 16, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050721.7878666}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050723.937491}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050723.9381468}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050723.9388027}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050723.9393833}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050723.9400322}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050723.940545}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050723.9411838}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050723.941701}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050723.9432495}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050725.9217596}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050725.9226465}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050725.9234853}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050725.9241366}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050725.9250336}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050725.925798}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050725.9266195}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050725.9273324}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 1, "hit_info": 16, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050725.9293547}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050727.9087873}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050727.9093819}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050727.9101064}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050727.9106483}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050727.9114013}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050727.9128547}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050727.9137907}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050727.9146917}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050727.916617}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050729.869386}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050729.8703904}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050729.8717122}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050729.8727436}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050729.8737001}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050729.874495}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050729.8754473}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050729.8761065}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050729.8776882}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050731.859251}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050731.8598769}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050731.8605318}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050731.8621454}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050731.863091}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050731.8639457}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050731.8647296}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050731.8657372}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050731.867629}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050733.9510841}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050733.9517975}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050733.9529254}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050733.9537737}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050733.954557}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050733.9552145}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050733.955966}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050733.956559}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050733.9581208}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050735.959136}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050735.9598837}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050735.9608955}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050735.961666}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050735.9628065}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050735.9637403}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050735.9648197}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050735.9657764}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050735.967983}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050737.8837032}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050737.8844082}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050737.8851972}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050737.8859544}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050737.8867426}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050737.8873267}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050737.8879943}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050737.8886206}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050737.8903496}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050739.872475}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050739.8732626}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050739.8740075}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050739.8746862}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050739.8754375}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050739.8761852}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050739.876855}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050739.8781083}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050739.8808327}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050741.9971123}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050741.9984334}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050741.9998639}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050742.0010514}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050742.00218}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050742.0033891}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050742.004624}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050742.0057833}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050742.0084605}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050743.7997968}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050743.800593}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050743.8015811}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050743.8023632}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050743.8031964}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050743.8041646}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050743.8051178}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050743.8058887}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050743.8074284}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050745.9170392}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050745.917933}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050745.918861}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050745.9196818}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050745.9206264}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050745.9213605}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050745.9238327}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050745.9246967}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050745.9272287}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050747.8987691}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050747.899655}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050747.9005017}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050747.9013715}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050747.9023}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050747.9030073}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050747.904673}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050747.9055743}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050747.9077206}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050749.789504}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050749.7902453}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050749.7909617}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050749.791621}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050749.7924805}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050749.7931128}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050749.7939837}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050749.7948635}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 6, "hit_info": 514, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050749.7969124}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050751.7316892}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050751.73247}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050751.7333367}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050751.7340043}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050751.7347925}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050751.7358708}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050751.7367222}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050751.7373674}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050751.7389646}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050753.9126525}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050753.914217}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050753.9154558}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050753.9169393}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050753.9179456}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050753.9187908}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050753.9198925}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050753.9207582}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050753.9242148}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050755.837852}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050755.838586}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050755.8393903}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050755.8400657}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050755.8408303}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050755.841543}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050755.8423183}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050755.8430026}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050755.844757}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050757.7953396}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050757.7994409}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050757.801217}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050757.8020463}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050757.8031893}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050757.8039672}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050757.805045}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050757.8058321}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050757.8077123}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050759.8227582}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050759.8237283}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050759.8245642}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050759.8253367}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050759.8261647}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050759.8270633}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050759.8281856}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050759.8292043}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050759.8317482}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050761.859357}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050761.8604872}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050761.861959}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050761.862872}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050761.8638968}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050761.8647733}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050761.865746}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050761.8669536}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 1, "hit_info": 16, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050761.8697774}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050763.7665944}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050763.7677066}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050763.7687445}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050763.7695644}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050763.7705789}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050763.7714078}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050763.7723494}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050763.7732167}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050763.774945}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050765.7879307}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050765.789611}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050765.7908833}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050765.7920837}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050765.7933402}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050765.794409}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050765.7975934}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050765.7989404}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050765.8011699}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050767.8044434}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050767.8059182}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050767.8072689}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050767.8082812}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050767.809528}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050767.8105557}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050767.8123908}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050767.8139887}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050767.8168128}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050769.7711039}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050769.7720733}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050769.7730625}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050769.773883}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050769.774711}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050769.775507}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050769.7766564}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050769.7775366}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050769.779535}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050771.7744029}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050771.7752166}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050771.7760384}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050771.7769098}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050771.7778378}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050771.77879}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050771.779895}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050771.780728}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 1, "hit_info": 16, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050771.7826338}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050773.7945793}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050773.7963266}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050773.7987447}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050773.8003776}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050773.8054624}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050773.807219}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050773.808401}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050773.8094316}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 1, "hit_info": 16, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050773.8116455}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050775.823548}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050775.8250194}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050775.8261278}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050775.8295941}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050775.8316298}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050775.8332255}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050775.8367896}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050775.8377075}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050775.8396523}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050777.7924786}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050777.793393}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050777.7943525}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050777.7952569}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050777.7961667}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050777.7971678}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050777.798283}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050777.79937}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050777.8039513}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050779.803297}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050779.8043172}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050779.805326}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050779.8061724}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050779.807081}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050779.808075}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050779.809002}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050779.8100307}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 6, "hit_info": 514, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050779.8121347}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050781.8396316}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050781.840646}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050781.8420274}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050781.843011}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050781.8441422}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050781.8453114}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050781.8467088}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050781.8477366}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050781.8501322}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050784.317172}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050784.3183248}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050784.3193936}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050784.3212073}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050784.3237286}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050784.3248885}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050784.3259795}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050784.3269546}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050784.329}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050785.9739873}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050785.9750385}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050785.9760737}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050785.9770777}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050785.9781394}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050785.979132}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050785.9803607}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050785.9812086}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050785.9832609}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050789.0588937}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050789.0601668}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050789.0614538}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050789.0632634}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050789.0647101}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050789.0666091}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050789.0682132}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050789.0697992}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050789.0754995}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050790.6968808}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050790.6977818}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050790.6985352}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050790.699273}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050790.7001138}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050790.7011352}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050790.7020428}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050790.7028544}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050790.7045748}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050792.625157}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050792.6266341}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050792.6280046}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050792.6292803}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050792.6305332}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050792.6318915}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050792.6334403}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050792.634746}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 2, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050792.6374202}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050794.5463119}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050794.5471811}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050794.548122}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050794.5489397}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050794.5498505}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050794.5505717}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050794.5515437}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050794.552376}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050794.5540571}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050796.7689927}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050796.770302}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050796.771258}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050796.7721698}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050796.7767189}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050796.7779167}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050796.7794201}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050796.7806857}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050796.7839742}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050798.7827585}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050798.7853801}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050798.7871475}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050798.7882862}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050798.7894323}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050798.7905438}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050798.7915306}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050798.7926505}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050798.7969413}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050800.7460387}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050800.748448}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050800.7510028}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050800.7533314}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050800.7556493}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050800.7577422}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050800.7595475}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050800.7622302}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050800.7684112}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050802.838159}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050802.8413346}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050802.8425062}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050802.8478503}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050802.850608}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050802.8528469}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050802.8548198}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050802.8570862}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050802.860974}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050804.652836}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050804.6542995}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050804.656804}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050804.6579187}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050804.6607714}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050804.6629362}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050804.6663132}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050804.6672661}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 6, "hit_info": 514, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050804.6732686}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050806.787777}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050806.7900848}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050806.791253}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050806.794139}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050806.8006754}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050806.8045776}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050806.806106}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050806.8072884}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050806.8093433}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050808.8275626}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050808.828641}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050808.8296895}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050808.831264}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050808.834428}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050808.837689}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050808.840685}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050808.8424025}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050808.852464}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050810.826998}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050810.82928}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050810.8304145}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050810.8317518}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050810.832765}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050810.834053}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050810.8353894}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050810.836653}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050810.8387797}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050812.724931}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050812.7260687}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050812.7271826}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050812.7282493}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050812.7292142}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050812.7300658}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050812.7308917}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050812.7317834}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050812.7338214}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050814.7159863}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050814.7169416}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050814.717879}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050814.7189507}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050814.719888}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050814.7208712}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050814.7218623}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050814.7227128}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 6, "hit_info": 514, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050814.7245643}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050816.766481}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050816.7675178}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050816.7685432}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050816.769594}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050816.7706916}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050816.7716942}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050816.7727573}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050816.7737176}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 1, "hit_info": 16, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050816.7755237}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050818.7688763}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050818.7700028}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050818.7709105}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050818.7717848}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050818.7727392}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050818.77355}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050818.774593}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050818.7754283}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050818.7772534}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050820.7966335}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050820.7976441}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050820.7985682}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050820.7995555}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050820.8005712}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050820.8015115}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050820.8023732}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050820.8032892}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050820.8049672}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050822.8400965}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050822.8412216}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050822.8422782}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050822.843348}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050822.8443842}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050822.8453727}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050822.8463242}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050822.8472726}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 6, "hit_info": 514, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050822.8492496}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050824.8216445}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050824.8229322}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050824.8240259}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050824.825653}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050824.8269067}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050824.8282778}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050824.829814}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050824.8314874}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 6, "hit_info": 514, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050824.8351862}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050826.9894993}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050826.9908004}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050826.9918869}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050826.99286}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050826.9941304}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050826.9951844}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050826.9965444}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050826.9986181}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050827.004502}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050829.146449}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050829.1474385}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050829.1484327}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050829.1493812}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050829.1504147}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050829.1513436}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050829.1522515}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050829.153217}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050829.154937}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050831.0968337}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050831.0979846}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050831.0990636}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050831.1001685}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050831.101193}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050831.1022468}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050831.1031864}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050831.1042628}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 1, "hit_info": 16, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050831.1062129}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050833.169322}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050833.1705742}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050833.1717818}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050833.17321}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050833.1747973}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050833.1759984}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050833.1775284}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050833.1788225}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050833.18118}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050835.081382}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050835.083037}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050835.0851045}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050835.086127}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050835.0871627}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050835.088046}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050835.0890462}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050835.0900228}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050835.092494}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050837.084966}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050837.086013}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050837.0869813}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050837.087964}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050837.088997}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050837.090097}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050837.0911648}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050837.092269}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050837.0943165}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050839.0987587}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050839.0998013}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050839.1007915}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050839.1016996}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050839.1025836}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050839.10345}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050839.1043558}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050839.1053846}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050839.1075685}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050841.0989435}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050841.1003075}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050841.101317}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050841.1023266}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050841.1033795}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050841.1043408}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050841.1053588}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050841.106656}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050841.1094573}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050843.2124848}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050843.21582}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050843.2169988}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050843.219871}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050843.221181}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050843.222876}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050843.2257328}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050843.2287173}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050843.2342384}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050845.1536267}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050845.156564}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050845.157796}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050845.1592066}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050845.160381}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050845.1615717}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050845.1627545}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050845.164033}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050845.1666398}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050847.38072}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050847.382516}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050847.3839407}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050847.3859694}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050847.3878453}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050847.3906443}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050847.3918445}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050847.394864}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 6, "hit_info": 514, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050847.402994}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050849.4985602}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050849.5029418}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050849.5068147}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050849.509867}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050849.5111563}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050849.5122595}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050849.5134442}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050849.514557}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050849.516729}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050851.5032973}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050851.5047915}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050851.505934}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050851.5072682}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050851.5085373}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050851.5096302}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050851.510937}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050851.512359}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050851.5155923}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050853.6814537}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050853.6848197}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050853.6906037}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050853.694056}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050853.6973836}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050853.69914}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050853.7008493}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050853.7047887}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050853.7079413}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050855.5712986}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050855.5726676}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050855.5741105}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050855.575353}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050855.5774174}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050855.5794458}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050855.5828018}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050855.5845141}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050855.5872967}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050857.6361217}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050857.63731}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050857.6383963}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050857.6395705}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050857.640822}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050857.6419733}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050857.6430678}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050857.6440663}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050857.6459684}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050859.5397604}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050859.5411663}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050859.5424433}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050859.5435393}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050859.5447307}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050859.545751}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050859.5475872}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050859.5492089}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050859.5886314}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050861.5593126}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050861.5609508}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050861.5622764}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050861.563858}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050861.5652423}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050861.5666716}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050861.5681734}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050861.5698504}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050861.5726569}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050863.5539308}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050863.555088}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050863.5561216}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050863.5574446}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050863.5585377}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050863.5595453}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050863.560542}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050863.5615652}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050863.5634928}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050865.5658336}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050865.5674007}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050865.5691268}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050865.5705042}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050865.571914}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050865.573292}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050865.574705}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050865.5760174}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050865.5784554}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050867.5575802}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050867.5587914}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050867.5599432}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050867.5610998}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050867.5621614}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050867.563273}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050867.564374}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050867.5656435}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050867.5684235}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050869.5937035}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050869.5988812}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050869.6003866}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050869.6023345}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050869.604159}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050869.6060925}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050869.6087253}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050869.6103535}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050869.6132045}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050871.5602915}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050871.5618093}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050871.5629842}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050871.5640855}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050871.5650487}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050871.5663307}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050871.56742}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050871.5686102}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050871.5706081}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050873.5887105}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050873.5928164}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050873.5940533}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050873.595907}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050873.5974836}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050873.5988197}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050873.6001072}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050873.6014638}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050873.6038098}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050875.6496725}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050875.6511173}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050875.6522925}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050875.6537673}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050875.6550932}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050875.6566916}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050875.6580272}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050875.6595464}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050875.6624408}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050877.646098}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050877.6531637}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050877.6546118}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050877.6567178}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050877.6631894}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050877.6726646}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050877.6741624}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050877.6819997}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050877.687396}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050879.6810474}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050879.6824622}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050879.6844032}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050879.6877823}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050879.6903186}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050879.6951013}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050879.6969583}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050879.6982405}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050879.7005515}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050882.0068629}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050882.010819}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050882.0123968}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050882.0141428}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050882.017524}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050882.0192575}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050882.0206637}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050882.0245185}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 2, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050882.0355308}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050883.8696127}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050883.873751}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050883.8750691}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050883.877398}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050883.878885}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050883.8815835}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050883.883571}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050883.887243}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050883.8932533}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050885.856093}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050885.857502}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050885.858995}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050885.8778417}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050885.8826923}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050885.8841782}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050885.8872566}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050885.8917704}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 2, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050885.8951318}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050887.8564515}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050887.8593628}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050887.8608842}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050887.8630507}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050887.8642511}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050887.86588}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050887.867443}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050887.869258}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050887.873527}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050891.04423}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050891.050514}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050891.052408}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050891.0601513}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050891.062073}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050891.0690072}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050891.0749135}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050891.0791194}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050891.0870035}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050892.7420979}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050892.7460506}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050892.751983}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050892.7560647}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050892.7588563}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050892.7612007}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050892.7625332}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050892.7639737}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050892.7693496}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050894.798372}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050894.8003013}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050894.8017352}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050894.8052943}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050894.8088458}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050894.814553}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050894.8248281}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050894.8274424}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050894.830397}
+{"event": "damage_stage_enter", "stage": "calculate", "attack_type": 0, "normalized": 0, "add_total_pct": 1, "item_mask": 0, "time": 1792050896.7549162}
+{"event": "damage_stage_return", "stage": "calculate", "value": 1, "time": 1792050896.756625}
+{"event": "damage_stage_enter", "stage": "bonus_done", "damage": 1, "time": 1792050896.758091}
+{"event": "damage_stage_return", "stage": "bonus_done", "value": 1, "time": 1792050896.7615168}
+{"event": "damage_stage_enter", "stage": "bonus_taken", "damage": 1, "time": 1792050896.763709}
+{"event": "damage_stage_return", "stage": "bonus_taken", "value": 0, "time": 1792050896.7663326}
+{"event": "damage_stage_enter", "stage": "armor", "damage": 0, "time": 1792050896.7680793}
+{"event": "damage_stage_return", "stage": "armor", "value": 0, "time": 1792050896.7700646}
+{"event": "incoming_swing", "damage": 0, "absorb": 0, "clean_damage": 0, "outcome": 8, "hit_info": 2, "min_damage": 1.5499142408370972, "max_damage": 1.6820142269134521, "attack_power": 9, "attack_time": 2000.0, "player": {"health": 60, "max_health": 60, "flags": 524296, "death_state": 0, "player_flags": 0, "animation_tier": 0, "power_fields": [205, 0, 0, 0, 0], "max_power_fields": [1000, 0, 0, 0, 0]}, "time": 1792050896.7784128}

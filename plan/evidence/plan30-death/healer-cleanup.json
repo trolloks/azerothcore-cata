@@ -1,0 +1,10 @@
+{
+  "generation": 2,
+  "state": "reset",
+  "container_removed": true,
+  "volume_removed": true,
+  "active_owned_processes": 0,
+  "owned_wine_processes": 0,
+  "protected_inputs_unchanged": true,
+  "recorded_ports_unused": true
+}

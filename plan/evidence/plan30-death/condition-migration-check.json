@@ -1,0 +1,8 @@
+{
+  "before": "17\t12\t19\n17\t22\t37\n17\t25\t1\n17\t27\t7\n17\t39\t1\n17\t60\t2\n17\t97\t4\n17\t103\t1\n17\t111\t1\n17\t172\t10\n17\t173\t16",
+  "after": "17\t13\t19\n17\t23\t37\n17\t26\t1\n17\t28\t7\n17\t41\t1\n17\t62\t2\n17\t99\t4\n17\t105\t1\n17\t113\t1\n17\t175\t10\n17\t176\t16",
+  "source": "f57e62bfce73bbc8fd02ee0bd0d4aa225982bc71",
+  "exact_expected_counts": true,
+  "rows_checked": 99,
+  "mapping_count": 180
+}

@@ -43,6 +43,7 @@
 #include "SpellAuraEffects.h"
 #include "SpellInfo.h"
 #include "SpellMgr.h"
+#include "SpellPackets.h"
 #include "SpellScript.h"
 #include "TemporarySummon.h"
 #include "Unit.h"
@@ -5401,18 +5402,13 @@ void Spell::SendResurrectRequest(Player* target)
                                ? ""
                                : unitCaster->GetNameForLocaleIdx(target->GetSession()->GetSessionDbLocaleIndex()));
 
-    WorldPacket data(SMSG_RESURRECT_REQUEST, (8 + 4 + sentName.size() + 1 + 1 + 1 + 4));
-    data << unitCaster->GetGUID();
-    data << uint32(sentName.size() + 1);
-
-    data << sentName;
-    data << uint8(0); // null terminator
-
-    data << uint8(unitCaster->IsPlayer() ? 0 : 1); // "you'll be afflicted with resurrection sickness"
-    // override delay sent with SMSG_CORPSE_RECLAIM_DELAY, set instant resurrection for spells with this attribute
-    if (m_spellInfo->HasAttribute(SPELL_ATTR3_NO_RES_TIMER))
-        data << uint32(0);
-    target->SendDirectMessage(&data);
+    WorldPackets::Spells::ResurrectRequest request;
+    request.ResurrectOffererGUID = unitCaster->GetGUID();
+    request.Name = sentName;
+    request.Sickness = unitCaster->IsSpiritHealer();
+    request.UseTimer = !m_spellInfo->HasAttribute(SPELL_ATTR3_NO_RES_TIMER);
+    request.SpellID = m_spellInfo->Id;
+    target->SendDirectMessage(request.Write());
 }
 
 void Spell::TakeCastItem()

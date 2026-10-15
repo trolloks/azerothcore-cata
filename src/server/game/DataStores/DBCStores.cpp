@@ -54,6 +54,7 @@ DBCStorage <CharSectionsEntry> sCharSectionsStore(CharSectionsEntryfmt);
 DBCStorage <CharTitlesEntry> sCharTitlesStore(CharTitlesEntryfmt);
 DBCStorage <ChatChannelsEntry> sChatChannelsStore(ChatChannelsEntryfmt);
 DBCStorage <ChrClassesEntry> sChrClassesStore(ChrClassesEntryfmt);
+DBCStorage <ChrPowerTypesEntry> sChrPowerTypesStore(ChrClassesXPowerTypesfmt);
 DBCStorage <ChrRacesEntry> sChrRacesStore(ChrRacesEntryfmt);
 DBCStorage <CinematicCameraEntry> sCinematicCameraStore(CinematicCameraEntryfmt);
 DBCStorage <CinematicSequencesEntry> sCinematicSequencesStore(CinematicSequencesEntryfmt);
@@ -308,6 +309,7 @@ void LoadDBCStores(std::string const& dataPath)
     LOAD_DBC(sCharTitlesStore,                      "CharTitles.dbc",                       "chartitles_dbc");
     LOAD_DBC(sChatChannelsStore,                    "ChatChannels.dbc",                     "chatchannels_dbc");
     LOAD_DBC(sChrClassesStore,                      "ChrClasses.dbc",                       "chrclasses_dbc");
+    LOAD_DBC(sChrPowerTypesStore,                   "ChrClassesXPowerTypes.dbc",            nullptr);
     LOAD_DBC(sChrRacesStore,                        "ChrRaces.dbc",                         "chrraces_dbc");
     LOAD_DBC(sCinematicCameraStore,                 "CinematicCamera.dbc",                  "cinematiccamera_dbc");
     LOAD_DBC(sCinematicSequencesStore,              "CinematicSequences.dbc",               "cinematicsequences_dbc");
@@ -1041,6 +1043,23 @@ uint32 GetLiquidFlags(uint32 liquidType)
         return 1 << liq->Type;
 
     return 0;
+}
+
+uint32 GetPowerIndexByClass(uint32 power, uint32 classId)
+{
+    uint32 index = 0;
+    for (ChrPowerTypesEntry const* entry : sChrPowerTypesStore)
+    {
+        if (entry->ClassID != classId)
+            continue;
+
+        if (entry->PowerType == power)
+            return index;
+
+        ++index;
+    }
+
+    return MAX_POWERS;
 }
 
 CharStartOutfitEntry const* GetCharStartOutfitEntry(uint8 race, uint8 class_, uint8 gender)

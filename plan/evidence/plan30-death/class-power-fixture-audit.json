@@ -1,0 +1,6 @@
+{
+  "native_dbc_sha256": "9379aace585f12ebbccdefb6ebc476ec4def529f05412b0f9c6758978a15db45",
+  "fixture": "src/test/mocks/TestMap.cpp",
+  "rows": 25,
+  "exact_order_match": true
+}

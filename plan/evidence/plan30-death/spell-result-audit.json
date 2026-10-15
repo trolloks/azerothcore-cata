@@ -1,0 +1,38 @@
+{
+  "reference_commit": "c699217775d90794158422387b07a917e161b582",
+  "original_commit": "5713480e77ef151f92624cd1a128bca2e10c3003",
+  "original_author": "Shauren <shauren.trinity@gmail.com>",
+  "reference_path": "src/server/shared/SharedDefines.h",
+  "local_values_match_reference": true,
+  "matched_values": 205,
+  "previous_values": 189,
+  "changed_existing_values": 180,
+  "new_names": [
+    "SPELL_FAILED_ALREADY_HAVE_PET",
+    "SPELL_FAILED_BY_NOT_MOVING",
+    "SPELL_FAILED_CURRENCY_WEIGHT_MISMATCH",
+    "SPELL_FAILED_EXCEEDED_WEEKLY_USAGE",
+    "SPELL_FAILED_FALLING",
+    "SPELL_FAILED_IN_COMBAT_RES_LIMIT_REACHED",
+    "SPELL_FAILED_NOT_IN_LFG_DUNGEON",
+    "SPELL_FAILED_NOT_IN_RATED_BATTLEGROUND",
+    "SPELL_FAILED_NO_ACTIONS",
+    "SPELL_FAILED_NO_LIQUID",
+    "SPELL_FAILED_NO_VACANT_SEAT",
+    "SPELL_FAILED_ONLY_NOT_SWIMMING",
+    "SPELL_FAILED_TARGET_NOT_GROUNDED",
+    "SPELL_FAILED_VISION_OBSCURED",
+    "SPELL_FAILED_WEIGHT_NOT_ENOUGH",
+    "SPELL_FAILED_WEIGHT_TOO_MUCH"
+  ],
+  "values_sha256": "6ed5ae0cd21e6ea462eb18d874a614bed2f75da54507813b15a0951d37c3bfbd",
+  "ghost_wire_codes": {
+    "SPELL_FAILED_CASTER_DEAD": 24,
+    "SPELL_FAILED_CONFUSED": 27,
+    "SPELL_FAILED_DONT_REPORT": 28
+  },
+  "callers": "Spell::WriteCastResultInfo, pet failure, spell failure notifications, script result switches and raw condition ErrorType consumers audited; all existing symbols retained. Generated EnumUtils metadata refreshed using apps/EnumUtils/enumutils_describe.py.",
+  "condition_migration": "data/sql/updates/pending_db_world/rev_1792063514915171427.sql",
+  "condition_mappings": 180,
+  "graphify": "Queried the existing 10,105-node graph, BFS depth 2, budget 1200. SpellCastResult resolves to a declaration in Object.h; the graph does not cover the result table or raw condition conversion. Current implementations and the pinned source were checked directly."
+}

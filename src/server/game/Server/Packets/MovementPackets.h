@@ -12,6 +12,7 @@
 #include "Packet.h"
 
 struct MovementInfo;
+struct Position;
 
 namespace WorldPackets
 {
@@ -65,6 +66,7 @@ namespace WorldPackets
             MSEFallHorizontalSpeed,
             MSESplineElevation,
             MSETimestamp,
+            MSECounter,
             MSEEnd,
         };
 
@@ -73,8 +75,16 @@ namespace WorldPackets
         void ReadHeartbeat(WorldPacket& packet, MovementInfo& info);
         void WriteMovementUpdate(WorldPacket& packet, MovementInfo const& info);
         MovementStatusElements const* GetGroundMovementSequence(uint16 opcode);
-        void ReadGroundMovement(WorldPacket& packet, MovementInfo& info, MovementStatusElements const* sequence);
-        void WriteGroundMovement(WorldPacket& packet, MovementInfo const& info, MovementStatusElements const* sequence);
+        void ReadGroundMovement(WorldPacket& packet, MovementInfo& info, MovementStatusElements const* sequence,
+            uint32* counter = nullptr);
+        void WriteGroundMovement(WorldPacket& packet, MovementInfo const& info, MovementStatusElements const* sequence,
+            uint32 counter = 0);
+        MovementStatusElements const* GetMovementFlagSequence(uint16 opcode);
+        void WriteTeleport(WorldPacket& packet, ObjectGuid guid, uint32 counter, Position const& pos,
+            ObjectGuid transport = ObjectGuid::Empty);
+        void ReadTeleportAck(WorldPacket& packet, ObjectGuid& guid, uint32& counter, uint32& time);
+        void WriteTeleportUpdate(WorldPacket& packet, MovementInfo const& info);
+
         void WriteRunSpeedChange(WorldPacket& packet, ObjectGuid const& guid, uint32 counter, float speed);
         void ReadRunSpeedChangeAck(WorldPacket& packet, MovementInfo& info, uint32& counter, float& speed);
         void WriteRunSpeedUpdate(WorldPacket& packet, MovementInfo const& info, float speed);

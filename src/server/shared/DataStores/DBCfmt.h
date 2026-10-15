@@ -33,6 +33,7 @@ char constexpr CharSectionsEntryfmt[] = "diiixxxiii";
 char constexpr CharTitlesEntryfmt[] = "nxSSix";
 char constexpr ChatChannelsEntryfmt[] = "nixSx"; // ChatChannelsEntryfmt, index not used (more compact store)
 char constexpr ChrClassesEntryfmt[] = "nixSxxxixiixxx";
+char constexpr ChrClassesXPowerTypesfmt[] = "nii";
 char constexpr ChrRacesEntryfmt[] = "niixiixixxxxiiSxxxxxixxx";
 char constexpr CinematicCameraEntryfmt[] = "nsiffff";
 char constexpr CinematicSequencesEntryfmt[] = "nxixxxxxxx";

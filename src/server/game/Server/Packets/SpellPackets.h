@@ -10,11 +10,26 @@
 
 #include "Packet.h"
 #include <array>
+#include <string>
 
 namespace WorldPackets
 {
     namespace Spells
     {
+        class ResurrectRequest final : public ServerPacket
+        {
+        public:
+            ResurrectRequest() : ServerPacket(SMSG_RESURRECT_REQUEST, 19) { }
+
+            WorldPacket const* Write() override;
+
+            ObjectGuid ResurrectOffererGUID;
+            std::string Name;
+            bool Sickness = false;
+            bool UseTimer = true;
+            uint32 SpellID = 0;
+        };
+
         struct SpellHistoryEntry
         {
             uint32 SpellID = 0;

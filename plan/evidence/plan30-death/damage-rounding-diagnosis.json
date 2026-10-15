@@ -1,0 +1,27 @@
+{
+  "symptom": "Normal wolf hits caused zero damage to a fresh warrior in Battle Stance.",
+  "before_stages": {
+    "calculate": 1,
+    "bonus_done": 1,
+    "bonus_taken": 0,
+    "armor": 0
+  },
+  "after_stages": {
+    "calculate": 1,
+    "bonus_done": 1,
+    "bonus_taken": 1,
+    "armor": 1
+  },
+  "native_stance": {
+    "spell": 2457,
+    "passive": 21156,
+    "damage_taken_percent": -5
+  },
+  "cause": "MeleeDamageBonusTaken truncated 0.95 to zero instead of rounding up.",
+  "reference_commit": "6cb2bd953dbf1fc63ef2e15d198ee7c32779fd0b",
+  "reference_author": "Ovahlord <dreadkiller@gmx.de>",
+  "production_commit": "fc3617e83",
+  "verified_source_commit": "778ec869ae4533c77d19b42de8b9a28885a78449",
+  "before_trace_sha256": "2ec0f65f27ccbad65ef28b5dc4c5c54cccecbbc93424aa122212c45862be29a3",
+  "synthetic_health_or_damage_override": false
+}
