@@ -59,6 +59,14 @@
 #endif
 extern ArchiveSet gOpenArchives;
 
+// The extractor tools never start the server logger (LOG_* needs sLog->Initialize()), so this
+// diagnostic goes to stdout through the project string helper instead of printf specifiers.
+static void PrintMessage(std::string const& message)
+{
+    fputs(message.c_str(), stdout);
+    fputc('\n', stdout);
+}
+
 // cppcheck-suppress ctuOneDefinitionRuleViolation
 typedef struct
 {
@@ -417,9 +425,10 @@ bool ConvertADT(std::string const& inputPath, std::string const& outputPath, int
     if (!adt.loadFile(inputPath))
         return false;
 
-    if (!adt.cellsFound)
+    if (adt.cellsFound != ADT_CELLS_PER_GRID * ADT_CELLS_PER_GRID)
     {
-        printf("No MCNK cells found in '%s'\n", inputPath.c_str());
+        PrintMessage(Acore::StringFormat("Incomplete cell set in '{}' ({} of {} cells)", inputPath,
+            adt.cellsFound, ADT_CELLS_PER_GRID * ADT_CELLS_PER_GRID));
         return false;
     }
 
