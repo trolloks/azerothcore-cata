@@ -109,13 +109,13 @@ WorldPacket const* WorldPackets::Misc::Weather::Write()
 
 WorldPacket const* WorldPackets::Misc::LevelUpInfo::Write()
 {
-    _worldPacket << uint32(Level);
-    _worldPacket << uint32(HealthDelta);
+    _worldPacket << int32(Level);
+    _worldPacket << int32(HealthDelta);
 
-    for (uint32 power : PowerDelta)
+    for (int32 power : PowerDelta)
         _worldPacket << power;
 
-    for (uint32 stat : StatDelta)
+    for (int32 stat : StatDelta)
         _worldPacket << stat;
 
     return &_worldPacket;

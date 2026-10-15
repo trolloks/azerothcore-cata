@@ -29,3 +29,4 @@ plan	issue	state	title	url
 28	99	closed	Plan 28: single-player loot delivery	https://github.com/trolloks/azerothcore-cata/issues/99
 29	100	closed	Plan 29: basic melee combat and creature death	https://github.com/trolloks/azerothcore-cata/issues/100
 30	101	open	Plan 30: player death, release, corpse recovery, and resurrection	https://github.com/trolloks/azerothcore-cata/issues/101
+31	102	open	Plan 31: first normal level-up and persisted progression	https://github.com/trolloks/azerothcore-cata/issues/102

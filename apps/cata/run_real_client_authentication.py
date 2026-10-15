@@ -211,11 +211,43 @@ CHAT_MESSAGE_MODE = "chat-message"
 # real client submits an ordinary CMSG_MESSAGECHAT_SAY - the packet that disconnected the real
 # client outright before issue #89's opcode split fix (server saw it as an unknown opcode).
 CHAT_MESSAGE_TEXT = "chatcheck"
+# Plan 31 / issue #102: level 1 -> 2 through a normal XP source. The fixture character is already
+# seeded at level 1 with a 400-XP threshold (player_xp_for_level row (1, 400)), so this mode only
+# has to make a real kill: a hostile creature is seeded beside the player, selected with Tab and
+# killed with the main-hand attack, which routes XP through KillRewarder -> Player::GiveXP.
+# No GM level command and no character-row edit (see .agents/docs/cataclysm-conversion-goal.md).
+LEVEL_UP_MODE = "level-up-progression"
+LEVEL_UP_XP_TARGET_GUID = 0x0A0B0C0D
+# Entry 2809 "Boar": faction 14 (hostile to all), no ScriptName/special AI, so it neither dies on
+# its own nor needs a lifespan limit. Same creature the targeted-spell-cast modes already seed.
+# Overridable because the fixture character is level 1 and the target's level comes from
+# creature_template, not the spawn row: if the chosen entry out-levels the character the kill will
+# not land, and picking a lower entry is a run parameter rather than a code change.
+LEVEL_UP_XP_TARGET_ENTRY = int(os.environ.get("LEVEL_UP_XP_TARGET_ENTRY", "2809"))
+# The seeded target's name as the client knows it, used for "/target <name>" selection.
+LEVEL_UP_TARGET_NAME = os.environ.get("LEVEL_UP_TARGET_NAME", "Boar")
+LEVEL_UP_XP_TARGET_OFFSET = (3, 3)
+# Spell 6603 is "Attack", the auto-attack melee classes start with - the same spell Plan 29's
+# passing melee acceptance pinned (native_dbc.Spell.dbc:6603). Button 0 is the one the main-hand
+# keypress reaches. (78 also sits on the warrior's starting bar but is not the auto-attack.)
+LEVEL_UP_ATTACK_SPELL = 6603
+LEVEL_UP_ATTACK_BUTTON = 0
+# (item instance guid, item entry, bag, slot, durability) - the real Human Warrior starting kit.
+# Equipment slots are bag 0: CHEST 4, LEGS 6, FEET 7, MAINHAND 15; the hearthstone goes in the
+# backpack. Without the weapon an unarmed level-1 warrior cannot kill even a level-1 creature.
+LEVEL_UP_GEAR = (
+    (99000001, 58231, 0, 4, 100),   # Recruit's Vest  -> CHEST
+    (99000002, 39, 0, 6, 100),      # Recruit's Pants -> LEGS
+    (99000003, 40, 0, 7, 100),      # Recruit's Boots -> FEET
+    (99000004, 49778, 0, 15, 100),  # Worn Greatsword -> MAINHAND (3-5 dmg)
+    (99000005, 6948, 0, 23, 0),     # Hearthstone     -> backpack
+)
+LEVEL_UP_MAINHAND_ENTRY = 49778  # Worn Greatsword
 POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
     IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
     WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-    INVALID_TARGET_SPELL_CAST_MODE,
+    INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
 })
 CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
@@ -238,6 +270,8 @@ ISSUE97_GO_ENTRY, ISSUE97_PHASE_ID = 2843, 125
 
 
 def plan_number(mode: str) -> str:
+    if mode == LEVEL_UP_MODE:
+        return "31"
     if mode == CHAT_MESSAGE_MODE:
         return "89"
     if mode in {BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, INVALID_TARGET_SPELL_CAST_MODE}:
@@ -671,6 +705,164 @@ def issue97_world_seed_sql() -> str:
         f"DELETE FROM `gameobject` WHERE `id` IN ({ISSUE97_GO_ENTRY},21008) "
         f"AND `guid`={ISSUE97_PHASED_GO_GUID};" + creature + gameobject
     )
+
+
+def level_up_action_seed_sql() -> str:
+    """Gives the fixture character the auto-attack binding so the main-hand keypress attacks.
+
+    populated_character_seed_sql inserts the `characters` row directly, so it grants no spells and
+    no action bar - fine for the movement/cast modes (they bind what they need explicitly) but fatal
+    here: with no bound Attack button the main-hand keypress sends no CMSG_ATTACK and the kill can
+    never happen.
+
+    Spell 78 is "Attack" (playercreateinfo_action row 1,1,73,78 for Human Warrior). It goes on
+    button 0 rather than the starting button 73 because 73 sits on a later action-bar page that a
+    single keypress cannot reach. Action type 0 is ACTION_BUTTON_TYPE_SPELL.
+    """
+    return (
+        f"DELETE FROM `character_action` WHERE `guid`={CHARACTER_GUID} AND `spec`=0;"
+        f"DELETE FROM `character_spell` WHERE `guid`={CHARACTER_GUID} AND `spell`={LEVEL_UP_ATTACK_SPELL};"
+        f"INSERT INTO `character_spell` (`guid`,`spell`,`specMask`) "
+        f"VALUES ({CHARACTER_GUID},{LEVEL_UP_ATTACK_SPELL},1);"
+        f"INSERT INTO `character_action` (`guid`,`spec`,`button`,`action`,`type`) "
+        f"VALUES ({CHARACTER_GUID},0,{LEVEL_UP_ATTACK_BUTTON},{LEVEL_UP_ATTACK_SPELL},0);"
+    )
+
+
+def level_up_tutorial_seed_sql() -> str:
+    """Marks every tutorial as seen for the fixture account so no modal popup appears.
+
+    The first run that reached the world was blocked by the modal "To fight your enemies, click on
+    Attack" tutorial: it swallows keyboard input before it reaches the chat edit box, so the
+    /target typing produced no CMSG_MESSAGECHAT and the attacks never happened. Tutorial state is
+    account-keyed (WorldSession::m_Tutorials <-> account_tutorial), and SendTutorialsData ships the
+    flags verbatim, so all 0xFFFFFFFF means "already seen".
+    """
+    values = ", ".join(["4294967295"] * 8)
+    return (
+        f"DELETE FROM `account_tutorial` WHERE `accountId`={ACCOUNT_ID};"
+        f"INSERT INTO `account_tutorial` "
+        "(`tut0`,`tut1`,`tut2`,`tut3`,`tut4`,`tut5`,`tut6`,`tut7`,`accountId`) "
+        f"VALUES ({values},{ACCOUNT_ID});"
+    )
+
+
+def level_up_gear_seed_sql() -> str:
+    """Equips the fixture with the real Human Warrior starting kit.
+
+    populated_character_seed_sql inserts only the `characters` row, so the fixture is naked and
+    unarmed - unlike a genuinely created level-1 warrior. Against even a level-1 creature an unarmed
+    warrior cannot out-damage it, so the kill (and therefore any XP) never lands. These are the
+    starting items the Plan 22 fixture also asserts (Recruit's Vest/Pants/Boots, Worn Greatsword,
+    Hearthstone), placed in their real equipment slots.
+    """
+    rows = ", ".join(f"({guid},{entry},{CHARACTER_GUID},1,{durability},'0 0 0 0 0 ','{'0 ' * 36}')"
+                     for guid, entry, _bag, _slot, durability in LEVEL_UP_GEAR)
+    slots = ", ".join(f"({CHARACTER_GUID},{bag},{slot},{guid})"
+                      for guid, _entry, bag, slot, _durability in LEVEL_UP_GEAR)
+    return (
+        f"DELETE FROM `character_inventory` WHERE `guid`={CHARACTER_GUID};"
+        f"DELETE FROM `item_instance` WHERE `owner_guid`={CHARACTER_GUID};"
+        "INSERT INTO `item_instance` "
+        "(`guid`,`itemEntry`,`owner_guid`,`count`,`durability`,`charges`,`enchantments`) "
+        f"VALUES {rows};"
+        "INSERT INTO `character_inventory` (`guid`,`bag`,`slot`,`item`) "
+        f"VALUES {slots};"
+    )
+
+
+def level_up_client_alive() -> bool:
+    """True while the owned WoW client process exists.
+
+    The run loop's own liveness check keys off Wine processes, and wineserver outlives the client,
+    so waiting on that alone keeps the script sleeping long after the game has closed.
+    """
+    result = subprocess.run(
+        ["pgrep", "-f", "Wow-64.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    return result.returncode == 0
+
+
+def level_up_world_seed_sql() -> str:
+    """Spawns the hostile creatures Plan 31 kills for XP.
+
+    One level-1 creature is worth far less than the 400 XP the level 1 -> 2 threshold needs (a real
+    run granted 100 XP), so several are seeded and killed in turn. Faction 14 is hostile to the
+    player, so the client-local name selection finds each one.
+    """
+    x, y, z = CHARACTER_POSITION
+    rows = []
+    for index in range(LEVEL_UP_XP_TARGET_COUNT):
+        offset_x = LEVEL_UP_XP_TARGET_OFFSET[0] + (index % 3) * 2
+        offset_y = LEVEL_UP_XP_TARGET_OFFSET[1] + (index // 3) * 2
+        rows.append(
+            f"({LEVEL_UP_XP_TARGET_GUID + index},{LEVEL_UP_XP_TARGET_ENTRY},"
+            f"{CHARACTER_MAP},{CHARACTER_ZONE},{CHARACTER_ZONE},{x + offset_x},{y + offset_y},{z},0,0)"
+        )
+    guids = ", ".join(str(LEVEL_UP_XP_TARGET_GUID + index) for index in range(LEVEL_UP_XP_TARGET_COUNT))
+    return (
+        f"DELETE FROM `creature` WHERE `guid` IN ({guids});"
+        "INSERT INTO `creature` "
+        "(`guid`,`id`,`map`,`zoneId`,`areaId`,`position_x`,`position_y`,`position_z`,"
+        "`wander_distance`,`MovementType`) "
+        f"VALUES {', '.join(rows)};"
+    )
+
+
+def verify_level_up_seed(manifest: Manifest, generation: Generation) -> dict[str, object]:
+    """Precondition check run before the client session.
+
+    Three separate inconclusive runs were each a missing scene precondition, not a server problem:
+    no attack binding, the wrong (friendly, nearer) target from Tab, and a modal tutorial swallowing
+    input. Each was cheap to detect in the database and expensive to detect in a live session, so
+    assert them here instead of discovering them from a run with zero packets.
+    """
+    characters = generation["schemas"]["characters"]
+    world = generation["schemas"]["world"]
+    character = mysql(
+        manifest, generation,
+        f"SELECT `level`,`race`,`class` FROM `characters` WHERE `guid`={CHARACTER_GUID};", characters,
+    )
+    if character != "1\t1\t1":
+        raise RuntimeError(f"level-up fixture is not a level-1 Human Warrior: {character!r}")
+    action = mysql(
+        manifest, generation,
+        f"SELECT `button`,`action`,`type` FROM `character_action` WHERE `guid`={CHARACTER_GUID} "
+        "AND `spec`=0;",
+        characters,
+    )
+    if action != f"{LEVEL_UP_ATTACK_BUTTON}\t{LEVEL_UP_ATTACK_SPELL}\t0":
+        raise RuntimeError(f"auto-attack is not bound to button {LEVEL_UP_ATTACK_BUTTON}: {action!r}")
+    weapon = mysql(
+        manifest, generation,
+        "SELECT ii.`itemEntry` FROM `character_inventory` ci "
+        "JOIN `item_instance` ii ON ii.`guid`=ci.`item` "
+        f"WHERE ci.`guid`={CHARACTER_GUID} AND ci.`bag`=0 AND ci.`slot`=15;",
+        characters,
+    )
+    if weapon != str(LEVEL_UP_MAINHAND_ENTRY):
+        raise RuntimeError(f"no weapon equipped in the main hand: {weapon!r}")
+    tutorials = mysql(
+        manifest, generation,
+        f"SELECT `tut0`,`tut1`,`tut2`,`tut3`,`tut4`,`tut5`,`tut6`,`tut7` FROM `account_tutorial` "
+        f"WHERE `accountId`={ACCOUNT_ID};",
+        characters,
+    )
+    if tutorials.split("\t") != ["4294967295"] * 8:
+        raise RuntimeError(f"tutorial flags were not cleared, a modal may swallow input: {tutorials!r}")
+    target = mysql(
+        manifest, generation,
+        f"SELECT COUNT(*) FROM `creature` WHERE `guid` BETWEEN {LEVEL_UP_XP_TARGET_GUID} "
+        f"AND {LEVEL_UP_XP_TARGET_GUID + LEVEL_UP_XP_TARGET_COUNT - 1};", world,
+    )
+    if target != str(LEVEL_UP_XP_TARGET_COUNT):
+        raise RuntimeError(f"expected {LEVEL_UP_XP_TARGET_COUNT} XP targets, seeded {target!r}")
+    return {
+        "character": {"level": 1, "race": 1, "class": 1},
+        "attack_binding": {"button": LEVEL_UP_ATTACK_BUTTON, "spell": LEVEL_UP_ATTACK_SPELL},
+        "tutorial_flags_cleared": True,
+        "xp_target": {"guid": LEVEL_UP_XP_TARGET_GUID, "entry": LEVEL_UP_XP_TARGET_ENTRY},
+    }
 
 
 def populated_character_seed_sql() -> str:
@@ -2067,6 +2259,58 @@ def automate_target_targeted_spell_cast(generation: Generation) -> None:
     time.sleep(TARGET_TARGETED_SPELL_CAST_COMPLETE_DELAY_SECONDS)  # let the second cast complete
 
 
+LEVEL_UP_ATTACK_KEYS = ("1",)  # main-hand attack (spell 78 "Attack") on action bar button 0
+# Auto-attack only has to be STARTED: once it begins, the server swings on the weapon timer until
+# the target dies or the player stops. Hammering the key 40 times added 40 focus-dependent input
+# events for no benefit (one run landed 16 damage events, the next none at all). Start it, then
+# confirm from the server log that the attack actually began and retry if it did not, rather than
+# guessing with a fixed sleep.
+LEVEL_UP_FIGHT_SECONDS = 45.0
+# One level-1 creature grants ~100 XP against a 400 XP threshold, so several kills are needed.
+LEVEL_UP_XP_TARGET_COUNT = 6
+LEVEL_UP_MAX_KILLS = LEVEL_UP_XP_TARGET_COUNT
+# Tab alone is not enough: it selects the nearest unit, and in the fixture's cell that is the
+# friendly Deputy Willem (faction 12, ~2.3yd) rather than the seeded Boar (faction 14, ~4.2yd).
+# Attacking a friendly target sends no CMSG_ATTACK, so the first run produced no attacks at all.
+# The client-local "/target <name>" macro resolves against the client's own object cache (the same
+# mechanism INVALID_TARGET_SPELL_CAST_MODE already uses), needs no GM rights, and still sends a
+# genuine CMSG_SET_SELECTION.
+LEVEL_UP_TARGET_KEYS = (
+    "Return", "slash", *tuple("target"), "space", *tuple(LEVEL_UP_TARGET_NAME.lower()), "Return",
+)
+
+
+def automate_level_up(generation: Generation) -> None:
+    """Kills the seeded hostiles one after another until the XP award crosses the level threshold.
+
+    XP comes from the real KillRewarder -> Player::GiveXP path. One level-1 creature grants far less
+    than the 400 XP required (a measured run granted 100), so each round selects the next creature,
+    starts auto-attack once, and waits for that kill to grant XP before moving on.
+    """
+    capture_desktop_screenshot(generation, "desktop-before-level-up.png")
+    for _round in range(LEVEL_UP_MAX_KILLS):
+        if level_up_marker_count(generation) > 0:
+            break
+        if not level_up_client_alive():
+            break
+        automate_key_sequence(generation, LEVEL_UP_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+        time.sleep(1.0)  # let the client resolve the name and register the target
+        xp_before = level_up_xp_gain_count(generation)
+        # Press the attack button ONCE. It is a toggle: a second press stops the attack, which is
+        # what produced the earlier "ATTACKSTART then ATTACKSTOP exactly one retry-interval later"
+        # pattern. Let the swing timer do the work and watch for the kill instead of re-pressing.
+        automate_key_sequence(generation, LEVEL_UP_ATTACK_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+        deadline = time.monotonic() + LEVEL_UP_FIGHT_SECONDS
+        while time.monotonic() < deadline:
+            if level_up_xp_gain_count(generation) > xp_before:
+                break  # this creature died and granted XP
+            if level_up_marker_count(generation) > 0 or not level_up_client_alive():
+                break
+            time.sleep(2.0)
+    capture_desktop_screenshot(generation, "desktop-after-level-up-attacks.png")
+    generation["level_up_automation_done"] = True
+
+
 # "/target <name>" (lowercase; the client's name lookup is case-insensitive) self-targets via the
 # chat edit box, then action bar button 1 casts the enemy-only Fireball at that (friendly) target.
 INVALID_TARGET_SPELL_CAST_KEYS = (
@@ -2238,6 +2482,12 @@ def run_client(args: argparse.Namespace) -> None:
         mysql(manifest, generation, target_targeted_spell_cast_world_seed_sql(), generation["schemas"]["world"])
     if generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE:
         mysql(manifest, generation, target_targeted_spell_cast_seed_sql(), generation["schemas"]["characters"])
+    if generation["mode"] == LEVEL_UP_MODE:
+        mysql(manifest, generation, level_up_action_seed_sql(), generation["schemas"]["characters"])
+        mysql(manifest, generation, level_up_gear_seed_sql(), generation["schemas"]["characters"])
+        mysql(manifest, generation, level_up_tutorial_seed_sql(), generation["schemas"]["characters"])
+        mysql(manifest, generation, level_up_world_seed_sql(), generation["schemas"]["world"])
+        generation["level_up_seed"] = verify_level_up_seed(manifest, generation)
     if ISSUE97 and generation["mode"] == IN_WORLD_CONTROL_MODE:
         mysql(manifest, generation, populated_character_seed_sql(), generation["schemas"]["characters"])
         verify_populated_character_seed(manifest, generation)
@@ -2294,6 +2544,7 @@ def run_client(args: argparse.Namespace) -> None:
         target_targeted_spell_cast_sent = False
         chat_message_sent = False
         invalid_target_spell_cast_sent = False
+        level_up_sent = False
         post_marker_hold_started: float | None = None
         milestone_definition = CHARACTER_MILESTONES if generation["mode"] in CHARACTER_MODES else CLIENT_MILESTONES
         while time.monotonic() < deadline:
@@ -2374,6 +2625,12 @@ def run_client(args: argparse.Namespace) -> None:
                 ):
                     automate_invalid_target_spell_cast(generation)
                     invalid_target_spell_cast_sent = True
+                if (
+                    generation["mode"] == LEVEL_UP_MODE and selection_sent and not level_up_sent
+                    and in_world_control_marker_count(generation) > 0
+                ):
+                    automate_level_up(generation)
+                    level_up_sent = True
                 if generation["mode"] in POST_MARKER_MODES and selection_sent:
                     marker_count = POST_MARKER_COUNTERS[generation["mode"]](generation)
                     if marker_count and post_marker_hold_started is None:
@@ -2798,10 +3055,44 @@ def invalid_target_spell_cast_marker_count(generation: Generation) -> int:
     return len(INVALID_TARGET_SPELL_CAST_SEQUENCE.findall(after_sync))
 
 
+LEVEL_UP_XP_PACKET = re.compile(r"\bS->C:\s+.*?\bSMSG_LOG_XPGAIN\b")
+LEVEL_UP_INFO_PACKET = re.compile(r"\bS->C:\s+.*?\bSMSG_LEVELUP_INFO\b")
+
+
+def level_up_settle_signal(generation: Generation) -> int:
+    """Drives when the run may end.
+
+    This must NOT be the level-up marker itself: SMSG_LEVELUP_INFO only appears when the run
+    succeeds, so using it as the post-marker counter means a failed attempt never sets
+    post_marker_hold_started and the loop runs to the full --timeout - long after the client is
+    dead, with the harness's client-exit check defeated by the still-running Wine processes. Once
+    the automation has finished (or the level-up happened) the scene is settled and the run can end
+    after the normal stability window.
+    """
+    if generation.get("level_up_automation_done") or level_up_marker_count(generation):
+        return 1
+    return 0
+
+
+def level_up_marker_count(generation: Generation) -> int:
+    """Counts the level-up itself: SMSG_LEVELUP_INFO is only sent by Player::GiveLevel, so seeing it
+    after the in-world sync marker means a real XP award crossed the threshold on the wire."""
+    after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
+    after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
+    return len(LEVEL_UP_INFO_PACKET.findall(after_sync))
+
+
+def level_up_xp_gain_count(generation: Generation) -> int:
+    after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
+    after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
+    return len(LEVEL_UP_XP_PACKET.findall(after_sync))
+
+
 POST_MARKER_MODES = frozenset({
     INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
     GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE, CHARACTER_CREATION_MODE,
     BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
+    LEVEL_UP_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -2817,6 +3108,7 @@ POST_MARKER_COUNTERS = {
     TARGET_TARGETED_SPELL_CAST_MODE: target_targeted_spell_cast_marker_count,
     CHAT_MESSAGE_MODE: chat_message_marker_count,
     INVALID_TARGET_SPELL_CAST_MODE: invalid_target_spell_cast_marker_count,
+    LEVEL_UP_MODE: level_up_settle_signal,
 }
 
 
@@ -2963,10 +3255,11 @@ def sanitized_evidence(
     target_targeted_spell_cast_mode = generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE
     chat_message_mode = generation["mode"] == CHAT_MESSAGE_MODE
     invalid_target_spell_cast_mode = generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE
+    level_up_mode = generation["mode"] == LEVEL_UP_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
         WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-        INVALID_TARGET_SPELL_CAST_MODE,
+        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
@@ -3041,6 +3334,8 @@ def sanitized_evidence(
             target_targeted_spell_cast_marker_count(generation) if target_targeted_spell_cast_mode else None
         ),
         "chat_message_marker_count": chat_message_marker_count(generation) if chat_message_mode else None,
+        "level_up_marker_count": level_up_marker_count(generation) if level_up_mode else None,
+        "level_up_xp_gain_count": level_up_xp_gain_count(generation) if level_up_mode else None,
         "invalid_target_spell_cast_sequence_count": (
             invalid_target_spell_cast_marker_count(generation) if invalid_target_spell_cast_mode else None
         ),
@@ -3096,10 +3391,11 @@ def verify(args: argparse.Namespace) -> None:
     target_targeted_spell_cast_mode = generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE
     chat_message_mode = generation["mode"] == CHAT_MESSAGE_MODE
     invalid_target_spell_cast_mode = generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE
+    level_up_mode = generation["mode"] == LEVEL_UP_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
         WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-        INVALID_TARGET_SPELL_CAST_MODE,
+        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     rows = character_row_count(manifest, generation) if character_mode else None
@@ -3237,6 +3533,15 @@ def verify(args: argparse.Namespace) -> None:
                 and evidence["spell_cast_marker_count"] == 0
                 and evidence["cast_failed_marker_count"] == 0
             )
+        if level_up_mode:
+            # SMSG_LEVELUP_INFO is emitted only by Player::GiveLevel, so it proves a real XP award
+            # crossed the threshold on the wire rather than a GM command or a row edit.
+            character_ok = character_ok and (
+                evidence["level_up_marker_count"] >= 1
+                and evidence["level_up_xp_gain_count"] >= 1
+                and evidence["post_marker_hold_seconds"] >= 5
+                and evidence["post_marker_snapshots"] == 2
+            )
         if creation_mode:
             character_ok = character_ok and (
                 any(item == {"direction": "c2s", "opcode": "CMSG_CHAR_CREATE"} for item in transcript)
@@ -3248,7 +3553,8 @@ def verify(args: argparse.Namespace) -> None:
             )
         if character_ok:
             evidence["outcome"] = (
-                "character_creation_pass" if creation_mode
+                "level_up_progression_pass" if level_up_mode
+                else "character_creation_pass" if creation_mode
                 else "run_speed_change_pass" if run_speed_mode
                 else "basic_spell_cast_pass" if basic_spell_cast_mode
                 else "target_targeted_spell_cast_pass" if target_targeted_spell_cast_mode
@@ -3834,6 +4140,39 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             f"VALUES ({CHARACTER_GUID},{TARGET_TARGETED_SPELL_CAST_SPELL_ID},1)"
             in target_targeted_spell_cast_seed_sql()
         )
+        assert plan_number(LEVEL_UP_MODE) == "31"
+        assert LEVEL_UP_MODE in POPULATED_CHARACTER_MODES
+        assert LEVEL_UP_MODE in POST_MARKER_MODES
+        assert LEVEL_UP_MODE in CHARACTER_MODES
+        # Without a bound Attack button the main-hand keypress sends no CMSG_ATTACK and the kill
+        # can never happen, which silently produced an all-zero-marker run.
+        level_up_action = level_up_action_seed_sql()
+        assert f"INSERT INTO `character_action` (`guid`,`spec`,`button`,`action`,`type`)" in level_up_action
+        assert (
+            f"VALUES ({CHARACTER_GUID},0,{LEVEL_UP_ATTACK_BUTTON},{LEVEL_UP_ATTACK_SPELL},0)"
+            in level_up_action
+        )
+        assert LEVEL_UP_ATTACK_BUTTON == 0, "the main-hand keypress only reaches action button 0"
+        # Tab selected the nearer friendly Deputy Willem, not the seeded hostile, so selection must
+        # be by name rather than proximity.
+        assert LEVEL_UP_TARGET_KEYS[0] == "Return" and "slash" in LEVEL_UP_TARGET_KEYS
+        assert tuple(LEVEL_UP_TARGET_NAME.lower()) == LEVEL_UP_TARGET_KEYS[
+            LEVEL_UP_TARGET_KEYS.index("space") + 1:
+        ][:len(LEVEL_UP_TARGET_NAME)]
+        assert LEVEL_UP_TARGET_KEYS[-1] == "Return"
+        level_up_tutorial = level_up_tutorial_seed_sql()
+        assert "INSERT INTO `account_tutorial`" in level_up_tutorial
+        assert "4294967295" in level_up_tutorial and str(ACCOUNT_ID) in level_up_tutorial
+        level_up_gear = level_up_gear_seed_sql()
+        assert "INSERT INTO `item_instance`" in level_up_gear and "INSERT INTO `character_inventory`" in level_up_gear
+        assert f"({CHARACTER_GUID},0,15,99000004)" in level_up_gear, "the sword must be in the main hand"
+        level_up_seed = level_up_world_seed_sql()
+        assert "INSERT INTO `creature`" in level_up_seed
+        assert f"VALUES ({LEVEL_UP_XP_TARGET_GUID},{LEVEL_UP_XP_TARGET_ENTRY}," in level_up_seed
+        # The XP target must be spawned next to the player, not at the world origin.
+        seed_pattern = rf"{CHARACTER_MAP},{CHARACTER_ZONE},{CHARACTER_ZONE},(-?[0-9.]+),"
+        target_x = float(re.search(seed_pattern, level_up_seed).group(1))
+        assert target_x == CHARACTER_POSITION[0] + LEVEL_UP_XP_TARGET_OFFSET[0]
         assert str(TARGET_TARGETED_SPELL_CAST_DUMMY_GUID) in target_targeted_spell_cast_world_seed_sql()
         assert (
             f"VALUES ({TARGET_TARGETED_SPELL_CAST_DUMMY_GUID},{TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY},"
@@ -3950,7 +4289,7 @@ def parser() -> argparse.ArgumentParser:
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,
             RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE,
             BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-            INVALID_TARGET_SPELL_CAST_MODE,
+            INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
         ), default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)
