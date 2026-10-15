@@ -9,6 +9,26 @@ Keep the fork's design, framework, interfaces, and code structure as close to up
 so upstream updates remain straightforward to integrate. Prefer the smallest Cata-specific delta;
 depart from upstream only where Cataclysm protocol, data, or gameplay differences require it.
 
+## Reference precedence for fixtures and acceptance criteria
+
+AzerothCore's own behaviour wins. When AC and TrinityCore-Cata represent the *same* player-visible
+outcome through different internal representations — for example persisted rows versus
+recomputed-on-login data — assert the AC-native representation. Do not change core AC logic to
+match a TC-Cata on-disk layout when AC's outcome is equivalent.
+
+Reserve TC-Cata comparisons for genuinely Cata-specific behaviour we are porting (new mechanics,
+wire formats, packet layouts, data schemas) where AC has no prior mechanism to defer to.
+
+When a fixture or assertion encodes a TC-Cata representation choice rather than a real behavioural
+requirement, fix the fixture or assertion — not the core code — and note the divergence inline so
+it is not mistaken for a regression later. Worked example: issue #76 (starting cast spell 2457 —
+AC recomputes it from `character_skills` on login; a TC-Cata-derived fixture wrongly expected a
+persisted `character_spell` row).
+
+Protocol fixtures under `apps/cata/fixtures/` that pin wire layouts are the exception: TC-Cata is
+the legitimate reference for those, because it is a Cata-specific format AC has no prior version
+of, not an AC-versus-TC representation choice.
+
 ## Branch workflow
 
 Use Graphify when tracing conversion subsystems, callers, and ownership. Query an existing graph before
