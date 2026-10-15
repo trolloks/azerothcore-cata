@@ -40,120 +40,112 @@ unverified and the log must not be committed because it contains account and pac
 
 ## Current state
 
-Reviewed on 2026-09-09 against merged `master` at `22f8540e1`, after PR #51. Numbered
-plans 1-21 are closed; Plans 22-26 are now queued below. Completion applies to the bounded contracts
-in each issue, not to whole gameplay systems.
+Audited on 2026-10-15 at merged master `7be5f4bf9da6b23c2addb55628febc4f6db2ae82`, after
+PRs #130-#132. Plans 1-30 are closed. Existing Plan 31 / [#102][plan-31] remains the next
+implementation task. Five new plans follow it below. Closed plans prove their bounded contracts,
+not complete gameplay systems or content coverage.
 
-Proven so far:
+The audit record is [audit.json](evidence/conversion-audit-2026-10-15/audit.json). It separates
+source inspection and checks of recorded evidence from fresh runtime acceptance.
 
-- Authentication, character enumeration, selection of a database-seeded character, and stable
-  Northshire world entry through the existing AzerothCore session and player-loading flows.
-- Direction-safe opcode dispatch and the shared build-15595 opcode values. Payload conversion
-  remains a separate check for each request and response.
-- Object, Unit, Player, Item, Container, GameObject, DynamicObject, and Corpse field contracts and
-  the object-create movement block.
-- Idle movement heartbeat processing and one server-initiated run-speed change with its matching
-  client acknowledgement. These do not establish keyboard movement or the other speed types.
-- Representative rendered objects in Plan 18: an equipped bag containing a sword and jerky,
-  a chest, a player corpse, and ground flames. The inventory API reported six slots, jerky x2,
-  and sword durability 13/20; the user manually confirmed the bag contents. The second fixture
-  attempt logged 97 ordinary periodic ground-spell triggers during a stable 30-second session.
-  Its generic verifier had already recorded INCONCLUSIVE without screen confirmation; the later
-  human confirmation is supplemental evidence, not a rewritten automated verdict. See #37.
+### What has reviewable proof
 
-Known gaps that determine the next work:
+- Authentication, character enumeration/selection, world entry and normal logout/relogin through
+  AC's existing session/player ownership.
+- Cata opcode directions, shared codecs, object field families and bounded create/update paths.
+  A mapped opcode still needs its own payload and recipient/state proof.
+- Creation/deletion checks across the 124 profiles in the current `playercreateinfo`
+  matrix, with the documented Death Knight eligibility restriction. Exact starting-kit/action
+  comparison is bounded to Human Warrior. Goblin and Worgen starting campaigns are absent from
+  that accepted matrix.
+- Keyboard ground movement, walk/run switching and jump/land routing. Full movement modes,
+  fall-damage rules and all acknowledgement variants remain separate.
+- The phase-125 area scenario with selected NPC/chest visibility, interaction and login restoration,
+  recorded in [phase acceptance](phase-97-client-acceptance.md). Terrain swaps and broad quest phases
+  are not implied by this scenario.
+- Bounded action-bar self/target casts, cancellation and invalid-target handling. Native split
+  Spell/SpellEffect/auxiliary stores and native starting-skill consumers are already implemented.
+  The old roadmap claim that active spell loading still requires a flattened WotLK root is obsolete.
+- [Quest 2158](evidence/plan26-quest2158/README.md), normal reward delivery and persistence. It has
+  no kill/collect objective or intended phase transition, so it does not prove those systems.
+- [Inventory/item use](evidence/plan27-inventory/README.md), [solo loot](evidence/plan28-loot/README.md),
+  [one melee encounter](evidence/plan29-melee/README.md), and
+  [death/reclaim/spirit-healer recovery](evidence/plan30-death/README.md). These include exact item,
+  money, damage, corpse, durability and relog checks for the declared fixtures.
+- Plan 30's final native replay matches 63 incoming swings and 60 damage, restores 30/60 HP through
+  the healer, preserves durability 17/25 across the living relog and records zero UI errors.
+  Its generic launcher failed during teardown after the final save; the independent scene checks
+  and subsequent ownership-checked reset pass. The evidence retains that distinction.
+- #75's Cata ScalingStatValues layout/accessors are already implemented. PR #132 adds a static
+  comparison, rerun by this audit against the actual 85-record, 47-field extraction. A native
+  scaling-item confirmation was transferred to Plan 31/#102 in #75 comments. #75 closed after
+  PR #132; its static closure is not native acceptance. Do not repeat the obsolete port proposal.
 
-- Every accepted world-entry fixture so far used a database-seeded character. Normal character
-  creation, deletion, and starting-state persistence have not been accepted. The creation request
-  header already matches the pinned reference, so begin with verification rather than rewriting it.
-- `Player::Create` still derives starting inventory from `CharStartOutfit` plus `playercreateinfo_item`,
-  and skills, spells, actions, and spawn data from the existing creation stores. The sword and jerky
-  in Plan 18 were synthetic fixture contents, not proof of the correct Cata starting inventory.
-- The login `PhaseShiftChange` serializer writes empty phase/map lists and the Unphased flag.
-  Server visibility still uses the existing phase-mask model. This proves only the default phase,
-  not Cata phase IDs, quest-driven visibility, terrain swaps, or phased starting zones.
-- `WorldSession::ReadMovementInfo` selects the Cata decoder only for `MSG_MOVE_HEARTBEAT`.
-  Directional movement and jump/land requests still enter the WotLK reader and broadcast path.
-- `HandleCastSpellOpcode` omits the reference request's `Misc` word. `SendSpellStart` and
-  `SendSpellGo` omit `CastFlagsEx` before the time field. Server-triggered flames do not prove
-  that pressing a spell button works.
-- Seeing bag contents does not establish moving, equipping, splitting, or using items. Several
-  basic inventory request layouts already match the reference; verify them before changing code.
-- `LootView` writes gold and an item count without the Cata currency-count byte. Single-player
-  looting and inventory delivery have not been accepted with the real client.
-- The current server still reads the flattened 234-field `Spell.dbc`, and distributed defaults
-  remain expansion 2 and level 80. Cata client-data stores, reproducible extraction, database
-  conversion, level-85 progression, and retail combat rules remain unfinished. Current fixtures
-  deliberately use verified records from the existing server data.
-- Character creation/deletion, new races, teleports, swimming/flying, transport movement, combat,
-  quests, social systems, and content remain unproven beyond the specific earlier issue contracts.
+### Remaining gates and tracker corrections
 
-The original Plan 1 baseline and audit measurements remain historical evidence in
-[#11](https://github.com/trolloks/azerothcore-cata/issues/11); they no longer describe current master.
+The functionality matrix now has **29 partial and 51 unassessed** rows. The data inventory has
+**48 partial, 473 unassessed and one blocked** row. Neither has a verified parent row. These are
+coverage categories, not equal-sized units of work, and they do not support a completion percentage.
+The pinned table/store inventory check covers 516 declared entries; six additional artifact/content
+rows bring the data tracker to 522. Record-level quest/spawn/encounter denominators are still missing.
 
-## Next five plans
+This audit reconciles existing proof, without new native acceptance:
 
-The five canonical issues are open in delivery order. Creating the queue does not authorize builds
-or mean every prerequisite is already satisfied. Start each implementation from merged master after
-its predecessor is complete. Split missing data or gameplay prerequisites into explicit blocking work.
-GitHub holds each full contract; the functionality/data trackers retain the broader parity scope.
+- Close the stale Plan 23-26/30 entries in the issue index and include existing Plan 31.
+- Link accepted phase-125 visibility and same-map graveyard teleport evidence. Keep broader
+  visibility and teleport variants unproven.
+- Replace five obsolete data-blocker descriptions with partial status where native outfit,
+  split-spell and starting-skill implementations already exist and bounded runtime proof is recorded.
+  Record the native class-power table's existing Plan 30 proof as partial. These corrections do not
+  establish complete table, join, profile or mechanic parity.
+- Keep the full-content coverage gate blocked until per-zone/quest/chain/spawn/loot/encounter
+  inventories exist. The source release being pinned does not supply that denominator.
 
-| Order | Proposed plan | Completion boundary |
+The most immediate functional/data gaps are ordinary progression beyond creation, server geometry,
+NPC commerce/training, mana-class combat and kill-objective credit. Current acceptance defaults
+explicitly disable VMAP LOS/height. Vendor and trainer layouts still differ from the Cata pin.
+Distributed defaults still say `Expansion = 2` and `MaxPlayerLevel = 80`; level-85 progression and
+release defaults remain unfinished. Plan 31 proves only the first normal level transition.
+
+Other races/classes and exact starter profiles, all other map/terrain/transport variants, social
+and economy systems, parties/instances/PvP, new resources/talents and broad world/encounter content
+remain partial or unassessed. The native input, schema, record, relation and runtime gates below
+continue to apply independently to each.
+
+## Next five new plans
+
+Plan 31 / [#102][plan-31], first normal level-up and persisted progression, already exists and stays
+first. It is not duplicated. The five newly created issues are sequenced after it:
+
+| Plan | Canonical issue | Completion boundary |
 | --- | --- | --- |
-| [22][plan-22] | Character creation and starting state | Create through UI; verify items, spells, spawn, and saves |
-| [23][plan-23] | On-foot movement | Walk, turn, strafe, jump, land, and stop at the accepted position |
-| [24][plan-24] | Initial phasing and visibility | Enter/leave a phase and restore correct visibility on login |
-| [25][plan-25] | Basic spell casting | Cast from the action bar and handle success, failure, and cancellation |
-| [26][plan-26] | First complete quest loop | Accept, progress, turn in, and save correct rewards and phase effects |
+| 32 | [#134][plan-32]: Northshire geometry | Pinned geometry, enabled LOS/height, legal chase path |
+| 33 | [#135][plan-33]: Vendor transactions | Buy/sell/buyback/repair; exact saved item and money changes |
+| 34 | [#136][plan-34]: Trainer learning | Trainer identity, legitimate learning, spell/action relog |
+| 35 | [#137][plan-35]: Mana-class combat | Mage starter inputs, cast/cost/regen and stable relog |
+| 36 | [#138][plan-36]: Kill-objective quest | Eligible kills, objective saves and exactly-once rewards |
 
-[plan-22]: https://github.com/trolloks/azerothcore-cata/issues/52
-[plan-23]: https://github.com/trolloks/azerothcore-cata/issues/53
-[plan-24]: https://github.com/trolloks/azerothcore-cata/issues/54
-[plan-25]: https://github.com/trolloks/azerothcore-cata/issues/55
-[plan-26]: https://github.com/trolloks/azerothcore-cata/issues/56
+[plan-31]: https://github.com/trolloks/azerothcore-cata/issues/102
+[plan-32]: https://github.com/trolloks/azerothcore-cata/issues/134
+[plan-33]: https://github.com/trolloks/azerothcore-cata/issues/135
+[plan-34]: https://github.com/trolloks/azerothcore-cata/issues/136
+[plan-35]: https://github.com/trolloks/azerothcore-cata/issues/137
+[plan-36]: https://github.com/trolloks/azerothcore-cata/issues/138
 
-Plan 22's starter-data prerequisite is [#57](https://github.com/trolloks/azerothcore-cata/issues/57),
-a native sub-issue blocking #52. Its initial acceptance matrix is Human Warrior, level 1, both genders,
-enUS, ordinary account, with custom starting spells disabled. Other profiles remain unverified.
+Each issue has its own source/data preflight, deterministic and native predicates, rejection cases,
+exclusions, dependency and merge gate. Creating this queue does not authorize builds or mean every
+input is already available. Start each implementation branch from current merged master after its
+predecessor merges. Split an unavailable data/mechanics prerequisite into a blocking child rather
+than weakening the contract. Keep #75's transferred native scaling-item companion visible in #102,
+separate from its normal-XP proof.
 
-The world and hotfix dumps now match the official TDB 434.22011 release. All 170 pending world updates
-through the TC pin replayed successfully in disposable MySQL 8.4.8; all 20 hotfix update hashes already
-match the release ledger. The updated reference removes SQL starter skills and adds class/race stats.
-See the [source and replay evidence](../apps/cata/fixtures/plan22-starting-data-audit.json) and
-[update hash ledger](../apps/cata/fixtures/plan22-world-update-audit.tsv). Client extraction provenance
-is confirmed; native AC loader/runtime acceptance remains open.
+### Historical starter-data work
 
-Implementation is split into blocking children of #57:
-
-1. [#58: native spell and skill inputs](https://github.com/trolloks/azerothcore-cata/issues/58).
-2. [#59: native items and starting outfits](https://github.com/trolloks/azerothcore-cata/issues/59).
-3. [#60: starting stats and world profiles](https://github.com/trolloks/azerothcore-cata/issues/60).
-
-#58 has a native loader draft and [static dependency audit](../apps/cata/fixtures/plan22-native-spell-audit.json).
-[Fresh extraction](../apps/cata/fixtures/plan22-client-extraction.json) with the pinned extractor
-reproduces all 27 audited spell/skill tables byte-for-byte, including four absent optional references.
-Their acceptance and loader/creation behaviour remain unverified. Coordinate these changes and the saved #52
-protocol patch before one authorized build
-using the existing ccache/PCH tree and one client session. Reuse cached prepare inputs and binaries.
-Keep #52 and #57 open until normal creation, correct starting state, and persistence are accepted.
-
-### Follow-on work and dependency gates
-
-The next-five list does not replace the full plan-family table below. Keep these dependencies
-visible when choosing the following tranche:
-
-- Inventory movement, splitting, equipping, item use, persistence, and failure cases. Reuse the
-  field proof from Plan 18 and the shared casting work; verify existing readers before changing them.
-- Single-player loot: correct the currency-count field, open/take/release behavior, item/money
-  delivery, full bags, ownership, and duplicate-award prevention. Use a controlled loot source
-  before claiming that combat, death, and loot all work together.
-- Combat, death, resurrection, and corpse recovery; then a repeatable kill/loot/quest-reward loop.
-- Cata extraction, client-data stores, and database migrations beyond the initial character data.
-  These gate broader progression, creature/item definitions, spells, and terrain-dependent behavior.
-- Remaining race/class combinations, Goblin/Worgen support, phased starting campaigns, quest
-  conditions/rewards, terrain swaps, and later-zone content. Track each as explicit unproven scope.
-- Teleports, swimming/flying, transports, instances, and the social/economy/PvP systems in the
-  family table. None is implied complete by a successful on-foot starting-zone session.
+Plans 22-26 and #57-#60 are closed. Their original source comparisons, TDB 434.22011 world/hotfix
+identity, update replay and native spell/item/skill extraction records remain under
+`apps/cata/fixtures/plan22-*`. Those records are useful source evidence, not whole-world or all-class
+runtime acceptance. The earlier queue and pending-loader descriptions are historical and have been
+replaced above with the merged state.
 
 ### Validation budget
 

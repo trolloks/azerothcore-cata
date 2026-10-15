@@ -1,0 +1,9 @@
+ScalingStatValues audit PASS (pin c699217775d9)
+  fmt=47 fields, record=188 bytes, records=85, strings=1
+  entry shape=['uint32', 'uint32', 'uint32[6]', 'uint32', 'uint32[5]', 'uint32[8][4]', 'uint32']
+  GetStatMultiplier: 29 return-bearing cases match the pin
+  GetArmor: 10 return-bearing cases match the pin
+  GetDPSAndDamageMultiplier: 14 return-bearing cases match the pin
+  NOTE: AC index column 0, pin 1; AC matches the real file (field 0 = level)
+  NOTE: GetDPSAndDamageMultiplier: for isCasterWeapon with subClass > WAND the port returns 0 where the pin returns dpsMod[2]; unreachable because callers pass weapon subclasses (<= WAND)
+  NOTE: GetStatMultiplier/GetArmor guard style differs from the pin; behaviour is identical because both fall through to 0

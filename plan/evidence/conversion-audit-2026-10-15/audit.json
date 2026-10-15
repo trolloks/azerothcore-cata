@@ -1,0 +1,239 @@
+{
+  "reviewed_on": "2026-10-15",
+  "baseline": "7be5f4bf9da6b23c2addb55628febc4f6db2ae82",
+  "reference_commit": "c699217775d90794158422387b07a917e161b582",
+  "cata_js_commit": "ab964a0e8dfe50a44fa92716ed05438f4a14dfd3",
+  "scope": "Source/issue/tracker reconciliation and checks of existing recorded evidence; no fresh build, extraction, database or native-client run.",
+  "closed_numbered_plans": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30
+  ],
+  "existing_next_issue": {
+    "number": 102,
+    "plan": 31,
+    "state_at_audit": "OPEN",
+    "url": "https://github.com/trolloks/azerothcore-cata/issues/102"
+  },
+  "tracker_before": {
+    "functionality": {
+      "partial": 28,
+      "unassessed": 52
+    },
+    "data": {
+      "partial": 42,
+      "unassessed": 474,
+      "blocked": 6
+    }
+  },
+  "tracker_after": {
+    "parity-functionality.tsv": {
+      "rows": 80,
+      "statuses": {
+        "partial": 29,
+        "unassessed": 51
+      }
+    },
+    "parity-data.tsv": {
+      "rows": 522,
+      "statuses": {
+        "unassessed": 473,
+        "partial": 48,
+        "blocked": 1
+      }
+    }
+  },
+  "verified_parent_rows": 0,
+  "inventory": {
+    "named_sql_tables_and_client_stores": 516,
+    "additional_content_artifact_gates": 6,
+    "complete_quest_spawn_encounter_record_denominator_available": false
+  },
+  "findings": [
+    {
+      "finding": "Roadmap and several numbered index states are obsolete",
+      "evidence": [
+        "plan/conversion-roadmap.md",
+        "plan/github-issues.tsv",
+        "Live GitHub issue snapshots for Plans 22-31"
+      ]
+    },
+    {
+      "finding": "Outfit, native split-spell and skill-source blocker notes contradict merged consumers and bounded runtime proof",
+      "evidence": [
+        "src/server/game/DataStores/DBCStores.cpp",
+        "src/server/shared/DataStores/DBCfmt.h",
+        "src/server/game/Globals/ObjectMgr.cpp",
+        "plan/evidence/plan27-inventory/acceptance.json",
+        "plan/evidence/plan30-death/README.md"
+      ]
+    },
+    {
+      "finding": "Geometry is not proven by accepted client routes; the harness disables server VMAP LOS/height",
+      "evidence": [
+        "apps/cata/run_real_client_authentication.py:984",
+        "plan/evidence/plan30-death/spell-result-runtime-inputs.json"
+      ]
+    },
+    {
+      "finding": "Vendor buy/list and trainer list/buy payloads differ from pinned Cata contracts",
+      "evidence": [
+        "src/server/game/Handlers/ItemHandler.cpp",
+        "src/server/game/Server/Packets/ItemPackets.cpp",
+        "src/server/game/Server/Packets/NPCPackets.cpp",
+        "TC pin: src/server/game/Handlers/ItemHandler.cpp",
+        "TC pin: src/server/game/Server/Packets/NPCPackets.cpp"
+      ]
+    },
+    {
+      "finding": "Delivery quest, warrior melee and recovery proof do not cover kill objectives, first level-up or mana-class combat",
+      "evidence": [
+        "plan/evidence/plan26-quest2158/acceptance.json",
+        "plan/evidence/plan29-melee/README.md",
+        "plan/evidence/plan30-death/README.md",
+        "existing issue #102"
+      ]
+    },
+    {
+      "finding": "Default expansion and level cap remain WotLK values",
+      "evidence": [
+        "src/server/apps/worldserver/worldserver.conf.dist:992",
+        "src/server/apps/worldserver/worldserver.conf.dist:2138"
+      ]
+    }
+  ],
+  "graphify": {
+    "graph_nodes": 10105,
+    "queries": [
+      "conversion native client data progression movement vendors trainers groups",
+      "GetHeight IsInLineOfSight GetObjectHitPos MoveChase"
+    ],
+    "limitations": "Broad query truncated at its token budget and mainly locates declarations; geometry query narrows ownership. Current implementations and the pinned source were inspected directly. No inferred edge is runtime proof."
+  },
+  "checks": [
+    {
+      "command": "python3 apps/cata/check_parity.py --reference-tree <pinned-TC-checkout>",
+      "result": "PASS: 516 named inputs covered; structure only"
+    },
+    {
+      "command": "python3 apps/cata/audit_scaling_stat_values.py --reference-tree <pinned-TC-checkout> --dbc <existing-native-ScalingStatValues.dbc>",
+      "result": "PASS: native header/layout and accessor comparison; no new extraction/build/runtime"
+    },
+    {
+      "command": "python3 plan/evidence/plan30-death/verify_evidence.py",
+      "result": "PASS: checks recorded native corpse/healer/final replay and strict cleanup; does not launch a client"
+    },
+    {
+      "command": "python3 apps/cata/check_parity.py --self-test",
+      "result": "PASS: invalid proof, duplicate IDs, unpinned refs and inventory drift rejected"
+    },
+    {
+      "command": "python3 apps/codestyle/codestyle-cpp.py",
+      "result": "PASS; no C++ changes"
+    },
+    {
+      "command": "python3 apps/codestyle/codestyle-sql.py",
+      "result": "PASS; no SQL changes"
+    }
+  ],
+  "created_issues": [
+    {
+      "plan": 32,
+      "number": 134,
+      "title": "Plan 32: reproducible Northshire collision and pathfinding",
+      "url": "https://github.com/trolloks/azerothcore-cata/issues/134",
+      "state": "open",
+      "predecessor": 102,
+      "body_sha256": "d32223bdf22372c33685e801d26d216708987f174d4abeb23cbafe0eee82a540"
+    },
+    {
+      "plan": 33,
+      "number": 135,
+      "title": "Plan 33: native vendor buy, sell, buyback and repair",
+      "url": "https://github.com/trolloks/azerothcore-cata/issues/135",
+      "state": "open",
+      "predecessor": 134,
+      "body_sha256": "457d0475d159d6b67ab3e730da081875a8e66fedeb0cf5b1d80141de6ca8c4fb"
+    },
+    {
+      "plan": 34,
+      "number": 136,
+      "title": "Plan 34: native trainer learning and spellbook persistence",
+      "url": "https://github.com/trolloks/azerothcore-cata/issues/136",
+      "state": "open",
+      "predecessor": 135,
+      "body_sha256": "e7ef7e6e5800f3403a376d0f48ee4426148459aee7d7ed2f96dc91f29c6931a4"
+    },
+    {
+      "plan": 35,
+      "number": 137,
+      "title": "Plan 35: first mana-class combat and resource recovery",
+      "url": "https://github.com/trolloks/azerothcore-cata/issues/137",
+      "state": "open",
+      "predecessor": 136,
+      "body_sha256": "c7424b7e5197ed80b620182faec31dc519b20962bedaa2262bd002dbee5ae33b"
+    },
+    {
+      "plan": 36,
+      "number": 138,
+      "title": "Plan 36: first normal kill-objective quest loop",
+      "url": "https://github.com/trolloks/azerothcore-cata/issues/138",
+      "state": "open",
+      "predecessor": 137,
+      "body_sha256": "28cdc1aa2a74b8c1dcd3a4b7ea5c4a3a4448a96d5e7f36aa56f4feba651b2fe8"
+    }
+  ],
+  "limitations": [
+    "No new native acceptance or production-configuration validation",
+    "Full data/schema/record/relations and per-content inventories remain incomplete",
+    "Plan 30 launcher teardown failure remains visible separately from the passed scene and later strict cleanup",
+    "GitHub CI was skipped on PR #130; local build/test/native evidence is recorded for that source"
+  ],
+  "created_issue_readback": "PASS: all five created issues and the clarified Plan 34 and Plan 31 bodies read back and matched",
+  "existing_scaling_issue": {
+    "number": 75,
+    "static_layout_accessor_audit": "PASS; 47 fields, 188 bytes, 85 records; 29/10/14 accessor cases match",
+    "remaining": "Native scaling-item confirmation transferred to Plan 31 per #75 comments; closing #75 after static PR #132 is not native acceptance.",
+    "initial_state": "OPEN",
+    "state_at_readback": "CLOSED",
+    "closed_at": "2026-10-15T14:49:16Z",
+    "remaining_companion_issue": 102
+  },
+  "handoff_reconciliation": "Updated #102: #101 dependency checked, current audit baseline, and separate native scaling-item companion transferred from closed #75. Its primary XP path remains ordinary level 1 to 2, isolated from item-scaling fixture setup.",
+  "scaling_input": {
+    "file": "ScalingStatValues.dbc",
+    "sha256": "e73b9e34f5d847c86f0f35be4c015afc3eb39511f394c58e1222b9508047f6f8",
+    "size": 16001,
+    "records": 85,
+    "fields": 47,
+    "record_size": 188,
+    "string_size": 1
+  }
+}

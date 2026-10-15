@@ -21,12 +21,17 @@ plan	issue	state	title	url
 20	41	closed	Plan 20: full opcode-table realignment to Cata 4.3.4	https://github.com/trolloks/azerothcore-cata/issues/41
 21	43	closed	Plan 21: login packet sequence parity with cata-js	https://github.com/trolloks/azerothcore-cata/issues/43
 22	52	closed	Plan 22: character creation and correct starting state	https://github.com/trolloks/azerothcore-cata/issues/52
-23	53	open	Plan 23: on-foot movement	https://github.com/trolloks/azerothcore-cata/issues/53
-24	54	open	Plan 24: initial phasing and visibility	https://github.com/trolloks/azerothcore-cata/issues/54
-25	55	open	Plan 25: basic spell casting	https://github.com/trolloks/azerothcore-cata/issues/55
-26	56	open	Plan 26: first complete quest loop	https://github.com/trolloks/azerothcore-cata/issues/56
+23	53	closed	Plan 23: on-foot movement	https://github.com/trolloks/azerothcore-cata/issues/53
+24	54	closed	Plan 24: initial phasing and visibility	https://github.com/trolloks/azerothcore-cata/issues/54
+25	55	closed	Plan 25: basic spell casting	https://github.com/trolloks/azerothcore-cata/issues/55
+26	56	closed	Plan 26: first complete quest loop	https://github.com/trolloks/azerothcore-cata/issues/56
 27	98	closed	Plan 27: basic inventory operations and item use	https://github.com/trolloks/azerothcore-cata/issues/98
 28	99	closed	Plan 28: single-player loot delivery	https://github.com/trolloks/azerothcore-cata/issues/99
 29	100	closed	Plan 29: basic melee combat and creature death	https://github.com/trolloks/azerothcore-cata/issues/100
-30	101	open	Plan 30: player death, release, corpse recovery, and resurrection	https://github.com/trolloks/azerothcore-cata/issues/101
+30	101	closed	Plan 30: player death, release, corpse recovery, and resurrection	https://github.com/trolloks/azerothcore-cata/issues/101
 31	102	open	Plan 31: first normal level-up and persisted progression	https://github.com/trolloks/azerothcore-cata/issues/102
+32	134	open	Plan 32: reproducible Northshire collision and pathfinding	https://github.com/trolloks/azerothcore-cata/issues/134
+33	135	open	Plan 33: native vendor buy, sell, buyback and repair	https://github.com/trolloks/azerothcore-cata/issues/135
+34	136	open	Plan 34: native trainer learning and spellbook persistence	https://github.com/trolloks/azerothcore-cata/issues/136
+35	137	open	Plan 35: first mana-class combat and resource recovery	https://github.com/trolloks/azerothcore-cata/issues/137
+36	138	open	Plan 36: first normal kill-objective quest loop	https://github.com/trolloks/azerothcore-cata/issues/138
