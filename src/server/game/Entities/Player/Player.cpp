@@ -1842,6 +1842,7 @@ void Player::RegenerateAll()
 
 void Player::Regenerate(Powers power)
 {
+    uint32 index = GetPowerIndex(power);
     uint32 maxValue = GetMaxPower(power);
     if (!maxValue)
         return;
@@ -1854,7 +1855,7 @@ void Player::Regenerate(Powers power)
             //Set the value to 0 first then set it to max to force resend of packet as for range clients keeps removing rage
             if (power == POWER_RAGE || power == POWER_RUNIC_POWER)
             {
-                UpdateUInt32Value(static_cast<uint16>(UNIT_FIELD_POWER1) + power, 0);
+                UpdateUInt32Value(UNIT_FIELD_POWER1 + index, 0);
             }
 
             SetPower(power, maxValue);
@@ -1881,9 +1882,11 @@ void Player::Regenerate(Powers power)
                     ManaIncreaseRate = sWorld->getRate(RATE_POWER_MANA) * (2.066f - (GetLevel() * 0.066f));
 
                 if (recentCast) // Trinity Updates Mana in intervals of 2s, which is correct
-                    addvalue += GetFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER + AsUnderlyingType(POWER_MANA)) *  ManaIncreaseRate * 0.001f * m_regenTimer;
+                    addvalue += GetFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER + index) *
+                        ManaIncreaseRate * 0.001f * m_regenTimer;
                 else
-                    addvalue += GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER + AsUnderlyingType(POWER_MANA)) * ManaIncreaseRate * 0.001f * m_regenTimer;
+                    addvalue += GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER + index) *
+                        ManaIncreaseRate * 0.001f * m_regenTimer;
             }
             break;
         case POWER_RAGE:                                    // Regenerate rage
@@ -1897,7 +1900,7 @@ void Player::Regenerate(Powers power)
             break;
         case POWER_ENERGY:                                  // Regenerate energy (rogue)
             // Regen per second
-            addvalue += (GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER + AsUnderlyingType(POWER_ENERGY)) + 10.f);
+            addvalue += (GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER + index) + 10.f);
             // Regen per millisecond
             addvalue *= 0.001f;
             // Milliseconds passed
@@ -1979,7 +1982,7 @@ void Player::Regenerate(Powers power)
     if (m_regenTimerCount >= 2000 || curValue == 0 || curValue == maxValue)
         SetPower(power, curValue, true, true);
     else
-        UpdateUInt32Value(UNIT_FIELD_POWER1 + AsUnderlyingType(power), curValue);
+        UpdateUInt32Value(UNIT_FIELD_POWER1 + index, curValue);
 }
 
 void Player::RegenerateHealth()

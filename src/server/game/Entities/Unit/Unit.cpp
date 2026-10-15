@@ -12055,9 +12055,34 @@ void Unit::SetMaxHealth(uint32 val)
         SetHealth(val);
 }
 
+uint32 Unit::GetPowerIndex(Powers power) const
+{
+    if (uint32(power) >= MAX_POWERS)
+        return MAX_POWERS;
+
+    if (IsPlayer())
+        return GetPowerIndexByClass(power, getClass());
+
+    // shortcut: retain non-player slots until creature/pet powers, including happiness, are converted together.
+    return uint32(power) < MAX_UNIT_POWER_FIELDS ? uint32(power) : uint32(MAX_POWERS);
+}
+
+uint32 Unit::GetPower(Powers power) const
+{
+    uint32 index = GetPowerIndex(power);
+    return index < MAX_UNIT_POWER_FIELDS ? GetUInt32Value(UNIT_FIELD_POWER1 + index) : 0;
+}
+
+uint32 Unit::GetMaxPower(Powers power) const
+{
+    uint32 index = GetPowerIndex(power);
+    return index < MAX_UNIT_POWER_FIELDS ? GetUInt32Value(UNIT_FIELD_MAXPOWER1 + index) : 0;
+}
+
 void Unit::SetPower(Powers power, uint32 val, bool withPowerUpdate /*= true*/, bool fromRegenerate /* = false */)
 {
-    if (!HasPowerField(power))
+    uint32 index = GetPowerIndex(power);
+    if (index >= MAX_UNIT_POWER_FIELDS)
         return;
 
     if (!fromRegenerate && GetPower(power) == val)
@@ -12069,16 +12094,17 @@ void Unit::SetPower(Powers power, uint32 val, bool withPowerUpdate /*= true*/, b
 
     if (fromRegenerate)
     {
-        UpdateUInt32Value(UNIT_FIELD_POWER1 + AsUnderlyingType(power), val);
+        UpdateUInt32Value(UNIT_FIELD_POWER1 + index, val);
         AddToObjectUpdateIfNeeded();
     }
     else
-        SetStatInt32Value(UNIT_FIELD_POWER1 + AsUnderlyingType(power), val);
+        SetStatInt32Value(UNIT_FIELD_POWER1 + index, val);
 
     if (withPowerUpdate)
     {
-        WorldPacket data(SMSG_POWER_UPDATE, 8 + 1 + 4);
+        WorldPacket data(SMSG_POWER_UPDATE, 8 + 4 + 1 + 4);
         data << GetPackGUID();
+        data << uint32(1);
         data << uint8(power);
         data << uint32(val);
         SendMessageToSet(&data, IsPlayer());
@@ -12111,11 +12137,12 @@ void Unit::SetPower(Powers power, uint32 val, bool withPowerUpdate /*= true*/, b
 
 void Unit::SetMaxPower(Powers power, uint32 val)
 {
-    if (!HasPowerField(power))
+    uint32 index = GetPowerIndex(power);
+    if (index >= MAX_UNIT_POWER_FIELDS)
         return;
 
     uint32 cur_power = GetPower(power);
-    SetStatInt32Value(static_cast<uint16>(UNIT_FIELD_MAXPOWER1) + power, val);
+    SetStatInt32Value(UNIT_FIELD_MAXPOWER1 + index, val);
 
     // group update
     if (IsPlayer())

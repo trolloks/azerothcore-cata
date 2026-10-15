@@ -675,6 +675,13 @@ struct ChatChannelsEntry
     // 36 string flag, unused
 };
 
+struct ChrPowerTypesEntry
+{
+    uint32 ID;
+    uint32 ClassID;
+    uint32 PowerType;
+};
+
 struct ChrClassesEntry
 {
     uint32  ClassID;                                        // 0
