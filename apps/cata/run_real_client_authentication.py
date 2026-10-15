@@ -717,6 +717,24 @@ def level_up_action_seed_sql() -> str:
     )
 
 
+def level_up_tutorial_seed_sql() -> str:
+    """Marks every tutorial as seen for the fixture account so no modal popup appears.
+
+    The first run that reached the world was blocked by the modal "To fight your enemies, click on
+    Attack" tutorial: it swallows keyboard input before it reaches the chat edit box, so the
+    /target typing produced no CMSG_MESSAGECHAT and the attacks never happened. Tutorial state is
+    account-keyed (WorldSession::m_Tutorials <-> account_tutorial), and SendTutorialsData ships the
+    flags verbatim, so all 0xFFFFFFFF means "already seen".
+    """
+    values = ", ".join(["4294967295"] * 8)
+    return (
+        f"DELETE FROM `account_tutorial` WHERE `accountId`={ACCOUNT_ID};"
+        f"INSERT INTO `account_tutorial` "
+        "(`tut0`,`tut1`,`tut2`,`tut3`,`tut4`,`tut5`,`tut6`,`tut7`,`accountId`) "
+        f"VALUES ({values},{ACCOUNT_ID});"
+    )
+
+
 def level_up_world_seed_sql() -> str:
     """Spawns the hostile creature Plan 31 kills for its XP. Nearest-spawn selection uses the same
     approach the targeted-spell-cast modes already rely on: faction 14 is hostile to the player, so
@@ -732,6 +750,52 @@ def level_up_world_seed_sql() -> str:
         "ON DUPLICATE KEY UPDATE `position_x`=VALUES(`position_x`),`position_y`=VALUES(`position_y`),"
         "`position_z`=VALUES(`position_z`);"
     )
+
+
+def verify_level_up_seed(manifest: Manifest, generation: Generation) -> dict[str, object]:
+    """Precondition check run before the client session.
+
+    Three separate inconclusive runs were each a missing scene precondition, not a server problem:
+    no attack binding, the wrong (friendly, nearer) target from Tab, and a modal tutorial swallowing
+    input. Each was cheap to detect in the database and expensive to detect in a live session, so
+    assert them here instead of discovering them from a run with zero packets.
+    """
+    characters = generation["schemas"]["characters"]
+    world = generation["schemas"]["world"]
+    character = mysql(
+        manifest, generation,
+        f"SELECT `level`,`race`,`class` FROM `characters` WHERE `guid`={CHARACTER_GUID};", characters,
+    )
+    if character != "1\t1\t1":
+        raise RuntimeError(f"level-up fixture is not a level-1 Human Warrior: {character!r}")
+    action = mysql(
+        manifest, generation,
+        f"SELECT `button`,`action`,`type` FROM `character_action` WHERE `guid`={CHARACTER_GUID} "
+        "AND `spec`=0;",
+        characters,
+    )
+    if action != f"{LEVEL_UP_ATTACK_BUTTON}\t{LEVEL_UP_ATTACK_SPELL}\t0":
+        raise RuntimeError(f"auto-attack is not bound to button {LEVEL_UP_ATTACK_BUTTON}: {action!r}")
+    tutorials = mysql(
+        manifest, generation,
+        f"SELECT `tut0`,`tut1`,`tut2`,`tut3`,`tut4`,`tut5`,`tut6`,`tut7` FROM `account_tutorial` "
+        f"WHERE `accountId`={ACCOUNT_ID};",
+        characters,
+    )
+    if tutorials.split("\t") != ["4294967295"] * 8:
+        raise RuntimeError(f"tutorial flags were not cleared, a modal may swallow input: {tutorials!r}")
+    target = mysql(
+        manifest, generation,
+        f"SELECT `id` FROM `creature` WHERE `guid`={LEVEL_UP_XP_TARGET_GUID};", world,
+    )
+    if target != str(LEVEL_UP_XP_TARGET_ENTRY):
+        raise RuntimeError(f"XP target creature {LEVEL_UP_XP_TARGET_GUID} is not seeded: {target!r}")
+    return {
+        "character": {"level": 1, "race": 1, "class": 1},
+        "attack_binding": {"button": LEVEL_UP_ATTACK_BUTTON, "spell": LEVEL_UP_ATTACK_SPELL},
+        "tutorial_flags_cleared": True,
+        "xp_target": {"guid": LEVEL_UP_XP_TARGET_GUID, "entry": LEVEL_UP_XP_TARGET_ENTRY},
+    }
 
 
 def populated_character_seed_sql() -> str:
@@ -2328,7 +2392,9 @@ def run_client(args: argparse.Namespace) -> None:
         mysql(manifest, generation, target_targeted_spell_cast_seed_sql(), generation["schemas"]["characters"])
     if generation["mode"] == LEVEL_UP_MODE:
         mysql(manifest, generation, level_up_action_seed_sql(), generation["schemas"]["characters"])
+        mysql(manifest, generation, level_up_tutorial_seed_sql(), generation["schemas"]["characters"])
         mysql(manifest, generation, level_up_world_seed_sql(), generation["schemas"]["world"])
+        generation["level_up_seed"] = verify_level_up_seed(manifest, generation)
     if ISSUE97 and generation["mode"] == IN_WORLD_CONTROL_MODE:
         mysql(manifest, generation, populated_character_seed_sql(), generation["schemas"]["characters"])
         verify_populated_character_seed(manifest, generation)
@@ -3986,6 +4052,9 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             LEVEL_UP_TARGET_KEYS.index("space") + 1:
         ][:len(LEVEL_UP_TARGET_NAME)]
         assert LEVEL_UP_TARGET_KEYS[-1] == "Return"
+        level_up_tutorial = level_up_tutorial_seed_sql()
+        assert "INSERT INTO `account_tutorial`" in level_up_tutorial
+        assert "4294967295" in level_up_tutorial and str(ACCOUNT_ID) in level_up_tutorial
         level_up_seed = level_up_world_seed_sql()
         assert "INSERT INTO `creature`" in level_up_seed
         assert f"VALUES ({LEVEL_UP_XP_TARGET_GUID},{LEVEL_UP_XP_TARGET_ENTRY}," in level_up_seed
