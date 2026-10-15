@@ -217,6 +217,20 @@ TEST_F(DeathHandlerTest, DuplicateResponseCannotResurrectLivingPlayerAgain)
     }
 }
 
+TEST_F(DeathHandlerTest, SpiritHealerCannotResurrectLivingPlayerAgain)
+{
+    TestPlayer* player = CreateTestPlayer();
+    player->SetMaxHealth(100);
+    player->SetHealth(80);
+
+    for (uint32 attempt = 0; attempt < 2; ++attempt)
+    {
+        player->GetSession()->SendSpiritResurrect();
+        EXPECT_TRUE(player->IsAlive());
+        EXPECT_EQ(player->GetHealth(), 80u);
+    }
+}
+
 TEST(ResurrectRequestTest, WritesCataNameSicknessTimerAndSpellId)
 {
     for (std::string const& name : { std::string(), std::string("Spirit Healer") })
