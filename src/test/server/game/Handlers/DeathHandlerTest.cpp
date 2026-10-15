@@ -9,6 +9,7 @@
 
 #include "Corpse.h"
 #include "IntegrationTestFixture.h"
+#include "Spell.h"
 #include "SpellAuras.h"
 #include "SpellInfoTestHelper.h"
 #include "SpellPackets.h"
@@ -50,6 +51,25 @@ protected:
 
     std::vector<Corpse*> _corpses;
 };
+}
+
+TEST_F(DeathHandlerTest, GhostCastFailureCodesMatchCata)
+{
+    TestPlayer* player = CreateGhost();
+    auto spell = SpellInfoBuilder().WithId(8326).BuildUnique();
+    for (auto const& [result, wireCode] : {
+        std::pair{ SPELL_FAILED_CASTER_DEAD, uint8(24) },
+        std::pair{ SPELL_FAILED_CONFUSED, uint8(27) },
+        std::pair{ SPELL_FAILED_DONT_REPORT, uint8(28) } })
+    {
+        WorldPacket packet(SMSG_CAST_FAILED);
+        Spell::WriteCastResultInfo(packet, player, spell.get(), 0, result, SPELL_CUSTOM_ERROR_NONE);
+
+        ASSERT_EQ(packet.size(), 6u);
+        EXPECT_EQ(packet.read<uint8>(), 0u);
+        EXPECT_EQ(packet.read<uint32>(), 8326u);
+        EXPECT_EQ(packet.read<uint8>(), wireCode);
+    }
 }
 
 TEST_F(DeathHandlerTest, MeleeDamageTakenRoundsUpAfterPercentageReduction)
