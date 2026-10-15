@@ -18,6 +18,7 @@
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "adt.h"
+#include <cstddef>
 #include <cstring>
 
 // Helper
@@ -81,13 +82,16 @@ bool ADT_file::prepareLoadedData()
 
 // Cataclysm root ADTs have no MCIN index - offsMCIN is 0 and the MCNK cells follow the other
 // chunks directly - so the cells have to be located by walking the chunk list. Each cell is
-// recorded under its own iy/ix, the order the conversion loops consume, and validated the way the
-// old MCIN traversal did. Returns false for a malformed, incomplete or duplicate-cell chunk list.
+// recorded under its own iy/ix, the order the conversion loops consume, and the sub-chunks it
+// reads are validated. Returns false for a malformed, incomplete or duplicate-cell chunk list.
 bool ADT_file::BuildMCNKCellIndex()
 {
     uint8* data = GetData();
     uint32 const dataSize = GetDataSize();
     uint32 offset = 0;
+
+    // Bytes a consumed MCLQ has to provide: the converter reads through the end of its flag grid.
+    uint32 const requiredMclqBytes = offsetof(adt_MCLQ, data);
 
     while (offset + 8 <= dataSize)
     {
@@ -98,6 +102,10 @@ bool ADT_file::BuildMCNKCellIndex()
         // the end of the file is malformed and must not be dereferenced.
         if (chunkSize > dataSize - payloadOffset)
             return false;
+
+        // Sub-chunk offsets are relative to the chunk start, header included, while chunkSize counts
+        // the payload only, so the full extent is what they have to fit inside.
+        uint32 const chunkExtent = chunkSize + 8;
 
         if (*reinterpret_cast<uint32*>(data + offset) == MCNKMagic.fcc)
         {
@@ -113,13 +121,14 @@ bool ADT_file::BuildMCNKCellIndex()
             if (cells[cell->iy][cell->ix])
                 return false;
 
-            // Validate only the sub-chunks the conversion reads. Heights always come from MCVT,
-            // but the legacy MCLQ is consumed only when sizeMCLQ > 8: Cataclysm moved liquid to the
-            // root MH2O chunk and leaves offsMCLQ pointing at the end of the cell, so validating it
-            // unconditionally would reject every Cataclysm cell.
+            // Validate only the sub-chunks the conversion reads, against the MCNK's full extent:
+            // heights always come from MCVT, while the legacy MCLQ is consumed only when
+            // sizeMCLQ > 8, because Cataclysm moved liquid to the root MH2O chunk and leaves
+            // offsMCLQ pointing at the end of the cell - validating it unconditionally would reject
+            // every Cataclysm cell.
             if (cell->offsMCVT)
             {
-                if (cell->offsMCVT > chunkSize || chunkSize - cell->offsMCVT < sizeof(adt_MCVT))
+                if (cell->offsMCVT > chunkExtent || chunkExtent - cell->offsMCVT < sizeof(adt_MCVT))
                     return false;
 
                 if (!cell->getMCVT()->prepareLoadedData())
@@ -128,10 +137,13 @@ bool ADT_file::BuildMCNKCellIndex()
 
             if (cell->offsMCLQ && cell->sizeMCLQ > 8)
             {
-                if (cell->offsMCLQ > chunkSize || cell->sizeMCLQ > chunkSize - cell->offsMCLQ)
+                // The converter reads the whole 8x8 flag grid and 9x9 liquid grid, so a short MCLQ
+                // has to be rejected rather than read past its end.
+                if (cell->offsMCLQ > chunkExtent || chunkExtent - cell->offsMCLQ < requiredMclqBytes)
                     return false;
 
-                if (!cell->getMCLQ()->prepareLoadedData())
+                adt_MCLQ* mclq = cell->getMCLQ();
+                if (mclq->size < requiredMclqBytes - 8 || !mclq->prepareLoadedData())
                     return false;
             }
 
