@@ -211,11 +211,25 @@ CHAT_MESSAGE_MODE = "chat-message"
 # real client submits an ordinary CMSG_MESSAGECHAT_SAY - the packet that disconnected the real
 # client outright before issue #89's opcode split fix (server saw it as an unknown opcode).
 CHAT_MESSAGE_TEXT = "chatcheck"
+# Plan 31 / issue #102: level 1 -> 2 through a normal XP source. The fixture character is already
+# seeded at level 1 with a 400-XP threshold (player_xp_for_level row (1, 400)), so this mode only
+# has to make a real kill: a hostile creature is seeded beside the player, selected with Tab and
+# killed with the main-hand attack, which routes XP through KillRewarder -> Player::GiveXP.
+# No GM level command and no character-row edit (see .agents/docs/cataclysm-conversion-goal.md).
+LEVEL_UP_MODE = "level-up-progression"
+LEVEL_UP_XP_TARGET_GUID = 0x0A0B0C0D
+# Entry 2809 "Boar": faction 14 (hostile to all), no ScriptName/special AI, so it neither dies on
+# its own nor needs a lifespan limit. Same creature the targeted-spell-cast modes already seed.
+# Overridable because the fixture character is level 1 and the target's level comes from
+# creature_template, not the spawn row: if the chosen entry out-levels the character the kill will
+# not land, and picking a lower entry is a run parameter rather than a code change.
+LEVEL_UP_XP_TARGET_ENTRY = int(os.environ.get("LEVEL_UP_XP_TARGET_ENTRY", "2809"))
+LEVEL_UP_XP_TARGET_OFFSET = (3, 3)
 POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
     IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
     WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-    INVALID_TARGET_SPELL_CAST_MODE,
+    INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
 })
 CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
@@ -238,6 +252,8 @@ ISSUE97_GO_ENTRY, ISSUE97_PHASE_ID = 2843, 125
 
 
 def plan_number(mode: str) -> str:
+    if mode == LEVEL_UP_MODE:
+        return "31"
     if mode == CHAT_MESSAGE_MODE:
         return "89"
     if mode in {BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, INVALID_TARGET_SPELL_CAST_MODE}:
@@ -670,6 +686,23 @@ def issue97_world_seed_sql() -> str:
         f"AND `guid` IN ({ISSUE97_PHASED_CREATURE_GUID},{ISSUE97_CONTROL_CREATURE_GUID});"
         f"DELETE FROM `gameobject` WHERE `id` IN ({ISSUE97_GO_ENTRY},21008) "
         f"AND `guid`={ISSUE97_PHASED_GO_GUID};" + creature + gameobject
+    )
+
+
+def level_up_world_seed_sql() -> str:
+    """Spawns the hostile creature Plan 31 kills for its XP. Nearest-spawn selection uses the same
+    approach the targeted-spell-cast modes already rely on: faction 14 is hostile to the player, so
+    "target nearest enemy" selects it."""
+    x, y, z = CHARACTER_POSITION
+    target_x, target_y = x + LEVEL_UP_XP_TARGET_OFFSET[0], y + LEVEL_UP_XP_TARGET_OFFSET[1]
+    return (
+        "INSERT INTO `creature` "
+        "(`guid`,`id`,`map`,`zoneId`,`areaId`,`position_x`,`position_y`,`position_z`,"
+        "`wander_distance`,`MovementType`) "
+        f"VALUES ({LEVEL_UP_XP_TARGET_GUID},{LEVEL_UP_XP_TARGET_ENTRY},"
+        f"{CHARACTER_MAP},{CHARACTER_ZONE},{CHARACTER_ZONE},{target_x},{target_y},{z},0,0) "
+        "ON DUPLICATE KEY UPDATE `position_x`=VALUES(`position_x`),`position_y`=VALUES(`position_y`),"
+        "`position_z`=VALUES(`position_z`);"
     )
 
 
@@ -2067,6 +2100,24 @@ def automate_target_targeted_spell_cast(generation: Generation) -> None:
     time.sleep(TARGET_TARGETED_SPELL_CAST_COMPLETE_DELAY_SECONDS)  # let the second cast complete
 
 
+LEVEL_UP_ATTACK_KEYS = ("1",)  # main-hand attack is on action bar button 1
+LEVEL_UP_ATTACK_ROUNDS = 40
+LEVEL_UP_ATTACK_INTERVAL_SECONDS = 1.0
+
+
+def automate_level_up(generation: Generation) -> None:
+    """Selects the seeded hostile and kills it with the main-hand attack, so the XP comes from the
+    real KillRewarder -> Player::GiveXP path. No GM level command is involved."""
+    capture_desktop_screenshot(generation, "desktop-before-level-up.png")
+    automate_key_sequence(generation, ("Tab",))
+    time.sleep(1.0)  # let the client register the nearest enemy as the target
+    capture_desktop_screenshot(generation, "desktop-after-level-up-target.png")
+    for _ in range(LEVEL_UP_ATTACK_ROUNDS):
+        automate_key_sequence(generation, LEVEL_UP_ATTACK_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+        time.sleep(LEVEL_UP_ATTACK_INTERVAL_SECONDS)
+    capture_desktop_screenshot(generation, "desktop-after-level-up-attacks.png")
+
+
 # "/target <name>" (lowercase; the client's name lookup is case-insensitive) self-targets via the
 # chat edit box, then action bar button 1 casts the enemy-only Fireball at that (friendly) target.
 INVALID_TARGET_SPELL_CAST_KEYS = (
@@ -2238,6 +2289,8 @@ def run_client(args: argparse.Namespace) -> None:
         mysql(manifest, generation, target_targeted_spell_cast_world_seed_sql(), generation["schemas"]["world"])
     if generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE:
         mysql(manifest, generation, target_targeted_spell_cast_seed_sql(), generation["schemas"]["characters"])
+    if generation["mode"] == LEVEL_UP_MODE:
+        mysql(manifest, generation, level_up_world_seed_sql(), generation["schemas"]["world"])
     if ISSUE97 and generation["mode"] == IN_WORLD_CONTROL_MODE:
         mysql(manifest, generation, populated_character_seed_sql(), generation["schemas"]["characters"])
         verify_populated_character_seed(manifest, generation)
@@ -2294,6 +2347,7 @@ def run_client(args: argparse.Namespace) -> None:
         target_targeted_spell_cast_sent = False
         chat_message_sent = False
         invalid_target_spell_cast_sent = False
+        level_up_sent = False
         post_marker_hold_started: float | None = None
         milestone_definition = CHARACTER_MILESTONES if generation["mode"] in CHARACTER_MODES else CLIENT_MILESTONES
         while time.monotonic() < deadline:
@@ -2374,6 +2428,12 @@ def run_client(args: argparse.Namespace) -> None:
                 ):
                     automate_invalid_target_spell_cast(generation)
                     invalid_target_spell_cast_sent = True
+                if (
+                    generation["mode"] == LEVEL_UP_MODE and selection_sent and not level_up_sent
+                    and in_world_control_marker_count(generation) > 0
+                ):
+                    automate_level_up(generation)
+                    level_up_sent = True
                 if generation["mode"] in POST_MARKER_MODES and selection_sent:
                     marker_count = POST_MARKER_COUNTERS[generation["mode"]](generation)
                     if marker_count and post_marker_hold_started is None:
@@ -2798,10 +2858,29 @@ def invalid_target_spell_cast_marker_count(generation: Generation) -> int:
     return len(INVALID_TARGET_SPELL_CAST_SEQUENCE.findall(after_sync))
 
 
+LEVEL_UP_XP_PACKET = re.compile(r"\bS->C:\s+.*?\bSMSG_LOG_XPGAIN\b")
+LEVEL_UP_INFO_PACKET = re.compile(r"\bS->C:\s+.*?\bSMSG_LEVELUP_INFO\b")
+
+
+def level_up_marker_count(generation: Generation) -> int:
+    """Counts the level-up itself: SMSG_LEVELUP_INFO is only sent by Player::GiveLevel, so seeing it
+    after the in-world sync marker means a real XP award crossed the threshold on the wire."""
+    after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
+    after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
+    return len(LEVEL_UP_INFO_PACKET.findall(after_sync))
+
+
+def level_up_xp_gain_count(generation: Generation) -> int:
+    after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
+    after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
+    return len(LEVEL_UP_XP_PACKET.findall(after_sync))
+
+
 POST_MARKER_MODES = frozenset({
     INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
     GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE, CHARACTER_CREATION_MODE,
     BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
+    LEVEL_UP_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -2817,6 +2896,7 @@ POST_MARKER_COUNTERS = {
     TARGET_TARGETED_SPELL_CAST_MODE: target_targeted_spell_cast_marker_count,
     CHAT_MESSAGE_MODE: chat_message_marker_count,
     INVALID_TARGET_SPELL_CAST_MODE: invalid_target_spell_cast_marker_count,
+    LEVEL_UP_MODE: level_up_marker_count,
 }
 
 
@@ -2963,10 +3043,11 @@ def sanitized_evidence(
     target_targeted_spell_cast_mode = generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE
     chat_message_mode = generation["mode"] == CHAT_MESSAGE_MODE
     invalid_target_spell_cast_mode = generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE
+    level_up_mode = generation["mode"] == LEVEL_UP_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
         WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-        INVALID_TARGET_SPELL_CAST_MODE,
+        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
@@ -3041,6 +3122,8 @@ def sanitized_evidence(
             target_targeted_spell_cast_marker_count(generation) if target_targeted_spell_cast_mode else None
         ),
         "chat_message_marker_count": chat_message_marker_count(generation) if chat_message_mode else None,
+        "level_up_marker_count": level_up_marker_count(generation) if level_up_mode else None,
+        "level_up_xp_gain_count": level_up_xp_gain_count(generation) if level_up_mode else None,
         "invalid_target_spell_cast_sequence_count": (
             invalid_target_spell_cast_marker_count(generation) if invalid_target_spell_cast_mode else None
         ),
@@ -3096,10 +3179,11 @@ def verify(args: argparse.Namespace) -> None:
     target_targeted_spell_cast_mode = generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE
     chat_message_mode = generation["mode"] == CHAT_MESSAGE_MODE
     invalid_target_spell_cast_mode = generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE
+    level_up_mode = generation["mode"] == LEVEL_UP_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
         WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-        INVALID_TARGET_SPELL_CAST_MODE,
+        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     rows = character_row_count(manifest, generation) if character_mode else None
@@ -3237,6 +3321,15 @@ def verify(args: argparse.Namespace) -> None:
                 and evidence["spell_cast_marker_count"] == 0
                 and evidence["cast_failed_marker_count"] == 0
             )
+        if level_up_mode:
+            # SMSG_LEVELUP_INFO is emitted only by Player::GiveLevel, so it proves a real XP award
+            # crossed the threshold on the wire rather than a GM command or a row edit.
+            character_ok = character_ok and (
+                evidence["level_up_marker_count"] >= 1
+                and evidence["level_up_xp_gain_count"] >= 1
+                and evidence["post_marker_hold_seconds"] >= 5
+                and evidence["post_marker_snapshots"] == 2
+            )
         if creation_mode:
             character_ok = character_ok and (
                 any(item == {"direction": "c2s", "opcode": "CMSG_CHAR_CREATE"} for item in transcript)
@@ -3248,7 +3341,8 @@ def verify(args: argparse.Namespace) -> None:
             )
         if character_ok:
             evidence["outcome"] = (
-                "character_creation_pass" if creation_mode
+                "level_up_progression_pass" if level_up_mode
+                else "character_creation_pass" if creation_mode
                 else "run_speed_change_pass" if run_speed_mode
                 else "basic_spell_cast_pass" if basic_spell_cast_mode
                 else "target_targeted_spell_cast_pass" if target_targeted_spell_cast_mode
@@ -3834,6 +3928,17 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             f"VALUES ({CHARACTER_GUID},{TARGET_TARGETED_SPELL_CAST_SPELL_ID},1)"
             in target_targeted_spell_cast_seed_sql()
         )
+        assert plan_number(LEVEL_UP_MODE) == "31"
+        assert LEVEL_UP_MODE in POPULATED_CHARACTER_MODES
+        assert LEVEL_UP_MODE in POST_MARKER_MODES
+        assert LEVEL_UP_MODE in CHARACTER_MODES
+        level_up_seed = level_up_world_seed_sql()
+        assert "INSERT INTO `creature`" in level_up_seed
+        assert f"VALUES ({LEVEL_UP_XP_TARGET_GUID},{LEVEL_UP_XP_TARGET_ENTRY}," in level_up_seed
+        # The XP target must be spawned next to the player, not at the world origin.
+        seed_pattern = rf"{CHARACTER_MAP},{CHARACTER_ZONE},{CHARACTER_ZONE},(-?[0-9.]+),"
+        target_x = float(re.search(seed_pattern, level_up_seed).group(1))
+        assert target_x == CHARACTER_POSITION[0] + LEVEL_UP_XP_TARGET_OFFSET[0]
         assert str(TARGET_TARGETED_SPELL_CAST_DUMMY_GUID) in target_targeted_spell_cast_world_seed_sql()
         assert (
             f"VALUES ({TARGET_TARGETED_SPELL_CAST_DUMMY_GUID},{TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY},"
@@ -3950,7 +4055,7 @@ def parser() -> argparse.ArgumentParser:
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,
             RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE,
             BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-            INVALID_TARGET_SPELL_CAST_MODE,
+            INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
         ), default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)
