@@ -9,6 +9,8 @@
 
 #include "Corpse.h"
 #include "IntegrationTestFixture.h"
+#include "SpellAuras.h"
+#include "SpellInfoTestHelper.h"
 #include "SpellPackets.h"
 #include "WorldPacket.h"
 
@@ -48,6 +50,27 @@ protected:
 
     std::vector<Corpse*> _corpses;
 };
+}
+
+TEST_F(DeathHandlerTest, MeleeDamageTakenRoundsUpAfterPercentageReduction)
+{
+    TestPlayer* player = CreateTestPlayer();
+    TestCreature* wolf = CreateTestCreature(1, 299, TEST_FACTION_HOSTILE_TO_ALL);
+    auto spell = SpellInfoBuilder()
+        .WithId(900007)
+        .WithEffect(0, SPELL_EFFECT_APPLY_AURA, SPELL_AURA_MOD_DAMAGE_PERCENT_TAKEN)
+        .WithEffectBasePoints(0, -5)
+        .WithEffectMiscValue(0, SPELL_SCHOOL_MASK_NORMAL)
+        .BuildUnique();
+    Aura* aura = Aura::TryCreate(spell.get(), 1, player, player);
+    ASSERT_NE(aura, nullptr);
+    aura->ApplyForTargets();
+
+    EXPECT_EQ(player->MeleeDamageBonusTaken(wolf, 0, BASE_ATTACK), 0u);
+    EXPECT_EQ(player->MeleeDamageBonusTaken(wolf, 1, BASE_ATTACK), 1u);
+    EXPECT_EQ(player->MeleeDamageBonusTaken(wolf, 20, BASE_ATTACK), 19u);
+
+    aura->Remove();
 }
 
 TEST_F(DeathHandlerTest, WarriorRecoveryCannotWriteInactiveEnergySlot)
