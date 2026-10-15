@@ -118,15 +118,22 @@ archive hashes, per-tile inventory, output file hashes, and the config used. The
    without checking it, so the `if (!cells)` guard could not reject an MCIN-less file and MHDR bytes
    were read as cell pointers. Run against the real client, `map_extractor` **segfaulted inside
    `ConvertADT` on the first map and produced zero tiles**.
-   `ADT_file` now indexes the cells by walking the chunk list and recording each `MCNK` under its own
-   `ix`/`iy` (`ADT_file::getMCNK`), which also holds for layouts that do carry `MCIN`, and `ConvertADT`
-   rejects a file with no cells instead of dereferencing the header.
-   **Verified against the real client:** the same command now exits 0, processes all 206 maps and
-   writes 7,192 tiles. The anchor tile decodes to `MAPS` / version 10 / build 15595 with full area
-   data whose ids are plausible rather than garbage (Elwynn Forest 9 ×160, 59 ×46, 34 ×34, Northshire
-   12 ×16), `MHGT` heights 61.29–276.96 (the fixture's z=83.53 lies inside) and a `MLIQ` section. The
-   server's own `MapMagic`/`MapVersionMagic` (`GridTerrainData.h`) match, so `GridTerrainLoader` will
-   accept it. Raw evidence: `.../cata-runs/plan32-terrain-mcnk/`.
+   `ADT_file` now indexes the cells by walking the chunk list, recording each `MCNK` under its own
+   `iy`/`ix` — the row/column order the conversion loops and the reference's
+   `area_ids[mcnk->iy][mcnk->ix]` use (`ADT_file::getMCNK`), and `ConvertADT` rejects a file whose
+   cells are missing, duplicated or malformed instead of dereferencing a header slot.
+   **Verified against the real client:** the same command exits 0, processes all 206 maps and writes
+   7,192 tiles. The anchor tile decodes to `MAPS` / version 10 / build 15595 with `MHGT` heights
+   61.29–276.96 (the fixture's z=83.53 lies inside) and a `MLIQ` section, and the server's own
+   `MapMagic`/`MapVersionMagic` (`GridTerrainData.h`) match, so `GridTerrainLoader` accepts it. The
+   cell layout was then checked against the raw file rather than by plausibility: reading each MCNK's
+   own `ix`/`iy`/`areaid` out of the ADT, the produced tile's `area_ids[iy][ix]` matches that grid
+   **256/256**, while the transposed reading (cell `ix` used as the row, as an earlier revision of
+   this branch wrongly did) matches only 188/256. As a by-product, the fixture position's own cell
+   spans world X (-8966.66, -8933.33] and world Y (-133.33, -100.00] and carries client area **9
+   (Elwynn Forest)**, not 12 — the `12` cells are the tile's `iy=0` row, so the harness's "Northshire"
+   label is not the terrain cell area at the spawn. Raw evidence:
+   `.../cata-runs/plan32-terrain-mcnk/`.
 5. **The route cannot be validated with geometry disabled.** The harness writes
    `MoveMaps.Enable=0`, `vmap.enableLOS=0`, `vmap.enableHeight=0`
    (`apps/cata/run_real_client_authentication.py`), while `worldserver.conf.dist` defaults them on.
