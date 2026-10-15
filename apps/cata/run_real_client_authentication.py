@@ -224,6 +224,8 @@ LEVEL_UP_XP_TARGET_GUID = 0x0A0B0C0D
 # creature_template, not the spawn row: if the chosen entry out-levels the character the kill will
 # not land, and picking a lower entry is a run parameter rather than a code change.
 LEVEL_UP_XP_TARGET_ENTRY = int(os.environ.get("LEVEL_UP_XP_TARGET_ENTRY", "2809"))
+# The seeded target's name as the client knows it, used for "/target <name>" selection.
+LEVEL_UP_TARGET_NAME = os.environ.get("LEVEL_UP_TARGET_NAME", "Boar")
 LEVEL_UP_XP_TARGET_OFFSET = (3, 3)
 # Spell 78 is "Attack", the auto-attack every melee class starts with. Button 0 is the one the
 # main-hand keypress reaches.
@@ -2126,17 +2128,26 @@ def automate_target_targeted_spell_cast(generation: Generation) -> None:
     time.sleep(TARGET_TARGETED_SPELL_CAST_COMPLETE_DELAY_SECONDS)  # let the second cast complete
 
 
-LEVEL_UP_ATTACK_KEYS = ("1",)  # main-hand attack is on action bar button 1
+LEVEL_UP_ATTACK_KEYS = ("1",)  # main-hand attack is on action bar button 0
 LEVEL_UP_ATTACK_ROUNDS = 40
 LEVEL_UP_ATTACK_INTERVAL_SECONDS = 1.0
+# Tab alone is not enough: it selects the nearest unit, and in the fixture's cell that is the
+# friendly Deputy Willem (faction 12, ~2.3yd) rather than the seeded Boar (faction 14, ~4.2yd).
+# Attacking a friendly target sends no CMSG_ATTACK, so the first run produced no attacks at all.
+# The client-local "/target <name>" macro resolves against the client's own object cache (the same
+# mechanism INVALID_TARGET_SPELL_CAST_MODE already uses), needs no GM rights, and still sends a
+# genuine CMSG_SET_SELECTION.
+LEVEL_UP_TARGET_KEYS = (
+    "Return", "slash", *tuple("target"), "space", *tuple(LEVEL_UP_TARGET_NAME.lower()), "Return",
+)
 
 
 def automate_level_up(generation: Generation) -> None:
     """Selects the seeded hostile and kills it with the main-hand attack, so the XP comes from the
     real KillRewarder -> Player::GiveXP path. No GM level command is involved."""
     capture_desktop_screenshot(generation, "desktop-before-level-up.png")
-    automate_key_sequence(generation, ("Tab",))
-    time.sleep(1.0)  # let the client register the nearest enemy as the target
+    automate_key_sequence(generation, LEVEL_UP_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(1.0)  # let the client resolve the name and register the target
     capture_desktop_screenshot(generation, "desktop-after-level-up-target.png")
     for _ in range(LEVEL_UP_ATTACK_ROUNDS):
         automate_key_sequence(generation, LEVEL_UP_ATTACK_KEYS, hold_seconds=0.05, gap_seconds=0.05)
@@ -3968,6 +3979,13 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             in level_up_action
         )
         assert LEVEL_UP_ATTACK_BUTTON == 0, "the main-hand keypress only reaches action button 0"
+        # Tab selected the nearer friendly Deputy Willem, not the seeded hostile, so selection must
+        # be by name rather than proximity.
+        assert LEVEL_UP_TARGET_KEYS[0] == "Return" and "slash" in LEVEL_UP_TARGET_KEYS
+        assert tuple(LEVEL_UP_TARGET_NAME.lower()) == LEVEL_UP_TARGET_KEYS[
+            LEVEL_UP_TARGET_KEYS.index("space") + 1:
+        ][:len(LEVEL_UP_TARGET_NAME)]
+        assert LEVEL_UP_TARGET_KEYS[-1] == "Return"
         level_up_seed = level_up_world_seed_sql()
         assert "INSERT INTO `creature`" in level_up_seed
         assert f"VALUES ({LEVEL_UP_XP_TARGET_GUID},{LEVEL_UP_XP_TARGET_ENTRY}," in level_up_seed
