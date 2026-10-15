@@ -152,7 +152,13 @@ archive hashes, per-tile inventory, output file hashes, and the config used. The
    `wow-update-base-*` chain to it, and opens the locale archive with its `patch-<locale>` and
    `wow-update-<locale>-*` chains. `src/tools/CMakeLists.txt` now links `storm` for this tool too.
    This is a deliberate divergence from upstream, which still uses libmpq for both tools; the Cata
-   patch format requires it.
+   patch format requires it. Discovery is restricted to the target client's base generation
+   (`NEW_BASE_SET_BUILD` 15211 .. `CLIENT_BUILD` 15595), matching the pin's skip rule, so a
+   `wow-update-base-16000.MPQ` or a retained pre-rebase patch cannot silently change the
+   reconstructed data. A missing required archive, a base that will not open or a patch that will
+   not attach now fails the run (`OpenMPQArchives` returns false and main exits non-zero before
+   parsing) instead of leaving the locale archive open and reporting "No errors" with missing
+   geometry; the MPQ reader also rejects a failed or short read rather than exposing unread bytes.
 
    **Functional check against the real client** (`.../.issue118-ssd-client/Data`, build-15595): the
    pre-migration binary opened only `locale-enUS.MPQ`, failed every WotLK archive and produced no
@@ -161,7 +167,11 @@ archive hashes, per-tile inventory, output file hashes, and the config used. The
    **10,496 assets (2,245 WMO, 8,249 M2)** ending "Work complete. No errors." That set includes
    ADT-level doodads (`Abbeyshelf01.m2`, `Elwynnstonefencepost.m2`, `Elwynnrock1.m2`), which only
    appear when the object-side `_obj0` read of finding 6 works, so that fix is functionally exercised
-   as well. Raw logs live outside Git at `.../cata-runs/plan32-archive-migration/`.
+   as well. Re-checked after the review hardening with identical results, and the two new failure
+   paths were exercised directly: a scratch Data dir without `world.MPQ` exits non-zero with
+   "nothing was extracted" and no success line, and a `wow-update-base-16000.MPQ` is reported as
+   skipped and not attached. Raw logs live outside Git at
+   `.../cata-runs/plan32-archive-migration/`.
 
 ## Blockers (each needs explicit authorization or input)
 
