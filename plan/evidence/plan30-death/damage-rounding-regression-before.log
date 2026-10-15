@@ -1,0 +1,23 @@
+Running main() from /home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/var/build-plan7/googletest/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = DeathHandlerTest.MeleeDamageTakenRoundsUpAfterPercentageReduction
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from DeathHandlerTest
+[ RUN      ] DeathHandlerTest.MeleeDamageTakenRoundsUpAfterPercentageReduction
+/home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/src/test/server/game/Handlers/DeathHandlerTest.cpp:70: Failure
+Expected equality of these values:
+  player->MeleeDamageBonusTaken(wolf, 1, BASE_ATTACK)
+    Which is: 0
+  1u
+    Which is: 1
+
+[  FAILED  ] DeathHandlerTest.MeleeDamageTakenRoundsUpAfterPercentageReduction (3 ms)
+[----------] 1 test from DeathHandlerTest (3 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (4 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] DeathHandlerTest.MeleeDamageTakenRoundsUpAfterPercentageReduction
+
+ 1 FAILED TEST

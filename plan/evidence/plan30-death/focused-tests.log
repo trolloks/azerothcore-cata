@@ -1,0 +1,58 @@
+Running main() from /home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/var/build-plan7/googletest/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = DeathHandlerTest.*:DeathMovementPacketsTest.*:DeathMovementHandlerTest.*:ResurrectRequestTest.*:IntegrationTestFixture.HasteChangesIntervalNotRage
+[==========] Running 18 tests from 5 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from IntegrationTestFixture
+[ RUN      ] IntegrationTestFixture.HasteChangesIntervalNotRage
+[       OK ] IntegrationTestFixture.HasteChangesIntervalNotRage (3 ms)
+[----------] 1 test from IntegrationTestFixture (3 ms total)
+
+[----------] 11 tests from DeathHandlerTest
+[ RUN      ] DeathHandlerTest.GhostCastFailureCodesMatchCata
+[       OK ] DeathHandlerTest.GhostCastFailureCodesMatchCata (0 ms)
+[ RUN      ] DeathHandlerTest.MeleeDamageTakenRoundsUpAfterPercentageReduction
+[       OK ] DeathHandlerTest.MeleeDamageTakenRoundsUpAfterPercentageReduction (0 ms)
+[ RUN      ] DeathHandlerTest.WarriorRecoveryCannotWriteInactiveEnergySlot
+[       OK ] DeathHandlerTest.WarriorRecoveryCannotWriteInactiveEnergySlot (0 ms)
+[ RUN      ] DeathHandlerTest.PowerSlotsFollowClassDataRatherThanPowerEnum
+[       OK ] DeathHandlerTest.PowerSlotsFollowClassDataRatherThanPowerEnum (0 ms)
+[ RUN      ] DeathHandlerTest.NonPlayerPowersRetainExistingSlots
+[       OK ] DeathHandlerTest.NonPlayerPowersRetainExistingSlots (0 ms)
+[ RUN      ] DeathHandlerTest.PrematureReclaimKeepsOwnedCorpseAndGhostState
+[       OK ] DeathHandlerTest.PrematureReclaimKeepsOwnedCorpseAndGhostState (0 ms)
+[ RUN      ] DeathHandlerTest.ForeignCorpseCannotResurrectRequesterWithoutOwnCorpse
+[       OK ] DeathHandlerTest.ForeignCorpseCannotResurrectRequesterWithoutOwnCorpse (0 ms)
+[ RUN      ] DeathHandlerTest.DuplicateReleaseKeepsSingleOwnedCorpse
+[       OK ] DeathHandlerTest.DuplicateReleaseKeepsSingleOwnedCorpse (0 ms)
+[ RUN      ] DeathHandlerTest.WrongOffererCannotAcceptPendingResurrection
+[       OK ] DeathHandlerTest.WrongOffererCannotAcceptPendingResurrection (0 ms)
+[ RUN      ] DeathHandlerTest.DuplicateResponseCannotResurrectLivingPlayerAgain
+[       OK ] DeathHandlerTest.DuplicateResponseCannotResurrectLivingPlayerAgain (0 ms)
+[ RUN      ] DeathHandlerTest.SpiritHealerCannotResurrectLivingPlayerAgain
+[       OK ] DeathHandlerTest.SpiritHealerCannotResurrectLivingPlayerAgain (0 ms)
+[----------] 11 tests from DeathHandlerTest (0 ms total)
+
+[----------] 1 test from ResurrectRequestTest
+[ RUN      ] ResurrectRequestTest.WritesCataNameSicknessTimerAndSpellId
+[       OK ] ResurrectRequestTest.WritesCataNameSicknessTimerAndSpellId (0 ms)
+[----------] 1 test from ResurrectRequestTest (0 ms total)
+
+[----------] 4 tests from DeathMovementPacketsTest
+[ RUN      ] DeathMovementPacketsTest.WritesRootAndWaterWalkRequestsWithCataGuidOrder
+[       OK ] DeathMovementPacketsTest.WritesRootAndWaterWalkRequestsWithCataGuidOrder (0 ms)
+[ RUN      ] DeathMovementPacketsTest.WritesNearTeleportAndReadsCataAcknowledgement
+[       OK ] DeathMovementPacketsTest.WritesNearTeleportAndReadsCataAcknowledgement (0 ms)
+[ RUN      ] DeathMovementPacketsTest.WritesTeleportObserverUpdate
+[       OK ] DeathMovementPacketsTest.WritesTeleportObserverUpdate (0 ms)
+[ RUN      ] DeathMovementPacketsTest.FlagAcknowledgementsCarryCounterAndMovement
+[       OK ] DeathMovementPacketsTest.FlagAcknowledgementsCarryCounterAndMovement (0 ms)
+[----------] 4 tests from DeathMovementPacketsTest (0 ms total)
+
+[----------] 1 test from DeathMovementHandlerTest
+[ RUN      ] DeathMovementHandlerTest.ForeignFlagAcknowledgementsCannotChangeMoverState
+[       OK ] DeathMovementHandlerTest.ForeignFlagAcknowledgementsCannotChangeMoverState (0 ms)
+[----------] 1 test from DeathMovementHandlerTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 18 tests from 5 test suites ran. (4 ms total)
+[  PASSED  ] 18 tests.

@@ -1,0 +1,21 @@
+From https://github.com/trolloks/azerothcore-cata
+ * branch                master     -> FETCH_HEAD
+Starting AzerothCore SQL Codestyle check...
+
+Please read the SQL Standards for AzerothCore:
+https://www.azerothcore.org/wiki/sql-standards
+
+
+
+Multiple blank lines check : Passed
+Trailing whitespace check : Passed
+SQL codestyle check : Passed
+INSERT, UPDATE & DELETE safety usage check : Passed
+Missing semicolon check : Passed
+Backtick check : Passed
+Directory check : Passed
+Table engine check : Passed
+
+
+
+✅ Everything looks good

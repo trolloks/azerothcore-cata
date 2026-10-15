@@ -1,0 +1,37 @@
+Running main() from /home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/var/build-plan7/googletest/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = DeathHandlerTest.GhostCastFailureCodesMatchCata
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from DeathHandlerTest
+[ RUN      ] DeathHandlerTest.GhostCastFailureCodesMatchCata
+/home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/src/test/server/game/Handlers/DeathHandlerTest.cpp:71: Failure
+Expected equality of these values:
+  packet.read<uint8>()
+    Which is: '\x17' (23)
+  wireCode
+    Which is: '\x18' (24)
+
+/home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/src/test/server/game/Handlers/DeathHandlerTest.cpp:71: Failure
+Expected equality of these values:
+  packet.read<uint8>()
+    Which is: '\x1A' (26)
+  wireCode
+    Which is: '\x1B' (27)
+
+/home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/src/test/server/game/Handlers/DeathHandlerTest.cpp:71: Failure
+Expected equality of these values:
+  packet.read<uint8>()
+    Which is: '\x1B' (27)
+  wireCode
+    Which is: '\x1C' (28)
+
+[  FAILED  ] DeathHandlerTest.GhostCastFailureCodesMatchCata (13 ms)
+[----------] 1 test from DeathHandlerTest (13 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (16 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] DeathHandlerTest.GhostCastFailureCodesMatchCata
+
+ 1 FAILED TEST

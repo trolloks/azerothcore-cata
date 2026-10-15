@@ -1,0 +1,16 @@
+[
+  {
+    "attempt": "legacy-power-fields",
+    "exception": "0xC0000005 (ACCESS_VIOLATION) at 0033:000000014003347A",
+    "instruction": "\"0x000000014003347A\" referenced memory at \"0x0000000000000001\".",
+    "report_sha256": "6e502b1efb40d18bd0edd28849dce14abde3de60fd63bed802f53b198981251e",
+    "dump_sha256": "e4caef2d7209bfc7e1441b24952736aebe8251949beb02c9f02b879e9bcb5b69"
+  },
+  {
+    "attempt": "count-only-fix",
+    "exception": "0xC0000005 (ACCESS_VIOLATION) at 0033:000000014003347A",
+    "instruction": "\"0x000000014003347A\" referenced memory at \"0x0000000000000001\".",
+    "report_sha256": "695ab24143edb4ee7819fa352112a4c4be1e0aeb92480a46a0f321a51b794720",
+    "dump_sha256": "9975154539e065220eefba23ba06a570a3d8ffb976603a9043366a6f2bb91581"
+  }
+]

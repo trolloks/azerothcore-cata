@@ -1,0 +1,69 @@
+{
+  "source_commit": "f57e62bfce73bbc8fd02ee0bd0d4aa225982bc71",
+  "generation": 4,
+  "binaries": {
+    "authserver": {
+      "path": "/home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/var/build-plan7/src/server/apps/authserver",
+      "sha256": "879c8940b209d5228e9f057878d04914977eacb1ce71c244093e397caa0674f2",
+      "version": "AzerothCore rev. f57e62bfce73+ 2026-10-15 13:31:27 +0200 (plan/30-player-death-release-corpse-recovery-and-resurrection branch) (Unix, Release, Static)"
+    },
+    "worldserver": {
+      "path": "/home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/var/build-plan7/src/server/apps/worldserver",
+      "sha256": "cc3010d97627d93f5c13adfa61c17e8216a3b89bd4c269ce9f03895ea537fc5c",
+      "version": "AzerothCore rev. f57e62bfce73+ 2026-10-15 13:31:27 +0200 (plan/30-player-death-release-corpse-recovery-and-resurrection branch) (Unix, Release, Static)"
+    },
+    "unit_tests": {
+      "path": "/home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/var/build-plan7/src/test/unit_tests",
+      "sha256": "619accaaa1f510e9b917e1df456f9438b3afd08041f4d54c13e7072e8faa5310"
+    }
+  },
+  "data_dbc_hash": "86bee8cd69fe0988b5e650b993390884594f45643fba60caf57d1ea852ca2475",
+  "data_maps_hash": "a8113db13679a3bb2a08b6e9f6a90c9b435eae43af3a4de413dd0ab56a8d0645",
+  "no_current_run_crash_reports": true,
+  "client_observer_sha256": "843f9944c6022ca29d5dbc4a488dd52198372322bcbbbc8a13520fa9249ccc69",
+  "loaded_cpp_scripts": 895,
+  "incoming_swings": 63,
+  "incoming_damage": 60,
+  "runner_teardown": {
+    "exit_code": 1,
+    "failure": "worldserver subprocess wait timed out after one second after the final normal logout",
+    "phase": "observed",
+    "generic_runner_result": "failed during teardown",
+    "scene_verdict_source": "native witness, packet headers and saved state checked independently; cleanup verified separately"
+  },
+  "script_configuration": {
+    "SCRIPTS": "none",
+    "SCRIPTS_SPELLS": "static"
+  },
+  "packet_counts": {
+    "SMSG_CAST_FAILED": 9,
+    "SMSG_MOVE_ROOT": 4,
+    "CMSG_FORCE_MOVE_ROOT_ACK": 4,
+    "CMSG_REPOP_REQUEST": 1,
+    "SMSG_MOVE_WATER_WALK": 2,
+    "SMSG_MOVE_UNROOT": 2,
+    "MSG_MOVE_TELEPORT": 1,
+    "CMSG_MOVE_WATER_WALK_ACK": 3,
+    "CMSG_FORCE_MOVE_UNROOT_ACK": 2,
+    "MSG_MOVE_TELEPORT_ACK": 1,
+    "SMSG_SPIRIT_HEALER_CONFIRM": 1,
+    "CMSG_SPIRIT_HEALER_ACTIVATE": 1,
+    "SMSG_MOVE_LAND_WALK": 1
+  },
+  "client_build": 15595,
+  "client_executable_sha256": "0ea9cc0458cb137f4e0767e8a1896e2042480a4a22397480d7ee64c2e696192a",
+  "database_cache_key": "95c7f36586609591a88ace69192bac5b8f19737cff51d1278e453a8ef95ff881",
+  "database_cache_result": "restored",
+  "settings": {
+    "Rate.Health": "1",
+    "DurabilityLoss.OnDeath": "10",
+    "DurabilityLoss.OnSpiritResurrect": "25",
+    "Death.SicknessLevel": "11",
+    "DurabilityLossChance.Damage": "0",
+    "DurabilityLossChance.Absorb": "0",
+    "DurabilityLossChance.Parry": "0",
+    "DurabilityLossChance.Block": "0",
+    "vmap.enableLOS": "0",
+    "vmap.enableHeight": "0"
+  }
+}

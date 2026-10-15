@@ -1,0 +1,38 @@
+{
+  "source_commit": "fb2cf10e638dd6a3ccd90de24b7c9153c8b65de3",
+  "executables": {
+    "worldserver": {
+      "sha256": "e9d211cbba9a77da1309c0386d9f9acf85ebc0ad56dd83b00a14dec984d39dfc",
+      "version": "AzerothCore rev. fb2cf10e638d+ 2026-10-15 10:13:44 +0200 (plan/30-player-death-release-corpse-recovery-and-resurrection branch) (Unix, Release, Static)"
+    },
+    "authserver": {
+      "sha256": "ceeeed88c35661f3cff732151b2a618d198cde3a79b3bdd60ad03793170e605e",
+      "version": "AzerothCore rev. fb2cf10e638d+ 2026-10-15 10:13:44 +0200 (plan/30-player-death-release-corpse-recovery-and-resurrection branch) (Unix, Release, Static)"
+    },
+    "unit_tests": {
+      "sha256": "0a514f1215beca4ed54ff7e478ee0033179be10bc86a2f9d9c771dbd2d33e463"
+    }
+  },
+  "client_sha256": "0ea9cc0458cb137f4e0767e8a1896e2042480a4a22397480d7ee64c2e696192a",
+  "server_dbc_tree_sha256": "86bee8cd69fe0988b5e650b993390884594f45643fba60caf57d1ea852ca2475",
+  "server_maps_tree_sha256": "a8113db13679a3bb2a08b6e9f6a90c9b435eae43af3a4de413dd0ab56a8d0645",
+  "selected_world_settings": {
+    "vmap.enableLOS": "0",
+    "vmap.enableHeight": "0",
+    "DurabilityLoss.OnDeath": "10",
+    "DurabilityLoss.OnSpiritResurrect": "25",
+    "DurabilityLossChance.Damage": "0",
+    "DurabilityLossChance.Absorb": "0",
+    "DurabilityLossChance.Parry": "0",
+    "DurabilityLossChance.Block": "0",
+    "Death.SicknessLevel": "11"
+  },
+  "script_configuration": {
+    "SCRIPTS": "none",
+    "SCRIPTS_SPELLS": "static"
+  },
+  "loaded_cpp_scripts": 895,
+  "required_script": "spell_gen_spirit_healer_res",
+  "generation": 2,
+  "no_current_run_crash_reports": true
+}

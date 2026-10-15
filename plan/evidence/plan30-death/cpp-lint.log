@@ -1,0 +1,17 @@
+Starting AzerothCore CPP Codestyle check...
+
+Please read the C++ Code Standards for AzerothCore:
+https://www.azerothcore.org/wiki/cpp-code-standards
+
+
+Multiple blank lines check : Passed
+Trailing whitespace check : Passed
+GetCounter() check : Passed
+Misc codestyle check : Passed
+GetTypeId() check : Passed
+NpcFlagHelpers check : Passed
+ItemFlagHelpers check : Passed
+ItemTemplateFlagHelpers check : Passed
+Qualifier alignment check : Passed
+
+Everything looks good

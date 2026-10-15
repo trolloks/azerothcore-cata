@@ -1,0 +1,30 @@
+Running main() from /home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/var/build-plan7/googletest/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = DeathHandlerTest.SpiritHealerCannotResurrectLivingPlayerAgain
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from DeathHandlerTest
+[ RUN      ] DeathHandlerTest.SpiritHealerCannotResurrectLivingPlayerAgain
+/home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/src/test/server/game/Handlers/DeathHandlerTest.cpp:230: Failure
+Expected equality of these values:
+  player->GetHealth()
+    Which is: 50
+  80u
+    Which is: 80
+
+/home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/src/test/server/game/Handlers/DeathHandlerTest.cpp:230: Failure
+Expected equality of these values:
+  player->GetHealth()
+    Which is: 50
+  80u
+    Which is: 80
+
+[  FAILED  ] DeathHandlerTest.SpiritHealerCannotResurrectLivingPlayerAgain (1 ms)
+[----------] 1 test from DeathHandlerTest (1 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (1 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] DeathHandlerTest.SpiritHealerCannotResurrectLivingPlayerAgain
+
+ 1 FAILED TEST
