@@ -18,6 +18,7 @@
 #include "wdtfile.h"
 #include "adtfile.h"
 #include "vmapexport.h"
+#include "StringFormat.h"
 
 #include <cstdio>
 
@@ -124,8 +125,8 @@ ADTFile* WDTFile::GetMap(int x, int z)
     if (!(x >= 0 && z >= 0 && x < 64 && z < 64))
         return nullptr;
 
-    char name[512];
-
-    snprintf(name, sizeof(name), R"(World\Maps\%s\%s_%d_%d.adt)", filename.c_str(), filename.c_str(), x, z);
-    return new ADTFile(name);
+    // Cataclysm moved the doodad and WMO placement chunks (MMDX/MWMO/MDDF/MODF) out of the terrain
+    // root ADT into the object-side file, which is the only ADT content this reader consumes.
+    std::string const name = Acore::StringFormat(R"(World\Maps\{}\{}_{}_{}_obj0.adt)", filename, filename, x, z);
+    return new ADTFile(name.c_str());
 }
