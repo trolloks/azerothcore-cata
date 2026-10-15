@@ -1,15 +1,15 @@
 # Plan 32: reproducible Northshire collision and pathfinding (issue #134)
 
-Status: **freeze, tool audit and the object-ADT reader fix complete; native acceptance BLOCKED**. The
-acceptance needs the map tools built and the geometry extracted, and no build/extraction is
-authorized yet. Nothing here claims a passing native run.
+Status: **object-ADT and archive-layer fixes done, tools build, VMAP extraction validated against the
+real client; native map-0 acceptance STILL UNRUN**. The tools were authorized, built and run once
+(finding 7), so findings 6 and 7 are compiled and the VMAP extraction now works. The server data,
+navmesh, harness geometry path and the client acceptance remain open.
 
-This record covers the checklist items that do not require a build: "freeze the scenario, required
-data/artifact manifest and blockers", "audit the pinned reference and affected shared AC callers",
-and one Cata prerequisite that the audit surfaced and that could be settled in code without running
-the tools — the object-side `_obj0` ADT (finding 6). That fix is one step, not the finish line: the
-archive layer beneath it (finding 7) and terrain chunk discovery (finding 4) stay open, and
-everything downstream of extraction stays blocked.
+This record covers "freeze the scenario, required data/artifact manifest and blockers", "audit the
+pinned reference and affected shared AC callers", and the Cata parser prerequisites that audit
+surfaced: the object-side `_obj0` ADT (finding 6) and the archive enumeration/patch reading
+(finding 7). Terrain chunk discovery (finding 4) is the next unverified parser question, and it
+comes before the extraction stage that is now partly exercised.
 
 ## Frozen scenario
 
@@ -139,38 +139,47 @@ archive hashes, per-tile inventory, output file hashes, and the config used. The
    build-15595 install by itself. An earlier revision of this record called `_obj0` the whole gap on
    the strength of a token sweep; that sweep only matched format tokens and never looked at archive
    names, so the claim is withdrawn here.
-7. **The VMAP extractor cannot open the build-15595 archives at all.** `vmapexport.cpp`
-   `fillArchiveNameVector` enumerates the WotLK set only — `locale-*.MPQ`, `expansion-locale-*.MPQ`,
+7. **The VMAP extractor could not open the build-15595 archives — fixed and validated in this
+   branch.** `vmapexport.cpp` enumerated the WotLK set only — `locale-*.MPQ`, `expansion-locale-*.MPQ`,
    `lichking-locale-*.MPQ`, `common.MPQ`, `common-2.MPQ`, `expansion.MPQ`, `lichking.MPQ` and
-   `patch*.MPQ` — and never opens Cata's `world.MPQ`, `art.MPQ`, `expansion1/2/3.MPQ`, `world2.MPQ` or
-   the `wow-update` chains. Its `MPQFile` is backed by the bundled libmpq
-   (`libmpq__archive_open`/`libmpq__file_number`) and looks each file up across whichever archives it
-   happened to open, with no patch-chain concept; the pin's `vmapexport.cpp` opens the Cata base sets
-   and applies `SFileOpenPatchArchive`, and its `mpqfile.cpp` reads with `SFILE_OPEN_PATCHED_FILE`.
-   The credited commit `568fba707c` carried that StormLib/archive migration alongside the filename
-   change. On a build-15595 install the ADT, WMO and M2 files live in archives this program never
-   opens, so finding 6 alone cannot surface them. This branch's own `map_extractor` is already the
-   Cata-shaped model for the fix: its `System.cpp` `CONF_mpq_list` starts at `world.MPQ`/`art.MPQ`/
-   `expansion1.MPQ` and it applies `wow-update-<locale>-<build>.MPQ`/`wow-update-base-<build>.MPQ`
-   through `SFileOpenPatchArchive` (`mpq_libmpq.cpp`). Not attempted here: this PR stays a bounded
-   filename fix.
+   `patch*.MPQ` — and its `MPQFile` was backed by the bundled libmpq, which cannot read Blizzard's
+   incremental binary-diff patches. On a build-15595 install none of `world.MPQ`, `art.MPQ`,
+   `expansion1/2/3.MPQ`, `world2.MPQ` or the `wow-update` chains were opened, so the ADT, WMO and M2
+   files were unreachable and finding 6 could not take effect.
+   The tool now reuses the StormLib layer the in-tree `map_extractor` already had (`023d2bd21` added
+   the Cata base-archive list, `09707af2a` vendored StormLib and switched that tool to it): it opens
+   `world.MPQ` as the base archive, attaches `art.MPQ`, `world2.MPQ`, `expansion1/2/3.MPQ` and the
+   `wow-update-base-*` chain to it, and opens the locale archive with its `patch-<locale>` and
+   `wow-update-<locale>-*` chains. `src/tools/CMakeLists.txt` now links `storm` for this tool too.
+   This is a deliberate divergence from upstream, which still uses libmpq for both tools; the Cata
+   patch format requires it.
+
+   **Functional check against the real client** (`.../.issue118-ssd-client/Data`, build-15595): the
+   pre-migration binary opened only `locale-enUS.MPQ`, failed every WotLK archive and produced no
+   geometry. The migrated binary logged opening `world.MPQ` and applying `art/world2/expansion1/2/3`
+   plus `wow-update-base-15211/15354/15595` and the locale chains, processed 143 maps and extracted
+   **10,496 assets (2,245 WMO, 8,249 M2)** ending "Work complete. No errors." That set includes
+   ADT-level doodads (`Abbeyshelf01.m2`, `Elwynnstonefencepost.m2`, `Elwynnrock1.m2`), which only
+   appear when the object-side `_obj0` read of finding 6 works, so that fix is functionally exercised
+   as well. Raw logs live outside Git at `.../cata-runs/plan32-archive-migration/`.
 
 ## Blockers (each needs explicit authorization or input)
 
-- **Build authorization.** The four tools are not built. `var/extractors/{maps,vmaps,mmaps}` exist but
-  are empty, so no geometry has ever been produced here, and the object-ADT fix in finding 6 is
-  therefore **uncompiled and unproven against real tiles** — builds are not authorized for this
-  branch.
-- **VMAP archive enumeration and patch reading** (finding 7). The VMAP extractor still lists the
-  WotLK archives and reads through libmpq, so it cannot open the build-15595 base sets or the
-  `wow-update` chains at all. Finding 6 cannot be exercised until this is migrated; the in-tree
-  `map_extractor` already carries the Cata-shaped pattern.
+- **Build authorization — satisfied for the tools.** The four map tools build from this branch, so
+  findings 6 and 7 are compiled rather than inspected, and the VMAP run above used that binary. The
+  server/game targets were not built and `var/extractors/{maps,vmaps,mmaps}` were not populated.
 - **Terrain chunk discovery** (finding 4). Whether the selected 4.3.4 tiles still carry the legacy
-  `MCIN` index the converter dereferences, or need the pin's direct chunk traversal, is unchecked.
-- **Extraction run** against the pinned build-15595 archives, including the listfile.
-- **Client archives provenance** for the map tiles (the same gate the DBC extraction already has).
+  `MCIN` index the converter dereferences, or need the pin's direct chunk traversal, is unchecked and
+  is now the first unverified parser question.
+- **Assembler, navmesh and data placement.** The VMAP stage produced its extracted model set, but
+  `vmap4_assembler` and `mmaps_generator` have not been run for the frozen tile and nothing has been
+  installed into the server's data directory.
+- **Client archives provenance** for the map tiles (the same gate the DBC extraction already has);
+  the bounded run above used the on-disk client copy without recording its provenance.
 - **Harness geometry path**: the accepted modes disable LOS/height/navmesh; enabling them (and
   keeping the anti-cheat/evade/path-query checks intact) is part of the acceptance work.
+- **Native acceptance**: the map-0 route, the LOS/height/navmesh queries and the pinned obstacle
+  chase are still unrun.
 
 ## Acceptance plan (unchanged, for when the above is authorized)
 
