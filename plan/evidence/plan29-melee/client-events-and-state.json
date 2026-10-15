@@ -1,0 +1,3325 @@
+{
+  "loaded": true,
+  "events": [
+    [
+      1792008873.551,
+      "SWING_DAMAGE",
+      false,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      10,
+      -1,
+      1
+    ],
+    [
+      1792008873.551,
+      "SWING_MISSED",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      "DODGE"
+    ],
+    [
+      1792008875.452,
+      "SWING_MISSED",
+      false,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      "DODGE"
+    ],
+    [
+      1792008876.352,
+      "SWING_DAMAGE",
+      false,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      9,
+      -1,
+      1
+    ],
+    [
+      1792008885.035,
+      "SWING_DAMAGE",
+      false,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      10,
+      -1,
+      1
+    ],
+    [
+      1792008887.935,
+      "SWING_DAMAGE",
+      false,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0,
+      9,
+      -1,
+      1
+    ],
+    {
+      "1": 1792008890.835,
+      "2": "SWING_DAMAGE",
+      "3": false,
+      "4": "0x0000000000000001",
+      "5": "Cataplan",
+      "6": 1297,
+      "7": 0,
+      "8": "0xF13000012B00031A",
+      "9": "Diseased Young Wolf",
+      "10": 68136,
+      "11": 0,
+      "12": 22,
+      "13": 18,
+      "14": 1,
+      "18": 1
+    },
+    [
+      1792008890.835,
+      "PARTY_KILL",
+      false,
+      "0x0000000000000001",
+      "Cataplan",
+      1297,
+      0,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0
+    ],
+    [
+      1792008890.835,
+      "UNIT_DIED",
+      true,
+      "0x0000000000000000",
+      null,
+      -2147483648,
+      -2147483648,
+      "0xF13000012B00031A",
+      "Diseased Young Wolf",
+      68136,
+      0
+    ]
+  ],
+  "states": [
+    {
+      "time": 306445.169,
+      "max": 42,
+      "health": 42,
+      "event": "PLAYER_TARGET_CHANGED"
+    },
+    {
+      "threat": 3,
+      "time": 306445.285,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "UNIT_HEALTH"
+    },
+    {
+      "threat": 3,
+      "time": 306445.285,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "PLAYER_REGEN_DISABLED"
+    },
+    {
+      "threat": 3,
+      "time": 306445.285,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306445.485,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306445.685,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306445.885,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306446.086,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306446.302,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306446.502,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306446.702,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306446.902,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306447.102,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306447.302,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306447.502,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306447.702,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306447.902,
+      "combat": 1,
+      "max": 42,
+      "health": 32,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306448.086,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "UNIT_HEALTH"
+    },
+    {
+      "threat": 3,
+      "time": 306448.102,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306448.302,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306448.502,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306448.702,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306448.902,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306449.102,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306449.302,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306449.502,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306449.702,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306449.902,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306450.102,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306450.302,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306450.502,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306450.702,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306450.902,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306451.102,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306451.302,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306451.502,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306451.703,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306451.904,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306452.114,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306452.323,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306452.536,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306452.752,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306452.952,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306453.152,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306453.354,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306453.558,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306453.758,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306453.972,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306454.187,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306454.391,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306454.592,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306454.819,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306455.028,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306455.235,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306455.438,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306455.652,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306455.853,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306456.069,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306456.269,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306456.469,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306456.669,
+      "combat": 1,
+      "max": 42,
+      "health": 23,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306456.769,
+      "combat": 1,
+      "max": 42,
+      "health": 13,
+      "event": "UNIT_HEALTH"
+    },
+    {
+      "threat": 3,
+      "time": 306456.869,
+      "combat": 1,
+      "max": 42,
+      "health": 13,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306457.071,
+      "combat": 1,
+      "max": 42,
+      "health": 13,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306457.285,
+      "combat": 1,
+      "max": 42,
+      "health": 13,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306457.491,
+      "combat": 1,
+      "max": 42,
+      "health": 13,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306457.702,
+      "combat": 1,
+      "max": 42,
+      "health": 13,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306457.902,
+      "combat": 1,
+      "max": 42,
+      "health": 13,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306458.102,
+      "combat": 1,
+      "max": 42,
+      "health": 13,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306458.302,
+      "combat": 1,
+      "max": 42,
+      "health": 13,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306458.502,
+      "combat": 1,
+      "max": 42,
+      "health": 13,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306458.703,
+      "combat": 1,
+      "max": 42,
+      "health": 13,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306458.92,
+      "combat": 1,
+      "max": 42,
+      "health": 13,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306459.135,
+      "combat": 1,
+      "max": 42,
+      "health": 13,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306459.337,
+      "combat": 1,
+      "max": 42,
+      "health": 13,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306459.552,
+      "combat": 1,
+      "max": 42,
+      "health": 13,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306459.669,
+      "combat": 1,
+      "max": 42,
+      "health": 4,
+      "event": "UNIT_HEALTH"
+    },
+    {
+      "threat": 3,
+      "time": 306459.752,
+      "combat": 1,
+      "max": 42,
+      "health": 4,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306459.952,
+      "combat": 1,
+      "max": 42,
+      "health": 4,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306460.152,
+      "combat": 1,
+      "max": 42,
+      "health": 4,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306460.354,
+      "combat": 1,
+      "max": 42,
+      "health": 4,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306460.574,
+      "combat": 1,
+      "max": 42,
+      "health": 4,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306460.786,
+      "combat": 1,
+      "max": 42,
+      "health": 4,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306460.986,
+      "combat": 1,
+      "max": 42,
+      "health": 4,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306461.186,
+      "combat": 1,
+      "max": 42,
+      "health": 4,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306461.404,
+      "combat": 1,
+      "max": 42,
+      "health": 4,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306461.619,
+      "combat": 1,
+      "max": 42,
+      "health": 4,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306461.819,
+      "combat": 1,
+      "max": 42,
+      "health": 4,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306462.019,
+      "combat": 1,
+      "max": 42,
+      "health": 4,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306462.219,
+      "combat": 1,
+      "max": 42,
+      "health": 4,
+      "event": "tick"
+    },
+    {
+      "threat": 3,
+      "time": 306462.419,
+      "combat": 1,
+      "max": 42,
+      "health": 4,
+      "event": "tick"
+    },
+    {
+      "time": 306541.405,
+      "max": 42,
+      "health": 0,
+      "event": "PLAYER_TARGET_CHANGED",
+      "dead": 1
+    },
+    {
+      "time": 306541.405,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306541.621,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306541.821,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306542.021,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306542.221,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306542.421,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306542.621,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306542.826,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306543.039,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306543.254,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306543.455,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306543.655,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306543.855,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306544.055,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306544.271,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306544.471,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306544.671,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306544.871,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306545.071,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306545.271,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306545.471,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306545.671,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306545.873,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306546.089,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306546.305,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306546.505,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306546.705,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306546.905,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306547.105,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306547.321,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306547.521,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306547.721,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306547.921,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306548.121,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306548.321,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306548.521,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306548.721,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306548.921,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306549.121,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306549.321,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306549.521,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306549.721,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306549.921,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306550.123,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306550.339,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306550.555,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306550.755,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306550.955,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306551.155,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306551.355,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306551.555,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306551.756,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306551.971,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306552.172,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306552.388,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306552.588,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306552.788,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306552.988,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306553.188,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306553.388,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306553.588,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306553.788,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306553.988,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306554.188,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306554.388,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306554.588,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306554.788,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306554.988,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306555.188,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306555.388,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306555.588,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306555.788,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306555.988,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306556.188,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306556.388,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306556.588,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306556.788,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306556.988,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306557.188,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306557.388,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306557.589,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306557.805,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306558.005,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306558.205,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306558.405,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306558.605,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306558.805,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306559.005,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306559.205,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306559.405,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306559.605,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306559.805,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306560.005,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306560.205,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306560.405,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306560.605,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306560.805,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306561.007,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306561.222,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306561.422,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306561.622,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306561.822,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306562.022,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306562.222,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306562.422,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306562.622,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306562.823,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306563.888,
+      "max": 42,
+      "health": 0,
+      "event": "PLAYER_TARGET_CHANGED",
+      "dead": 1
+    },
+    {
+      "time": 306564.055,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306564.255,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306564.455,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306564.655,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306564.858,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306565.072,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306565.273,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306565.488,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306565.689,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306565.889,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306566.089,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306566.305,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306566.505,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306566.705,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306566.905,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306567.105,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306567.305,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306567.505,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306567.706,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306567.906,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306568.106,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306568.308,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306568.523,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306568.723,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306568.923,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306569.123,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306569.323,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306569.523,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306569.723,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306569.923,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306570.123,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306570.323,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306570.525,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306570.744,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306570.944,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306571.156,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306571.357,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306571.558,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306571.769,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306571.986,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306572.189,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306572.389,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306572.592,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306572.793,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306573.009,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306573.227,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306573.439,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306573.641,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306573.859,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306574.073,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306574.273,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306574.473,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306574.673,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306574.873,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306575.073,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306575.273,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306575.489,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306575.689,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306575.889,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306576.091,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306576.305,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306576.506,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306576.725,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306576.939,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306577.139,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306577.34,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306577.555,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306577.756,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306577.956,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306578.156,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306578.356,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306578.556,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306578.756,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306578.956,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306579.156,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306579.357,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306579.565,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306579.768,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306579.982,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306580.183,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306580.396,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306580.61,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306580.822,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306581.026,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306581.239,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306581.439,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306581.642,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306581.856,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306582.056,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306582.256,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306582.456,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306582.672,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306582.872,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306583.072,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306583.272,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306583.475,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306583.692,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306583.906,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306584.106,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306584.306,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306584.506,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306584.706,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306584.908,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306585.123,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306585.339,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306585.539,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306585.739,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306585.939,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306586.139,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306586.339,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306586.539,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306586.739,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306586.939,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306587.141,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306587.358,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306587.574,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306587.789,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306587.989,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306588.189,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306588.404,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306588.608,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306588.823,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306589.023,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306589.241,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306589.456,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306589.656,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306589.864,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306590.072,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306590.274,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306590.491,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306590.694,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306590.912,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306591.112,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306591.325,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306591.527,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306591.739,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306591.939,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306592.139,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306592.339,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306592.54,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306592.74,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306592.942,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306593.156,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306593.357,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306593.573,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306593.773,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306593.99,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306594.206,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306594.406,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306594.606,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306594.81,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306595.01,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306595.223,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306595.423,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306595.623,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306595.823,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306596.023,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306596.223,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306596.423,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306596.631,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306596.839,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306597.039,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306597.24,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306597.457,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306597.673,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306597.873,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306598.073,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306598.273,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306598.473,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306598.673,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306598.874,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306599.089,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306599.289,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306599.489,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306599.689,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306599.889,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306600.089,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306600.29,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306600.506,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306600.706,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306600.906,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306601.106,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306601.306,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306601.506,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306601.706,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306601.906,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306602.106,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306602.306,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306602.506,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306602.707,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306602.923,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306603.123,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306603.325,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306603.54,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306603.74,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306603.94,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306604.156,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306604.356,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306604.556,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306604.756,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306604.956,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306605.156,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306605.356,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306605.556,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306605.756,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306605.956,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306606.156,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306606.356,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306606.556,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306606.756,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306606.956,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306607.156,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306607.356,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306607.557,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306607.773,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306607.973,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306608.173,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306608.373,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306608.573,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306608.773,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306608.973,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306609.173,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306609.373,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306609.573,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306609.773,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306609.973,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306610.173,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306610.374,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306610.59,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306610.79,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306610.99,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306611.19,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306611.391,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306611.606,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306611.806,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306612.007,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306612.207,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306612.423,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306612.623,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306612.823,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306613.023,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    },
+    {
+      "time": 306613.224,
+      "max": 42,
+      "health": 0,
+      "event": "tick",
+      "dead": 1
+    }
+  ]
+}

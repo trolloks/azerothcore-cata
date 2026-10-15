@@ -1,0 +1,20 @@
+[  0%] Built target gtest
+[  1%] Built target argon2
+[  1%] Built target sfmt
+[  2%] Built target fmt
+[  3%] Built target libsidecar
+[ 10%] Built target jemalloc
+[  4%] Built target Detour
+[ 17%] Built target g3dlib
+[ 17%] Built target gtest_main
+[ 18%] Built target gmock
+[ 18%] Built target gmock_main
+[ 28%] Built target common
+[ 31%] Built target database
+[ 33%] Built target shared
+[ 34%] Built target modules
+[ 34%] Built target revision.h
+[ 88%] Built target game
+[ 88%] Building CXX object src/test/CMakeFiles/unit_tests.dir/server/game/Combat/CombatManagerTest.cpp.o
+[ 89%] Linking CXX executable unit_tests
+[100%] Built target unit_tests

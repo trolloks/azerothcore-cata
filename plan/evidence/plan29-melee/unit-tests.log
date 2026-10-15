@@ -1,0 +1,450 @@
+Running main() from /home/trolloks/.herdr/worktrees/azerothcore-cata/worktree-silver-forest-bd9f/var/build-plan7/googletest/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = MeleeRequestTest.*:CombatManagerIntegrationTest.*:ThreatManagerIntegrationTest.*:SnakeTrapEvadeTest.*:LootViewTest.*:ItemInventoryTest.*:ItemPacketsTest.*
+[==========] Running 211 tests from 7 test suites.
+[----------] Global test environment set-up.
+[----------] 77 tests from CombatManagerIntegrationTest
+[ RUN      ] CombatManagerIntegrationTest.SetInCombatWith_CreatesReference
+[       OK ] CombatManagerIntegrationTest.SetInCombatWith_CreatesReference (1 ms)
+[ RUN      ] CombatManagerIntegrationTest.SetInCombatWith_SameUnit_Fails
+[       OK ] CombatManagerIntegrationTest.SetInCombatWith_SameUnit_Fails (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.SetInCombatWith_DeadUnit_Fails
+[       OK ] CombatManagerIntegrationTest.SetInCombatWith_DeadUnit_Fails (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.SetInCombatWith_DifferentPhase_Fails
+[       OK ] CombatManagerIntegrationTest.SetInCombatWith_DifferentPhase_Fails (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EndAllPvECombat_ClearsAll
+[       OK ] CombatManagerIntegrationTest.EndAllPvECombat_ClearsAll (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EndAllPvECombat_AlsoClearsThreat
+[       OK ] CombatManagerIntegrationTest.EndAllPvECombat_AlsoClearsThreat (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.HasCombat_ReflectsState
+[       OK ] CombatManagerIntegrationTest.HasCombat_ReflectsState (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeTimer_StartAndExpiry
+[       OK ] CombatManagerIntegrationTest.EvadeTimer_StartAndExpiry (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeState_Transitions
+[       OK ] CombatManagerIntegrationTest.EvadeState_Transitions (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.ContinueEvadeRegen_KeepsRegenActive
+[       OK ] CombatManagerIntegrationTest.ContinueEvadeRegen_KeepsRegenActive (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.ContinueEvadeRegen_StopEvadeClearsIt
+[       OK ] CombatManagerIntegrationTest.ContinueEvadeRegen_StopEvadeClearsIt (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeConstants
+[       OK ] CombatManagerIntegrationTest.EvadeConstants (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EndCombat_SingleReference_KeepsOthers
+[       OK ] CombatManagerIntegrationTest.EndCombat_SingleReference_KeepsOthers (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EndCombat_AlsoClearsThreatForThatRef
+[       OK ] CombatManagerIntegrationTest.EndCombat_AlsoClearsThreatForThatRef (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EndCombat_BidirectionalCleanup
+[       OK ] CombatManagerIntegrationTest.EndCombat_BidirectionalCleanup (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.SetImmuneToNPC_EndsCombatWithNPCs
+[       OK ] CombatManagerIntegrationTest.SetImmuneToNPC_EndsCombatWithNPCs (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.SetImmuneToNPC_KeepCombat_PreservesRefs
+[       OK ] CombatManagerIntegrationTest.SetImmuneToNPC_KeepCombat_PreservesRefs (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.StopAttackFaction_EndsCombatForFaction
+[       OK ] CombatManagerIntegrationTest.StopAttackFaction_EndsCombatForFaction (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.ClearInCombat_ClearsAllState
+[       OK ] CombatManagerIntegrationTest.ClearInCombat_ClearsAllState (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeTimer_PartialCountdown_StillActive
+[       OK ] CombatManagerIntegrationTest.EvadeTimer_PartialCountdown_StillActive (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeTimer_FullCountdown_Expires
+[       OK ] CombatManagerIntegrationTest.EvadeTimer_FullCountdown_Expires (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeTimer_Overshoot_StillExpires
+[       OK ] CombatManagerIntegrationTest.EvadeTimer_Overshoot_StillExpires (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeTimer_IncrementalCountdown_Expires
+[       OK ] CombatManagerIntegrationTest.EvadeTimer_IncrementalCountdown_Expires (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeTimer_StopEvade_CancelsBeforeExpiry
+[       OK ] CombatManagerIntegrationTest.EvadeTimer_StopEvade_CancelsBeforeExpiry (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeTimer_RestartAfterStop_WorksAgain
+[       OK ] CombatManagerIntegrationTest.EvadeTimer_RestartAfterStop_WorksAgain (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeTimer_InitialStart_NotInRegen
+[       OK ] CombatManagerIntegrationTest.EvadeTimer_InitialStart_NotInRegen (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeTimer_CountdownToRegenPhase
+[       OK ] CombatManagerIntegrationTest.EvadeTimer_CountdownToRegenPhase (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeTimer_ContinueEvadeRegen_ResetsToRegenDelay
+[       OK ] CombatManagerIntegrationTest.EvadeTimer_ContinueEvadeRegen_ResetsToRegenDelay (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeTimer_ContinueEvadeRegen_RepeatKeepsRegen
+[       OK ] CombatManagerIntegrationTest.EvadeTimer_ContinueEvadeRegen_RepeatKeepsRegen (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeState_SetToNone_ClearsTimer
+[       OK ] CombatManagerIntegrationTest.EvadeState_SetToNone_ClearsTimer (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeState_HomeState_IsInEvadeMode
+[       OK ] CombatManagerIntegrationTest.EvadeState_HomeState_IsInEvadeMode (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeState_CombatState_IsInEvadeMode
+[       OK ] CombatManagerIntegrationTest.EvadeState_CombatState_IsInEvadeMode (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeState_FullLifecycle
+[       OK ] CombatManagerIntegrationTest.EvadeState_FullLifecycle (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeTimer_StopEvade_WithActiveState_ClearsState
+[       OK ] CombatManagerIntegrationTest.EvadeTimer_StopEvade_WithActiveState_ClearsState (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeTimer_StopEvade_TimerAndState_ClearsBoth
+[       OK ] CombatManagerIntegrationTest.EvadeTimer_StopEvade_TimerAndState_ClearsBoth (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.SetCannotReachTarget_StartsEvadeTimer
+[       OK ] CombatManagerIntegrationTest.SetCannotReachTarget_StartsEvadeTimer (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.SetCannotReachTarget_Clear_StopsEvade
+[       OK ] CombatManagerIntegrationTest.SetCannotReachTarget_Clear_StopsEvade (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.SetCannotReachTarget_SameTarget_NoDuplicate
+[       OK ] CombatManagerIntegrationTest.SetCannotReachTarget_SameTarget_NoDuplicate (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.IsNotReachableAndNeedRegen_Integration
+[       OK ] CombatManagerIntegrationTest.IsNotReachableAndNeedRegen_Integration (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.SuppressedRef_DoesNotGenerateCombat
+[       OK ] CombatManagerIntegrationTest.SuppressedRef_DoesNotGenerateCombat (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.GetAnyTarget_NoCombat_ReturnsNull
+[       OK ] CombatManagerIntegrationTest.GetAnyTarget_NoCombat_ReturnsNull (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.GetAnyTarget_WithCombat_ReturnsTarget
+[       OK ] CombatManagerIntegrationTest.GetAnyTarget_WithCombat_ReturnsTarget (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.GetAnyTarget_SuppressedOnly_ReturnsNull
+[       OK ] CombatManagerIntegrationTest.GetAnyTarget_SuppressedOnly_ReturnsNull (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.HasPvECombatWithPlayers_CreaturesOnly_ReturnsFalse
+[       OK ] CombatManagerIntegrationTest.HasPvECombatWithPlayers_CreaturesOnly_ReturnsFalse (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EndAllCombat_ClearsEverything
+[       OK ] CombatManagerIntegrationTest.EndAllCombat_ClearsEverything (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EndAllPvPCombat_NoRefs_DoesNotCrash
+[       OK ] CombatManagerIntegrationTest.EndAllPvPCombat_NoRefs_DoesNotCrash (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.InheritCombatStatesFrom_InheritsPvERefs
+[       OK ] CombatManagerIntegrationTest.InheritCombatStatesFrom_InheritsPvERefs (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.InheritCombatStatesFrom_SkipsDuplicate
+[       OK ] CombatManagerIntegrationTest.InheritCombatStatesFrom_SkipsDuplicate (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.InheritCombatStatesFrom_SkipsImmuneTargets
+[       OK ] CombatManagerIntegrationTest.InheritCombatStatesFrom_SkipsImmuneTargets (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EndCombatBeyondRange_InRange_KeepsCombat
+[       OK ] CombatManagerIntegrationTest.EndCombatBeyondRange_InRange_KeepsCombat (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EndCombatBeyondRange_OutOfRange_EndsCombat
+[       OK ] CombatManagerIntegrationTest.EndCombatBeyondRange_OutOfRange_EndsCombat (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EndCombatBeyondRange_MixedDistances_EndsOnlyFar
+[       OK ] CombatManagerIntegrationTest.EndCombatBeyondRange_MixedDistances_EndsOnlyFar (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.RevalidateCombat_ValidRefs_KeepsAll
+[       OK ] CombatManagerIntegrationTest.RevalidateCombat_ValidRefs_KeepsAll (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.RevalidateCombat_InvalidRef_RemovesIt
+[       OK ] CombatManagerIntegrationTest.RevalidateCombat_InvalidRef_RemovesIt (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.RevalidateCombat_DifferentPhase_RemovesIt
+[       OK ] CombatManagerIntegrationTest.RevalidateCombat_DifferentPhase_RemovesIt (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.CombatRefresh_UnsuppressesRef
+[       OK ] CombatManagerIntegrationTest.CombatRefresh_UnsuppressesRef (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.SuppressFor_SuppressesOneSide
+[       OK ] CombatManagerIntegrationTest.SuppressFor_SuppressesOneSide (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.CanBeginCombat_UnitStateEvade_Fails
+[       OK ] CombatManagerIntegrationTest.CanBeginCombat_UnitStateEvade_Fails (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.CanBeginCombat_UnitStateInFlight_Fails
+[       OK ] CombatManagerIntegrationTest.CanBeginCombat_UnitStateInFlight_Fails (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.CanBeginCombat_CombatDisallowed_Fails
+[       OK ] CombatManagerIntegrationTest.CanBeginCombat_CombatDisallowed_Fails (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.CanBeginCombat_FriendlyFactions_Fails
+[       OK ] CombatManagerIntegrationTest.CanBeginCombat_FriendlyFactions_Fails (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.CanBeginCombat_ValidUnits_Succeeds
+[       OK ] CombatManagerIntegrationTest.CanBeginCombat_ValidUnits_Succeeds (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.CanBeginCombat_AsymmetricHostileVsFriendly_Succeeds
+[       OK ] CombatManagerIntegrationTest.CanBeginCombat_AsymmetricHostileVsFriendly_Succeeds (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.CanBeginCombat_FriendlyWithoutHostility_Fails
+[       OK ] CombatManagerIntegrationTest.CanBeginCombat_FriendlyWithoutHostility_Fails (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.IsInCombatWith_ObjectGuid_Variant
+[       OK ] CombatManagerIntegrationTest.IsInCombatWith_ObjectGuid_Variant (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.Update_NoPvPRefs_DoesNotCrash
+[       OK ] CombatManagerIntegrationTest.Update_NoPvPRefs_DoesNotCrash (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.Update_EvadeTimerAndCombat_BothWork
+[       OK ] CombatManagerIntegrationTest.Update_EvadeTimerAndCombat_BothWork (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.CombatReference_GetOther_ReturnsPeer
+[       OK ] CombatManagerIntegrationTest.CombatReference_GetOther_ReturnsPeer (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.HasPvPCombat_NoPvPRefs_ReturnsFalse
+[       OK ] CombatManagerIntegrationTest.HasPvPCombat_NoPvPRefs_ReturnsFalse (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.SuppressPvPCombat_NoPvPRefs_DoesNotCrash
+[       OK ] CombatManagerIntegrationTest.SuppressPvPCombat_NoPvPRefs_DoesNotCrash (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.SetInCombatWith_ExistingPvE_RefreshesRef
+[       OK ] CombatManagerIntegrationTest.SetInCombatWith_ExistingPvE_RefreshesRef (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.MultipleRefs_IndependentLifecycle
+[       OK ] CombatManagerIntegrationTest.MultipleRefs_IndependentLifecycle (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.CanBeginCombat_DifferentMaps_Fails
+[       OK ] CombatManagerIntegrationTest.CanBeginCombat_DifferentMaps_Fails (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.SetEvadeState_SameState_NoOp
+[       OK ] CombatManagerIntegrationTest.SetEvadeState_SameState_NoOp (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.SetEvadeState_SameState_DoesNotClearTimer
+[       OK ] CombatManagerIntegrationTest.SetEvadeState_SameState_DoesNotClearTimer (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.MeleeResultUsesCataOverkillSentinel
+[       OK ] CombatManagerIntegrationTest.MeleeResultUsesCataOverkillSentinel (0 ms)
+[ RUN      ] CombatManagerIntegrationTest.EvadeCleanupClearsThreatAndBothCombatReferences
+[       OK ] CombatManagerIntegrationTest.EvadeCleanupClearsThreatAndBothCombatReferences (0 ms)
+[----------] 77 tests from CombatManagerIntegrationTest (5 ms total)
+
+[----------] 3 tests from MeleeRequestTest
+[ RUN      ] MeleeRequestTest.UnknownAndSpoofedTargetsCannotStartAttack
+[       OK ] MeleeRequestTest.UnknownAndSpoofedTargetsCannotStartAttack (0 ms)
+[ RUN      ] MeleeRequestTest.AttackStopWithoutVictimIsIdempotent
+[       OK ] MeleeRequestTest.AttackStopWithoutVictimIsIdempotent (0 ms)
+[ RUN      ] MeleeRequestTest.NonAttackableTargetCannotStartAttack
+[       OK ] MeleeRequestTest.NonAttackableTargetCannotStartAttack (0 ms)
+[----------] 3 tests from MeleeRequestTest (0 ms total)
+
+[----------] 3 tests from SnakeTrapEvadeTest
+[ RUN      ] SnakeTrapEvadeTest.EndAllCombat_WithMultipleRefs_DoesNotRecurse
+[       OK ] SnakeTrapEvadeTest.EndAllCombat_WithMultipleRefs_DoesNotRecurse (0 ms)
+[ RUN      ] SnakeTrapEvadeTest.TargetCombatStop_ClearsSnakeRefs
+[       OK ] SnakeTrapEvadeTest.TargetCombatStop_ClearsSnakeRefs (0 ms)
+[ RUN      ] SnakeTrapEvadeTest.AddThreat_DuringEvade_IsRejected
+[       OK ] SnakeTrapEvadeTest.AddThreat_DuringEvade_IsRejected (0 ms)
+[----------] 3 tests from SnakeTrapEvadeTest (0 ms total)
+
+[----------] 113 tests from ThreatManagerIntegrationTest
+[ RUN      ] ThreatManagerIntegrationTest.CanHaveThreatList_NullUnit_ReturnsFalse
+[       OK ] ThreatManagerIntegrationTest.CanHaveThreatList_NullUnit_ReturnsFalse (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.CanHaveThreatList_InitializedCreature_ReturnsTrue
+[       OK ] ThreatManagerIntegrationTest.CanHaveThreatList_InitializedCreature_ReturnsTrue (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.AddThreat_CreatesThreatEntry
+[       OK ] ThreatManagerIntegrationTest.AddThreat_CreatesThreatEntry (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.AddThreat_ImpliesCombat
+[       OK ] ThreatManagerIntegrationTest.AddThreat_ImpliesCombat (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ScaleThreat_DoublesAmount
+[       OK ] ThreatManagerIntegrationTest.ScaleThreat_DoublesAmount (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ScaleThreat_ZeroFactor_ZerosThreat
+[       OK ] ThreatManagerIntegrationTest.ScaleThreat_ZeroFactor_ZerosThreat (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ClearThreat_RemovesEntry
+[       OK ] ThreatManagerIntegrationTest.ClearThreat_RemovesEntry (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ClearAllThreat_EmptiesList
+[       OK ] ThreatManagerIntegrationTest.ClearAllThreat_EmptiesList (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.GetCurrentVictim_ReturnsHighestThreat
+[       OK ] ThreatManagerIntegrationTest.GetCurrentVictim_ReturnsHighestThreat (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.FixateTarget_OverridesSelection
+[       OK ] ThreatManagerIntegrationTest.FixateTarget_OverridesSelection (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ResetAllThreat_ZerosAllEntries
+[       OK ] ThreatManagerIntegrationTest.ResetAllThreat_ZerosAllEntries (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.CompareReferences_OnlineStatePrecedence
+[       OK ] ThreatManagerIntegrationTest.CompareReferences_OnlineStatePrecedence (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ThreatConstants
+[       OK ] ThreatManagerIntegrationTest.ThreatConstants (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.GetThreatListPlayerCount_CreatureOnlyList_ReturnsZero
+[       OK ] ThreatManagerIntegrationTest.GetThreatListPlayerCount_CreatureOnlyList_ReturnsZero (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ResetAllMyThreatOnOthers_ZerosThreatOnAllCreatures
+[       OK ] ThreatManagerIntegrationTest.ResetAllMyThreatOnOthers_ZerosThreatOnAllCreatures (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ResetAllMyThreatOnOthers_NoEntries_DoesNothing
+[       OK ] ThreatManagerIntegrationTest.ResetAllMyThreatOnOthers_NoEntries_DoesNothing (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.SendThreatList_HighestThreatUpdate_Path
+[       OK ] ThreatManagerIntegrationTest.SendThreatList_HighestThreatUpdate_Path (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.SendThreatList_ThreatUpdate_Path
+[       OK ] ThreatManagerIntegrationTest.SendThreatList_ThreatUpdate_Path (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.TauntState_OverridesHigherThreat
+[       OK ] ThreatManagerIntegrationTest.TauntState_OverridesHigherThreat (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.TauntState_DoesNotClobberFixate
+[       OK ] ThreatManagerIntegrationTest.TauntState_DoesNotClobberFixate (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.Detaunt_LowersPriority
+[       OK ] ThreatManagerIntegrationTest.Detaunt_LowersPriority (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.CanHaveThreatList_ConsistentBetweenUnitAndThreatMgr
+[       OK ] ThreatManagerIntegrationTest.CanHaveThreatList_ConsistentBetweenUnitAndThreatMgr (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.CanHaveThreatList_DeadCreature_ReturnsFalse
+[       OK ] ThreatManagerIntegrationTest.CanHaveThreatList_DeadCreature_ReturnsFalse (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.MatchUnitThreatToHighestThreat_SetsToHighest
+[       OK ] ThreatManagerIntegrationTest.MatchUnitThreatToHighestThreat_SetsToHighest (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.MatchUnitThreatToHighestThreat_AlreadyHighest_NoChange
+[       OK ] ThreatManagerIntegrationTest.MatchUnitThreatToHighestThreat_AlreadyHighest_NoChange (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.RedirectThreat_RegisterAndUnregister_PerSpell
+[       OK ] ThreatManagerIntegrationTest.RedirectThreat_RegisterAndUnregister_PerSpell (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.RedirectThreat_UnregisterOneSpell_KeepsOther
+[       OK ] ThreatManagerIntegrationTest.RedirectThreat_UnregisterOneSpell_KeepsOther (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.RedirectThreat_ResetAllRedirects_ClearsAll
+[       OK ] ThreatManagerIntegrationTest.RedirectThreat_ResetAllRedirects_ClearsAll (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.IsEngagedBy_UsesThreatListForCreatures
+[       OK ] ThreatManagerIntegrationTest.IsEngagedBy_UsesThreatListForCreatures (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.IsEngagedBy_CombatWithoutThreat_NotEngaged
+[       OK ] ThreatManagerIntegrationTest.IsEngagedBy_CombatWithoutThreat_NotEngaged (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.SpellSchoolModifiers_DefaultIsUnmodified
+[       OK ] ThreatManagerIntegrationTest.SpellSchoolModifiers_DefaultIsUnmodified (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.PhaseChange_PutsThreatsOffline
+[       OK ] ThreatManagerIntegrationTest.PhaseChange_PutsThreatsOffline (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.RedirectThreat_AddThreat_SplitsBetweenTargetAndRedirect
+[       OK ] ThreatManagerIntegrationTest.RedirectThreat_AddThreat_SplitsBetweenTargetAndRedirect (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.RedirectThreat_FullRedirect_AllThreatGoesToTarget
+[       OK ] ThreatManagerIntegrationTest.RedirectThreat_FullRedirect_AllThreatGoesToTarget (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.RedirectThreat_TwoSpells_BothRedirect
+[       OK ] ThreatManagerIntegrationTest.RedirectThreat_TwoSpells_BothRedirect (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.RedirectThreat_NegativeAmount_NoRedirect
+[       OK ] ThreatManagerIntegrationTest.RedirectThreat_NegativeAmount_NoRedirect (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.RedirectThreat_AfterUnregister_NoMoreRedirect
+[       OK ] ThreatManagerIntegrationTest.RedirectThreat_AfterUnregister_NoMoreRedirect (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.RedirectThreat_UnregisterPerSpellPerVictim
+[       OK ] ThreatManagerIntegrationTest.RedirectThreat_UnregisterPerSpellPerVictim (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ForwardThreat_SingleCreature_AllThreatToAssistant
+[       OK ] ThreatManagerIntegrationTest.ForwardThreat_SingleCreature_AllThreatToAssistant (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ForwardThreat_MultipleCreatures_SplitsEvenly
+[       OK ] ThreatManagerIntegrationTest.ForwardThreat_MultipleCreatures_SplitsEvenly (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ForwardThreat_CCTarget_GetsZeroThreat
+[       OK ] ThreatManagerIntegrationTest.ForwardThreat_CCTarget_GetsZeroThreat (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ForwardThreat_NoThreatenedBy_DoesNothing
+[       OK ] ThreatManagerIntegrationTest.ForwardThreat_NoThreatenedBy_DoesNothing (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ForwardThreat_ZeroAmount_StillEntersCombat
+[       OK ] ThreatManagerIntegrationTest.ForwardThreat_ZeroAmount_StillEntersCombat (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.EvaluateSuppressed_NoRefs_DoesNotCrash
+[       OK ] ThreatManagerIntegrationTest.EvaluateSuppressed_NoRefs_DoesNotCrash (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.EvaluateSuppressed_OnlineRefs_RemainOnline
+[       OK ] ThreatManagerIntegrationTest.EvaluateSuppressed_OnlineRefs_RemainOnline (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.EvaluateSuppressed_DamageImmunity_SetsSuppressed
+[       OK ] ThreatManagerIntegrationTest.EvaluateSuppressed_DamageImmunity_SetsSuppressed (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.EvaluateSuppressed_CanExpire_RestoresOnline
+[       OK ] ThreatManagerIntegrationTest.EvaluateSuppressed_CanExpire_RestoresOnline (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.EvaluateSuppressed_TauntedVictim_NeverSuppressed
+[       OK ] ThreatManagerIntegrationTest.EvaluateSuppressed_TauntedVictim_NeverSuppressed (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.EvaluateSuppressed_MultipleRefs_EachEvaluatedIndependently
+[       OK ] ThreatManagerIntegrationTest.EvaluateSuppressed_MultipleRefs_EachEvaluatedIndependently (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ReselectVictim_Below110Percent_KeepsOldVictim
+[       OK ] ThreatManagerIntegrationTest.ReselectVictim_Below110Percent_KeepsOldVictim (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ReselectVictim_MeleeAt110Percent_Switches
+[       OK ] ThreatManagerIntegrationTest.ReselectVictim_MeleeAt110Percent_Switches (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ReselectVictim_MeleeAt130Percent_AlsoSwitches
+[       OK ] ThreatManagerIntegrationTest.ReselectVictim_MeleeAt130Percent_AlsoSwitches (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ReselectVictim_MeleeThirdTarget_AboveThreshold_Switches
+[       OK ] ThreatManagerIntegrationTest.ReselectVictim_MeleeThirdTarget_AboveThreshold_Switches (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ReselectVictim_NoOldVictim_PicksHighest
+[       OK ] ThreatManagerIntegrationTest.ReselectVictim_NoOldVictim_PicksHighest (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ReselectVictim_EqualThreat_KeepsCurrentVictim
+[       OK ] ThreatManagerIntegrationTest.ReselectVictim_EqualThreat_KeepsCurrentVictim (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.Update_TimerDrivenReselection
+[       OK ] ThreatManagerIntegrationTest.Update_TimerDrivenReselection (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.Update_ZeroDiff_DoesNotCrash
+[       OK ] ThreatManagerIntegrationTest.Update_ZeroDiff_DoesNotCrash (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.Update_EmptyThreatList_DoesNotCrash
+[       OK ] ThreatManagerIntegrationTest.Update_EmptyThreatList_DoesNotCrash (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ModifyThreatByPercent_Increase
+[       OK ] ThreatManagerIntegrationTest.ModifyThreatByPercent_Increase (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ModifyThreatByPercent_Decrease
+[       OK ] ThreatManagerIntegrationTest.ModifyThreatByPercent_Decrease (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ModifyThreatByPercent_Minus100_ZerosThreat
+[       OK ] ThreatManagerIntegrationTest.ModifyThreatByPercent_Minus100_ZerosThreat (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ModifyThreatByPercent_ZeroPercent_NoChange
+[       OK ] ThreatManagerIntegrationTest.ModifyThreatByPercent_ZeroPercent_NoChange (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ModifyThreatByPercent_Plus100_Doubles
+[       OK ] ThreatManagerIntegrationTest.ModifyThreatByPercent_Plus100_Doubles (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.GetThreat_NonexistentTarget_ReturnsZero
+[       OK ] ThreatManagerIntegrationTest.GetThreat_NonexistentTarget_ReturnsZero (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.GetThreat_OfflineTarget_ExcludedByDefault
+[       OK ] ThreatManagerIntegrationTest.GetThreat_OfflineTarget_ExcludedByDefault (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.IsThreatListEmpty_EmptyList_ReturnsTrue
+[       OK ] ThreatManagerIntegrationTest.IsThreatListEmpty_EmptyList_ReturnsTrue (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.IsThreatListEmpty_WithEntries_ReturnsFalse
+[       OK ] ThreatManagerIntegrationTest.IsThreatListEmpty_WithEntries_ReturnsFalse (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.IsThreatListEmpty_AllOffline_TrueWithoutOfflineFlag
+[       OK ] ThreatManagerIntegrationTest.IsThreatListEmpty_AllOffline_TrueWithoutOfflineFlag (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.IsThreatenedBy_OfflineTarget_Variants
+[       OK ] ThreatManagerIntegrationTest.IsThreatenedBy_OfflineTarget_Variants (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.IsThreateningAnyone_NoEntries_ReturnsFalse
+[       OK ] ThreatManagerIntegrationTest.IsThreateningAnyone_NoEntries_ReturnsFalse (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.IsThreateningAnyone_WithEntries_ReturnsTrue
+[       OK ] ThreatManagerIntegrationTest.IsThreateningAnyone_WithEntries_ReturnsTrue (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.IsThreateningAnyone_AllOffline_FalseWithoutFlag
+[       OK ] ThreatManagerIntegrationTest.IsThreateningAnyone_AllOffline_FalseWithoutFlag (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.IsThreateningTo_SpecificTarget
+[       OK ] ThreatManagerIntegrationTest.IsThreateningTo_SpecificTarget (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.IsThreateningTo_ObjectGuidVariant
+[       OK ] ThreatManagerIntegrationTest.IsThreateningTo_ObjectGuidVariant (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.RemoveMeFromThreatLists_RemovesFromAllLists
+[       OK ] ThreatManagerIntegrationTest.RemoveMeFromThreatLists_RemovesFromAllLists (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.RemoveMeFromThreatLists_NoEntries_DoesNotCrash
+[       OK ] ThreatManagerIntegrationTest.RemoveMeFromThreatLists_NoEntries_DoesNotCrash (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.GetAnyTarget_EmptyList_ReturnsNull
+[       OK ] ThreatManagerIntegrationTest.GetAnyTarget_EmptyList_ReturnsNull (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.GetAnyTarget_WithEntries_ReturnsNonNull
+[       OK ] ThreatManagerIntegrationTest.GetAnyTarget_WithEntries_ReturnsNonNull (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.GetAnyTarget_AllOffline_ReturnsNull
+[       OK ] ThreatManagerIntegrationTest.GetAnyTarget_AllOffline_ReturnsNull (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.GetLastVictim_NoVictim_ReturnsNull
+[       OK ] ThreatManagerIntegrationTest.GetLastVictim_NoVictim_ReturnsNull (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.GetLastVictim_WithVictim_ReturnsCached
+[       OK ] ThreatManagerIntegrationTest.GetLastVictim_WithVictim_ReturnsCached (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.GetLastVictim_OfflineVictim_ReturnsNull
+[       OK ] ThreatManagerIntegrationTest.GetLastVictim_OfflineVictim_ReturnsNull (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.GetSortedThreatList_ReturnsSortedByThreat
+[       OK ] ThreatManagerIntegrationTest.GetSortedThreatList_ReturnsSortedByThreat (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.GetUnsortedThreatList_ReturnsAllEntries
+[       OK ] ThreatManagerIntegrationTest.GetUnsortedThreatList_ReturnsAllEntries (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.GetModifiableThreatList_ReturnsCopy
+[       OK ] ThreatManagerIntegrationTest.GetModifiableThreatList_ReturnsCopy (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.MultipleTaunts_LastTauntWins
+[       OK ] ThreatManagerIntegrationTest.MultipleTaunts_LastTauntWins (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.AddThreat_NegativeAmount_ReducesThreat
+[       OK ] ThreatManagerIntegrationTest.AddThreat_NegativeAmount_ReducesThreat (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.AddThreat_NegativeBeyondZero_ClampsToZero
+[       OK ] ThreatManagerIntegrationTest.AddThreat_NegativeBeyondZero_ClampsToZero (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.AddThreat_DeadTarget_NoCombatOrThreat
+[       OK ] ThreatManagerIntegrationTest.AddThreat_DeadTarget_NoCombatOrThreat (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.AddThreat_DifferentPhaseTarget_NoCombatOrThreat
+[       OK ] ThreatManagerIntegrationTest.AddThreat_DifferentPhaseTarget_NoCombatOrThreat (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.GetFixateTarget_NoFixate_ReturnsNull
+[       OK ] ThreatManagerIntegrationTest.GetFixateTarget_NoFixate_ReturnsNull (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.GetFixateTarget_WithFixate_ReturnsTarget
+[       OK ] ThreatManagerIntegrationTest.GetFixateTarget_WithFixate_ReturnsTarget (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ThreatReference_GetOwnerAndVictim
+[       OK ] ThreatManagerIntegrationTest.ThreatReference_GetOwnerAndVictim (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ThreatReference_ScaleThreat_Directly
+[       OK ] ThreatManagerIntegrationTest.ThreatReference_ScaleThreat_Directly (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.MatchUnitThreatToHighestThreat_HighestIsTaunted_UsesNextEntry
+[       OK ] ThreatManagerIntegrationTest.MatchUnitThreatToHighestThreat_HighestIsTaunted_UsesNextEntry (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.MatchUnitThreatToHighestThreat_TauntedIsAlsoHighest_UsesTauntedThreat
+[       OK ] ThreatManagerIntegrationTest.MatchUnitThreatToHighestThreat_TauntedIsAlsoHighest_UsesTauntedThreat (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.AddThreat_SuppressedRef_UnsuppressesOnNewThreat
+[       OK ] ThreatManagerIntegrationTest.AddThreat_SuppressedRef_UnsuppressesOnNewThreat (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.AddThreat_SuppressedRef_StillSuppressed_NoTransition
+[       OK ] ThreatManagerIntegrationTest.AddThreat_SuppressedRef_StillSuppressed_NoTransition (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.RedirectThreat_TotalExceeds100_CappedAt100
+[       OK ] ThreatManagerIntegrationTest.RedirectThreat_TotalExceeds100_CappedAt100 (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.RedirectThreat_Exactly100Percent_AllRedirected
+[       OK ] ThreatManagerIntegrationTest.RedirectThreat_Exactly100Percent_AllRedirected (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ThreatReference_ScaleThreat_Factor1_NoOp
+[       OK ] ThreatManagerIntegrationTest.ThreatReference_ScaleThreat_Factor1_NoOp (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ThreatReference_AddThreat_ZeroAmount_NoOp
+[       OK ] ThreatManagerIntegrationTest.ThreatReference_AddThreat_ZeroAmount_NoOp (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.ThreatReference_ClearThreat_DirectCall_RemovesEntry
+[       OK ] ThreatManagerIntegrationTest.ThreatReference_ClearThreat_DirectCall_RemovesEntry (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.FixateTarget_NotOnThreatList_ClearsFixate
+[       OK ] ThreatManagerIntegrationTest.FixateTarget_NotOnThreatList_ClearsFixate (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.FixateTarget_NotOnThreatList_ClearsExistingFixate
+[       OK ] ThreatManagerIntegrationTest.FixateTarget_NotOnThreatList_ClearsExistingFixate (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.UpdateVictim_ImmediateReselectAfterTauntState
+[       OK ] ThreatManagerIntegrationTest.UpdateVictim_ImmediateReselectAfterTauntState (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.UpdateVictim_Idempotent_MultipleCalls
+[       OK ] ThreatManagerIntegrationTest.UpdateVictim_Idempotent_MultipleCalls (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.UpdateVictim_RapidTauntToggle_NoCrash
+[       OK ] ThreatManagerIntegrationTest.UpdateVictim_RapidTauntToggle_NoCrash (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.UpdateVictim_WithConcurrentThreatChanges_NoCrash
+[       OK ] ThreatManagerIntegrationTest.UpdateVictim_WithConcurrentThreatChanges_NoCrash (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.UpdateVictim_MultipleTaunters_HighestStateWins
+[       OK ] ThreatManagerIntegrationTest.UpdateVictim_MultipleTaunters_HighestStateWins (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.UpdateVictim_FixateStillTakesPrecedence
+[       OK ] ThreatManagerIntegrationTest.UpdateVictim_FixateStillTakesPrecedence (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.TauntUpdate_EmptyThreatList_NoCrash
+[       OK ] ThreatManagerIntegrationTest.TauntUpdate_EmptyThreatList_NoCrash (0 ms)
+[ RUN      ] ThreatManagerIntegrationTest.TauntUpdate_RapidCalls_NoCrash
+[       OK ] ThreatManagerIntegrationTest.TauntUpdate_RapidCalls_NoCrash (0 ms)
+[----------] 113 tests from ThreatManagerIntegrationTest (6 ms total)
+
+[----------] 2 tests from ItemPacketsTest
+[ RUN      ] ItemPacketsTest.DestroyReadsCataCountWithoutTruncation
+[       OK ] ItemPacketsTest.DestroyReadsCataCountWithoutTruncation (0 ms)
+[ RUN      ] ItemPacketsTest.DestroyRejectsTruncatedCataCount
+[       OK ] ItemPacketsTest.DestroyRejectsTruncatedCataCount (0 ms)
+[----------] 2 tests from ItemPacketsTest (0 ms total)
+
+[----------] 11 tests from ItemInventoryTest
+[ RUN      ] ItemInventoryTest.InvalidExplicitSlotIsRejected
+[       OK ] ItemInventoryTest.InvalidExplicitSlotIsRejected (0 ms)
+[ RUN      ] ItemInventoryTest.InsufficientSpaceDoesNotCreateItems
+[       OK ] ItemInventoryTest.InsufficientSpaceDoesNotCreateItems (0 ms)
+[ RUN      ] ItemInventoryTest.UnusableItemIsRejected
+[       OK ] ItemInventoryTest.UnusableItemIsRejected (0 ms)
+[ RUN      ] ItemInventoryTest.ForeignBoundItemCannotBeUsedOrStored
+[       OK ] ItemInventoryTest.ForeignBoundItemCannotBeUsedOrStored (0 ms)
+[ RUN      ] ItemInventoryTest.EmptyLootViewIncludesCurrencyCount
+[       OK ] ItemInventoryTest.EmptyLootViewIncludesCurrencyCount (0 ms)
+[ RUN      ] ItemInventoryTest.LootItemFollowsBothCounts
+[       OK ] ItemInventoryTest.LootItemFollowsBothCounts (0 ms)
+[ RUN      ] ItemInventoryTest.FullInventoryPreservesLoot
+[       OK ] ItemInventoryTest.FullInventoryPreservesLoot (0 ms)
+[ RUN      ] ItemInventoryTest.ForeignLootWinnerCannotTakeItem
+[       OK ] ItemInventoryTest.ForeignLootWinnerCannotTakeItem (0 ms)
+[ RUN      ] ItemInventoryTest.ForeignContainerCannotLoseItemsOrMoney
+[       OK ] ItemInventoryTest.ForeignContainerCannotLoseItemsOrMoney (0 ms)
+[ RUN      ] ItemInventoryTest.InvalidAndRepeatedLootSlotsPreserveItems
+[       OK ] ItemInventoryTest.InvalidAndRepeatedLootSlotsPreserveItems (0 ms)
+[ RUN      ] ItemInventoryTest.ForeignAndRepeatedReleaseCannotChangeLootState
+[       OK ] ItemInventoryTest.ForeignAndRepeatedReleaseCannotChangeLootState (0 ms)
+[----------] 11 tests from ItemInventoryTest (0 ms total)
+
+[----------] 2 tests from LootViewTest
+[ RUN      ] LootViewTest.NoPermissionIncludesBothCounts
+[       OK ] LootViewTest.NoPermissionIncludesBothCounts (0 ms)
+[ RUN      ] LootViewTest.CataNotificationOpcodes
+[       OK ] LootViewTest.CataNotificationOpcodes (0 ms)
+[----------] 2 tests from LootViewTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 211 tests from 7 test suites ran. (13 ms total)
+[  PASSED  ] 211 tests.
