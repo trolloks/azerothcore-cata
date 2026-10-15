@@ -23,9 +23,11 @@ position so it stays reproducible across plans:
 One tile is named by three coordinate systems, and they are **transposed relative to each other**, so
 the manifest must not mix them:
 
-- **Server grid `(gx, gy)` = `(48, 32)`.** `gx = 32 - x/533.33333`, `gy = 32 - y/533.33333`
-  (`ComputeGridCoordSimple`, `src/server/game/Grids/GridDefines.h`); `GridTerrainLoader::LoadMap`
-  loads `{id:03}{gx:02}{gy:02}.map`.
+- **Server grid `(gx, gy)` = `(48, 32)`.** `ComputeGridCoord` (`src/server/game/Grids/GridDefines.h`)
+  returns `gx = max(0, (int)(32 - x/533.33333))` and `gy = max(0, (int)(32 - y/533.33333))`, and it is
+  the helper `Map::GetGridTerrainData(x, y)` uses (`Map.cpp`); `GridTerrainLoader::LoadMap` then loads
+  `{id:03}{gx:02}{gy:02}.map`. Do not compute this with `ComputeGridCoordSimple`, which returns
+  `(63 - gx, 63 - gy)` — `(15, 31)` for this anchor.
 - **Extractor/ADT `(x, y)` = `(32, 48)`.** The extractor iterates `{map}_{x}_{y}.adt` and writes
   `{id:03}{y:02}{x:02}.map` (`src/tools/map_extractor/System.cpp`), so the ADT here is
   `Azeroth_32_48.adt`.
@@ -57,9 +59,12 @@ carries per-tool files; AC removed them, so a naive diff of the two trees is not
 `map_extractor`, `mmaps_generator`, `vmap4_assembler`, `vmap4_extractor`.
 
 ```sh
-# once a build is authorized
-cmake -S . -B var/build-plan32 -DTOOLS_BUILD=maps-only -DCMAKE_BUILD_TYPE=Release
-cmake --build var/build-plan32 --target map_extractor vmap4_extractor vmap4_assembler mmaps_generator -j 4
+# once a build is authorized: reuse the existing var/build-plan7 tree so its stored settings and
+# ccache launcher (already recorded in its CMakeCache.txt) are preserved - do not create a new build
+# tree (.agents/docs/build.md). TOOLS_BUILD is currently "none" there, so re-configure that same tree
+# to enable only the four map tools, leaving every other cached setting untouched.
+cmake -S . -B var/build-plan7 -DTOOLS_BUILD=maps-only
+cmake --build var/build-plan7 --target map_extractor vmap4_extractor vmap4_assembler mmaps_generator -j 4
 
 # map tiles -> <out>/maps/{id:03}{y:02}{x:02}.map   (-e 1 = maps only, -f 0 = float heights)
 # -i takes the client install root: System.cpp appends "/Data/" itself when opening archives.
