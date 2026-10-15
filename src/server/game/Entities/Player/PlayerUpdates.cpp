@@ -59,6 +59,18 @@ void Player::Update(uint32 p_time)
     if (!IsInWorld())
         return;
 
+    {
+        static thread_local uint32 s_issue118LastSampleMs = 0;
+        uint32 now = getMSTime();
+        if (now - s_issue118LastSampleMs >= 1000)
+        {
+            s_issue118LastSampleMs = now;
+            VisibleWorldObjectsMap const* visible = GetObjectVisibilityContainer().GetVisibleWorldObjectsMap();
+            LOG_DEBUG("issue118.visiblesize", "VISIBLESIZE guid={} size={} ts={}",
+                GetGUID().ToString(), visible ? visible->size() : 0, now);
+        }
+    }
+
     sScriptMgr->OnPlayerBeforeUpdate(this, p_time);
 
     // undelivered mail

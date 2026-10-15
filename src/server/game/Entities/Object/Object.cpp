@@ -232,6 +232,7 @@ void Object::BuildCreateUpdateBlockForPlayer(UpdateData* data, Player* target)
     buf << GetPackGUID();
     buf << (uint8)m_objectTypeId;
 
+    LOG_DEBUG("issue118.create", "CREATE guid={} ts={}", GetGUID().ToString(), getMSTime());
     BuildMovementUpdate(&buf, flags);
     BuildValuesUpdate(updatetype, &buf, target);
     data->AddUpdateBlock(buf);
@@ -262,12 +263,15 @@ void Object::BuildValuesUpdateBlockForPlayer(UpdateData* data, Player* target)
 
 void Object::BuildOutOfRangeUpdateBlock(UpdateData* data) const
 {
+    LOG_DEBUG("issue118.oorange", "OOR guid={} ts={}", GetGUID().ToString(), getMSTime());
     data->AddOutOfRangeGUID(GetGUID());
 }
 
 void Object::DestroyForPlayer(Player* target, bool onDeath) const
 {
     ASSERT(target);
+
+    LOG_DEBUG("issue118.destroy", "DESTROY guid={} ts={}", GetGUID().ToString(), getMSTime());
 
     if (IsUnit() || isType(TYPEMASK_PLAYER))
     {
@@ -372,7 +376,16 @@ void Object::BuildMovementUpdate(ByteBuffer* data, CreateObjectBits flags) const
     if (flags.MovementUpdate)
     {
         self = ToUnit();
-        movementFlags = WorldPackets::Movement::MovementFlagsToClient(self->m_movementInfo.GetMovementFlags());
+
+        // Creatures keep every movement flag server-side for movement calculations, but only a
+        // subset may be advertised in the CREATE_OBJECT block (TrinityCore-Cata parity) - sending
+        // a disallowed flag here (e.g. MOVEMENTFLAG_WALKING) desyncs the client's bit reader for
+        // the rest of the create block.
+        uint32 rawMovementFlags = self->m_movementInfo.GetMovementFlags();
+        if (IsCreature())
+            rawMovementFlags &= MOVEMENTFLAG_MASK_CREATURE_ALLOWED;
+
+        movementFlags = WorldPackets::Movement::MovementFlagsToClient(rawMovementFlags);
         movementFlagsExtra = WorldPackets::Movement::ExtraMovementFlagsToClient(
             self->m_movementInfo.GetExtraMovementFlags()) & 0x0FFF;
 

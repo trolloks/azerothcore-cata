@@ -124,7 +124,14 @@ namespace Movement
         data << real_position.x << real_position.y << real_position.z;
 
         PacketBuilder::WriteMonsterMove(move_spline, data);
-        unit->SendMessageToSet(&data, true);
+        LOG_DEBUG("issue118.monstermove", "MOVE guid={} ts={}", unit->GetGUID().ToString(), getMSTime());
+
+        // issue118 diagnostic: A/B test suppressing standalone SMSG_ON_MONSTER_MOVE entirely
+        // (server-side spline computation and SMSG_UPDATE_OBJECT traffic unaffected) to test
+        // whether this packet class is necessary for the crash. Remove before merge.
+        constexpr bool ISSUE118_SUPPRESS_MOVE = true;
+        if constexpr (!ISSUE118_SUPPRESS_MOVE)
+            unit->SendMessageToSet(&data, true);
 
         return move_spline.Duration();
     }

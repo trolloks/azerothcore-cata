@@ -948,6 +948,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         "SOAP.Enabled": "0",
         "Cluster.Enabled": "0",
         "Appender.Server": '2,5,1,WorldServer.log,w',
+        "PacketLogFile": '"World.pkt"',
         "Logger.network": (
             "5,Server" if generation["mode"] in {
                 BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
@@ -956,6 +957,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
             else "4,Server"
         ),
         "Logger.network.opcode": "4,Server",
+        "Logger.issue118": "5,Server",
     }
     auth_source = (REPO_ROOT / "src/server/apps/authserver/authserver.conf.dist").read_text()
     world_source = (REPO_ROOT / "src/server/apps/worldserver/worldserver.conf.dist").read_text()

@@ -327,6 +327,20 @@ python3 apps/cata/run_real_client_authentication.py run --manifest "$M" \
 `var/build-plan7` is the build tree the harness uses — not `var/build`, which is not
 configured, nor `var/build-mysql-isolated`, which has no CMake cache.
 
+### Path gotchas when running from a git worktree
+
+The invocation above assumes the main checkout (`/mnt/e1384d9e-.../Fun/azerothcore-cata`). Running
+it from a git worktree (`/home/trolloks/.herdr/worktrees/azerothcore-cata/<name>`) hits two
+path mismatches — verify both with `ls` before running `prepare`, don't assume the doc's paths:
+
+- `--server-dbc-root`: `var/extractors/dbc-out3/dbc` does not exist per-worktree (extraction
+  wasn't rerun there); point at the main checkout's copy instead:
+  `/mnt/e1384d9e-bede-40dd-8b1c-be0beb488490/Fun/azerothcore-cata/var/extractors/dbc-out3/dbc`.
+- `--wine-runner`: the installed Bottles runner name changes as it's updated (e.g.
+  `ge-proton11-6` became `GE-Proton11-7-x86_64`). List
+  `/home/trolloks/.var/app/com.usebottles.bottles/data/bottles/runners/` first and use whatever's
+  actually installed — a stale name fails with "installed Wine runner is incomplete".
+
 ## Retrying a failed run — do not reset and re-prepare
 
 `run` accepts a generation already in `failed`/`inconclusive` state: it clears the raw
