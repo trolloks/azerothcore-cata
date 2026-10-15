@@ -225,6 +225,10 @@ LEVEL_UP_XP_TARGET_GUID = 0x0A0B0C0D
 # not land, and picking a lower entry is a run parameter rather than a code change.
 LEVEL_UP_XP_TARGET_ENTRY = int(os.environ.get("LEVEL_UP_XP_TARGET_ENTRY", "2809"))
 LEVEL_UP_XP_TARGET_OFFSET = (3, 3)
+# Spell 78 is "Attack", the auto-attack every melee class starts with. Button 0 is the one the
+# main-hand keypress reaches.
+LEVEL_UP_ATTACK_SPELL = 78
+LEVEL_UP_ATTACK_BUTTON = 0
 POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
     IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
@@ -686,6 +690,28 @@ def issue97_world_seed_sql() -> str:
         f"AND `guid` IN ({ISSUE97_PHASED_CREATURE_GUID},{ISSUE97_CONTROL_CREATURE_GUID});"
         f"DELETE FROM `gameobject` WHERE `id` IN ({ISSUE97_GO_ENTRY},21008) "
         f"AND `guid`={ISSUE97_PHASED_GO_GUID};" + creature + gameobject
+    )
+
+
+def level_up_action_seed_sql() -> str:
+    """Gives the fixture character the auto-attack binding so the main-hand keypress attacks.
+
+    populated_character_seed_sql inserts the `characters` row directly, so it grants no spells and
+    no action bar - fine for the movement/cast modes (they bind what they need explicitly) but fatal
+    here: with no bound Attack button the main-hand keypress sends no CMSG_ATTACK and the kill can
+    never happen.
+
+    Spell 78 is "Attack" (playercreateinfo_action row 1,1,73,78 for Human Warrior). It goes on
+    button 0 rather than the starting button 73 because 73 sits on a later action-bar page that a
+    single keypress cannot reach. Action type 0 is ACTION_BUTTON_TYPE_SPELL.
+    """
+    return (
+        f"DELETE FROM `character_action` WHERE `guid`={CHARACTER_GUID} AND `spec`=0;"
+        f"DELETE FROM `character_spell` WHERE `guid`={CHARACTER_GUID} AND `spell`={LEVEL_UP_ATTACK_SPELL};"
+        f"INSERT INTO `character_spell` (`guid`,`spell`,`specMask`) "
+        f"VALUES ({CHARACTER_GUID},{LEVEL_UP_ATTACK_SPELL},1);"
+        f"INSERT INTO `character_action` (`guid`,`spec`,`button`,`action`,`type`) "
+        f"VALUES ({CHARACTER_GUID},0,{LEVEL_UP_ATTACK_BUTTON},{LEVEL_UP_ATTACK_SPELL},0);"
     )
 
 
@@ -2290,6 +2316,7 @@ def run_client(args: argparse.Namespace) -> None:
     if generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE:
         mysql(manifest, generation, target_targeted_spell_cast_seed_sql(), generation["schemas"]["characters"])
     if generation["mode"] == LEVEL_UP_MODE:
+        mysql(manifest, generation, level_up_action_seed_sql(), generation["schemas"]["characters"])
         mysql(manifest, generation, level_up_world_seed_sql(), generation["schemas"]["world"])
     if ISSUE97 and generation["mode"] == IN_WORLD_CONTROL_MODE:
         mysql(manifest, generation, populated_character_seed_sql(), generation["schemas"]["characters"])
@@ -3932,6 +3959,15 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         assert LEVEL_UP_MODE in POPULATED_CHARACTER_MODES
         assert LEVEL_UP_MODE in POST_MARKER_MODES
         assert LEVEL_UP_MODE in CHARACTER_MODES
+        # Without a bound Attack button the main-hand keypress sends no CMSG_ATTACK and the kill
+        # can never happen, which silently produced an all-zero-marker run.
+        level_up_action = level_up_action_seed_sql()
+        assert f"INSERT INTO `character_action` (`guid`,`spec`,`button`,`action`,`type`)" in level_up_action
+        assert (
+            f"VALUES ({CHARACTER_GUID},0,{LEVEL_UP_ATTACK_BUTTON},{LEVEL_UP_ATTACK_SPELL},0)"
+            in level_up_action
+        )
+        assert LEVEL_UP_ATTACK_BUTTON == 0, "the main-hand keypress only reaches action button 0"
         level_up_seed = level_up_world_seed_sql()
         assert "INSERT INTO `creature`" in level_up_seed
         assert f"VALUES ({LEVEL_UP_XP_TARGET_GUID},{LEVEL_UP_XP_TARGET_ENTRY}," in level_up_seed
