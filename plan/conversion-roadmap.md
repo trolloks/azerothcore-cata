@@ -21,7 +21,9 @@ The rule for every change is simple:
    where AC has no prior mechanism to defer to. See
    [#76](https://github.com/trolloks/azerothcore-cata/issues/76) for a concrete example (starting
    spells: AC recomputes from `character_skills` at login; a TC-Cata-derived fixture wrongly
-   expected a persisted `character_spell` row).
+   expected a persisted `character_spell` row). Agent-facing rule:
+   `.agents/docs/cataclysm-conversion-goal.md` (Reference precedence for fixtures and acceptance
+   criteria).
 
 ## Reference order
 
