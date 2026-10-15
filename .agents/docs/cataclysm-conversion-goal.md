@@ -29,6 +29,21 @@ Protocol fixtures under `apps/cata/fixtures/` that pin wire layouts are the exce
 the legitimate reference for those, because it is a Cata-specific format AC has no prior version
 of, not an AC-versus-TC representation choice.
 
+## GM commands for test setup
+
+GM commands are the quickest way to reach a client-testing state that would otherwise take a long
+play session (spawning fixtures, teleporting, granting items/spells/talents, setting reputation or
+flags). Use them freely as *setup* in local, run-owned testing. The full list is on the AzerothCore
+wiki (https://www.azerothcore.org/wiki/gm-commands), and the world DB `command` table is the
+runtime source of truth for what a given server actually exposes and at which security level.
+
+They must not stand in for the mechanic under test. When an acceptance criterion is about a normal
+player path, drive that path and assert on it (earn level-up XP through a quest or kill, not
+`.levelup`; take loot from a corpse, not `.additem`). Use GM commands only for preconditions, then
+assert the real player-visible result. This matches `.agents/docs/e2e-policy.md`: GM setup is fine;
+the oracle must observe the real player path. A harness account needs its own GM/RBAC grant before
+it can use restricted commands.
+
 ## Branch workflow
 
 Use Graphify when tracing conversion subsystems, callers, and ownership. Query an existing graph before

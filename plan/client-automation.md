@@ -293,6 +293,17 @@ rejected the cast). Generation 2 passed on this basis (`invalid_target_spell_cas
 1`, `spell_cast_marker_count: 0`, `cast_failed_marker_count: 0`), with screenshots confirming the
 on-screen "Invalid target" flash. This closes out issue #85's real-client acceptance checklist.
 
+## GM commands for setup
+
+A scenario usually reaches its starting state faster with GM commands than by seeding SQL directly:
+spawn/`.npc add`, `.tele`, `.additem`, `.learn`, `.modify`, reputation and flag changes, and so on.
+Use them for *setup only* — the asserted behaviour must still run through the normal player path
+(see the AC-vs-TC precedence rule in `.agents/docs/cataclysm-conversion-goal.md`). The harness
+fixture account has no RBAC/GM grant by default (see the `.cast` notes above), so a GM-enabled setup
+step needs its own account with the required security level written into the generation. Full
+command list: https://www.azerothcore.org/wiki/gm-commands (runtime source of truth: the world DB
+`command` table).
+
 ## The exact harness invocation
 
 Recovering these arguments from scratch is slow and they are not stored anywhere the
