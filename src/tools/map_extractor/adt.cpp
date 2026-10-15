@@ -18,6 +18,7 @@
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "adt.h"
+#include <cstring>
 
 // Helper
 int holetab_h[4] = { 0x1111, 0x2222, 0x4444, 0x8888 };
@@ -56,6 +57,8 @@ ADT_file::~ADT_file()
 void ADT_file::free()
 {
     a_grid = nullptr;
+    memset(cells, 0, sizeof(cells));
+    cellsFound = 0;
     FileLoader::free();
 }
 
@@ -73,7 +76,39 @@ bool ADT_file::prepareLoadedData()
     if (!a_grid->prepareLoadedData())
         return false;
 
+    BuildMCNKCellIndex();
+
     return true;
+}
+
+// Cataclysm root ADTs have no MCIN index - offsMCIN is 0 and the MCNK cells follow the other
+// chunks directly - so the cells have to be located by walking the chunk list. Each cell is
+// indexed by its own ix/iy, which also holds for older layouts that do carry MCIN.
+void ADT_file::BuildMCNKCellIndex()
+{
+    uint8* data = GetData();
+    uint32 const dataSize = GetDataSize();
+
+    for (uint32 offset = 0; offset + 8 <= dataSize;)
+    {
+        uint32 const chunkSize = *reinterpret_cast<uint32*>(data + offset + 4);
+        uint32 const next = offset + 8 + chunkSize;
+
+        if (*reinterpret_cast<uint32*>(data + offset) == MCNKMagic.fcc)
+        {
+            adt_MCNK* cell = reinterpret_cast<adt_MCNK*>(data + offset);
+            if (cell->ix < ADT_CELLS_PER_GRID && cell->iy < ADT_CELLS_PER_GRID)
+            {
+                cells[cell->ix][cell->iy] = cell;
+                ++cellsFound;
+            }
+        }
+
+        if (next <= offset) // corrupt or zero-sized chunk: stop instead of looping
+            break;
+
+        offset = next;
+    }
 }
 
 bool adt_MHDR::prepareLoadedData()

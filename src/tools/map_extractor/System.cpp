@@ -417,10 +417,9 @@ bool ConvertADT(std::string const& inputPath, std::string const& outputPath, int
     if (!adt.loadFile(inputPath))
         return false;
 
-    adt_MCIN* cells = adt.a_grid->getMCIN();
-    if (!cells)
+    if (!adt.cellsFound)
     {
-        printf("Can't find cells in '%s'\n", inputPath.c_str());
+        printf("No MCNK cells found in '%s'\n", inputPath.c_str());
         return false;
     }
 
@@ -439,7 +438,7 @@ bool ConvertADT(std::string const& inputPath, std::string const& outputPath, int
     // Get area flags data
     for (int i = 0; i < ADT_CELLS_PER_GRID; i++)
         for (int j = 0; j < ADT_CELLS_PER_GRID; j++)
-            area_ids[i][j] = cells->getMCNK(i, j)->areaid;
+            area_ids[i][j] = adt.getMCNK(i, j)->areaid;
 
     //============================================
     // Try pack area data
@@ -482,7 +481,7 @@ bool ConvertADT(std::string const& inputPath, std::string const& outputPath, int
     {
         for (int j = 0; j < ADT_CELLS_PER_GRID; j++)
         {
-            adt_MCNK* cell = cells->getMCNK(i, j);
+            adt_MCNK* cell = adt.getMCNK(i, j);
             if (!cell)
                 continue;
             // Height values for triangles stored in order:
@@ -667,7 +666,7 @@ bool ConvertADT(std::string const& inputPath, std::string const& outputPath, int
     {
         for (int j = 0; j < ADT_CELLS_PER_GRID; j++)
         {
-            adt_MCNK* cell = cells->getMCNK(i, j);
+            adt_MCNK* cell = adt.getMCNK(i, j);
             if (!cell)
                 continue;
 
@@ -883,7 +882,7 @@ bool ConvertADT(std::string const& inputPath, std::string const& outputPath, int
     {
         for (int j = 0; j < ADT_CELLS_PER_GRID; ++j)
         {
-            adt_MCNK* cell = cells->getMCNK(i, j);
+            adt_MCNK* cell = adt.getMCNK(i, j);
             if (!cell)
                 continue;
             holes[i][j] = cell->holes;

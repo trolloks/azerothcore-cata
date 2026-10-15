@@ -401,6 +401,16 @@ public:
     void free() override;
 
     adt_MHDR* a_grid;
+
+    // Cataclysm root ADTs carry no MCIN index (offsMCIN is 0) and place the MCNK cells after the
+    // other chunks, so the cells are indexed by walking the chunk list, as the reference reader
+    // does. Indexing by each cell's own ix/iy keeps working for layouts that do have MCIN.
+    adt_MCNK* getMCNK(int x, int y) { return cells[x][y]; }
+    adt_MCNK* cells[ADT_CELLS_PER_GRID][ADT_CELLS_PER_GRID] {};
+    uint32 cellsFound = 0;
+
+private:
+    void BuildMCNKCellIndex();
 };
 
 #endif
