@@ -120,8 +120,13 @@ archive hashes, per-tile inventory, output file hashes, and the config used. The
    `ConvertADT` on the first map and produced zero tiles**.
    `ADT_file` now indexes the cells by walking the chunk list, recording each `MCNK` under its own
    `iy`/`ix` — the row/column order the conversion loops and the reference's
-   `area_ids[mcnk->iy][mcnk->ix]` use (`ADT_file::getMCNK`), and `ConvertADT` rejects a file whose
-   cells are missing, duplicated or malformed instead of dereferencing a header slot.
+   `area_ids[mcnk->iy][mcnk->ix]` use (`ADT_file::getMCNK`). `ConvertADT` rejects a file whose cells
+   are missing, duplicated or malformed instead of dereferencing a header slot, and the walk
+   bounds-checks every declared chunk against the file and validates the sub-chunks the conversion
+   reads — MCVT always, and the legacy MCLQ only when `sizeMCLQ > 8`, because Cataclysm leaves
+   `offsMCLQ` at the end of the cell. Sub-chunk offsets are compared against the MCNK's full extent
+   (they are relative to the chunk start, while the declared size counts only the payload), and a
+   consumed MCLQ must provide the flag and liquid arrays the converter reads.
    **Verified against the real client:** the same command exits 0, processes all 206 maps and writes
    7,192 tiles. The anchor tile decodes to `MAPS` / version 10 / build 15595 with `MHGT` heights
    61.29–276.96 (the fixture's z=83.53 lies inside) and a `MLIQ` section, and the server's own
