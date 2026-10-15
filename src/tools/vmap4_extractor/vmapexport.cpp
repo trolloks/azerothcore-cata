@@ -16,11 +16,16 @@
  */
 
 #define _CRT_SECURE_NO_DEPRECATE
+#include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <cstdio>
+#include <filesystem>
 #include <list>
 #include <map>
+#include <string>
 #include <sys/stat.h>
+#include <utility>
 #include <vector>
 
 #if defined(WIN32) || defined(_WIN32)
@@ -241,125 +246,108 @@ void getGamePath()
 #endif
 }
 
-bool scan_patches(char* scanmatch, std::vector<std::string>& pArchiveNames)
+// Discovers wow-update-<prefix><build>.MPQ archives in dir and attaches them to base in
+// ascending build order, so StormLib can reconstruct the patched files instead of reading
+// the raw base bytes.
+static void ApplyWowUpdateChain(MPQArchive* base, std::string const& dir, std::string const& prefix)
 {
-    int i;
-    char path[512];
+    std::vector<std::pair<uint32, std::string>> updates;
 
-    for (i = 1; i <= 99; i++)
+    if (std::filesystem::exists(dir))
     {
-        if (i != 1)
+        for (auto const& entry : std::filesystem::directory_iterator(dir))
         {
-            sprintf(path, "%s-%d.MPQ", scanmatch, i);
-        }
-        else
-        {
-            sprintf(path, "%s.MPQ", scanmatch);
-        }
-#ifdef __linux__
-        if (FILE* h = fopen64(path, "rb"))
-#else
-        if (FILE* h = fopen(path, "rb"))
-#endif
-        {
-            fclose(h);
-            //matches.push_back(path);
-            pArchiveNames.emplace_back(path);
+            std::string name = entry.path().filename().string();
+            if (name.rfind(prefix, 0) != 0 || name.rfind(".MPQ") != name.size() - 4)
+                continue;
+
+            std::string buildStr = name.substr(prefix.size(), name.size() - prefix.size() - 4);
+            if (!buildStr.empty() && std::all_of(buildStr.begin(), buildStr.end(),
+                [](unsigned char c) { return std::isdigit(c); }))
+                updates.emplace_back(static_cast<uint32>(std::stoul(buildStr)), entry.path().string());
         }
     }
 
-    return (true);
+    std::sort(updates.begin(), updates.end());
+    for (auto const& update : updates)
+        base->ApplyPatch(update.second.c_str());
 }
 
-bool fillArchiveNameVector(std::vector<std::string>& pArchiveNames)
+// Opens the build-15595 archive set the way the client and the map extractor do: world.MPQ is
+// the base archive and the remaining base sets plus the wow-update chains are attached to it as
+// patches. The previous WotLK list (common.MPQ/expansion.MPQ/lichking.MPQ) does not exist in a
+// Cataclysm install, so no map or model data was reachable through it.
+void OpenMPQArchives()
 {
     if (!hasInputPathParam)
         getGamePath();
 
     printf("\nGame path: %s\n", input_path);
 
-    char path[512];
-    string in_path(input_path);
-    std::vector<std::string> locales, searchLocales;
+    std::string const dataPath(input_path);
+    std::vector<std::string> locales;
 
-    searchLocales.emplace_back("enGB");
-    searchLocales.emplace_back("enUS");
-    searchLocales.emplace_back("deDE");
-    searchLocales.emplace_back("esES");
-    searchLocales.emplace_back("frFR");
-    searchLocales.emplace_back("koKR");
-    searchLocales.emplace_back("zhCN");
-    searchLocales.emplace_back("zhTW");
-    searchLocales.emplace_back("enCN");
-    searchLocales.emplace_back("enTW");
-    searchLocales.emplace_back("esMX");
-    searchLocales.emplace_back("ruRU");
-
-    for (auto & searchLocale : searchLocales)
+    static char const* const searchLocales[] =
     {
-        std::string localePath = in_path + searchLocale;
-        // check if locale exists:
+        "enGB", "enUS", "deDE", "esES", "frFR", "koKR", "zhCN", "zhTW", "enCN", "enTW", "esMX", "ruRU"
+    };
+
+    for (auto const* searchLocale : searchLocales)
+    {
+        std::string const localePath = dataPath + searchLocale;
         struct stat status;
-        if (stat(localePath.c_str(), &status))
+        if (stat(localePath.c_str(), &status) || (status.st_mode & S_IFDIR) == 0)
             continue;
-        if ((status.st_mode & S_IFDIR) == 0)
-            continue;
-        printf("Found locale '%s'\n", searchLocale.c_str());
-        locales.push_back(searchLocale);
+        printf("Found locale '%s'\n", searchLocale);
+        locales.emplace_back(searchLocale);
     }
     printf("\n");
 
-    // open locale expansion and common files
-    printf("Adding data files from locale directories.\n");
-    for (auto & locale : locales)
+    // Common archives: terrain, model and WMO data live here.
+    printf("Adding data files from common archives.\n");
+    static char const* const commonArchives[] =
     {
-        pArchiveNames.push_back(in_path + locale + "/locale-" + locale + ".MPQ");
-        pArchiveNames.push_back(in_path + locale + "/expansion-locale-" + locale + ".MPQ");
-        pArchiveNames.push_back(in_path + locale + "/lichking-locale-" + locale + ".MPQ");
-    }
+        "art.MPQ", "world2.MPQ", "expansion1.MPQ", "expansion2.MPQ", "expansion3.MPQ"
+    };
 
-    // open expansion and common files
-    pArchiveNames.push_back(input_path + string("common.MPQ"));
-    pArchiveNames.push_back(input_path + string("common-2.MPQ"));
-    pArchiveNames.push_back(input_path + string("expansion.MPQ"));
-    pArchiveNames.push_back(input_path + string("lichking.MPQ"));
-
-    // now, scan for the patch levels in the core dir
-    printf("Scanning patch levels from data directory.\n");
-    int ret = snprintf(path, 512, "%spatch", input_path);
-    if (ret < 0)
+    std::string const worldPath = dataPath + "world.MPQ";
+    MPQArchive* world = new MPQArchive(worldPath.c_str());
+    if (world->mpq_a)
     {
-        printf("Error when formatting string");
-        return false;
-    }
-    if (!scan_patches(path, pArchiveNames))
-        return (false);
-
-    // now, scan for the patch levels in locale dirs
-    printf("Scanning patch levels from locale directories.\n");
-    bool foundOne = false;
-    for (auto & locale : locales)
-    {
-        printf("Locale: %s\n", locale.c_str());
-        int ret2 = snprintf(path, 512, "%s%s/patch-%s", input_path, locale.c_str(), locale.c_str());
-        if (ret2 < 0)
+        for (auto const* archive : commonArchives)
         {
-            printf("Error when formatting string");
-            return false;
+            std::string const archivePath = dataPath + archive;
+            if (FileExists(archivePath.c_str()))
+                world->ApplyPatch(archivePath.c_str());
         }
-        if (scan_patches(path, pArchiveNames))
-            foundOne = true;
+
+        ApplyWowUpdateChain(world, dataPath, "wow-update-base-");
+    }
+
+    // Locale archives carry the DBCs this tool reads.
+    printf("Adding data files from locale directories.\n");
+    for (auto const& locale : locales)
+    {
+        std::string const localeDir = dataPath + locale + "/";
+        std::string const localeMpq = localeDir + "locale-" + locale + ".MPQ";
+        if (!FileExists(localeMpq.c_str()))
+            continue;
+
+        MPQArchive* base = new MPQArchive(localeMpq.c_str());
+        if (!base->mpq_a)
+            continue;
+
+        for (int i = 1; i <= 9; ++i)
+        {
+            std::string patchName = localeDir + "patch-" + locale + (i > 1 ? "-" + std::to_string(i) : "") + ".MPQ";
+            if (FileExists(patchName.c_str()))
+                base->ApplyPatch(patchName.c_str());
+        }
+
+        ApplyWowUpdateChain(base, localeDir, "wow-update-" + locale + "-");
     }
 
     printf("\n");
-
-    if (!foundOne)
-    {
-        printf("no locale found\n");
-        return false;
-    }
-
-    return true;
 }
 
 bool processArgv(int argc, char** argv, char const* versionString)
@@ -458,15 +446,8 @@ int main(int argc, char** argv)
              ))
         success = (errno == EEXIST);
 
-    // prepare archive name list
-    std::vector<std::string> archiveNames;
-    fillArchiveNameVector(archiveNames);
-    for (auto & archiveName : archiveNames)
-    {
-        MPQArchive* archive = new MPQArchive(archiveName.c_str());
-        if (gOpenArchives.empty() || gOpenArchives.front() != archive)
-            delete archive;
-    }
+    // open the Cataclysm base sets and their patch chains
+    OpenMPQArchives();
 
     if (gOpenArchives.empty())
     {

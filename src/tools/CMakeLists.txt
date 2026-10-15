@@ -143,7 +143,7 @@ foreach(TOOL_NAME ${TOOLS_BUILD_LIST})
         g3dlib
         fkYAML)
 
-    if (${TOOL_PROJECT_NAME} STREQUAL "map_extractor")
+    if (${TOOL_PROJECT_NAME} MATCHES "^(map_extractor|vmap4_extractor)$")
       target_link_libraries(${TOOL_PROJECT_NAME}
         PUBLIC
           storm)
