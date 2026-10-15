@@ -108,14 +108,17 @@ namespace WorldPackets
         class LevelUpInfo final : public ServerPacket
         {
         public:
-            LevelUpInfo() : ServerPacket(SMSG_LEVELUP_INFO, 56) { }
+            LevelUpInfo() : ServerPacket(SMSG_LEVELUP_INFO, 48) { }
 
             WorldPacket const* Write() override;
 
-            uint32 Level = 0;
-            uint32 HealthDelta = 0;
-            std::array<uint32, MAX_POWERS> PowerDelta = { };
-            std::array<uint32, MAX_STATS> StatDelta = { };
+            int32 Level = 0;
+            int32 HealthDelta = 0;
+            // The 4.3.4 client reads a fixed number of power deltas, so this must not track
+            // MAX_POWERS (which grew to 7 when Cataclysm added POWER_RUNE). Matches the pinned
+            // TC-Cata layout: int32 level, health, 6 power deltas, then MAX_STATS stat deltas.
+            std::array<int32, 6> PowerDelta = { };
+            std::array<int32, MAX_STATS> StatDelta = { };
         };
 
         class AC_GAME_API PlayMusic final : public ServerPacket
