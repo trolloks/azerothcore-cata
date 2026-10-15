@@ -227,10 +227,22 @@ LEVEL_UP_XP_TARGET_ENTRY = int(os.environ.get("LEVEL_UP_XP_TARGET_ENTRY", "2809"
 # The seeded target's name as the client knows it, used for "/target <name>" selection.
 LEVEL_UP_TARGET_NAME = os.environ.get("LEVEL_UP_TARGET_NAME", "Boar")
 LEVEL_UP_XP_TARGET_OFFSET = (3, 3)
-# Spell 78 is "Attack", the auto-attack every melee class starts with. Button 0 is the one the
-# main-hand keypress reaches.
-LEVEL_UP_ATTACK_SPELL = 78
+# Spell 6603 is "Attack", the auto-attack melee classes start with - the same spell Plan 29's
+# passing melee acceptance pinned (native_dbc.Spell.dbc:6603). Button 0 is the one the main-hand
+# keypress reaches. (78 also sits on the warrior's starting bar but is not the auto-attack.)
+LEVEL_UP_ATTACK_SPELL = 6603
 LEVEL_UP_ATTACK_BUTTON = 0
+# (item instance guid, item entry, bag, slot, durability) - the real Human Warrior starting kit.
+# Equipment slots are bag 0: CHEST 4, LEGS 6, FEET 7, MAINHAND 15; the hearthstone goes in the
+# backpack. Without the weapon an unarmed level-1 warrior cannot kill even a level-1 creature.
+LEVEL_UP_GEAR = (
+    (99000001, 58231, 0, 4, 100),   # Recruit's Vest  -> CHEST
+    (99000002, 39, 0, 6, 100),      # Recruit's Pants -> LEGS
+    (99000003, 40, 0, 7, 100),      # Recruit's Boots -> FEET
+    (99000004, 49778, 0, 15, 100),  # Worn Greatsword -> MAINHAND (3-5 dmg)
+    (99000005, 6948, 0, 23, 0),     # Hearthstone     -> backpack
+)
+LEVEL_UP_MAINHAND_ENTRY = 49778  # Worn Greatsword
 POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
     IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
@@ -735,20 +747,65 @@ def level_up_tutorial_seed_sql() -> str:
     )
 
 
-def level_up_world_seed_sql() -> str:
-    """Spawns the hostile creature Plan 31 kills for its XP. Nearest-spawn selection uses the same
-    approach the targeted-spell-cast modes already rely on: faction 14 is hostile to the player, so
-    "target nearest enemy" selects it."""
-    x, y, z = CHARACTER_POSITION
-    target_x, target_y = x + LEVEL_UP_XP_TARGET_OFFSET[0], y + LEVEL_UP_XP_TARGET_OFFSET[1]
+def level_up_gear_seed_sql() -> str:
+    """Equips the fixture with the real Human Warrior starting kit.
+
+    populated_character_seed_sql inserts only the `characters` row, so the fixture is naked and
+    unarmed - unlike a genuinely created level-1 warrior. Against even a level-1 creature an unarmed
+    warrior cannot out-damage it, so the kill (and therefore any XP) never lands. These are the
+    starting items the Plan 22 fixture also asserts (Recruit's Vest/Pants/Boots, Worn Greatsword,
+    Hearthstone), placed in their real equipment slots.
+    """
+    rows = ", ".join(f"({guid},{entry},{CHARACTER_GUID},1,{durability},'0 0 0 0 0 ','{'0 ' * 36}')"
+                     for guid, entry, _bag, _slot, durability in LEVEL_UP_GEAR)
+    slots = ", ".join(f"({CHARACTER_GUID},{bag},{slot},{guid})"
+                      for guid, _entry, bag, slot, _durability in LEVEL_UP_GEAR)
     return (
+        f"DELETE FROM `character_inventory` WHERE `guid`={CHARACTER_GUID};"
+        f"DELETE FROM `item_instance` WHERE `owner_guid`={CHARACTER_GUID};"
+        "INSERT INTO `item_instance` "
+        "(`guid`,`itemEntry`,`owner_guid`,`count`,`durability`,`charges`,`enchantments`) "
+        f"VALUES {rows};"
+        "INSERT INTO `character_inventory` (`guid`,`bag`,`slot`,`item`) "
+        f"VALUES {slots};"
+    )
+
+
+def level_up_client_alive() -> bool:
+    """True while the owned WoW client process exists.
+
+    The run loop's own liveness check keys off Wine processes, and wineserver outlives the client,
+    so waiting on that alone keeps the script sleeping long after the game has closed.
+    """
+    result = subprocess.run(
+        ["pgrep", "-f", "Wow-64.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    return result.returncode == 0
+
+
+def level_up_world_seed_sql() -> str:
+    """Spawns the hostile creatures Plan 31 kills for XP.
+
+    One level-1 creature is worth far less than the 400 XP the level 1 -> 2 threshold needs (a real
+    run granted 100 XP), so several are seeded and killed in turn. Faction 14 is hostile to the
+    player, so the client-local name selection finds each one.
+    """
+    x, y, z = CHARACTER_POSITION
+    rows = []
+    for index in range(LEVEL_UP_XP_TARGET_COUNT):
+        offset_x = LEVEL_UP_XP_TARGET_OFFSET[0] + (index % 3) * 2
+        offset_y = LEVEL_UP_XP_TARGET_OFFSET[1] + (index // 3) * 2
+        rows.append(
+            f"({LEVEL_UP_XP_TARGET_GUID + index},{LEVEL_UP_XP_TARGET_ENTRY},"
+            f"{CHARACTER_MAP},{CHARACTER_ZONE},{CHARACTER_ZONE},{x + offset_x},{y + offset_y},{z},0,0)"
+        )
+    guids = ", ".join(str(LEVEL_UP_XP_TARGET_GUID + index) for index in range(LEVEL_UP_XP_TARGET_COUNT))
+    return (
+        f"DELETE FROM `creature` WHERE `guid` IN ({guids});"
         "INSERT INTO `creature` "
         "(`guid`,`id`,`map`,`zoneId`,`areaId`,`position_x`,`position_y`,`position_z`,"
         "`wander_distance`,`MovementType`) "
-        f"VALUES ({LEVEL_UP_XP_TARGET_GUID},{LEVEL_UP_XP_TARGET_ENTRY},"
-        f"{CHARACTER_MAP},{CHARACTER_ZONE},{CHARACTER_ZONE},{target_x},{target_y},{z},0,0) "
-        "ON DUPLICATE KEY UPDATE `position_x`=VALUES(`position_x`),`position_y`=VALUES(`position_y`),"
-        "`position_z`=VALUES(`position_z`);"
+        f"VALUES {', '.join(rows)};"
     )
 
 
@@ -776,6 +833,15 @@ def verify_level_up_seed(manifest: Manifest, generation: Generation) -> dict[str
     )
     if action != f"{LEVEL_UP_ATTACK_BUTTON}\t{LEVEL_UP_ATTACK_SPELL}\t0":
         raise RuntimeError(f"auto-attack is not bound to button {LEVEL_UP_ATTACK_BUTTON}: {action!r}")
+    weapon = mysql(
+        manifest, generation,
+        "SELECT ii.`itemEntry` FROM `character_inventory` ci "
+        "JOIN `item_instance` ii ON ii.`guid`=ci.`item` "
+        f"WHERE ci.`guid`={CHARACTER_GUID} AND ci.`bag`=0 AND ci.`slot`=15;",
+        characters,
+    )
+    if weapon != str(LEVEL_UP_MAINHAND_ENTRY):
+        raise RuntimeError(f"no weapon equipped in the main hand: {weapon!r}")
     tutorials = mysql(
         manifest, generation,
         f"SELECT `tut0`,`tut1`,`tut2`,`tut3`,`tut4`,`tut5`,`tut6`,`tut7` FROM `account_tutorial` "
@@ -786,10 +852,11 @@ def verify_level_up_seed(manifest: Manifest, generation: Generation) -> dict[str
         raise RuntimeError(f"tutorial flags were not cleared, a modal may swallow input: {tutorials!r}")
     target = mysql(
         manifest, generation,
-        f"SELECT `id` FROM `creature` WHERE `guid`={LEVEL_UP_XP_TARGET_GUID};", world,
+        f"SELECT COUNT(*) FROM `creature` WHERE `guid` BETWEEN {LEVEL_UP_XP_TARGET_GUID} "
+        f"AND {LEVEL_UP_XP_TARGET_GUID + LEVEL_UP_XP_TARGET_COUNT - 1};", world,
     )
-    if target != str(LEVEL_UP_XP_TARGET_ENTRY):
-        raise RuntimeError(f"XP target creature {LEVEL_UP_XP_TARGET_GUID} is not seeded: {target!r}")
+    if target != str(LEVEL_UP_XP_TARGET_COUNT):
+        raise RuntimeError(f"expected {LEVEL_UP_XP_TARGET_COUNT} XP targets, seeded {target!r}")
     return {
         "character": {"level": 1, "race": 1, "class": 1},
         "attack_binding": {"button": LEVEL_UP_ATTACK_BUTTON, "spell": LEVEL_UP_ATTACK_SPELL},
@@ -2192,9 +2259,16 @@ def automate_target_targeted_spell_cast(generation: Generation) -> None:
     time.sleep(TARGET_TARGETED_SPELL_CAST_COMPLETE_DELAY_SECONDS)  # let the second cast complete
 
 
-LEVEL_UP_ATTACK_KEYS = ("1",)  # main-hand attack is on action bar button 0
-LEVEL_UP_ATTACK_ROUNDS = 40
-LEVEL_UP_ATTACK_INTERVAL_SECONDS = 1.0
+LEVEL_UP_ATTACK_KEYS = ("1",)  # main-hand attack (spell 78 "Attack") on action bar button 0
+# Auto-attack only has to be STARTED: once it begins, the server swings on the weapon timer until
+# the target dies or the player stops. Hammering the key 40 times added 40 focus-dependent input
+# events for no benefit (one run landed 16 damage events, the next none at all). Start it, then
+# confirm from the server log that the attack actually began and retry if it did not, rather than
+# guessing with a fixed sleep.
+LEVEL_UP_FIGHT_SECONDS = 45.0
+# One level-1 creature grants ~100 XP against a 400 XP threshold, so several kills are needed.
+LEVEL_UP_XP_TARGET_COUNT = 6
+LEVEL_UP_MAX_KILLS = LEVEL_UP_XP_TARGET_COUNT
 # Tab alone is not enough: it selects the nearest unit, and in the fixture's cell that is the
 # friendly Deputy Willem (faction 12, ~2.3yd) rather than the seeded Boar (faction 14, ~4.2yd).
 # Attacking a friendly target sends no CMSG_ATTACK, so the first run produced no attacks at all.
@@ -2207,16 +2281,34 @@ LEVEL_UP_TARGET_KEYS = (
 
 
 def automate_level_up(generation: Generation) -> None:
-    """Selects the seeded hostile and kills it with the main-hand attack, so the XP comes from the
-    real KillRewarder -> Player::GiveXP path. No GM level command is involved."""
+    """Kills the seeded hostiles one after another until the XP award crosses the level threshold.
+
+    XP comes from the real KillRewarder -> Player::GiveXP path. One level-1 creature grants far less
+    than the 400 XP required (a measured run granted 100), so each round selects the next creature,
+    starts auto-attack once, and waits for that kill to grant XP before moving on.
+    """
     capture_desktop_screenshot(generation, "desktop-before-level-up.png")
-    automate_key_sequence(generation, LEVEL_UP_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05)
-    time.sleep(1.0)  # let the client resolve the name and register the target
-    capture_desktop_screenshot(generation, "desktop-after-level-up-target.png")
-    for _ in range(LEVEL_UP_ATTACK_ROUNDS):
+    for _round in range(LEVEL_UP_MAX_KILLS):
+        if level_up_marker_count(generation) > 0:
+            break
+        if not level_up_client_alive():
+            break
+        automate_key_sequence(generation, LEVEL_UP_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+        time.sleep(1.0)  # let the client resolve the name and register the target
+        xp_before = level_up_xp_gain_count(generation)
+        # Press the attack button ONCE. It is a toggle: a second press stops the attack, which is
+        # what produced the earlier "ATTACKSTART then ATTACKSTOP exactly one retry-interval later"
+        # pattern. Let the swing timer do the work and watch for the kill instead of re-pressing.
         automate_key_sequence(generation, LEVEL_UP_ATTACK_KEYS, hold_seconds=0.05, gap_seconds=0.05)
-        time.sleep(LEVEL_UP_ATTACK_INTERVAL_SECONDS)
+        deadline = time.monotonic() + LEVEL_UP_FIGHT_SECONDS
+        while time.monotonic() < deadline:
+            if level_up_xp_gain_count(generation) > xp_before:
+                break  # this creature died and granted XP
+            if level_up_marker_count(generation) > 0 or not level_up_client_alive():
+                break
+            time.sleep(2.0)
     capture_desktop_screenshot(generation, "desktop-after-level-up-attacks.png")
+    generation["level_up_automation_done"] = True
 
 
 # "/target <name>" (lowercase; the client's name lookup is case-insensitive) self-targets via the
@@ -2392,6 +2484,7 @@ def run_client(args: argparse.Namespace) -> None:
         mysql(manifest, generation, target_targeted_spell_cast_seed_sql(), generation["schemas"]["characters"])
     if generation["mode"] == LEVEL_UP_MODE:
         mysql(manifest, generation, level_up_action_seed_sql(), generation["schemas"]["characters"])
+        mysql(manifest, generation, level_up_gear_seed_sql(), generation["schemas"]["characters"])
         mysql(manifest, generation, level_up_tutorial_seed_sql(), generation["schemas"]["characters"])
         mysql(manifest, generation, level_up_world_seed_sql(), generation["schemas"]["world"])
         generation["level_up_seed"] = verify_level_up_seed(manifest, generation)
@@ -2966,6 +3059,21 @@ LEVEL_UP_XP_PACKET = re.compile(r"\bS->C:\s+.*?\bSMSG_LOG_XPGAIN\b")
 LEVEL_UP_INFO_PACKET = re.compile(r"\bS->C:\s+.*?\bSMSG_LEVELUP_INFO\b")
 
 
+def level_up_settle_signal(generation: Generation) -> int:
+    """Drives when the run may end.
+
+    This must NOT be the level-up marker itself: SMSG_LEVELUP_INFO only appears when the run
+    succeeds, so using it as the post-marker counter means a failed attempt never sets
+    post_marker_hold_started and the loop runs to the full --timeout - long after the client is
+    dead, with the harness's client-exit check defeated by the still-running Wine processes. Once
+    the automation has finished (or the level-up happened) the scene is settled and the run can end
+    after the normal stability window.
+    """
+    if generation.get("level_up_automation_done") or level_up_marker_count(generation):
+        return 1
+    return 0
+
+
 def level_up_marker_count(generation: Generation) -> int:
     """Counts the level-up itself: SMSG_LEVELUP_INFO is only sent by Player::GiveLevel, so seeing it
     after the in-world sync marker means a real XP award crossed the threshold on the wire."""
@@ -3000,7 +3108,7 @@ POST_MARKER_COUNTERS = {
     TARGET_TARGETED_SPELL_CAST_MODE: target_targeted_spell_cast_marker_count,
     CHAT_MESSAGE_MODE: chat_message_marker_count,
     INVALID_TARGET_SPELL_CAST_MODE: invalid_target_spell_cast_marker_count,
-    LEVEL_UP_MODE: level_up_marker_count,
+    LEVEL_UP_MODE: level_up_settle_signal,
 }
 
 
@@ -4055,6 +4163,9 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         level_up_tutorial = level_up_tutorial_seed_sql()
         assert "INSERT INTO `account_tutorial`" in level_up_tutorial
         assert "4294967295" in level_up_tutorial and str(ACCOUNT_ID) in level_up_tutorial
+        level_up_gear = level_up_gear_seed_sql()
+        assert "INSERT INTO `item_instance`" in level_up_gear and "INSERT INTO `character_inventory`" in level_up_gear
+        assert f"({CHARACTER_GUID},0,15,99000004)" in level_up_gear, "the sword must be in the main hand"
         level_up_seed = level_up_world_seed_sql()
         assert "INSERT INTO `creature`" in level_up_seed
         assert f"VALUES ({LEVEL_UP_XP_TARGET_GUID},{LEVEL_UP_XP_TARGET_ENTRY}," in level_up_seed
