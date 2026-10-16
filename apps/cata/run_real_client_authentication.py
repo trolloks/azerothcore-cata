@@ -1255,7 +1255,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         "Logger.network": (
             "5,Server" if ISSUE97 or generation["mode"] in {
                 BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
-                WALK_RUN_MODE_SWITCH_MODE,
+                WALK_RUN_MODE_SWITCH_MODE, PLAN32_GEOMETRY_MODE,
             }
             else "4,Server"
         ),
@@ -3106,7 +3106,9 @@ def plan32_packet_events(generation: Generation) -> list[dict[str, object]]:
         payload = data[offset + 44:offset + 40 + length]
         side = "c2s" if direction == 0x47534D43 else "s2c"
         if opcode == CMSG_SET_SELECTION_OPCODE:
-            target, _ = read_packed_guid(payload, 0)
+            # ObjectGuid's own stream operator reads a full uint64, unlike the packed GUIDs in
+            # the cast packets below.
+            target = struct.unpack_from("<Q", payload, 0)[0]
             events.append({"opcode": "CMSG_SET_SELECTION", "side": side, "target": target})
         elif opcode == CMSG_CAST_SPELL_OPCODE:
             count = payload[0]
@@ -4714,9 +4716,10 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     C2S, S2C = 0x47534D43, 0x47534D53
     player = pack_guid(CHARACTER_GUID)
     boar_packed = pack_guid(boar)
+    boar_full = struct.pack("<Q", boar)
     synthetic = (
         b"PKT" + bytes(63)
-        + pkt(C2S, CMSG_SET_SELECTION_OPCODE, boar_packed)
+        + pkt(C2S, CMSG_SET_SELECTION_OPCODE, boar_full)
         + pkt(C2S, CMSG_CAST_SPELL_OPCODE,
               bytes([1]) + struct.pack("<I", 133) + bytes(4) + struct.pack("<I", 2) + boar_packed)
         + pkt(S2C, SMSG_CAST_FAILED_OPCODE, bytes([1]) + struct.pack("<I", 133) + bytes([49]))
