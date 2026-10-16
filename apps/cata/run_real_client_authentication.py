@@ -214,21 +214,22 @@ PLAN32_GEOMETRY_SEEDS = {
         "character": (-8775.13, -220.95, 85.254, 2.766),
         "dummy": (-8798.946, -211.566, 82.845),
     },
-    # Chase: the player rounds the abbey's east corner while the aggroed fixture follows. The
-    # corner (validated offline against the tile's own polygons and the obstacle's triangles)
-    # runs north 15 m then east 12 m; every follower shortcut across it hits Nsabbey.wmo while a
-    # navmesh route exists around. Facing is cardinal north so both legs are exact axis moves
-    # (forward, then strafe) with no turn-timing error.
+    # Chase: the player rounds the abbey's north-east corner while the aggroed fixture
+    # follows. The corner (validated offline against the tile's own polygons and the
+    # obstacle's triangles) runs east 15 m then south 12 m; every follower shortcut across
+    # it hits Nsabbey.wmo while a navmesh route exists around. Facing is cardinal east so
+    # both legs are exact axis moves (forward, then strafe) with no turn-timing error. The
+    # aggro fixture sits 22 m ahead within the frontal arc with clear line of sight.
     "chase": {
-        "character": (-8862, -202, 80.386, math.pi / 2),
-        "dummy": (-8842, -212, 82.339),
+        "character": (-8870, -177, 80.218, 0.0),
+        "dummy": (-8848, -180, 80.248),
     },
 }
 # Chase observation contract, all pinned before the run. The follower path must be decisively
 # longer than its straight line (a clipper walks ratio ~1.0), must end at melee range, must be
 # continuous (no teleports), and must include a melee engagement; any of those missing fails the
 # run instead of passing.
-PLAN32_CHASE_P2 = (-8850, -187)
+PLAN32_CHASE_P2 = (-8855, -189)
 PLAN32_CHASE_START_TOLERANCE = 4.0
 PLAN32_CHASE_END_TOLERANCE = 6.0
 PLAN32_CHASE_DETOUR_RATIO = 1.25
@@ -5067,8 +5068,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert selections_target_fixture([]) is None
     # Chase pieces: monster-move bodies (compressed and uncompressed), attackerstate, metrics.
     assert PLAN32_EXPECTED_COUNTS == {"blocked": [1, 2], "clear": [1, 2], "chase": [1]}
-    assert PLAN32_GEOMETRY_SEEDS["chase"]["character"][:3] == (-8862, -202, 80.386)
-    assert PLAN32_GEOMETRY_SEEDS["chase"]["dummy"] == (-8842, -212, 82.339)
+    assert PLAN32_GEOMETRY_SEEDS["chase"]["character"] == (-8870, -177, 80.218, 0.0)
+    assert PLAN32_GEOMETRY_SEEDS["chase"]["dummy"] == (-8848, -180, 80.248)
     mover_packed = pack_guid(fixture)
 
     def move_pkt(extra: bytes, flags: int = 0) -> bytes:
