@@ -197,7 +197,9 @@ directory is in TrinityCore's `ModelSpawn` layout (`uint8` flags) while this ser
 the two sets cannot be swapped. `python3 apps/cata/check_collision_geometry.py --data-root <root>`
 reports that, along with missing, truncated, misnamed or unloadable artifacts — a declared map
 section outside the file, a missing `{id}.vmtree`, a spawn whose model has no `.vmo`, or an unusable
-Detour payload — before a run starts. Without the flag
+Detour payload — before a run starts. Add `--los-pair` to derive the frozen scenario's blocked and
+clear line-of-sight pair from the pinned obstacle's triangles, with the blocking triangle and the
+eye height the run has to reproduce. Without the flag
 nothing changes, so geometry-free modes keep their accepted behaviour.
 
 The sets have to match the server's own naming, which is not uniform: for map 0 the server asks for

@@ -1,17 +1,11 @@
 # Plan 32: reproducible Northshire collision and pathfinding (issue #134)
 
-Status: **parser fixes, the extraction pipeline, the harness geometry path and the scenario's data
-pins are done.** The frozen tile has all three artifact sets, verified against the server's own naming
-and header constants; `prepare --geometry` can stage them and enable LOS/height/navmesh; and the pinned
-obstacle and ground heights are now read out of those artifacts
-(`apps/cata/check_collision_geometry.py`), so the run has expectations to be judged against.
-**Native map-0 acceptance is STILL UNRUN** — no server has loaded the artifacts yet.
-
-This record covers "freeze the scenario, required data/artifact manifest and blockers", "audit the
-pinned reference and affected shared AC callers", and the Cata parser prerequisites that audit
-surfaced: the object-side `_obj0` ADT (finding 6), the archive enumeration/patch reading (finding 7)
-and terrain chunk discovery (finding 4, which turned out to be a hard crash). All three are fixed and
-verified; nothing in the extraction path is left as an uninspected assumption.
+Status: **parser fixes, the extraction pipeline, the harness geometry path and the scenario's data pins
+are done, including the derived clear/blocked LOS pair.** The frozen tile has all three artifact sets,
+verified against the server's own naming and header constants; `prepare --geometry` can stage them and
+enable LOS/height/navmesh; and the pinned obstacle, the ground heights and the LOS pair are read out of
+those artifacts rather than guessed (`apps/cata/check_collision_geometry.py`). **Native map-0 acceptance
+is STILL UNRUN** — no server has loaded the artifacts yet.
 
 ## Frozen scenario
 
@@ -180,11 +174,34 @@ Pinned facts, in world coordinates, with heights from the map tile rather than f
 | Obstacle extents | `x[-8950.03, -8831.42] y[-248.44, -129.90] z[80.10, 169.18]` |
 | Other candidates within 200 m | `Abbeygate02.wmo` (175 m, residual -0.00), `Abbeygate01.wmo` (139 m, -0.50) |
 
-**A bound cannot decide an LOS case.** The stored bound is the model's computed extent, and for a
-building WMO that extent includes its grounds: `Nsabbey.wmo`'s box contains the fixture position itself.
-A segment crossing the box therefore proves nothing about a query result, so the clear/blocked pair has
-to be derived from the model's own triangles. That is the one freeze item still open, recorded as such
-below instead of being guessed at.
+**The pair is derived from the triangles, not the bound.** The stored bound is the model's computed
+extent, and for a building WMO that extent includes its grounds: `Nsabbey.wmo`'s box contains the fixture
+position itself, so a segment crossing it proves nothing about a query result. The pair was therefore
+derived from the model's own triangles (`--los-pair`):
+
+| Query | Endpoints (world) | Length | Result |
+| --- | --- | --- | --- |
+| Blocked | `(-8830.95, -198.96, 84.83)` to `(-8860.72, -187.23, 82.37)` | 32.09 m | hit at 18.01 m, group 6 tri 590 |
+| Clear | `(-8775.13, -220.95, 87.29)` to `(-8804.90, -209.22, 84.91)` | 32.09 m | no hits |
+
+Both endpoints sit at a unit's eye height — the terrain plus `Unit::GetCollisionHeight`'s default
+(`2.03128`), which is what `WorldObject::IsWithinLOS` adds before `Map::isInLineOfSight` runs. The search
+is the server's own: the segment is walked over **every** spawn, culled only by the segment/bound
+intersection the tile tree itself uses — not by any distance heuristic, because a large model's bound can
+cross a segment while its centre is nowhere near it — then tested against each model's triangles through
+`ModelInstance`'s transform
+(`iInvRot * (origin - iPos) * iInvScale` and `iInvRot * direction`), and the same
+`G3D::Matrix3::fromEulerAnglesZYX` call that the extractor, the assembler and the server all use. A
+blocked line is only accepted when its nearest hit is the pinned obstacle, and a clear line when it hits
+nothing at all; the blocked line's hit is additionally required to intersect the obstacle's stored bound,
+so the triangles and the artifact agree rather than merely agreeing with themselves, and the chosen clear
+line is re-tested against every spawn before it is reported.
+
+One honest limitation: the blocked line crosses the obstacle's stored bound and the clear line does not.
+The sharper contrast — a clear line that stays *inside* those grounds, isolating the wall from the
+surroundings — is not available at this wall, because a line shifted outward far enough to clear the
+trees and fences has already left the extent. It is printed with the derivation so the acceptance is not
+misled about what the clear case proves.
 
 The checker reports thirteen checks, one for each way the artifacts can fail to be loadable: the map
 magic/version/build (15595); every declared map section the terrain loader opens (area, height, liquid,
@@ -198,7 +215,11 @@ a reference at or above `iNTreeValues` and that object then has no collision;
 each spawn's model resolving as `<name>.vmo`, which is the only name `WorldModelStore` opens; the
 tile/contents agreement; the on-terrain residual; one `dtNavMeshParams` with usable
 tileWidth/tileHeight/maxTiles; the mmtile header (`MMAP_MAGIC`, `dtVersion 7`, `mmapVersion 20`) with
-`header + size == file length`; and the `dtMeshHeader` inside the declared payload — magic, version,
+`header + size == file length`; the reported obstacles' `.vmo` files parsing, carrying collision triangles, and having
+every triangle
+index inside its group's vertex array (a model can satisfy the byte count while the indices are
+unusable, and the server indexes the vertex array directly);
+and the `dtMeshHeader` inside the declared payload — magic, version,
 its tile index recomputed from the params the way `MapBuilder` writes it, and `dtNavMesh::addTile`'s
 own aligned buffer arithmetic with **this tree's** element sizes, so the counts must describe arrays
 that fit in the declared payload. Those sizes are not the upstream defaults: the vendored Detour
@@ -352,8 +373,6 @@ substitute one for the other.
   the staging proof is still only that the sets are complete, not that a given grid loads.
 - **Client archives provenance** for all three artifact sets; the runs above used the on-disk client
   copy without recording its provenance.
-- **Pinned clear/blocked LOS pair**: the obstacle is pinned, but the pair itself still has to be derived
-  from the model's triangles; its bounding box is not sufficient, for the reason recorded above.
 - **Native acceptance**: the map-0 route, the LOS/height/navmesh queries and the pinned obstacle
   chase are still unrun, and no server has loaded the produced geometry. Run
   `apps/cata/check_collision_geometry.py` against the staged root first — it is what makes a silently
@@ -363,8 +382,9 @@ substitute one for the other.
 ## Acceptance plan (unchanged, for when the above is authorized)
 
 Before the run, `apps/cata/check_collision_geometry.py` must pass against the exact root `--data-root`
-stages (it fails on missing, truncated, misnamed or foreign-toolchain artifacts). Derive the clear/blocked
-pair from the pinned obstacle's triangles, then run the owned native client with the selected tiles loaded
+stages (it fails on missing, truncated, misnamed or foreign-toolchain artifacts). The clear/blocked pair
+is derived from the pinned obstacle's triangles and is recorded above, so the run has the expectation to
+reproduce; then run the owned native client with the selected tiles loaded
 and server LOS, height and navmesh use enabled, and prove: clear vs blocked LOS against that obstacle,
 correct ground heights at pinned points (the anchor's is `82.630`), one normal creature chase that paths
 around the obstacle, and a normal walk/stop/logout/relog at a legal position. Deterministic cases:
