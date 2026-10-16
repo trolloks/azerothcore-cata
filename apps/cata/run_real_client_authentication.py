@@ -196,11 +196,15 @@ PLAN32_GEOMETRY_MODE = "plan32-geometry"
 # pinned seed, so no travel between pinned points is needed. Stages arrive in this order; only the
 # implemented ones are accepted by prepare/run/verify.
 PLAN32_GEOMETRY_STAGES = ("blocked", "clear")
-# Blocked: caster at the pinned blocked-line start, Boar 80% along that line behind the abbey wall
-# (the probed setup: 25.67 m, comparable to the clear attempt below). Clear: caster at the pinned
-# clear-line start, Boar 80% along that line (same 25.67 m, a matched control on open ground), so
-# the full 32.09 m pinned line stays the expectation while both attempts share one distance. Every
-# Z below is the artifact terrain height at that point, read out of the staged root before any run.
+# The fixture is an entry with no static spawns anywhere near the seeds and a name no other nearby
+# unit shares: Tab-nearest is not deterministic in the abbey (ambient hostiles wander through Tab
+# range), so targeting goes through the client-local "/target <name>" macro instead (the level-up
+# mode's proven mechanism), and verify still requires the selected GUID to equal the seeded one.
+# Saytr (361, faction 14 hostile-to-all like the boar, level 1, no ScriptName) has zero rows
+# anywhere in the world DB. Every Z below is the artifact terrain height at that point, read out
+# of the staged root before any run.
+PLAN32_GEOMETRY_DUMMY_ENTRY = 361
+PLAN32_GEOMETRY_DUMMY_NAME = "saytr"
 PLAN32_GEOMETRY_SEEDS = {
     "blocked": {
         "character": (-8830.95, -198.96, 82.801, 2.766),
@@ -216,7 +220,11 @@ PLAN32_GEOMETRY_SEEDS = {
 PLAN32_GEOMETRY_HEIGHT_TOLERANCE = 0.1
 PLAN32_GEOMETRY_SPELL_ID = TARGET_TARGETED_SPELL_CAST_SPELL_ID
 PLAN32_GEOMETRY_ACTION_BUTTON = TARGET_TARGETED_SPELL_CAST_ACTION_BUTTON
-PLAN32_GEOMETRY_TARGET_KEY = "Tab"
+# Client-local "/target <name>" macro: resolves against the client's own object cache, needs no
+# server permission, still sends a genuine CMSG_SET_SELECTION (level-up mode precedent).
+PLAN32_GEOMETRY_TARGET_KEYS = (
+    "Return", "slash", *tuple("target"), "space", *tuple(PLAN32_GEOMETRY_DUMMY_NAME), "Return",
+)
 INVALID_TARGET_SPELL_CAST_MODE = "invalid-target-spell-cast"
 # Issue #85's remaining "invalid-target negative case" acceptance item, exercised via the action
 # bar like the other cast modes above. Reuses the Fireball grant from target_targeted_spell_cast_
@@ -721,7 +729,7 @@ def plan32_world_seed_sql(stage: str) -> str:
         "INSERT INTO `creature` "
         "(`guid`,`id`,`map`,`zoneId`,`areaId`,`position_x`,`position_y`,`position_z`,"
         "`wander_distance`,`MovementType`) "
-        f"VALUES ({TARGET_TARGETED_SPELL_CAST_DUMMY_GUID},{TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY},"
+        f"VALUES ({TARGET_TARGETED_SPELL_CAST_DUMMY_GUID},{PLAN32_GEOMETRY_DUMMY_ENTRY},"
         f"{CHARACTER_MAP},{CHARACTER_ZONE},{CHARACTER_ZONE},{dummy_x},{dummy_y},{dummy_z},0,0) "
         "ON DUPLICATE KEY UPDATE `position_x`=VALUES(`position_x`),`position_y`=VALUES(`position_y`),"
         "`position_z`=VALUES(`position_z`);"
@@ -729,10 +737,10 @@ def plan32_world_seed_sql(stage: str) -> str:
 
 
 def plan32_dummy_full_guid() -> int:
-    """The Boar's full 64-bit GUID as it appears on the wire (counter | entry << 24 | hi << 48)."""
+    """The fixture's full 64-bit GUID as it appears on the wire (counter | entry << 24 | hi << 48)."""
     return (
         TARGET_TARGETED_SPELL_CAST_DUMMY_GUID
-        | (TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY << 24)
+        | (PLAN32_GEOMETRY_DUMMY_ENTRY << 24)
         | (0xF130 << 48)
     )
 
@@ -2174,13 +2182,15 @@ def automate_ground_movement(generation: Generation) -> None:
 
 
 def automate_plan32_geometry(generation: Generation) -> None:
-    # One walk tap (height and walk evidence at the seed), then Tab-target and two ordinary,
-    # uncancelled Fireball casts. No Escape: Codex's confirmation requires both attempts to run
-    # through their observation windows so a failure cannot be a client-side cancel.
+    # One walk tap (height and walk evidence at the seed), then name-target the seeded fixture and
+    # two ordinary, uncancelled Fireball casts. No Escape: Codex's confirmation requires both
+    # attempts to run through their observation windows so a failure cannot be a client-side cancel.
     capture_desktop_screenshot(generation, "desktop-before-target.png")
     automate_key_sequence(generation, ("w",), hold_seconds=0.6, gap_seconds=0.4)
-    automate_key_sequence(generation, (PLAN32_GEOMETRY_TARGET_KEY,))
-    time.sleep(1.0)  # let the client register the new target before casting
+    automate_key_sequence(
+        generation, PLAN32_GEOMETRY_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05,
+    )
+    time.sleep(1.0)  # let the client resolve the name and register the target
     capture_desktop_screenshot(generation, "desktop-after-target.png")
     automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
     time.sleep(6.0)  # let the first cast resolve (Fireball has a real cast time)
@@ -3297,11 +3307,11 @@ def plan32_settle_z(generation: Generation) -> float | None:
     return float(samples[0]["z"]) if samples else None
 
 
-def selections_target_boar(events: list[dict[str, object]], boar: int) -> bool:
-    """The automation presses Tab once: the last selection must be the Boar, so the casts that
-    follow cannot be aimed at a nearer friendly unit or a critter."""
+def selections_target_fixture(events: list[dict[str, object]], fixture: int) -> bool:
+    """The automation targets once by name: the last selection must be the seeded fixture, so
+    the casts that follow cannot be aimed at a nearer ambient unit."""
     selections = [event for event in events if event["opcode"] == "CMSG_SET_SELECTION"]
-    return bool(selections) and selections[-1].get("target") == boar
+    return bool(selections) and selections[-1].get("target") == fixture
 
 
 def target_targeted_spell_cast_marker_count(generation: Generation) -> int:
@@ -3859,7 +3869,7 @@ def verify(args: argparse.Namespace) -> None:
                 stage_ok = False
             character_ok = character_ok and (
                 stage in PLAN32_GEOMETRY_SEEDS
-                and selections_target_boar(casts, boar)
+                and selections_target_fixture(casts, boar)
                 and stage_ok
                 and height_ok
             )
@@ -4689,11 +4699,17 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert PLAN32_GEOMETRY_MODE in POST_MARKER_MODES
     assert plan_number(PLAN32_GEOMETRY_MODE) == "32"
     boar = plan32_dummy_full_guid()
-    # counter 99990001 is 0x05F5B101, wider than 24 bits, so its top nibble bleeds into the
-    # entry field exactly as ObjectGuid(hi, entry, counter) ORs it: entry reads 0x0AFD.
-    assert boar == 0xF130000AFDF5B9F1
+    # counter 99990001 is 0x05F5B9F1, wider than 24 bits, so its top nibble bleeds into the
+    # entry field exactly as ObjectGuid(hi, entry, counter) ORs it: entry reads 0x016D.
+    assert boar == 0xF13000016DF5B9F1
     assert set(PLAN32_GEOMETRY_SEEDS) == set(PLAN32_GEOMETRY_STAGES) == {"blocked", "clear"}
     assert "-8854.766" in plan32_world_seed_sql("blocked") and "80.422" in plan32_world_seed_sql("blocked")
+    assert ",361,0,12,12," in plan32_world_seed_sql("blocked")
+    assert ",2809," not in plan32_world_seed_sql("blocked")
+    assert PLAN32_GEOMETRY_TARGET_KEYS[0] == "Return" and "slash" in PLAN32_GEOMETRY_TARGET_KEYS
+    assert tuple(PLAN32_GEOMETRY_DUMMY_NAME) == PLAN32_GEOMETRY_TARGET_KEYS[
+        PLAN32_GEOMETRY_TARGET_KEYS.index("space") + 1:
+    ][:len(PLAN32_GEOMETRY_DUMMY_NAME)]
     assert "-8798.946" in plan32_world_seed_sql("clear") and "82.845" in plan32_world_seed_sql("clear")
     assert f"VALUES ({CHARACTER_GUID},0,0,{PLAN32_GEOMETRY_SPELL_ID},0)" in plan32_spell_seed_sql()
 
@@ -4742,11 +4758,11 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert [(e.get("count"), e.get("spell")) for e in events if e["opcode"] == "CMSG_CAST_SPELL"] == [(1, 133), (2, 133)]
     assert [(e.get("count"), e.get("spell"), e.get("result")) for e in events if e["opcode"] == "SMSG_CAST_FAILED"] == [(1, 133, 49), (2, 133, 49)]
     assert events[-1]["caster"] == CHARACTER_GUID and events[-1]["spell"] == 133
-    assert selections_target_boar(events, boar)
-    assert not selections_target_boar(
+    assert selections_target_fixture(events, boar)
+    assert not selections_target_fixture(
         [{"opcode": "CMSG_SET_SELECTION", "target": CHARACTER_GUID}], boar,
     )
-    assert not selections_target_boar([], boar)
+    assert not selections_target_fixture([], boar)
     print("Real-client runner self-check passed")
 
 
