@@ -736,13 +736,32 @@ def plan32_world_seed_sql(stage: str) -> str:
     )
 
 
-def plan32_dummy_full_guid() -> int:
-    """The fixture's full 64-bit GUID as it appears on the wire (counter | entry << 24 | hi << 48)."""
-    return (
-        TARGET_TARGETED_SPELL_CAST_DUMMY_GUID
-        | (PLAN32_GEOMETRY_DUMMY_ENTRY << 24)
-        | (0xF130 << 48)
+def verify_plan32_seeds(manifest: Manifest, generation: Generation) -> None:
+    """The selected unit is the seeded fixture only if no other row of the fixture entry sits
+    near either seed point. Runs in run() after seeding, so a stray same-entry row fails the run
+    instead of silently admitting an ambient target. The run-owned DB is disposable; the check
+    reads it, it never modifies shared data."""
+    points = [
+        PLAN32_GEOMETRY_SEEDS[stage]["character"][:2] for stage in PLAN32_GEOMETRY_SEEDS
+    ] + [
+        PLAN32_GEOMETRY_SEEDS[stage]["dummy"][:2] for stage in PLAN32_GEOMETRY_SEEDS
+    ]
+    conditions = " OR ".join(
+        f"((`position_x`-({x}))*(`position_x`-({x}))+(`position_y`-({y}))*(`position_y`-({y}))) < 22500"
+        for x, y in points
     )
+    rows = mysql(
+        manifest, generation,
+        f"SELECT `guid`,`position_x`,`position_y` FROM `creature` "
+        f"WHERE `id`={PLAN32_GEOMETRY_DUMMY_ENTRY} AND `map`={CHARACTER_MAP} AND ({conditions});",
+        generation["schemas"]["world"],
+    )
+    found = [line.split("\t") for line in rows.splitlines() if line.strip()]
+    expected = str(TARGET_TARGETED_SPELL_CAST_DUMMY_GUID)
+    if len(found) != 1 or found[0][0] != expected:
+        raise RuntimeError(
+            f"plan32 fixture entry {PLAN32_GEOMETRY_DUMMY_ENTRY} is not unique near the seeds: {found}"
+        )
 
 
 def target_targeted_spell_cast_world_seed_sql() -> str:
@@ -2638,6 +2657,7 @@ def run_client(args: argparse.Namespace) -> None:
         generation["plan32_stage"] = stage
         mysql(manifest, generation, plan32_spell_seed_sql(), generation["schemas"]["characters"])
         mysql(manifest, generation, plan32_world_seed_sql(stage), generation["schemas"]["world"])
+        verify_plan32_seeds(manifest, generation)
     if generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE:
         mysql(manifest, generation, target_targeted_spell_cast_seed_sql(), generation["schemas"]["characters"])
     if generation["mode"] == LEVEL_UP_MODE:
@@ -3307,11 +3327,21 @@ def plan32_settle_z(generation: Generation) -> float | None:
     return float(samples[0]["z"]) if samples else None
 
 
-def selections_target_fixture(events: list[dict[str, object]], fixture: int) -> bool:
-    """The automation targets once by name: the last selection must be the seeded fixture, so
-    the casts that follow cannot be aimed at a nearer ambient unit."""
-    selections = [event for event in events if event["opcode"] == "CMSG_SET_SELECTION"]
-    return bool(selections) and selections[-1].get("target") == fixture
+def selections_target_fixture(events: list[dict[str, object]]) -> int | None:
+    """The single unit the automation selected by name.
+
+    Static spawns run under server-assigned map-local lows (grid loading creates units with
+    GenerateLowGuid, keeping the DB guid only as spawnId), so the fixture's wire GUID is not
+    knowable a priori. Identity binds instead to the one selection the /target macro sends:
+    every selection present must agree, and every cast must name that same unit. A differing
+    second selection means the client retargeted on its own and fails the run.
+    """
+    selections = [
+        event.get("target") for event in events if event.get("opcode") == "CMSG_SET_SELECTION"
+    ]
+    if not selections or any(target != selections[-1] for target in selections):
+        return None
+    return selections[-1]
 
 
 def target_targeted_spell_cast_marker_count(generation: Generation) -> int:
@@ -3828,7 +3858,7 @@ def verify(args: argparse.Namespace) -> None:
         if plan32_geometry_mode:
             stage = generation.get("plan32_stage")
             casts = evidence["plan32_casts"] or []
-            boar = plan32_dummy_full_guid()
+            target = selections_target_fixture(casts)
             first_selection = next(
                 (index for index, event in enumerate(casts)
                  if event["opcode"] == "CMSG_SET_SELECTION"), None,
@@ -3841,11 +3871,14 @@ def verify(args: argparse.Namespace) -> None:
                 if event["opcode"] == "SMSG_SPELL_GO" and event.get("spell") == PLAN32_GEOMETRY_SPELL_ID
                 and event.get("caster") == CHARACTER_GUID
             ]
-            # Every request names Fireball at the Boar with the client's own counters, in order.
+            # Every request names Fireball at the selected fixture with the client's own
+            # counters, in order; the selection itself is pinned by name uniqueness (see
+            # verify_plan32_seeds) and the target-frame screenshot.
             casts_ok = (
-                [event.get("count") for event in sent] == [1, 2]
+                target is not None
+                and [event.get("count") for event in sent] == [1, 2]
                 and all(event.get("spell") == PLAN32_GEOMETRY_SPELL_ID for event in sent)
-                and all(event.get("target") == boar for event in sent)
+                and all(event.get("target") == target for event in sent)
             )
             settle_z = evidence["plan32_settle_z"]
             expected_z = PLAN32_GEOMETRY_SEEDS.get(str(stage), {}).get("character", (None, None, None))[2]
@@ -3869,7 +3902,7 @@ def verify(args: argparse.Namespace) -> None:
                 stage_ok = False
             character_ok = character_ok and (
                 stage in PLAN32_GEOMETRY_SEEDS
-                and selections_target_fixture(casts, boar)
+                and casts_ok
                 and stage_ok
                 and height_ok
             )
@@ -4698,10 +4731,11 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert PLAN32_GEOMETRY_MODE in POPULATED_CHARACTER_MODES
     assert PLAN32_GEOMETRY_MODE in POST_MARKER_MODES
     assert plan_number(PLAN32_GEOMETRY_MODE) == "32"
-    boar = plan32_dummy_full_guid()
-    # counter 99990001 is 0x05F5B9F1, wider than 24 bits, so its top nibble bleeds into the
-    # entry field exactly as ObjectGuid(hi, entry, counter) ORs it: entry reads 0x016D.
-    assert boar == 0xF13000016DF5B9F1
+    # Server-assigned runtime lows come from the map's own sequence generator (grid loading
+    # creates units with GenerateLowGuid, keeping the DB guid only as spawnId), so no formula can
+    # predict the fixture's wire GUID. The synthetic value below only exercises the parser and the
+    # selection-anchored correlation shape.
+    fixture = 0xF13000016900064A
     assert set(PLAN32_GEOMETRY_SEEDS) == set(PLAN32_GEOMETRY_STAGES) == {"blocked", "clear"}
     assert "-8854.766" in plan32_world_seed_sql("blocked") and "80.422" in plan32_world_seed_sql("blocked")
     assert ",361,0,12,12," in plan32_world_seed_sql("blocked")
@@ -4731,16 +4765,16 @@ four Completed: COP_GET_CHARACTERS result=TRUE
 
     C2S, S2C = 0x47534D43, 0x47534D53
     player = pack_guid(CHARACTER_GUID)
-    boar_packed = pack_guid(boar)
-    boar_full = struct.pack("<Q", boar)
+    fixture_packed = pack_guid(fixture)
+    fixture_full = struct.pack("<Q", fixture)
     synthetic = (
         b"PKT" + bytes(63)
-        + pkt(C2S, CMSG_SET_SELECTION_OPCODE, boar_full)
+        + pkt(C2S, CMSG_SET_SELECTION_OPCODE, fixture_full)
         + pkt(C2S, CMSG_CAST_SPELL_OPCODE,
-              bytes([1]) + struct.pack("<I", 133) + bytes(4) + struct.pack("<I", 2) + boar_packed)
+              bytes([1]) + struct.pack("<I", 133) + bytes(4) + struct.pack("<I", 2) + fixture_packed)
         + pkt(S2C, SMSG_CAST_FAILED_OPCODE, bytes([1]) + struct.pack("<I", 133) + bytes([49]))
         + pkt(C2S, CMSG_CAST_SPELL_OPCODE,
-              bytes([2]) + struct.pack("<I", 133) + bytes(4) + struct.pack("<I", 2) + boar_packed)
+              bytes([2]) + struct.pack("<I", 133) + bytes(4) + struct.pack("<I", 2) + fixture_packed)
         + pkt(S2C, SMSG_CAST_FAILED_OPCODE, bytes([2]) + struct.pack("<I", 133) + bytes([49]))
         + pkt(S2C, SMSG_SPELL_GO_OPCODE, player + player + bytes([3]) + struct.pack("<I", 133))
     )
@@ -4754,15 +4788,16 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED",
         "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO",
     ]
-    assert events[0]["target"] == boar
+    assert events[0]["target"] == fixture
     assert [(e.get("count"), e.get("spell")) for e in events if e["opcode"] == "CMSG_CAST_SPELL"] == [(1, 133), (2, 133)]
     assert [(e.get("count"), e.get("spell"), e.get("result")) for e in events if e["opcode"] == "SMSG_CAST_FAILED"] == [(1, 133, 49), (2, 133, 49)]
     assert events[-1]["caster"] == CHARACTER_GUID and events[-1]["spell"] == 133
-    assert selections_target_fixture(events, boar)
-    assert not selections_target_fixture(
-        [{"opcode": "CMSG_SET_SELECTION", "target": CHARACTER_GUID}], boar,
-    )
-    assert not selections_target_fixture([], boar)
+    assert selections_target_fixture(events) == fixture
+    assert selections_target_fixture([
+        {"opcode": "CMSG_SET_SELECTION", "target": CHARACTER_GUID},
+        {"opcode": "CMSG_SET_SELECTION", "target": fixture},
+    ]) is None
+    assert selections_target_fixture([]) is None
     print("Real-client runner self-check passed")
 
 
