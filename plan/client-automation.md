@@ -192,7 +192,11 @@ against a content hash recorded at preflight. The accepted modes then run with `
 `prepare --geometry` closes that path: it requires a non-empty `vmaps/` and `mmaps/` under
 `--data-root`, stages them with the same content-hash check, and writes those three settings as `1`.
 Point `--data-root` at the extraction root — the directory holding `dbc/`, `maps/`, `vmaps/` and
-`mmaps/`. Without the flag nothing changes, so geometry-free modes keep their accepted behaviour.
+`mmaps/` — and make sure it is one this tree's tools produced: the pinned reference tree's data
+directory is in TrinityCore's `ModelSpawn` layout (`uint8` flags) while this server reads `uint32`, so
+the two sets cannot be swapped. `python3 apps/cata/check_collision_geometry.py --data-root <root>`
+reports that, along with missing, truncated or misnamed tiles, before a run starts. Without the flag
+nothing changes, so geometry-free modes keep their accepted behaviour.
 
 The sets have to match the server's own naming, which is not uniform: for map 0 the server asks for
 `000.vmtree`, `000_32_48.vmtile` (grid 48,32 — the vmap tile name is `<tileY>_<tileX>`), `000.mmap`
