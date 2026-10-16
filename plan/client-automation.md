@@ -183,6 +183,28 @@ measuring the loading bar. `movie`/`playIntroMovie` are belt-and-braces alongsid
 `Data/enUS/realmlist.wtf` is also written (`set realmlist 127.0.0.1`); the client reads
 whichever it finds first, so both are set.
 
+### Server data staged by `prepare`, and `--geometry`
+
+`prepare` copies `dbc/` and `maps/` from `--data-root` into the run's `DataDir`, verifying each
+against a content hash recorded at preflight. The accepted modes then run with `MoveMaps.Enable=0`,
+`vmap.enableLOS=0` and `vmap.enableHeight=0`, because nothing used to extract `vmaps/` or `mmaps/`.
+
+`prepare --geometry` closes that path: it requires a non-empty `vmaps/` and `mmaps/` under
+`--data-root`, stages them with the same content-hash check, and writes those three settings as `1`.
+Point `--data-root` at the extraction root — the directory holding `dbc/`, `maps/`, `vmaps/` and
+`mmaps/`. Without the flag nothing changes, so geometry-free modes keep their accepted behaviour.
+
+The sets have to match the server's own naming, which is not uniform: for map 0 the server asks for
+`000.vmtree`, `000_32_48.vmtile` (grid 48,32 — the vmap tile name is `<tileY>_<tileX>`), `000.mmap`
+and `0004832.mmtile`. A partially extracted tree therefore fails per tile at load rather than at
+staging, which is why the staging check only proves the sets are complete, not that they are
+readable for a given grid.
+
+A generation remembers how it was prepared, so switching geometry is not idempotent: re-running
+`prepare --geometry` against an already-prepared geometry-free generation is rejected, as is a
+geometry-enabled generation whose `vmaps`/`mmaps` content changed. Switch by resetting the
+generation or using a new manifest; identical repeated prepares still return harmlessly.
+
 ### Run parameters that matter
 
 `--auto-login --stability-seconds 8 --timeout 110`. `--timeout` limits the observation loop

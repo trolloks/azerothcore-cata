@@ -1136,6 +1136,7 @@ def replace_config(source: str, replacements: dict[str, str]) -> str:
 
 def write_configs(manifest: Manifest, generation: Generation) -> None:
     paths = generation["paths"]
+    geometry = bool(generation["inputs"].get("geometry"))
     config_dir = Path(paths["config"])
     log_dir = Path(paths["logs"])
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -1172,9 +1173,9 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         "Updates.EnableDatabases": "0",
         "Updates.AutoSetup": "0",
         "Expansion": "3",
-        "MoveMaps.Enable": "0",
-        "vmap.enableLOS": "0",
-        "vmap.enableHeight": "0",
+        "MoveMaps.Enable": "1" if geometry else "0",
+        "vmap.enableLOS": "1" if geometry else "0",
+        "vmap.enableHeight": "1" if geometry else "0",
         "Warden.Enabled": "0",
         "Ra.Enable": "0",
         "SOAP.Enabled": "0",
@@ -1423,6 +1424,41 @@ def binary_identity(path: Path, head: str, *, reports_version: bool) -> dict[str
     return identity
 
 
+def geometry_input_hashes(data_root: Path) -> dict[str, str]:
+    """Content hashes for the vmaps and mmaps sets a geometry-enabled run stages.
+
+    ``--geometry`` makes the server load collision and navmesh data, so both sets must be present
+    under the data root. An absent or empty one is a configuration error, not a silently degraded
+    run that would only report FileNotFound per tile.
+    """
+    hashes: dict[str, str] = {}
+    for name in ("vmaps", "mmaps"):
+        root = data_root / name
+        if not root.is_dir() or not any(root.iterdir()):
+            raise RuntimeError(f"--geometry requires a non-empty {name} directory under the data root")
+        hashes[f"data_{name}_hash"] = tree_content_hash(root)
+    return hashes
+
+
+def geometry_inputs_differ(stored: dict, requested: dict) -> bool:
+    """True when a prepared generation's geometry inputs differ from the requested ones.
+
+    Reusing a prepared generation is idempotent only for the same inputs. A geometry-enabled
+    request must not silently continue a generation that was prepared without collision data (or
+    with different sets), because nothing would be staged or reconfigured and the caller would get
+    the geometry-free run it did not ask for.
+    """
+    geometry = bool(requested.get("geometry"))
+    if bool(stored.get("geometry")) != geometry:
+        return True
+    if not geometry:
+        return False
+    return (
+        stored.get("data_vmaps_hash") != requested.get("data_vmaps_hash")
+        or stored.get("data_mmaps_hash") != requested.get("data_mmaps_hash")
+    )
+
+
 def preflight_prepare(args: argparse.Namespace) -> dict[str, object]:
     manifest_path = args.manifest.resolve()
     root = require_external_root(manifest_path.parent)
@@ -1451,6 +1487,8 @@ def preflight_prepare(args: argparse.Namespace) -> dict[str, object]:
     dbc_root = args.server_dbc_root.resolve() if args.server_dbc_root else data_root / "dbc"
     if not dbc_root.is_dir() or not (data_root / "maps").is_dir():
         raise RuntimeError("data candidates must contain readable server DBC and Cataclysm maps directories")
+    geometry = bool(getattr(args, "geometry", False))
+    geometry_hashes = geometry_input_hashes(data_root) if geometry else {}
     if args.mode == RUN_SPEED_MODE:
         verify_run_speed_aura_source(dbc_root)
     wine_runner = args.wine_runner.resolve()
@@ -1495,6 +1533,9 @@ def preflight_prepare(args: argparse.Namespace) -> dict[str, object]:
         "server_dbc_root": str(dbc_root),
         "data_dbc_hash": tree_content_hash(dbc_root),
         "data_maps_hash": tree_content_hash(data_root / "maps"),
+        "geometry": geometry,
+        "data_vmaps_hash": geometry_hashes.get("data_vmaps_hash", ""),
+        "data_mmaps_hash": geometry_hashes.get("data_mmaps_hash", ""),
         "wine_runner": str(wine_runner),
         "wine": str(wine),
         "wine_sha256": sha256(wine),
@@ -1520,6 +1561,11 @@ def prepare(args: argparse.Namespace) -> None:
         latest = active_generation(manifest) if manifest["generations"] else None
         if latest is not None and latest["state"] != "reset":
             if latest["state"] == "prepared":
+                if geometry_inputs_differ(latest.get("inputs", {}), inputs):
+                    raise RuntimeError(
+                        "the prepared generation used different geometry inputs (collision data or "
+                        "navmesh presence/content changed); reset it or prepare a new generation"
+                    )
                 print(f"generation {latest['number']} is already prepared")
                 return
             raise RuntimeError(f"cannot prepare after generation in state {latest['state']}")
@@ -1690,6 +1736,11 @@ def prepare(args: argparse.Namespace) -> None:
             raise RuntimeError("run-owned DBC copy differs from its candidate input")
         if tree_content_hash(data_destination / "maps") != inputs["data_maps_hash"]:
             raise RuntimeError("run-owned maps copy differs from its candidate input")
+        if inputs.get("geometry"):
+            for name in ("vmaps", "mmaps"):
+                copy_tree(Path(str(inputs["data_root"])) / name, data_destination / name)
+                if tree_content_hash(data_destination / name) != inputs[f"data_{name}_hash"]:
+                    raise RuntimeError(f"run-owned {name} copy differs from its candidate input")
         client_destination = Path(paths["client"])
         link_client_base(Path(str(inputs["client_root"])), client_destination)
         if sha256(client_destination / "Wow-64.exe") != CLIENT_SHA256:
@@ -3361,6 +3412,12 @@ def sanitized_evidence(
             "worldserver_sha256": generation["inputs"]["worldserver"]["sha256"],
             "dbc_tree_sha256": generation["inputs"]["data_dbc_hash"],
             "maps_tree_sha256": generation["inputs"]["data_maps_hash"],
+            # Geometry is part of the identity: without these a repeatability comparison cannot tell
+            # a collision-enabled run from a geometry-free one, or notice either artifact set
+            # changing. Older geometry-free evidence projects to False with empty hashes.
+            "geometry": bool(generation["inputs"].get("geometry")),
+            "vmaps_tree_sha256": generation["inputs"].get("data_vmaps_hash", ""),
+            "mmaps_tree_sha256": generation["inputs"].get("data_mmaps_hash", ""),
         },
     }
 
@@ -4252,6 +4309,78 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         pass
     else:
         raise AssertionError("invalid state transition was accepted")
+    # geometry staging: the required sets are enforced, and the server settings follow --geometry
+    with tempfile.TemporaryDirectory() as temporary:
+        data_root = Path(temporary)
+        try:
+            geometry_input_hashes(data_root)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("geometry was accepted without vmaps and mmaps directories")
+        (data_root / "vmaps").mkdir()
+        try:
+            geometry_input_hashes(data_root)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("geometry was accepted with an empty vmaps directory")
+        (data_root / "vmaps" / "000.vmtree").write_bytes(b"VMAP_4.8")
+        (data_root / "mmaps").mkdir()
+        (data_root / "mmaps" / "000.mmap").write_bytes(bytes(28))
+        hashes = geometry_input_hashes(data_root)
+        assert set(hashes) == {"data_vmaps_hash", "data_mmaps_hash"}
+        assert all(len(value) == 64 for value in hashes.values())
+
+        for geometry, expected in ((False, "0"), (True, "1")):
+            config_dir = Path(temporary) / f"config-{int(geometry)}"
+            geometry_generation: Generation = {
+                "mode": "authentication",
+                "ports": {"mysql": 3306, "world": 18085},
+                "schemas": {"auth": "auth", "world": "world", "characters": "characters"},
+                "paths": {
+                    "config": str(config_dir), "logs": str(config_dir / "logs"),
+                    "data": str(config_dir / "data"),
+                    "auth_config": str(config_dir / "authserver.conf"),
+                    "world_config": str(config_dir / "worldserver.conf"),
+                },
+                "inputs": {"geometry": geometry} if geometry else {},
+            }
+            write_configs({"mysql_user": "u", "mysql_password": "p"}, geometry_generation)
+            world_text = (config_dir / "worldserver.conf").read_text()
+            for key in ("MoveMaps.Enable", "vmap.enableLOS", "vmap.enableHeight"):
+                assert re.search(rf"^{key}\s*=\s*{expected}\s*$", world_text, re.MULTILINE), (key, geometry)
+
+    # reusing a prepared generation is idempotent only for identical geometry inputs
+    assert not geometry_inputs_differ({"geometry": False}, {"geometry": False})
+    assert geometry_inputs_differ({"geometry": False}, {"geometry": True})
+    assert geometry_inputs_differ({"geometry": True}, {"geometry": False})
+    same_geometry = {"geometry": True, "data_vmaps_hash": "a" * 64, "data_mmaps_hash": "b" * 64}
+    assert not geometry_inputs_differ(same_geometry, dict(same_geometry))
+    assert geometry_inputs_differ(same_geometry, {**same_geometry, "data_vmaps_hash": "c" * 64})
+    assert geometry_inputs_differ(same_geometry, {**same_geometry, "data_mmaps_hash": "c" * 64})
+
+    # the exported identity has to distinguish geometry configurations
+    def exported_inputs(geometry: bool) -> dict[str, object]:
+        geometry_generation: Generation = {
+            "mode": "authentication",
+            "ports": {"world": 18085},
+            "processes": [],
+            "paths": {"raw_evidence": "/abs/private"},
+            "inputs": {
+                "authserver": {"sha256": "a" * 64}, "worldserver": {"sha256": "b" * 64},
+                "data_dbc_hash": "c" * 64, "data_maps_hash": "d" * 64,
+                "geometry": geometry,
+                "data_vmaps_hash": "e" * 64 if geometry else "",
+                "data_mmaps_hash": "f" * 64 if geometry else "",
+            },
+        }
+        return sanitized_evidence(geometry_generation, [name for name, _ in CLIENT_MILESTONES], [])["inputs"]
+
+    assert exported_inputs(False)["geometry"] is False
+    assert exported_inputs(True)["geometry"] is True
+    assert exported_inputs(False) != exported_inputs(True)
+    assert exported_inputs(True)["vmaps_tree_sha256"] == "e" * 64
     print("Real-client runner self-check passed")
 
 
@@ -4276,6 +4405,11 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--unit-tests", type=Path, required=True)
     prepare_parser.add_argument("--client-root", type=Path, required=True)
     prepare_parser.add_argument("--data-root", type=Path, required=True)
+    prepare_parser.add_argument(
+        "--geometry", action="store_true",
+        help=("stage vmaps/ and mmaps/ from the data root and run the server with MoveMaps and vmap "
+              "LOS/height enabled; without it the accepted modes stay geometry-free"),
+    )
     prepare_parser.add_argument("--server-dbc-root", type=Path)
     prepare_parser.add_argument("--wine-runner", type=Path, required=True)
     prepare_parser.add_argument("--personal-bottle", type=Path, required=True)
