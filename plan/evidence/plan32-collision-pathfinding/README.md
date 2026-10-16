@@ -1,9 +1,9 @@
 # Plan 32: reproducible Northshire collision and pathfinding (issue #134)
 
-Status: **object-ADT, archive-layer and terrain-chunk fixes done, all validated by building and running
-against the real client; native map-0 acceptance STILL UNRUN**. Findings 4, 6 and 7 are now compiled
-and exercised: the map extractor produces a sane anchor tile and the VMAP extraction completes. The
-assembler/navmesh, server data placement, harness geometry path and the client acceptance remain open.
+Status: **parser fixes and the whole extraction pipeline are done and validated against the real
+client; the frozen tile now has all three artifact sets, verified against the server's own naming and
+header constants. Native map-0 acceptance STILL UNRUN** — the harness cannot stage `vmaps`/`mmaps`
+or enable geometry yet, and no server has loaded the artifacts.
 
 This record covers "freeze the scenario, required data/artifact manifest and blockers", "audit the
 pinned reference and affected shared AC callers", and the Cata parser prerequisites that audit
@@ -91,6 +91,57 @@ The mmaps readme still names the binary `movement_extractor` while the CMake pro
 Output goes outside Git. Manifest to publish per artifact set: tool commit, build/version, input
 archive hashes, per-tile inventory, output file hashes, and the config used. The `assets:maps`,
 `assets:vmaps` and `assets:mmaps` parity rows carry the same fields.
+
+## Pipeline run (validated 2026-10-16)
+
+The manifest above is no longer a plan: the whole pipeline was run against the real build-15595
+client, on tools built from this branch, with the outputs on a scratch volume outside Git
+(`.../cata-runs/plan32-pipeline/`). Artifacts are all under one data root so `DataDir` can point at
+it directly.
+
+```sh
+CLIENT=/mnt/.../Fun/.issue118-ssd-client
+P=.../cata-runs/plan32-pipeline
+DATA="$P/data"        # artifacts land here: maps/, vmaps/, mmaps/
+RAW="$P/raw"; mkdir -p "$DATA/maps" "$DATA/vmaps" "$DATA/mmaps" "$RAW"
+# mmaps-config.yaml copied from src/tools/mmaps_generator with dataDir: "$DATA"
+sed "s|dataDir: \"./\"|dataDir: \"$DATA\"|" src/tools/mmaps_generator/mmaps-config.yaml > "$P/mmaps-config.yaml"
+
+map_extractor   -e 1 -f 0 -i "$CLIENT" -o "$DATA"                 # -> $DATA/maps
+(cd "$RAW" && vmap4_extractor -d "$CLIENT/Data")                  # -> $RAW/Buildings (+ dir_bin)
+vmap4_assembler "$RAW/Buildings" "$DATA/vmaps"                    # -> $DATA/vmaps
+mmaps_generator --config "$P/mmaps-config.yaml" 0 --tile 32,48    # -> $DATA/mmaps
+```
+
+Results: `maps/` 7,192 tiles (696M); `vmaps/` 17,130 files (884M) — 140 `.vmtree`, 3,618 `.vmtile`,
+9,910 `.vmo`, 3,461 `.m2`, one `.dtree`; `mmaps/` 2 files (1.2M). All four tools exited 0 with no
+errors, and the mmaps run reported `Discovering maps... found 143` / `Discovering tiles... found
+7395` before building only tile `[32,48]` (5 s).
+
+The frozen tile (server grid `gx=48, gy=32`) now has all three artifact files the server asks for,
+and each was checked against the server's own constants rather than assumed:
+
+| Server request | Source of the name | Artifact | Size | sha256 (first 16) |
+| --- | --- | --- | --- | --- |
+| `GridTerrainLoader::LoadMap` | `{id:03}{gx:02}{gy:02}.map` | `maps/0004832.map` | 174,776 | `bde52927bc69d027` |
+| `getTileFileName` | `{id:03}_{gy:02}_{gx:02}.vmtile` | `vmaps/000_32_48.vmtile` | 65,376 | `c8a280573d20b9f9` |
+| `VMapMgr2::getMapFileName` | `{id:03}.vmtree` | `vmaps/000.vmtree` | 4,049,233 | `49b3ba72c75aca7d` |
+| `MMapMgr::LoadNavMesh` | `{id:03}.mmap` | `mmaps/000.mmap` | 28 | `001e3d118da45c85` |
+| `MMapMgr::LoadMMapTile` | `{id:03}{x:02}{y:02}.mmtile` | `mmaps/0004832.mmtile` | 1,227,584 | `9456dd26e8d8665b` |
+
+Two naming questions were settled by that table rather than by reading code:
+
+- **VMAP tiles are not transposed.** The assembler writes `<mapID>_<x>_<y>` from `unpackTileID`,
+  while `StaticMapTree::getTileFileName` writes `<mapID>_<tileY>_<tileX>` (its `tileX_tileY` variant
+  is commented out). They agree because the extractor's ADT `x` is the server's `tileY`: the anchor
+  needs `000_32_48.vmtile`, and that is what the assembler produced.
+- **MMAP tiles use the server-grid order.** `--tile 32,48` sets `tileX=32, tileY=48`, which loads
+  `0004832.map` and writes `0004832.mmtile` — the file `MMapMgr` opens for grid (48, 32).
+
+Headers were checked too: both VMAP files start with `VMAP_4.8` (what `readChunk` expects), and the
+mmtile header is `mmapMagic = 0x4d4d4150`, `dtVersion = 7` (`DT_NAVMESH_VERSION`), `mmapVersion =
+20` (`MMAP_VERSION`, `MapDefines.h`) — a first read of the hexdump mis-assigned those fields and was
+corrected by checking them against the struct, which is worth remembering when reading these files.
 
 ## Tool audit findings (build-free)
 
@@ -194,18 +245,19 @@ archive hashes, per-tile inventory, output file hashes, and the config used. The
 ## Blockers (each needs explicit authorization or input)
 
 - **Build authorization — satisfied for the tools.** The four map tools build from this branch, so
-  findings 4, 6 and 7 are compiled rather than inspected, and both extraction runs above used that
-  binary. The server/game targets were not built and `var/extractors/{maps,vmaps,mmaps}` were not
-  populated.
-- **Assembler, navmesh and data placement.** The map and VMAP stages now produce their artifact sets,
-  but `vmap4_assembler` and `mmaps_generator` have not been run for the frozen tile and nothing has
-  been installed into the server's data directory.
-- **Client archives provenance** for the map tiles (the same gate the DBC extraction already has);
-  the runs above used the on-disk client copy without recording its provenance.
-- **Harness geometry path**: the accepted modes disable LOS/height/navmesh; enabling them (and
-  keeping the anti-cheat/evade/path-query checks intact) is part of the acceptance work.
+  the parser fixes are compiled rather than inspected, and every run above used that binary. The
+  server/game targets were not built.
+- **Harness data staging and geometry path.** The artifacts now exist and match what the server asks
+  for, but the harness cannot use them yet: `apps/cata/run_real_client_authentication.py` `prepare`
+  copies only `dbc/` and `maps/` into the run's `DataDir` and pins `maps/` with a `data_maps_hash`
+  content check, so `vmaps/` and `mmaps/` never reach the server; and `write_configs` writes
+  `MoveMaps.Enable=0`, `vmap.enableLOS=0`, `vmap.enableHeight=0`. Using these artifacts needs a
+  staging path for the other two sets (with their hashes) plus a mode that leaves those three
+  settings enabled — otherwise enabling geometry only yields FileNotFound on every tile.
+- **Client archives provenance** for all three artifact sets; the runs above used the on-disk client
+  copy without recording its provenance.
 - **Native acceptance**: the map-0 route, the LOS/height/navmesh queries and the pinned obstacle
-  chase are still unrun.
+  chase are still unrun, and no server has loaded the produced geometry.
 
 ## Acceptance plan (unchanged, for when the above is authorized)
 
