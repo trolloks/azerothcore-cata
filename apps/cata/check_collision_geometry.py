@@ -85,6 +85,11 @@ DT_POLYTYPE_OFFMESH_CONNECTION = 1
 # dtPoly.neis holds the neighbour polygon index plus one, and 0x8000|side marks a link into another
 # tile (dtNavMesh::connectIntLinks reads exactly that), so one tile's own polygons carry its graph.
 DT_EXT_LINK = 0x8000
+# PathGenerator::CreateFilter's include mask for a creature that can walk (MapDefines.h's NAV_GROUND).
+# A creature that can enter water adds NAV_WATER|NAV_MAGMA, so a route that exists only through those
+# flags is not one a walker takes; dtNavMeshQuery::passFilter drops every polygon whose flags do not
+# intersect this mask, including the ones with flags 0.
+NAV_GROUND = 0x01
 SIZE_OF_GRIDS = 533.33333
 MAP_RESOLUTION = 128
 MAX_NUMBER_OF_GRIDS = 64
@@ -681,6 +686,8 @@ class MmapFiles:
                 "max_link_count": fields[8], "detail_mesh_count": fields[9],
                 "detail_vert_count": fields[10], "detail_tri_count": fields[11],
                 "bv_node_count": fields[12], "off_mesh_con_count": fields[13],
+                "walkable_height": fields[15], "walkable_radius": fields[16],
+                "walkable_climb": fields[17],
                 "bmin": fields[18:21], "bmax": fields[21:24], "bv_quant_factor": fields[24]}
 
     def required_payload(self, payload):
@@ -778,38 +785,101 @@ def polygon_centre(polygon, verts):
     return tuple(component / polygon["vert_count"] for component in centre)
 
 
-def polygon_contains(polygon, verts, point):
-    """The 2D containment findNearestPoly resolves to a polygon, on the tile's own axes."""
+def polygon_height(polygon, verts, point):
+    """The polygon's surface height under a point, or None when the point is outside it.
+
+    A polygon is convex, so its vertex fan covers it and the point falls in exactly one triangle, whose
+    barycentric interpolation gives the height there (dtNavMeshQuery::closestHeightPointTriangle's
+    answer for the polygon's own surface). A ramp or a staircase does not have one height per polygon,
+    so a polygon's centre height says nothing about the surface under a given point.
+    """
+    corners = [(verts[polygon["verts"][edge] * 3], verts[polygon["verts"][edge] * 3 + 1],
+                verts[polygon["verts"][edge] * 3 + 2]) for edge in range(polygon["vert_count"])]
+    for index in range(1, len(corners) - 1):
+        height = triangle_height((corners[0], corners[index], corners[index + 1]), point)
+        if height is not None:
+            return height
+    return None
+
+
+def triangle_height(triangle, point):
+    """The height on a triangle at a point's horizontal position, or None when it is outside it."""
+    first, second, third = triangle
     x, z = point[0], point[2]
-    inside = False
-    corners = [(verts[polygon["verts"][edge] * 3], verts[polygon["verts"][edge] * 3 + 2])
-               for edge in range(polygon["vert_count"])]
-    for edge in range(polygon["vert_count"]):
-        x1, z1 = corners[edge]
-        x2, z2 = corners[(edge + 1) % polygon["vert_count"]]
-        if (z1 > z) != (z2 > z) and x < x1 + (z - z1) * (x2 - x1) / (z2 - z1):
-            inside = not inside
-    return inside
+    area = (second[2] - third[2]) * (first[0] - third[0]) + (third[0] - second[0]) * (first[2] - third[2])
+    if abs(area) < 1e-12:
+        return None
+    first_weight = ((second[2] - third[2]) * (x - third[0]) + (third[0] - second[0]) * (z - third[2])) / area
+    second_weight = ((third[2] - first[2]) * (x - third[0]) + (first[0] - third[0]) * (z - third[2])) / area
+    third_weight = 1.0 - first_weight - second_weight
+    if min(first_weight, second_weight, third_weight) < -1e-9:
+        return None
+    return (first_weight * first[1] + second_weight * second[1] + third_weight * third[1])
 
 
-def navmesh_polygon(verts, polygons, point, ground):
-    """The walkable polygon at a point: the containing one whose surface sits on the ground.
+def navmesh_polygon(verts, polygons, point, ground, include_flags=NAV_GROUND):
+    """The walkable polygon at a point: the containing one whose surface is nearest the ground.
 
-    A roof, a balcony or a bridge also contains the point horizontally, so the surface height picks
-    the polygon the creature would stand on; the tie-break is the horizontal centre distance.
+    A roof, a balcony or a bridge also contains the point horizontally, so the surface height under the
+    point picks the polygon the creature would stand on; the tie-break is the horizontal centre
+    distance. Polygons the creature's filter rejects are not candidates at all.
     """
     best, best_score = None, None
     for index, polygon in enumerate(polygons):
-        if polygon["type"] == DT_POLYTYPE_OFFMESH_CONNECTION:
+        if polygon["type"] == DT_POLYTYPE_OFFMESH_CONNECTION or not polygon["flags"] & include_flags:
             continue
-        if not polygon_contains(polygon, verts, point):
+        height = polygon_height(polygon, verts, point)
+        if height is None:
             continue
         centre = polygon_centre(polygon, verts)
-        score = (abs(centre[1] - ground),
-                 math.hypot(centre[0] - point[0], centre[2] - point[2]))
+        score = (abs(height - ground), math.hypot(centre[0] - point[0], centre[2] - point[2]))
         if best_score is None or score < best_score:
             best, best_score = index, score
     return best
+
+
+def creature_graph(polygons, adjacency, include_flags=NAV_GROUND):
+    """(walkable indices, graph): the creature's filter applied to the polygons and to the links.
+
+    detNavMeshQuery's passFilter rejects a polygon the include mask does not match, so a route can
+    neither start, end, nor pass through one: a water-only polygon must not supply a false land route
+    or join two components a walker cannot cross between.
+    """
+    walkable = [index for index, polygon in enumerate(polygons) if polygon["flags"] & include_flags]
+    allowed = set(walkable)
+    return walkable, [{neighbour for neighbour in neighbours if neighbour in allowed}
+                      for neighbours in adjacency]
+
+
+def navmesh_covers(verts, polygons, walkable, point, tolerance):
+    """(polygon, height) for a walkable surface within tolerance of a point, or (None, None).
+
+    The creature walks the surface under the point, so coverage means a polygon of its filter whose
+    surface at that point is reachable from it vertically; a polygon at a different level does not
+    cover it.
+    """
+    for index in walkable:
+        height = polygon_height(polygons[index], verts, point)
+        if height is not None and abs(height - point[1]) <= tolerance:
+            return index, height
+    return None, None
+
+
+def blocked_line_coverage(verts, polygons, walkable, first, second, tolerance, spacing):
+    """(samples, uncovered): the points of a segment no walkable surface covers.
+
+    spacing is the agent's own walkable radius, so a gap carved for that agent is wider than one step
+    and cannot fall between two samples.
+    """
+    steps = max(1, int(math.ceil(math.hypot(second[0] - first[0], second[2] - first[2]) / spacing)))
+    samples, uncovered = [], []
+    for step in range(steps + 1):
+        fraction = step / steps
+        point = tuple(first[axis] + fraction * (second[axis] - first[axis]) for axis in range(3))
+        samples.append(point)
+        if navmesh_covers(verts, polygons, walkable, point, tolerance)[0] is None:
+            uncovered.append(point)
+    return samples, uncovered
 
 
 def navmesh_route(verts, polygons, adjacency, start, goal):
@@ -1264,21 +1334,21 @@ def derive_los_pair(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312),
 
 
 def chase_path(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), obstacle_name="Nsabbey.wmo",
-               neighbours=1, eye=DEFAULT_COLLISION_HEIGHT):
+               neighbours=1, eye=DEFAULT_COLLISION_HEIGHT, include_flags=NAV_GROUND):
     """Derive the pinned chase route around the obstacle from the tile's own polygon graph.
 
     The acceptance's "one normal creature chase that paths around that obstacle" needs an expectation
     to reproduce, and the LOS pair supplies its two ends: its blocked line crosses the pinned obstacle
     at eye height, so a creature walking from one end to the other has to leave the straight line. The
-    route is the tile's own graph (dtPoly.neis) and each end's polygon is the containing one that sits
-    on the ground, so the route length against the blocked straight line says whether the graph goes
-    around the obstacle.
+    route is the tile's own graph (dtPoly.neis) under the walker's own filter, and each end's polygon
+    is the containing one whose surface under that point is nearest the ground. What the obstacle means
+    for the chase is tested directly rather than inferred from the route's length: no walkable surface
+    may cover the blocked line at the height a walker would take it, or a navmesh that disagrees with
+    the collision would let the creature walk straight through the obstacle.
 
     Single tile only: a step that would leave through a DT_EXT_LINK has no neighbour here, so a route
-    that exists only via an adjacent tile is reported unreachable. Straight lines between polygon
-    centres are not the walkable surface — stairs and ramps are crossed by them — so this reports the
-    route's shape, not whether every point of the surface is clear of collision. This is a derived
-    expectation for a run to reproduce, not proof a server loaded the tile or a creature walked it.
+    that exists only via an adjacent tile is reported unreachable. This is a derived expectation for a
+    run to reproduce, not proof a server loaded the tile or a creature walked it.
     """
     data_root = Path(data_root)
     gx, gy = grid_coord(anchor[0], anchor[1])
@@ -1299,68 +1369,85 @@ def chase_path(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), obstac
              "obstacle": pair["obstacle"], "obstacle_id": pair["obstacle_id"],
              "blocked_line_length": pair["blocked"]["length"],
              "not_verified": ("Whether a server loaded this tile, whether dtNavMeshQuery reproduces "
-                              "these polygons, the route as a smoothed walkable polyline, and "
-                              "whether every point of the surface is clear of object collision "
-                              "(centre-to-centre lines cut stair risers, so they cannot say).")}
+                              "these polygons, the route as a smoothed walkable polyline, and the "
+                              "detail mesh's own surface, which this check does not parse.")}
     report = {"data_root": str(data_root), "map": map_id, "anchor": list(anchor), "grid": [gx, gy],
               "checks": checks, "gaps": gaps, "facts": facts, "pass": False}
     if problems:
         return report
+
+    walkable, adjacency = creature_graph(polygons, adjacency, include_flags)
+    record("navmesh.creature_filter", bool(walkable),
+           f"{len(walkable)} of {len(polygons)} polygons pass the walker's flags {include_flags:#04x} "
+           f"(PathGenerator::CreateFilter's mask; dtNavMeshQuery::passFilter drops the rest, so no "
+           f"route may use one)")
 
     terrain = TerrainReader(data_root, map_id)
     ends = {}
     for role, world in (("start", pair["blocked"]["first"]), ("goal", pair["blocked"]["second"])):
         ground = terrain.height(world[0], world[1])
         surface = ground if ground is not None else world[2]
-        ends[role] = {"world": list(world), "ground": ground,
-                      "polygon": navmesh_polygon(verts, polygons, nav_coord((world[0], world[1], surface)),
-                                                 surface)}
+        point = nav_coord((world[0], world[1], surface))
+        polygon = navmesh_polygon(verts, polygons, point, surface, include_flags)
+        ends[role] = {"world": list(world), "ground": ground, "point": point, "polygon": polygon,
+                      "surface": None if polygon is None
+                                 else polygon_height(polygons[polygon], verts, point)}
 
     def end_note(role):
         end = ends[role]
         if end["polygon"] is None:
-            return (f"{role} ({end['world'][0]:.2f},{end['world'][1]:.2f}) is not inside any polygon "
-                    f"of this tile")
-        surface = polygon_centre(polygons[end["polygon"]], verts)[1]
+            return (f"{role} ({end['world'][0]:.2f},{end['world'][1]:.2f}) is not inside any walkable "
+                    f"polygon of this tile")
+        if end["ground"] is None:
+            return (f"{role} ({end['world'][0]:.2f},{end['world'][1]:.2f}) is in polygon "
+                    f"{end['polygon']}, whose surface is {end['surface']:.2f} m with no terrain height "
+                    f"to compare it to")
         return (f"{role} ({end['world'][0]:.2f},{end['world'][1]:.2f}) is in polygon "
-                f"{end['polygon']}, whose surface is {surface - end['ground']:+.2f} m above the "
+                f"{end['polygon']}, whose surface is {end['surface'] - end['ground']:+.2f} m above the "
                 f"terrain there")
 
     record("navmesh.ends_on_navmesh", all(ends[role]["polygon"] is not None for role in ends),
            "; ".join(end_note(role) for role in ("start", "goal")))
-    start_point = nav_coord(ends["start"]["world"])
-    goal_point = nav_coord(ends["goal"]["world"])
-    straight = math.hypot(start_point[0] - goal_point[0], start_point[2] - goal_point[2])
+    if ends["start"]["polygon"] is None or ends["goal"]["polygon"] is None:
+        return report
+    straight = math.hypot(ends["start"]["point"][0] - ends["goal"]["point"][0],
+                          ends["start"]["point"][2] - ends["goal"]["point"][2])
     route, cost = navmesh_route(verts, polygons, adjacency,
                                 ends["start"]["polygon"], ends["goal"]["polygon"])
     record("navmesh.route", route is not None,
            (f"a {len(route)}-polygon route from polygon {ends['start']['polygon']} to "
-            f"{ends['goal']['polygon']}, costed at {cost:.2f} m over the polygon centres, against a "
-            f"{straight:.2f} m straight line that the blocked LOS pair shows is not walkable" if route
+            f"{ends['goal']['polygon']} through the walker's own links" if route
             else f"no route links the start polygon {ends['start']['polygon']} to the goal polygon "
                  f"{ends['goal']['polygon']} inside this tile"))
-    if route:
-        # A route that ran through the obstacle would be close to the straight line, so the ratio is
-        # what says the graph goes around it; whether any point of the surface collides with the
-        # obstacle is a separate question this graph walk does not answer.
-        record("navmesh.route_is_a_detour", cost > straight,
-               f"the route is {cost / straight:.1f} times the {straight:.2f} m straight line between "
-               f"the blocked pair's ends, so it goes around the obstacle rather than through it")
+
+    # The route's length cannot show that the corridor leaves the straight line, so the line itself is
+    # tested: the walker's own straight line between the two endpoints is sampled, and no walkable
+    # surface may cover it at the level the walker would take it. The line runs between the resolved
+    # surface heights, not the terrain's, because an endpoint can stand on a raised floor.
+    line = [(end["world"][1], end["surface"], end["world"][0]) for end in (ends["start"], ends["goal"])]
+    payload = mmap.payload()
+    samples, uncovered = blocked_line_coverage(verts, polygons, walkable, line[0], line[1],
+                                               payload["walkable_climb"],
+                                               max(payload["walkable_radius"], 0.01))
+    record("navmesh.blocked_line_not_walkable", bool(uncovered),
+           f"{len(uncovered)} of {len(samples)} points on the blocked {pair['blocked']['length']:.2f} m "
+           f"line have no walkable surface within the agent's {payload['walkable_climb']:.2f} m climb"
+           f"{'' if uncovered else ', so this navmesh lets a walker take the line the LOS pair blocks'}"
+           f" (sampled every {payload['walkable_radius']:.2f} m, the agent's own radius)")
 
     reachable = reachable_polygons(adjacency, ends["start"]["polygon"])
-    outside = [polygon["index"] for polygon in polygons
-               if polygon["index"] not in reachable
-               and polygon["type"] != DT_POLYTYPE_OFFMESH_CONNECTION]
+    outside = [index for index in walkable if index not in reachable]
     detached = None
     if outside:
         detached = min(outside, key=lambda index: math.hypot(
-            polygon_centre(polygons[index], verts)[0] - goal_point[0],
-            polygon_centre(polygons[index], verts)[2] - goal_point[2]))
+            polygon_centre(polygons[index], verts)[0] - ends["goal"]["point"][0],
+            polygon_centre(polygons[index], verts)[2] - ends["goal"]["point"][2]))
     detached_route, _ = navmesh_route(verts, polygons, adjacency, ends["start"]["polygon"], detached)
     off_tile, off_tile_polygon = None, None
     for offset in (300.0, 600.0, 1200.0):
-        candidate = (goal_point[0] + offset, goal_point[1], goal_point[2] + offset)
-        off_tile_polygon = navmesh_polygon(verts, polygons, candidate, candidate[1])
+        candidate = (ends["goal"]["point"][0] + offset, ends["goal"]["point"][1],
+                     ends["goal"]["point"][2] + offset)
+        off_tile_polygon = navmesh_polygon(verts, polygons, candidate, candidate[1], include_flags)
         if off_tile_polygon is None:
             off_tile = candidate
             break
@@ -1368,19 +1455,22 @@ def chase_path(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), obstac
            and (detached is not None or off_tile is not None),
            "no route is reported to a polygon the start cannot reach, and a point outside the tile "
            "resolves to no polygon instead of to the nearest one; "
-           + (f"{len(polygons) - len(reachable)} of {len(polygons)} polygons are outside the start's "
-              f"component and the nearest of them to the goal is polygon {detached}"
-              if detached is not None else "every polygon in this tile is reachable from the start"))
+           + (f"{len(walkable) - len(reachable)} of {len(walkable)} walkable polygons are outside the "
+              f"start's component and the nearest of them to the goal is polygon {detached}"
+              if detached is not None else "every walkable polygon in this tile is reachable from the "
+                                           "start"))
     facts.update({
-        "polygons": len(polygons), "vertices": len(verts) // 3,
+        "polygons": len(polygons), "vertices": len(verts) // 3, "walkable_polygons": len(walkable),
+        "include_flags": include_flags,
+        "agent": {"height": payload["walkable_height"], "radius": payload["walkable_radius"],
+                  "climb": payload["walkable_climb"]},
         "reachable_polygons": len(reachable),
         "ends": {role: {"world": ends[role]["world"], "ground": ends[role]["ground"],
                         "polygon": ends[role]["polygon"],
-                        "polygon_centre": list(polygon_centre(polygons[ends[role]["polygon"]], verts))
-                        if ends[role]["polygon"] is not None else None} for role in ends},
+                        "surface": ends[role]["surface"]} for role in ends},
         "straight_line": straight, "route_polygons": len(route) if route else None,
-        "route_cost": cost, "detached_polygon": detached,
-        "off_tile_point": list(off_tile) if off_tile else None})
+        "route_cost": cost, "line_samples": len(samples), "line_uncovered": len(uncovered),
+        "detached_polygon": detached, "off_tile_point": list(off_tile) if off_tile else None})
     report["pass"] = all(entry["pass"] for entry in checks)
     return report
 
@@ -1397,14 +1487,17 @@ def render_chase(report):
     if facts.get("ends"):
         for role in ("start", "goal"):
             end = facts["ends"][role]
+            offset = (f"{end['surface'] - end['ground']:+.2f} m above the terrain"
+                      if end["surface"] is not None and end["ground"] is not None else "unavailable")
             lines.append(f"  {role}: world ({end['world'][0]:.2f},{end['world'][1]:.2f},"
                          f"{end['world'][2]:.2f}) terrain {number(end['ground'], '.3f')} polygon "
-                         f"{end['polygon']} centre "
-                         f"{[round(value, 3) for value in end['polygon_centre']] if end['polygon_centre'] else None}")
-        lines.append(f"  straight line {number(facts['straight_line'])} m; route "
-                     f"{facts['route_polygons']} polygons costed at {number(facts['route_cost'])} m")
-        lines.append(f"  {facts['reachable_polygons']} of {facts['polygons']} polygons reachable from "
-                     f"the start; nearest disconnected polygon {facts['detached_polygon']}")
+                         f"{end['polygon']} surface {offset}")
+        lines.append(f"  straight line {number(facts['straight_line'])} m, {facts['line_uncovered']} of "
+                     f"{facts['line_samples']} sampled points uncovered; route {facts['route_polygons']} "
+                     f"polygons costed at {number(facts['route_cost'])} m over the polygon centres")
+        lines.append(f"  {facts['reachable_polygons']} of {facts['walkable_polygons']} walkable "
+                     f"polygons reachable from the start (flags {facts['include_flags']:#04x} of "
+                     f"{facts['polygons']}); nearest unreachable polygon {facts['detached_polygon']}")
     lines.append("Chase path " + ("PASS" if report["pass"] else "FAIL")
                  + ". A route in this tile's graph is not a server-loaded navmesh, a creature chase, "
                    "or a smoothed walkable polyline.")
@@ -1532,21 +1625,22 @@ def build_mmtile(tile_x, tile_y, bmin, bmax, payload_bytes=4096, magic=DT_NAVMES
     """A tile whose counts describe its payload; arrays=(vertices, polygons) writes real arrays.
 
     Without arrays the two arrays are padding of the declared size, which is enough for the header and
-    payload-arithmetic cases; the path query needs real ones. A polygon is (vertex indices, neis) with
-    the file's own neighbour encoding (neighbour index plus one).
+    payload-arithmetic cases; the path query needs real ones. A polygon is (vertex indices, neis,
+    flags) with the file's own neighbour encoding (neighbour index plus one), and a positive fixture
+    needs a walkable flag: a polygon with flags 0 fails the creature filter a query applies.
     """
     detail = b""
     if arrays:
         vertices, polygons = arrays
         vert_count, poly_count = len(vertices), len(polygons)
         detail = struct.pack(f"<{3 * vert_count}f", *[value for vertex in vertices for value in vertex])
-        for polygon_verts, polygon_neis in polygons:
+        for polygon_verts, polygon_neis, polygon_flags in polygons:
             detail += struct.pack("<I", 0)
             detail += struct.pack(f"<{DT_VERTS_PER_POLYGON}H", *(tuple(polygon_verts) + (0,) * (
                 DT_VERTS_PER_POLYGON - len(polygon_verts))))
             detail += struct.pack(f"<{DT_VERTS_PER_POLYGON}H", *(tuple(polygon_neis) + (0,) * (
                 DT_VERTS_PER_POLYGON - len(polygon_neis))))
-            detail += struct.pack("<HBB", 0, len(polygon_verts), 0)
+            detail += struct.pack("<HBB", polygon_flags, len(polygon_verts), 0)
     mesh = struct.pack("<15i10f", magic, version, tile_x, tile_y, 0, 0, poly_count, vert_count,
                        30, 0, 0, 0, 0, 0, 0, 1.6, 0.53, 1.6,
                        bmin[0], bmin[1], bmin[2], bmax[0], bmax[1], bmax[2], 1.0)
@@ -1832,27 +1926,82 @@ def self_check():
         roof = [(-1.0, 45.0, 0.0), (0.0, 45.0, 0.0), (0.0, 45.0, 2.0), (-1.0, 45.0, 2.0)]
         mesh = ground + roof
         # A shares its x=0 edge with B (polygon 1); C is detached; D is the roof over A.
-        room = [((0, 1, 2, 3), (0, 2, 0, 0)), ((1, 4, 5, 2), (0, 0, 0, 1)),
-                ((6, 7, 8, 9), (0, 0, 0, 0)), ((10, 11, 12, 13), (0, 0, 0, 0))]
+        room = [((0, 1, 2, 3), (0, 2, 0, 0), NAV_GROUND), ((1, 4, 5, 2), (0, 0, 0, 1), NAV_GROUND),
+                ((6, 7, 8, 9), (0, 0, 0, 0), NAV_GROUND), ((10, 11, 12, 13), (0, 0, 0, 0), NAV_GROUND)]
         verts_, polys_, adjacency_, problems_ = navmesh_graph(tile(mesh, room))
         assert not problems_ and len(polys_) == 4, problems_
+        walkable_, graph_ = creature_graph(polys_, adjacency_)
         start = navmesh_polygon(verts_, polys_, (-0.5, 40.0, 1.0), 40.0)
         neighbour = navmesh_polygon(verts_, polys_, (0.5, 40.0, 1.0), 40.0)
         detached = navmesh_polygon(verts_, polys_, (5.5, 40.0, 1.0), 40.0)
         assert (start, neighbour, detached) == (0, 1, 2), (start, neighbour, detached)
-        route, cost = navmesh_route(verts_, polys_, adjacency_, start, neighbour)
+        route, cost = navmesh_route(verts_, polys_, graph_, start, neighbour)
         assert route == [0, 1] and 0.0 < cost < 3.0, (route, cost)
-        assert navmesh_route(verts_, polys_, adjacency_, start, detached) == (None, None)
-        assert reachable_polygons(adjacency_, start) == {0, 1}
-        assert navmesh_route(verts_, polys_, adjacency_, start, 3) == (None, None), \
+        assert navmesh_route(verts_, polys_, graph_, start, detached) == (None, None)
+        assert reachable_polygons(graph_, start) == {0, 1}
+        assert navmesh_route(verts_, polys_, graph_, start, 3) == (None, None), \
             "the roof polygon was treatable as a destination"
+        # A polygon whose flags the creature's filter does not match is not walkable, and a link into
+        # one is not a link: a water-only second polygon must not supply the route.
+        water = [room[0], ((1, 4, 5, 2), (0, 0, 0, 1), 0x08), room[2], room[3]]
+        verts_, polys_, adjacency_, _ = navmesh_graph(tile(mesh, water))
+        walkable_, graph_ = creature_graph(polys_, adjacency_)
+        assert walkable_ == [0, 2, 3] and graph_[0] == set(), graph_
+        assert navmesh_polygon(verts_, polys_, (0.5, 40.0, 1.0), 40.0) is None, \
+            "a water-only polygon was selected for a land walker"
+        assert navmesh_route(verts_, polys_, graph_, 0, 1) == (None, None)
+        assert navmesh_polygon(verts_, polys_, (0.5, 40.0, 1.0), 40.0, 0x09) == 1, \
+            "a water-only polygon was not reachable with NAV_GROUND|NAV_WATER"
+        # A gently sloped ramp from height 0 to 20 over 100 m with an overlapping floor at 3: at x=1
+        # the ramp's surface is 0.2 and its centre is 10, so a centre height picks the floor wrongly.
+        ramp = [(-1.0, 0.0, 0.0), (-1.0, 20.0, 100.0), (1.0, 20.0, 100.0), (1.0, 0.0, 0.0),
+                (-1.0, 3.0, 0.0), (1.0, 3.0, 0.0), (1.0, 3.0, 100.0), (-1.0, 3.0, 100.0)]
+        ramp_room = [((0, 1, 2, 3), (0, 0, 0, 0), NAV_GROUND), ((4, 5, 6, 7), (0, 0, 0, 0), NAV_GROUND)]
+        ramp_verts, ramp_polys, _, _ = navmesh_graph(tile(ramp, ramp_room))
+        assert abs(polygon_height(ramp_polys[0], ramp_verts, (0.0, 0.2, 1.0)) - 0.2) < 1e-6, \
+            polygon_height(ramp_polys[0], ramp_verts, (0.0, 0.2, 1.0))
+        assert navmesh_polygon(ramp_verts, ramp_polys, (0.0, 0.2, 1.0), 0.2) == 0, \
+            "the overlapping floor was selected over the ramp surface at the point"
+        assert navmesh_polygon(ramp_verts, ramp_polys, (0.0, 0.2, 1.0), 3.0) == 1
+        # The blocked line's own coverage decides, not the route's length. Two touching rectangles span
+        # the line and their centres sit 100 m apart while the line is 40 m long, so a route between its
+        # ends exists and is 2.5x longer than the line the LOS pair blocks — the shape a length ratio
+        # wrongly calls a detour — while the line itself is covered, which is what has to fail. The same
+        # shape with a 4 m carved gap is what a correct navmesh looks like.
+        span_verts = [(-100.0, 40.0, -100.0), (-100.0, 40.0, 100.0), (0.0, 40.0, 100.0),
+                      (0.0, 40.0, -100.0), (0.0, 40.0, -100.0), (0.0, 40.0, 100.0),
+                      (100.0, 40.0, 100.0), (100.0, 40.0, -100.0)]
+        carved_verts = [(-100.0, 40.0, -100.0), (-100.0, 40.0, 100.0), (-2.0, 40.0, 100.0),
+                        (-2.0, 40.0, -100.0), (2.0, 40.0, -100.0), (2.0, 40.0, 100.0),
+                        (100.0, 40.0, 100.0), (100.0, 40.0, -100.0)]
+        touching = [((0, 1, 2, 3), (0, 0, 0, 2), NAV_GROUND), ((4, 5, 6, 7), (0, 0, 0, 1), NAV_GROUND)]
+        carved = [((0, 1, 2, 3), (0, 0, 0, 0), NAV_GROUND), ((4, 5, 6, 7), (0, 0, 0, 0), NAV_GROUND)]
+        first_line, second_line = (-20.0, 40.0, 0.0), (20.0, 40.0, 0.0)
+        # "touching" has no gap, so the navmesh covers the blocked line: navmesh.blocked_line_not_walkable
+        # must fail there even though the route exists and is longer than the line.
+        for label, vertices, polygons, linked, gap in (
+                ("touching", span_verts, touching, True, False),
+                ("carved", carved_verts, carved, False, True)):
+            verts_, polys_, adjacency_, _ = navmesh_graph(tile(vertices, polygons))
+            walkable_, graph_ = creature_graph(polys_, adjacency_)
+            route, cost = navmesh_route(verts_, polys_, graph_,
+                                        navmesh_polygon(verts_, polys_, first_line, 40.0),
+                                        navmesh_polygon(verts_, polys_, second_line, 40.0))
+            samples, uncovered = blocked_line_coverage(verts_, polys_, walkable_, first_line,
+                                                       second_line, 0.53, 0.53)
+            # The agent's own radius is the step, so a carved gap wider than it cannot be stepped over.
+            assert len(samples) - 1 >= 40.0 / 0.53, (label, len(samples))
+            assert (route is not None) == linked, (label, route)
+            if route:
+                assert cost > 2.0 * 40.0, (label, cost)
+            assert bool(uncovered) == gap, (label, len(uncovered), len(samples))
         # A vertex or neighbour index outside its array is corrupt data, not a usable graph.
-        assert navmesh_graph(tile([(0.0, 40.0, 0.0)], [((0, 1, 2, 3), (0, 0, 0, 0))]))[3]
+        assert navmesh_graph(tile([(0.0, 40.0, 0.0)], [((0, 1, 2, 3), (0, 0, 0, 0), NAV_GROUND)]))[3]
         assert any("links to polygon" in problem for problem in
-                   navmesh_graph(tile(ground, [((0, 1, 2, 3), (0, 9, 0, 0))]))[3])
+                   navmesh_graph(tile(ground, [((0, 1, 2, 3), (0, 9, 0, 0), NAV_GROUND)]))[3])
         # A polygon declaring seven vertices is a build this Detour cannot read (DT_VERTS_PER_POLYGON).
         seven = bytearray(build_mmtile(0, 0, (-1.0, 0.0, -1.0), (1.0, 1.0, 1.0),
-                                       arrays=(ground[:4], [((0, 1, 2, 3), (0, 0, 0, 0))])))
+                                       arrays=(ground[:4], [((0, 1, 2, 3), (0, 0, 0, 0), NAV_GROUND)])))
         struct.pack_into("<B", seven, MMAP_TILE_HEADER_SIZE + DT_MESH_HEADER_SIZE + 12 * 4 + 30, 7)
         assert any("DT_VERTS_PER_POLYGON" in problem
                    for problem in navmesh_graph(MmapFiles.from_bytes(bytes(seven)))[3])
@@ -1860,7 +2009,8 @@ def self_check():
         assert "Chase path FAIL" in render_chase(
             {"data_root": "x", "map": 0, "grid": [32, 32], "checks": [], "gaps": [],
              "facts": {"ends": {}, "straight_line": None, "route_polygons": None, "route_cost": None,
-                       "reachable_polygons": 0, "polygons": 0,
+                       "line_samples": 0, "line_uncovered": 0, "reachable_polygons": 0,
+                       "walkable_polygons": 0, "polygons": 0, "include_flags": NAV_GROUND,
                        "detached_polygon": None}, "pass": False})
         # An unavailable neighbouring terrain height must render, not raise.
         unavailable = {"data_root": "x", "map": 0, "anchor": [0.0, 0.0, 0.0], "grid": [32, 32],
