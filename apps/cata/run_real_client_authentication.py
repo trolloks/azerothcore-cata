@@ -1440,6 +1440,25 @@ def geometry_input_hashes(data_root: Path) -> dict[str, str]:
     return hashes
 
 
+def geometry_inputs_differ(stored: dict, requested: dict) -> bool:
+    """True when a prepared generation's geometry inputs differ from the requested ones.
+
+    Reusing a prepared generation is idempotent only for the same inputs. A geometry-enabled
+    request must not silently continue a generation that was prepared without collision data (or
+    with different sets), because nothing would be staged or reconfigured and the caller would get
+    the geometry-free run it did not ask for.
+    """
+    geometry = bool(requested.get("geometry"))
+    if bool(stored.get("geometry")) != geometry:
+        return True
+    if not geometry:
+        return False
+    return (
+        stored.get("data_vmaps_hash") != requested.get("data_vmaps_hash")
+        or stored.get("data_mmaps_hash") != requested.get("data_mmaps_hash")
+    )
+
+
 def preflight_prepare(args: argparse.Namespace) -> dict[str, object]:
     manifest_path = args.manifest.resolve()
     root = require_external_root(manifest_path.parent)
@@ -1542,6 +1561,11 @@ def prepare(args: argparse.Namespace) -> None:
         latest = active_generation(manifest) if manifest["generations"] else None
         if latest is not None and latest["state"] != "reset":
             if latest["state"] == "prepared":
+                if geometry_inputs_differ(latest.get("inputs", {}), inputs):
+                    raise RuntimeError(
+                        "the prepared generation used different geometry inputs (collision data or "
+                        "navmesh presence/content changed); reset it or prepare a new generation"
+                    )
                 print(f"generation {latest['number']} is already prepared")
                 return
             raise RuntimeError(f"cannot prepare after generation in state {latest['state']}")
@@ -3388,6 +3412,12 @@ def sanitized_evidence(
             "worldserver_sha256": generation["inputs"]["worldserver"]["sha256"],
             "dbc_tree_sha256": generation["inputs"]["data_dbc_hash"],
             "maps_tree_sha256": generation["inputs"]["data_maps_hash"],
+            # Geometry is part of the identity: without these a repeatability comparison cannot tell
+            # a collision-enabled run from a geometry-free one, or notice either artifact set
+            # changing. Older geometry-free evidence projects to False with empty hashes.
+            "geometry": bool(generation["inputs"].get("geometry")),
+            "vmaps_tree_sha256": generation["inputs"].get("data_vmaps_hash", ""),
+            "mmaps_tree_sha256": generation["inputs"].get("data_mmaps_hash", ""),
         },
     }
 
@@ -4320,6 +4350,37 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             world_text = (config_dir / "worldserver.conf").read_text()
             for key in ("MoveMaps.Enable", "vmap.enableLOS", "vmap.enableHeight"):
                 assert re.search(rf"^{key}\s*=\s*{expected}\s*$", world_text, re.MULTILINE), (key, geometry)
+
+    # reusing a prepared generation is idempotent only for identical geometry inputs
+    assert not geometry_inputs_differ({"geometry": False}, {"geometry": False})
+    assert geometry_inputs_differ({"geometry": False}, {"geometry": True})
+    assert geometry_inputs_differ({"geometry": True}, {"geometry": False})
+    same_geometry = {"geometry": True, "data_vmaps_hash": "a" * 64, "data_mmaps_hash": "b" * 64}
+    assert not geometry_inputs_differ(same_geometry, dict(same_geometry))
+    assert geometry_inputs_differ(same_geometry, {**same_geometry, "data_vmaps_hash": "c" * 64})
+    assert geometry_inputs_differ(same_geometry, {**same_geometry, "data_mmaps_hash": "c" * 64})
+
+    # the exported identity has to distinguish geometry configurations
+    def exported_inputs(geometry: bool) -> dict[str, object]:
+        geometry_generation: Generation = {
+            "mode": "authentication",
+            "ports": {"world": 18085},
+            "processes": [],
+            "paths": {"raw_evidence": "/abs/private"},
+            "inputs": {
+                "authserver": {"sha256": "a" * 64}, "worldserver": {"sha256": "b" * 64},
+                "data_dbc_hash": "c" * 64, "data_maps_hash": "d" * 64,
+                "geometry": geometry,
+                "data_vmaps_hash": "e" * 64 if geometry else "",
+                "data_mmaps_hash": "f" * 64 if geometry else "",
+            },
+        }
+        return sanitized_evidence(geometry_generation, [name for name, _ in CLIENT_MILESTONES], [])["inputs"]
+
+    assert exported_inputs(False)["geometry"] is False
+    assert exported_inputs(True)["geometry"] is True
+    assert exported_inputs(False) != exported_inputs(True)
+    assert exported_inputs(True)["vmaps_tree_sha256"] == "e" * 64
     print("Real-client runner self-check passed")
 
 
