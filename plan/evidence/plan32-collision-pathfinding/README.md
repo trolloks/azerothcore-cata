@@ -215,7 +215,8 @@ a reference at or above `iNTreeValues` and that object then has no collision;
 each spawn's model resolving as `<name>.vmo`, which is the only name `WorldModelStore` opens; the
 tile/contents agreement; the on-terrain residual; one `dtNavMeshParams` with usable
 tileWidth/tileHeight/maxTiles; the mmtile header (`MMAP_MAGIC`, `dtVersion 7`, `mmapVersion 20`) with
-`header + size == file length`; the reported obstacles' `.vmo` files parsing, carrying collision triangles, and having every triangle
+`header + size == file length`; the reported obstacles' `.vmo` files parsing, carrying collision triangles, and having
+every triangle
 index inside its group's vertex array (a model can satisfy the byte count while the indices are
 unusable, and the server indexes the vertex array directly);
 and the `dtMeshHeader` inside the declared payload — magic, version,
