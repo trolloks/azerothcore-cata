@@ -200,6 +200,11 @@ and `0004832.mmtile`. A partially extracted tree therefore fails per tile at loa
 staging, which is why the staging check only proves the sets are complete, not that they are
 readable for a given grid.
 
+A generation remembers how it was prepared, so switching geometry is not idempotent: re-running
+`prepare --geometry` against an already-prepared geometry-free generation is rejected, as is a
+geometry-enabled generation whose `vmaps`/`mmaps` content changed. Switch by resetting the
+generation or using a new manifest; identical repeated prepares still return harmlessly.
+
 ### Run parameters that matter
 
 `--auto-login --stability-seconds 8 --timeout 110`. `--timeout` limits the observation loop
