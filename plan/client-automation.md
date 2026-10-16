@@ -199,7 +199,9 @@ reports that, along with missing, truncated, misnamed or unloadable artifacts â€
 section outside the file, a missing `{id}.vmtree`, a spawn whose model has no `.vmo`, or an unusable
 Detour payload â€” before a run starts. Add `--los-pair` to derive the frozen scenario's blocked and
 clear line-of-sight pair from the pinned obstacle's triangles, with the blocking triangle and the
-eye height the run has to reproduce. Without the flag
+eye height the run has to reproduce, and `--chase` to derive the route around that obstacle from the
+tile's own polygon graph: both walkable polygons, the polygon sequence, its length against the blocked
+straight line, and the rejected disconnected polygon and off-tile point. Without the flag
 nothing changes, so geometry-free modes keep their accepted behaviour.
 
 The sets have to match the server's own naming, which is not uniform: for map 0 the server asks for
