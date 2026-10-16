@@ -2960,6 +2960,22 @@ def ground_movement_sequence(generation: Generation) -> list[str]:
     return [str(sample["opcode"]) for sample in ground_movement_samples(generation)]
 
 
+def ground_movement_action_samples(
+    samples: list[dict[str, str | float]],
+) -> list[dict[str, str | float]]:
+    """The six automated key pairs, without the client's own world-entry landing.
+
+    The client settles once onto the ground right after world entry and emits MSG_MOVE_FALL_LAND of
+    its own before the automation presses anything - the same world-entry landing the jump/fall/land
+    and walk/run-switch checks drop. Only that one marker-adjacent sample is excused, so the exact
+    opcode list and all six directional pairs still have to hold and a landing anywhere else remains
+    a failure rather than being sliced away with the actions.
+    """
+    if samples and str(samples[0]["opcode"]) == "MSG_MOVE_FALL_LAND":
+        return samples[1:]
+    return samples
+
+
 def _normalized_angle_delta(delta: float) -> float:
     return (delta + math.pi) % (2 * math.pi) - math.pi
 
@@ -3546,9 +3562,10 @@ def verify(args: argparse.Namespace) -> None:
         if basic_movement_mode:
             character_ok = character_ok and evidence["movement_heartbeat_count"] > 0
         if ground_movement_mode:
-            ground_movement_samples_value = ground_movement_samples(generation)
+            ground_movement_samples_value = ground_movement_action_samples(ground_movement_samples(generation))
             character_ok = character_ok and (
-                evidence["ground_movement_sequence"] == list(GROUND_MOVEMENT_OPCODES)
+                [str(sample["opcode"]) for sample in ground_movement_samples_value]
+                == list(GROUND_MOVEMENT_OPCODES)
                 and ground_movement_deltas_are_action_appropriate(ground_movement_samples_value)
                 and ground_movement_is_stable_after_final_stop(generation, ground_movement_samples_value)
             )
@@ -4298,6 +4315,23 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     slow_run_samples = [dict(sample) for sample in walk_run_samples]
     slow_run_samples[5]["y"] = 1.3
     assert not walk_run_mode_switch_deltas_are_action_appropriate(slow_run_samples)
+    ground_movement_samples_value = [
+        {"opcode": opcode, "x": 0.0, "y": 0.0, "z": 0.0, "o": 0.0}
+        for opcode in ("MSG_MOVE_FALL_LAND", *GROUND_MOVEMENT_OPCODES)
+    ]
+    assert [
+        str(sample["opcode"]) for sample in ground_movement_action_samples(ground_movement_samples_value)
+    ] == list(GROUND_MOVEMENT_OPCODES)
+    actions_only = ground_movement_samples_value[-len(GROUND_MOVEMENT_OPCODES):]
+    assert ground_movement_action_samples(actions_only) == actions_only
+    assert ground_movement_action_samples([]) == []
+    # only the world-entry landing is excused: one anywhere inside the actions stays in the list, so
+    # the exact-sequence comparison still fails on it
+    landing_inside = [
+        {"opcode": opcode, "x": 0.0, "y": 0.0, "z": 0.0, "o": 0.0}
+        for opcode in ("MSG_MOVE_START_FORWARD", "MSG_MOVE_FALL_LAND", "MSG_MOVE_STOP")
+    ]
+    assert ground_movement_action_samples(landing_inside) == landing_inside
     window_sample = "0x08400003 0 3597195 124 4 1800 1042 steam_proton.steam_proton host World of Warcraft"
     assert owned_wow_window(window_sample, {3597195}) == ("0x08400003", 124, 4, 1800, 1042)
     assert owned_wow_window(window_sample, {1}) is None

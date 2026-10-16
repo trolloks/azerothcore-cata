@@ -561,6 +561,16 @@ an empty post-stop heartbeat list as vacuously stable and only fails on a heartb
 actually drifted from the final stop position. This also unblocks `ground-movement-mode` and
 `jump-fall-land-mode`, which shared the same unsatisfiable check.
 
+A geometry-enabled run shows a second real-client behaviour in the same family. With `MoveMaps`
+and vmap height enabled the client settles once onto the ground shortly after world entry — the
+2026-10-16 Plan 32 generation landed from the fixture's stored `z` to the terrain height and
+emitted its own `MSG_MOVE_FALL_LAND` after the in-world control marker, before the automation
+pressed anything. `jump_fall_land_action_pair()` and the `walk_run_mode_switch` check already drop
+that landing by taking only their trailing action window; the `ground-movement` check now excuses
+exactly the one marker-adjacent `MSG_MOVE_FALL_LAND` (`ground_movement_action_samples()`) and still
+requires the exact 12-opcode list, all six directional pairs and the post-stop stability, so a
+landing anywhere else stays a failure. The raw sequence remains in the evidence unchanged.
+
 ## Building before a run
 
 `prepare` refuses binaries whose `--version` does not report the current HEAD, so a build is
