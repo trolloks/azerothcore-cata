@@ -159,9 +159,11 @@ Settling the conventions needed measurement, not a summary:
   `VMapMgr2::convertPositionToInternalRep`, which every `MapCollisionData` vmap query goes through, maps
   `world -> (mid - x, mid - y, z)` with `mid = 0.5 * 64 * 533.33333 = 17066.667`. Read without inverting
   that, every object sits outside the 64x64 map grid and lands nowhere near the terrain. With the inverse
-  applied, the median `z - terrain` residual over the 692 spawns of `000_32_48.vmtile` is **0.00 m**
-  (552 within 5 m), using heights from `0004832.map` through the server's own `getHeightFromFloat`
-  interpolation. That residual is what pins the convention.
+  applied, the median **|z - terrain|** residual over the 692 spawns of `000_32_48.vmtile` is **0.11 m**
+  (signed median 0.00 m), using heights from `0004832.map` through the server's own
+  `getHeightFromFloat` interpolation. That residual is what pins the convention. The check uses the
+  magnitude, not the signed median: with signed values a spread of large positive and negative
+  placement errors around zero would cancel and read as objects on the ground.
 - **The two names for one tile disagree in order.** Map and mmap tiles are `{id}{gx:02}{gy:02}`; vmap
   tiles are `{id:03}_{gy:02}_{gx:02}`. The anchor's files are therefore `0004832.map`, `0004832.mmtile`
   and `000_32_48.vmtile`. A transposed vmap tile is a plausible mistake and is now detectable: 692 of the
@@ -184,22 +186,39 @@ A segment crossing the box therefore proves nothing about a query result, so the
 to be derived from the model's own triangles. That is the one freeze item still open, recorded as such
 below instead of being guessed at.
 
-The checker reports seven checks: map magic/version/build (15595); the MHGT section; the vmap tile's
-exact record consumption, so a truncated tile fails instead of being half-read; the tile/contents
-agreement; the on-terrain residual; that `{id}.mmap` is one `dtNavMeshParams`; and the mmtile header
-(`MMAP_MAGIC`, `dtVersion 7`, `mmapVersion 20`) with `header + size == file length`. Against the produced
-set it passes:
+The checker reports twelve checks, one for each way the artifacts can fail to be loadable: the map
+magic/version/build (15595); every declared map section the terrain loader opens (area, height, liquid,
+holes) inside the file with its own magic, so a section offset beyond EOF fails instead of being
+ignored; the height section in its flat, int16, int8 and float forms, with `MAP_HEIGHT_NO_HEIGHT`
+treated as the constant field `getHeightFromFlat` returns rather than as missing terrain; the vmap
+tile's exact record consumption, so a truncated tile fails instead of being half-read; the required
+`{id}.vmtree` and its `NODE` chunk, without which `StaticMapTree::InitMap` cannot initialise at all;
+each spawn's model resolving as `<name>.vmo`, which is the only name `WorldModelStore` opens; the
+tile/contents agreement; the on-terrain residual; one `dtNavMeshParams` with usable
+tileWidth/tileHeight/maxTiles; the mmtile header (`MMAP_MAGIC`, `dtVersion 7`, `mmapVersion 20`) with
+`header + size == file length`; and the `dtMeshHeader` inside the declared payload (magic, version,
+counts, and its tile index recomputed from the params the way `MapBuilder` writes it), so an empty or
+arbitrary payload cannot pass. Against the produced set it passes:
 
 ```
 $ python3 apps/cata/check_collision_geometry.py --data-root .../cata-runs/plan32-pipeline/data
-  [PASS] map.headers: magic 0x5350414d version 10 build 15595
-  [PASS] vmap.structure: 736 spawns consumed 65376 of 65376 bytes
-  [PASS] vmap.tile_matches_contents: 692/736 spawns (94.0%) fall in the grid 48,32 the file is named for
-  [PASS] vmap.objects_on_terrain: median |z - terrain| residual -0.00 over 692 objects, 552 within 5 m
-  ...
+  [PASS] map.sections: area@44(520) height@564(132152) liquid@132716(41548) holes@174264(512)
+  [PASS] vmap.tree: 000.vmtree carries b'VMAP_4.8' and a NODE chunk, which is what
+                      StaticMapTree::InitMap needs before any spawn can load
+  [PASS] vmap.objects_on_terrain: median |z - terrain| 0.11 m over 692 objects (signed median -0.00)
+  [PASS] mmap.payload: dtMeshHeader inside the declared payload: magic 0x444e4156 version 7,
+                      6312 polygons, 11046 vertices, tile 13,13 consistent with the params
+  [GAP ] vmap.models: 1 of 117 referenced models do not resolve (Innchandelier.m2)
   anchor terrain height 82.630 (position z 83.531, stand height +0.901)
   Collision geometry PASS.
 ```
+
+One gap is reported rather than swallowed: `Innchandelier.m2`, referenced by this tile, has no
+`<name>.vmo`, which is the only name `WorldModelStore::AcquireModelInstance` opens, so the server will
+log a model load failure and that object has no collision. The scenario's own obstacles all resolve, so
+it does not affect the frozen route — but it is exactly the class of missing prerequisite the run must
+not discover by accident. The checker fails outright when a scaffold the scenario *does* depend on is
+absent (no `{id}.vmtree`, no obstacle model, no usable payload).
 
 It rejects what should be rejected, and one of those rejections matters in practice: an empty data root
 fails on the missing tile, and **the pinned reference tree's own data directory fails**, because that set
