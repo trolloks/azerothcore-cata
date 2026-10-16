@@ -5,8 +5,9 @@ artifacts the server will read, using the server's own formats, naming and conve
 checks that they can actually be loaded: every file the loaders open is required, every declared
 section is inside the file, and every payload carries the header the reader validates.
 
-It never claims that a server loaded the artifacts, that a query matched, or that a path exists.
-Those are the acceptance's job; this only makes a silently degraded run detectable in advance.
+It never claims that a server loaded the artifacts or that a query matched. Its path check walks the
+tile's own polygon graph, which is connectivity in the artifact, not a creature walking the route;
+those remain the acceptance's job, and this only makes a silently degraded run detectable in advance.
 
 Layouts and constants are taken from this tree, not from a summary:
   * maps/{id:03}{gx:02}{gy:02}.map        GridTerrainData::Load / LoadAreaData / LoadLiquidData /
@@ -16,12 +17,15 @@ Layouts and constants are taken from this tree, not from a summary:
   * vmaps/<spawn.name>.vmo                WorldModelStore::AcquireModelInstance (always ".vmo")
   * mmaps/{id:03}.mmap                    MMapMgr::LoadNavMesh (a single dtNavMeshParams)
   * mmaps/{id:03}{gx:02}{gy:02}.mmtile    MMapMgr::LoadTile / MmapTileHeader (56 bytes, asserted in
-                                          MapDefines.h) / dtNavMesh::addTile's payload validation
+                                          MapDefines.h) / dtNavMesh::addTile's payload validation /
+                                          the dtMeshTile vertex and polygon arrays, whose dtPoly.neis
+                                          is the graph a path query walks
 Grid coordinates follow the server's ComputeGridCoord, not ComputeGridCoordSimple: gx = 32 - x/533.33
 and gy = 32 - y/533.33, and vmap tile files are named with {gy}_{gx} while map and mmap tiles use
 {gx}{gy}. The two orders disagree, which is exactly what the tile/contents agreement check detects.
 """
 import argparse
+import heapq
 import json
 import math
 import struct
@@ -73,6 +77,14 @@ DT_LINK_SIZE = 16
 DT_POLY_DETAIL_SIZE = 12
 DT_BV_NODE_SIZE = 16
 DT_OFF_MESH_CONNECTION_SIZE = 36
+# dtPoly is read through these two, not through the file's own stride: vertCount above six or a
+# vertex/neighbour index outside its array is a tile this Detour cannot walk (DT_VERTS_PER_POLYGON is
+# a build-time constant), so the arrays are rejected instead of truncated.
+DT_VERTS_PER_POLYGON = 6
+DT_POLYTYPE_OFFMESH_CONNECTION = 1
+# dtPoly.neis holds the neighbour polygon index plus one, and 0x8000|side marks a link into another
+# tile (dtNavMesh::connectIntLinks reads exactly that), so one tile's own polygons carry its graph.
+DT_EXT_LINK = 0x8000
 SIZE_OF_GRIDS = 533.33333
 MAP_RESOLUTION = 128
 MAX_NUMBER_OF_GRIDS = 64
@@ -638,13 +650,21 @@ class MmapFiles:
     def __init__(self, par_path, tile_path):
         self.params_path = par_path
         self.params_size = len(par_path.read_bytes())
-        self.data = tile_path.read_bytes()
-        self.tile_size = len(self.data)
-        magic, dt_version, mmap_version, size = struct.unpack_from("<4I", self.data, 0)
-        self.magic = magic
-        self.dt_version = dt_version
-        self.mmap_version = mmap_version
-        self.declared_size = size
+        self._read(tile_path.read_bytes())
+
+    @classmethod
+    def from_bytes(cls, data):
+        """The same view over an in-memory tile: the self-check has no data root to read from."""
+        instance = cls.__new__(cls)
+        instance.params_path, instance.params_size = None, 0
+        instance._read(data)
+        return instance
+
+    def _read(self, data):
+        self.data = data
+        self.tile_size = len(data)
+        (self.magic, self.dt_version, self.mmap_version,
+         self.declared_size) = struct.unpack_from("<4I", data, 0)
         self.header_size = MMAP_TILE_HEADER_SIZE
 
     def params(self):
@@ -677,6 +697,167 @@ class MmapFiles:
                 + aligned(4 * payload["detail_tri_count"])
                 + aligned(DT_BV_NODE_SIZE * payload["bv_node_count"])
                 + aligned(DT_OFF_MESH_CONNECTION_SIZE * payload["off_mesh_con_count"]))
+
+    def arrays(self):
+        """The tile's dtMeshTile vertex and polygon arrays, and the problems that make them unusable.
+
+        addTile copies these arrays straight out of the payload, so a count or index outside its own
+        array is corrupt data rather than a missing check: the path query is what walks them.
+        """
+        def aligned(value):
+            return (value + 3) & ~3
+
+        payload = self.payload()
+        if payload is None:
+            return [], [], [f"the payload is shorter than a {DT_MESH_HEADER_SIZE}-byte dtMeshHeader"]
+        if self.required_payload(payload) > self.declared_size:
+            return [], [], [f"the declared {self.declared_size}-byte payload is smaller than the "
+                            f"{self.required_payload(payload)} bytes its counts describe"]
+        offset = self.header_size + DT_MESH_HEADER_SIZE
+        verts = struct.unpack_from(f"<{3 * payload['vert_count']}f", self.data, offset)
+        offset += aligned(12 * payload["vert_count"])
+        problems, polygons = [], []
+        for index in range(payload["poly_count"]):
+            base = offset + DT_POLY_SIZE * index
+            vert_count, area_and_type = struct.unpack_from("<2B", self.data, base + 30)
+            polygon = {"index": index,
+                       "verts": struct.unpack_from(f"<{DT_VERTS_PER_POLYGON}H", self.data, base + 4),
+                       "neis": struct.unpack_from(f"<{DT_VERTS_PER_POLYGON}H", self.data, base + 16),
+                       "flags": struct.unpack_from("<H", self.data, base + 28)[0],
+                       "vert_count": vert_count,
+                       "type": area_and_type >> 6,
+                       "area": area_and_type & 0x3f}
+            if vert_count > DT_VERTS_PER_POLYGON:
+                problems.append(f"polygon {index} declares {vert_count} vertices, but this Detour "
+                                f"reads DT_VERTS_PER_POLYGON {DT_VERTS_PER_POLYGON} per polygon")
+                continue
+            if vert_count < 3:
+                problems.append(f"polygon {index} declares {vert_count} vertices, not a polygon")
+                continue
+            for edge in range(vert_count):
+                if polygon["verts"][edge] >= payload["vert_count"]:
+                    problems.append(f"polygon {index} edge {edge} indexes vertex "
+                                    f"{polygon['verts'][edge]} of {payload['vert_count']}")
+            polygons.append(polygon)
+        return verts, polygons, problems
+
+
+def navmesh_graph(mmap):
+    """(verts, polygons, adjacency, problems): one tile's polygon graph, as the tile stores it."""
+    verts, polygons, problems = mmap.arrays()
+    if problems:
+        return verts, polygons, [], problems
+    adjacency = []
+    for polygon in polygons:
+        neighbours = set()
+        for edge in range(polygon["vert_count"]):
+            neighbour = polygon["neis"][edge]
+            if neighbour == 0 or neighbour & DT_EXT_LINK:
+                continue
+            if neighbour - 1 >= len(polygons):
+                problems.append(f"polygon {polygon['index']} edge {edge} links to polygon "
+                                f"{neighbour - 1} of {len(polygons)}")
+                continue
+            neighbours.add(neighbour - 1)
+        adjacency.append(neighbours)
+    return verts, polygons, adjacency, problems
+
+
+def nav_coord(world):
+    """PathGenerator::BuildPolyPath's frame: dtPoint = (world y, world z, world x)."""
+    return (world[1], world[2], world[0])
+
+
+def polygon_centre(polygon, verts):
+    """dtNavMeshQuery::getPolyCenter: the mean of the polygon's own vertices."""
+    centre = [0.0, 0.0, 0.0]
+    for edge in range(polygon["vert_count"]):
+        base = polygon["verts"][edge] * 3
+        for axis in range(3):
+            centre[axis] += verts[base + axis]
+    return tuple(component / polygon["vert_count"] for component in centre)
+
+
+def polygon_contains(polygon, verts, point):
+    """The 2D containment findNearestPoly resolves to a polygon, on the tile's own axes."""
+    x, z = point[0], point[2]
+    inside = False
+    corners = [(verts[polygon["verts"][edge] * 3], verts[polygon["verts"][edge] * 3 + 2])
+               for edge in range(polygon["vert_count"])]
+    for edge in range(polygon["vert_count"]):
+        x1, z1 = corners[edge]
+        x2, z2 = corners[(edge + 1) % polygon["vert_count"]]
+        if (z1 > z) != (z2 > z) and x < x1 + (z - z1) * (x2 - x1) / (z2 - z1):
+            inside = not inside
+    return inside
+
+
+def navmesh_polygon(verts, polygons, point, ground):
+    """The walkable polygon at a point: the containing one whose surface sits on the ground.
+
+    A roof, a balcony or a bridge also contains the point horizontally, so the surface height picks
+    the polygon the creature would stand on; the tie-break is the horizontal centre distance.
+    """
+    best, best_score = None, None
+    for index, polygon in enumerate(polygons):
+        if polygon["type"] == DT_POLYTYPE_OFFMESH_CONNECTION:
+            continue
+        if not polygon_contains(polygon, verts, point):
+            continue
+        centre = polygon_centre(polygon, verts)
+        score = (abs(centre[1] - ground),
+                 math.hypot(centre[0] - point[0], centre[2] - point[2]))
+        if best_score is None or score < best_score:
+            best, best_score = index, score
+    return best
+
+
+def navmesh_route(verts, polygons, adjacency, start, goal):
+    """(path, cost) over the tile's own polygon graph, costed at the polygon centres.
+
+    dtNavMeshQuery::findPath walks these same links with area costs; connectivity is what this check
+    asks about. Centre-to-centre steps overstate a smoothed path, so the cost is an upper bound and
+    the result is the polygon sequence, not a walkable polyline.
+    """
+    if start is None or goal is None:
+        return None, None
+    centres = [polygon_centre(polygon, verts) for polygon in polygons]
+    distance = {start: 0.0}
+    previous = {}
+    queue = [(0.0, start)]
+    while queue:
+        cost, index = heapq.heappop(queue)
+        if cost > distance.get(index, math.inf):
+            continue
+        if index == goal:
+            break
+        for neighbour in adjacency[index]:
+            step = math.hypot(centres[index][0] - centres[neighbour][0],
+                              centres[index][2] - centres[neighbour][2])
+            if cost + step < distance.get(neighbour, math.inf):
+                distance[neighbour] = cost + step
+                previous[neighbour] = index
+                heapq.heappush(queue, (cost + step, neighbour))
+    if goal not in distance:
+        return None, None
+    path = [goal]
+    while path[-1] != start:
+        path.append(previous[path[-1]])
+    path.reverse()
+    return path, distance[goal]
+
+
+def reachable_polygons(adjacency, start):
+    """The polygon indices a path from start can reach, walking the tile's own links."""
+    if start is None:
+        return set()
+    seen, stack = {start}, [start]
+    while stack:
+        for neighbour in adjacency[stack.pop()]:
+            if neighbour not in seen:
+                seen.add(neighbour)
+                stack.append(neighbour)
+    return seen
 
 
 def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=1, radius=200.0):
@@ -914,6 +1095,17 @@ def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=
             "pass": all(entry["pass"] for entry in checks)}
 
 
+def tile_spawns(data_root, map_id, gx, gy, neighbours):
+    """Every ModelSpawn in a tile and its neighbours: the set a query's broad phase can reach."""
+    spawns = []
+    for dx in range(-neighbours, neighbours + 1):
+        for dy in range(-neighbours, neighbours + 1):
+            path = Path(data_root) / "vmaps" / f"{map_id:03d}_{gy + dy:02d}_{gx + dx:02d}.vmtile"
+            if path.is_file():
+                spawns.extend(read_vmap_tile(path.read_bytes())[0])
+    return spawns
+
+
 def derive_los_pair(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312),
                     obstacle_name="Nsabbey.wmo", neighbours=1, eye=DEFAULT_COLLISION_HEIGHT):
     """Derive the scenario's blocked and clear LOS pair from the obstacle's own triangles.
@@ -926,12 +1118,7 @@ def derive_los_pair(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312),
     terrain = TerrainReader(data_root, map_id)
     models = ModelCache(data_root)
     gx, gy = grid_coord(anchor[0], anchor[1])
-    spawns = []
-    for dx in range(-neighbours, neighbours + 1):
-        for dy in range(-neighbours, neighbours + 1):
-            path = data_root / "vmaps" / f"{map_id:03d}_{gy + dy:02d}_{gx + dx:02d}.vmtile"
-            if path.is_file():
-                spawns.extend(read_vmap_tile(path.read_bytes())[0])
+    spawns = tile_spawns(data_root, map_id, gx, gy, neighbours)
     instances = [spawn for spawn in spawns if spawn["name"] == obstacle_name and spawn["bound"]]
     if not instances:
         raise ValueError(f"no {obstacle_name} spawn near the anchor")
@@ -1076,9 +1263,156 @@ def derive_los_pair(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312),
     raise ValueError("no wall of the pinned obstacle produced a blocked pair with a clear partner")
 
 
+def chase_path(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), obstacle_name="Nsabbey.wmo",
+               neighbours=1, eye=DEFAULT_COLLISION_HEIGHT):
+    """Derive the pinned chase route around the obstacle from the tile's own polygon graph.
+
+    The acceptance's "one normal creature chase that paths around that obstacle" needs an expectation
+    to reproduce, and the LOS pair supplies its two ends: its blocked line crosses the pinned obstacle
+    at eye height, so a creature walking from one end to the other has to leave the straight line. The
+    route is the tile's own graph (dtPoly.neis) and each end's polygon is the containing one that sits
+    on the ground, so the route length against the blocked straight line says whether the graph goes
+    around the obstacle.
+
+    Single tile only: a step that would leave through a DT_EXT_LINK has no neighbour here, so a route
+    that exists only via an adjacent tile is reported unreachable. Straight lines between polygon
+    centres are not the walkable surface — stairs and ramps are crossed by them — so this reports the
+    route's shape, not whether every point of the surface is clear of collision. This is a derived
+    expectation for a run to reproduce, not proof a server loaded the tile or a creature walked it.
+    """
+    data_root = Path(data_root)
+    gx, gy = grid_coord(anchor[0], anchor[1])
+    checks, gaps = [], []
+
+    def record(name, ok, detail):
+        checks.append({"check": name, "pass": bool(ok), "detail": detail})
+        return ok
+
+    pair = derive_los_pair(data_root, map_id, anchor, obstacle_name, neighbours, eye)
+    mmap = MmapFiles(data_root / "mmaps" / f"{map_id:03d}.mmap",
+                     data_root / "mmaps" / f"{map_id:03d}{gx:02d}{gy:02d}.mmtile")
+    verts, polygons, adjacency, problems = navmesh_graph(mmap)
+    record("navmesh.tile_arrays", not problems,
+           f"{len(polygons)} polygons and {len(verts) // 3} vertices walked out of the tile's own "
+           f"arrays" + ("; " + "; ".join(problems) if problems else ""))
+    facts = {"data_root": str(data_root), "map": map_id, "grid": [gx, gy],
+             "obstacle": pair["obstacle"], "obstacle_id": pair["obstacle_id"],
+             "blocked_line_length": pair["blocked"]["length"],
+             "not_verified": ("Whether a server loaded this tile, whether dtNavMeshQuery reproduces "
+                              "these polygons, the route as a smoothed walkable polyline, and "
+                              "whether every point of the surface is clear of object collision "
+                              "(centre-to-centre lines cut stair risers, so they cannot say).")}
+    report = {"data_root": str(data_root), "map": map_id, "anchor": list(anchor), "grid": [gx, gy],
+              "checks": checks, "gaps": gaps, "facts": facts, "pass": False}
+    if problems:
+        return report
+
+    terrain = TerrainReader(data_root, map_id)
+    ends = {}
+    for role, world in (("start", pair["blocked"]["first"]), ("goal", pair["blocked"]["second"])):
+        ground = terrain.height(world[0], world[1])
+        surface = ground if ground is not None else world[2]
+        ends[role] = {"world": list(world), "ground": ground,
+                      "polygon": navmesh_polygon(verts, polygons, nav_coord((world[0], world[1], surface)),
+                                                 surface)}
+
+    def end_note(role):
+        end = ends[role]
+        if end["polygon"] is None:
+            return (f"{role} ({end['world'][0]:.2f},{end['world'][1]:.2f}) is not inside any polygon "
+                    f"of this tile")
+        surface = polygon_centre(polygons[end["polygon"]], verts)[1]
+        return (f"{role} ({end['world'][0]:.2f},{end['world'][1]:.2f}) is in polygon "
+                f"{end['polygon']}, whose surface is {surface - end['ground']:+.2f} m above the "
+                f"terrain there")
+
+    record("navmesh.ends_on_navmesh", all(ends[role]["polygon"] is not None for role in ends),
+           "; ".join(end_note(role) for role in ("start", "goal")))
+    start_point = nav_coord(ends["start"]["world"])
+    goal_point = nav_coord(ends["goal"]["world"])
+    straight = math.hypot(start_point[0] - goal_point[0], start_point[2] - goal_point[2])
+    route, cost = navmesh_route(verts, polygons, adjacency,
+                                ends["start"]["polygon"], ends["goal"]["polygon"])
+    record("navmesh.route", route is not None,
+           (f"a {len(route)}-polygon route from polygon {ends['start']['polygon']} to "
+            f"{ends['goal']['polygon']}, costed at {cost:.2f} m over the polygon centres, against a "
+            f"{straight:.2f} m straight line that the blocked LOS pair shows is not walkable" if route
+            else f"no route links the start polygon {ends['start']['polygon']} to the goal polygon "
+                 f"{ends['goal']['polygon']} inside this tile"))
+    if route:
+        # A route that ran through the obstacle would be close to the straight line, so the ratio is
+        # what says the graph goes around it; whether any point of the surface collides with the
+        # obstacle is a separate question this graph walk does not answer.
+        record("navmesh.route_is_a_detour", cost > straight,
+               f"the route is {cost / straight:.1f} times the {straight:.2f} m straight line between "
+               f"the blocked pair's ends, so it goes around the obstacle rather than through it")
+
+    reachable = reachable_polygons(adjacency, ends["start"]["polygon"])
+    outside = [polygon["index"] for polygon in polygons
+               if polygon["index"] not in reachable
+               and polygon["type"] != DT_POLYTYPE_OFFMESH_CONNECTION]
+    detached = None
+    if outside:
+        detached = min(outside, key=lambda index: math.hypot(
+            polygon_centre(polygons[index], verts)[0] - goal_point[0],
+            polygon_centre(polygons[index], verts)[2] - goal_point[2]))
+    detached_route, _ = navmesh_route(verts, polygons, adjacency, ends["start"]["polygon"], detached)
+    off_tile, off_tile_polygon = None, None
+    for offset in (300.0, 600.0, 1200.0):
+        candidate = (goal_point[0] + offset, goal_point[1], goal_point[2] + offset)
+        off_tile_polygon = navmesh_polygon(verts, polygons, candidate, candidate[1])
+        if off_tile_polygon is None:
+            off_tile = candidate
+            break
+    record("navmesh.unreachable_rejected", detached_route is None and off_tile_polygon is None
+           and (detached is not None or off_tile is not None),
+           "no route is reported to a polygon the start cannot reach, and a point outside the tile "
+           "resolves to no polygon instead of to the nearest one; "
+           + (f"{len(polygons) - len(reachable)} of {len(polygons)} polygons are outside the start's "
+              f"component and the nearest of them to the goal is polygon {detached}"
+              if detached is not None else "every polygon in this tile is reachable from the start"))
+    facts.update({
+        "polygons": len(polygons), "vertices": len(verts) // 3,
+        "reachable_polygons": len(reachable),
+        "ends": {role: {"world": ends[role]["world"], "ground": ends[role]["ground"],
+                        "polygon": ends[role]["polygon"],
+                        "polygon_centre": list(polygon_centre(polygons[ends[role]["polygon"]], verts))
+                        if ends[role]["polygon"] is not None else None} for role in ends},
+        "straight_line": straight, "route_polygons": len(route) if route else None,
+        "route_cost": cost, "detached_polygon": detached,
+        "off_tile_point": list(off_tile) if off_tile else None})
+    report["pass"] = all(entry["pass"] for entry in checks)
+    return report
+
+
+def render_chase(report):
+    def number(value, spec=".2f"):
+        return "unavailable" if value is None else format(value, spec)
+
+    lines = [f"chase path: data-root {report['data_root']} map {report['map']} "
+             f"grid {report['grid'][0]},{report['grid'][1]}"]
+    for check in report["checks"]:
+        lines.append(f"  [{'PASS' if check['pass'] else 'FAIL'}] {check['check']}: {check['detail']}")
+    facts = report["facts"]
+    if facts.get("ends"):
+        for role in ("start", "goal"):
+            end = facts["ends"][role]
+            lines.append(f"  {role}: world ({end['world'][0]:.2f},{end['world'][1]:.2f},"
+                         f"{end['world'][2]:.2f}) terrain {number(end['ground'], '.3f')} polygon "
+                         f"{end['polygon']} centre "
+                         f"{[round(value, 3) for value in end['polygon_centre']] if end['polygon_centre'] else None}")
+        lines.append(f"  straight line {number(facts['straight_line'])} m; route "
+                     f"{facts['route_polygons']} polygons costed at {number(facts['route_cost'])} m")
+        lines.append(f"  {facts['reachable_polygons']} of {facts['polygons']} polygons reachable from "
+                     f"the start; nearest disconnected polygon {facts['detached_polygon']}")
+    lines.append("Chase path " + ("PASS" if report["pass"] else "FAIL")
+                 + ". A route in this tile's graph is not a server-loaded navmesh, a creature chase, "
+                   "or a smoothed walkable polyline.")
+    return "\n".join(lines)
+
+
 def render_los_pair(pair):
     lines = [f"LOS pair for {pair['obstacle']} id {pair['obstacle_id']} "
-             f"({pair['obstacle_triangles']} triangles) at "
              f"({pair['obstacle_position'][0]:.2f},{pair['obstacle_position'][1]:.2f},"
              f"{pair['obstacle_position'][2]:.2f}); eye height {pair['eye_height']:.5f}"]
     blocked, clear = pair["blocked"], pair["clear"]
@@ -1130,7 +1464,8 @@ def render(report):
             lines.append(f"    world bounds x[{low[0]:.2f},{high[0]:.2f}] y[{low[1]:.2f},{high[1]:.2f}] "
                          f"z[{low[2]:.2f},{high[2]:.2f}]")
     lines.append(f"Collision geometry {'PASS' if report['pass'] else 'FAIL'}. This does not prove a "
-                 f"server loaded it, that any query matched, or that a path exists.")
+                 f"server loaded it, that any query matched, or that any creature walks a route; the "
+                 f"chase route's expectation is --chase.")
     return "\n".join(lines)
 
 
@@ -1193,11 +1528,29 @@ def build_mmap(orig=(-7466.6665, 1.1754943508222875e-38, -16000.0), max_polys=-2
 
 
 def build_mmtile(tile_x, tile_y, bmin, bmax, payload_bytes=4096, magic=DT_NAVMESH_MAGIC,
-                 version=DT_NAVMESH_VERSION, poly_count=10, vert_count=20):
+                 version=DT_NAVMESH_VERSION, poly_count=10, vert_count=20, arrays=None):
+    """A tile whose counts describe its payload; arrays=(vertices, polygons) writes real arrays.
+
+    Without arrays the two arrays are padding of the declared size, which is enough for the header and
+    payload-arithmetic cases; the path query needs real ones. A polygon is (vertex indices, neis) with
+    the file's own neighbour encoding (neighbour index plus one).
+    """
+    detail = b""
+    if arrays:
+        vertices, polygons = arrays
+        vert_count, poly_count = len(vertices), len(polygons)
+        detail = struct.pack(f"<{3 * vert_count}f", *[value for vertex in vertices for value in vertex])
+        for polygon_verts, polygon_neis in polygons:
+            detail += struct.pack("<I", 0)
+            detail += struct.pack(f"<{DT_VERTS_PER_POLYGON}H", *(tuple(polygon_verts) + (0,) * (
+                DT_VERTS_PER_POLYGON - len(polygon_verts))))
+            detail += struct.pack(f"<{DT_VERTS_PER_POLYGON}H", *(tuple(polygon_neis) + (0,) * (
+                DT_VERTS_PER_POLYGON - len(polygon_neis))))
+            detail += struct.pack("<HBB", 0, len(polygon_verts), 0)
     mesh = struct.pack("<15i10f", magic, version, tile_x, tile_y, 0, 0, poly_count, vert_count,
                        30, 0, 0, 0, 0, 0, 0, 1.6, 0.53, 1.6,
                        bmin[0], bmin[1], bmin[2], bmax[0], bmax[1], bmax[2], 1.0)
-    payload = mesh + b"\0" * max(0, payload_bytes - len(mesh))
+    payload = mesh + detail + b"\0" * max(0, payload_bytes - len(mesh) - len(detail))
     header = struct.pack("<4I", MMAP_MAGIC, DT_NAVMESH_VERSION, MMAP_VERSION, len(payload))
     header += b"\x01\x00\x00\x00"
     header += b"\0" * (MMAP_TILE_HEADER_SIZE - len(header))
@@ -1461,16 +1814,54 @@ def self_check():
         except ValueError:
             big_pair = None
         if big_pair:
-            big_spawns = []
-            for dx in (-1, 0, 1):
-                for dy in (-1, 0, 1):
-                    path_ = big_root / "vmaps" / f"000_{32 + dy:02d}_{32 + dx:02d}.vmtile"
-                    if path_.is_file():
-                        big_spawns.extend(read_vmap_tile(path_.read_bytes())[0])
+            big_spawns = tile_spawns(big_root, 0, 32, 32, 1)
             big_models = ModelCache(big_root)
             assert not segment_hits(big_spawns, big_models, big_pair["clear"]["first"],
                                     big_pair["clear"]["second"])[0], \
                 "the derived clear line is blocked when every spawn is considered"
+        # The path query walks the tile's own polygons: a shared edge must route, a detached polygon
+        # must not, a roof must not win over the ground, and an index outside either array is rejected.
+        def tile(vertices, polygons):
+            return MmapFiles.from_bytes(build_mmtile(0, 0, (-200.0, 0.0, -200.0),
+                                                     (200.0, 200.0, 200.0),
+                                                     arrays=(vertices, polygons)))
+
+        ground = [(-1.0, 40.0, 0.0), (0.0, 40.0, 0.0), (0.0, 40.0, 2.0), (-1.0, 40.0, 2.0),
+                  (1.0, 40.0, 0.0), (1.0, 40.0, 2.0),
+                  (5.0, 40.0, 0.0), (6.0, 40.0, 0.0), (6.0, 40.0, 2.0), (5.0, 40.0, 2.0)]
+        roof = [(-1.0, 45.0, 0.0), (0.0, 45.0, 0.0), (0.0, 45.0, 2.0), (-1.0, 45.0, 2.0)]
+        mesh = ground + roof
+        # A shares its x=0 edge with B (polygon 1); C is detached; D is the roof over A.
+        room = [((0, 1, 2, 3), (0, 2, 0, 0)), ((1, 4, 5, 2), (0, 0, 0, 1)),
+                ((6, 7, 8, 9), (0, 0, 0, 0)), ((10, 11, 12, 13), (0, 0, 0, 0))]
+        verts_, polys_, adjacency_, problems_ = navmesh_graph(tile(mesh, room))
+        assert not problems_ and len(polys_) == 4, problems_
+        start = navmesh_polygon(verts_, polys_, (-0.5, 40.0, 1.0), 40.0)
+        neighbour = navmesh_polygon(verts_, polys_, (0.5, 40.0, 1.0), 40.0)
+        detached = navmesh_polygon(verts_, polys_, (5.5, 40.0, 1.0), 40.0)
+        assert (start, neighbour, detached) == (0, 1, 2), (start, neighbour, detached)
+        route, cost = navmesh_route(verts_, polys_, adjacency_, start, neighbour)
+        assert route == [0, 1] and 0.0 < cost < 3.0, (route, cost)
+        assert navmesh_route(verts_, polys_, adjacency_, start, detached) == (None, None)
+        assert reachable_polygons(adjacency_, start) == {0, 1}
+        assert navmesh_route(verts_, polys_, adjacency_, start, 3) == (None, None), \
+            "the roof polygon was treatable as a destination"
+        # A vertex or neighbour index outside its array is corrupt data, not a usable graph.
+        assert navmesh_graph(tile([(0.0, 40.0, 0.0)], [((0, 1, 2, 3), (0, 0, 0, 0))]))[3]
+        assert any("links to polygon" in problem for problem in
+                   navmesh_graph(tile(ground, [((0, 1, 2, 3), (0, 9, 0, 0))]))[3])
+        # A polygon declaring seven vertices is a build this Detour cannot read (DT_VERTS_PER_POLYGON).
+        seven = bytearray(build_mmtile(0, 0, (-1.0, 0.0, -1.0), (1.0, 1.0, 1.0),
+                                       arrays=(ground[:4], [((0, 1, 2, 3), (0, 0, 0, 0))])))
+        struct.pack_into("<B", seven, MMAP_TILE_HEADER_SIZE + DT_MESH_HEADER_SIZE + 12 * 4 + 30, 7)
+        assert any("DT_VERTS_PER_POLYGON" in problem
+                   for problem in navmesh_graph(MmapFiles.from_bytes(bytes(seven)))[3])
+        # A chase report renders with the endpoints absent, as the check's own render does.
+        assert "Chase path FAIL" in render_chase(
+            {"data_root": "x", "map": 0, "grid": [32, 32], "checks": [], "gaps": [],
+             "facts": {"ends": {}, "straight_line": None, "route_polygons": None, "route_cost": None,
+                       "reachable_polygons": 0, "polygons": 0,
+                       "detached_polygon": None}, "pass": False})
         # An unavailable neighbouring terrain height must render, not raise.
         unavailable = {"data_root": "x", "map": 0, "anchor": [0.0, 0.0, 0.0], "grid": [32, 32],
                        "checks": [{"check": "c", "pass": True, "detail": "d"}], "gaps": [],
@@ -1499,8 +1890,10 @@ def main():
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
     parser.add_argument("--los-pair", action="store_true",
                         help="derive the blocked/clear LOS pair from the pinned obstacle's triangles")
+    parser.add_argument("--chase", action="store_true",
+                        help="derive the chase route around the pinned obstacle from the tile's polygons")
     parser.add_argument("--obstacle", default="Nsabbey.wmo",
-                        help="obstacle for --los-pair (default Nsabbey.wmo)")
+                        help="obstacle for --los-pair and --chase (default Nsabbey.wmo)")
     parser.add_argument("--self-check", action="store_true", help="run the synthetic checks only")
     args = parser.parse_args()
     if args.self_check:
@@ -1520,6 +1913,10 @@ def main():
         pair = derive_los_pair(args.data_root, args.map, anchor, args.obstacle, args.neighbours)
         print(json.dumps(pair, indent=2, sort_keys=True) if args.json else render_los_pair(pair))
         return 0
+    if args.chase:
+        report = chase_path(args.data_root, args.map, anchor, args.obstacle, args.neighbours)
+        print(json.dumps(report, indent=2, sort_keys=True) if args.json else render_chase(report))
+        return 0 if report["pass"] else 1
     report = check(args.data_root, args.map, anchor, args.neighbours, args.radius)
     print(json.dumps(report, indent=2, sort_keys=True) if args.json else render(report))
     return 0 if report["pass"] else 1
