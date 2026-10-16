@@ -267,6 +267,15 @@ if ISSUE97:
 ISSUE97_PHASED_CREATURE_GUID, ISSUE97_CONTROL_CREATURE_GUID, ISSUE97_PHASED_GO_GUID = 9970001, 9970002, 9970001
 ISSUE97_CREATURE_ENTRY, ISSUE97_CONTROL_CREATURE_ENTRY = 197, 823
 ISSUE97_GO_ENTRY, ISSUE97_PHASE_ID = 2843, 125
+# Plan 32 blocked-LOS probe: the caster stands at the pinned blocked-line start and the Boar
+# stands 80% along that line, behind the abbey wall. Same env-gated seed-override pattern as
+# ISSUE97; probe only, not an acceptance mode. The Boar Z is the artifact terrain height at that
+# point (stand height +0.001 m), read out of the staged root before the run.
+PLAN32_LOS_PROBE = os.environ.get("PLAN32_LOS_PROBE") == "1"
+if PLAN32_LOS_PROBE:
+    CHARACTER_POSITION = (-8830.95, -198.96, 82.801)
+    CHARACTER_ORIENTATION = 2.766
+PLAN32_LOS_PROBE_DUMMY = (-8854.766, -189.576, 80.422)
 
 
 def plan_number(mode: str) -> str:
@@ -673,13 +682,16 @@ def target_targeted_spell_cast_seed_sql() -> str:
 
 def target_targeted_spell_cast_world_seed_sql() -> str:
     x, y, z = CHARACTER_POSITION
-    dummy_x, dummy_y = x + 3, y + 3
+    if PLAN32_LOS_PROBE:
+        dummy_x, dummy_y, dummy_z = PLAN32_LOS_PROBE_DUMMY
+    else:
+        dummy_x, dummy_y, dummy_z = x + 3, y + 3, z
     return (
         "INSERT INTO `creature` "
         "(`guid`,`id`,`map`,`zoneId`,`areaId`,`position_x`,`position_y`,`position_z`,"
         "`wander_distance`,`MovementType`) "
         f"VALUES ({TARGET_TARGETED_SPELL_CAST_DUMMY_GUID},{TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY},"
-        f"{CHARACTER_MAP},{CHARACTER_ZONE},{CHARACTER_ZONE},{dummy_x},{dummy_y},{z},0,0) "
+        f"{CHARACTER_MAP},{CHARACTER_ZONE},{CHARACTER_ZONE},{dummy_x},{dummy_y},{dummy_z},0,0) "
         "ON DUPLICATE KEY UPDATE `position_x`=VALUES(`position_x`),`position_y`=VALUES(`position_y`),"
         "`position_z`=VALUES(`position_z`);"
     )
