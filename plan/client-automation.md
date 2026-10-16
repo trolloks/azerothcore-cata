@@ -200,8 +200,8 @@ section outside the file, a missing `{id}.vmtree`, a spawn whose model has no `.
 Detour payload — before a run starts. Add `--los-pair` to derive the frozen scenario's blocked and
 clear line-of-sight pair from the pinned obstacle's triangles, with the blocking triangle and the
 eye height the run has to reproduce, and `--chase` to derive the route around that obstacle from the
-tile's own polygon graph: both walkable polygons, the polygon sequence, its length against the blocked
-straight line, and the rejected disconnected polygon and off-tile point. Without the flag
+tile's own polygon graph under the walker's own filter: both walkable polygons, the route, the blocked
+line the navmesh must not cover, and the rejected unreachable polygon and off-tile point. Without the flag
 nothing changes, so geometry-free modes keep their accepted behaviour.
 
 The sets have to match the server's own naming, which is not uniform: for map 0 the server asks for
