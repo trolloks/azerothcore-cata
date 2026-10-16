@@ -1,9 +1,11 @@
 # Plan 32: reproducible Northshire collision and pathfinding (issue #134)
 
-Status: **parser fixes, the extraction pipeline, the harness geometry path and the scenario's data pins
-are done, including the derived clear/blocked LOS pair.** The frozen tile has all three artifact sets,
+Status: **parser fixes, the extraction pipeline, the harness geometry path, the scenario's data pins and
+the derived chase route are done, including the derived clear/blocked LOS pair.** The frozen tile has all
+three artifact sets,
 verified against the server's own naming and header constants; `prepare --geometry` can stage them and
-enable LOS/height/navmesh; and the pinned obstacle, the ground heights and the LOS pair are read out of
+enable LOS/height/navmesh; and the pinned obstacle, the ground heights, the LOS pair and the chase route
+(read under the walker's own filter, with the blocked line no walkable surface covers) are read out of
 those artifacts rather than guessed (`apps/cata/check_collision_geometry.py`). **Native map-0 acceptance
 is STILL UNRUN** — no server has loaded the artifacts yet.
 
@@ -203,6 +205,79 @@ surroundings — is not available at this wall, because a line shifted outward f
 trees and fences has already left the extent. It is printed with the derivation so the acceptance is not
 misled about what the clear case proves.
 
+### The chase route around the obstacle (`--chase`)
+
+The acceptance's other expectation is the chase, and it is derived from the same pair. `--chase` takes
+the blocked line's two ends, finds the walkable polygon at each — among the polygons the walker's own
+filter accepts, the containing one whose **surface under that point** is nearest the ground, so a roof
+over the same column of air cannot win and a ramp's single polygon height cannot stand in for the
+surface height where the creature stands — and walks the tile's own polygon graph. That graph is
+`dtPoly.neis`, the neighbour index plus one (0 for none, `0x8000|side` for another tile) that
+`dtNavMesh::connectIntLinks` reads, so it is data the tile already stores rather than a re-derivation of
+it, and the creature's filter (`PathGenerator::CreateFilter`: `NAV_GROUND` here) is applied to the
+polygons *and* to the links, because `dtNavMeshQuery::passFilter` drops every polygon whose flags do not
+match — including the ones with flags 0. This tile has `6300` of `6312` polygons on `NAV_GROUND` and
+`12` water-only ones, and no route may use the latter.
+
+| Fact | Value |
+| --- | --- |
+| Start (blocked, first end) | `(-8830.95, -198.96)`, terrain `82.801`, polygon `3324`, surface `-0.27` m |
+| Goal (blocked, second end) | `(-8860.72, -187.23)`, terrain `80.339`, polygon `2793`, surface `+2.79` m |
+| Blocked straight line | `32.00 m`; the walk stops after `3` polygons at `11.66 m`, where `3066` has no neighbour |
+| Route | `56` polygons, `261.45 m` of centre-to-centre steps (reported, not asserted) |
+| Start's component | `3767 of 6300` walkable polygons |
+| Rejected | polygon `2753` (start cannot reach it) and a point past the tile edge — no route for either |
+
+**The detour is tested on the line, not inferred from the route's length.** A longer centre-to-centre
+cost does not show that the corridor leaves the straight line: two large polygons can span a blocked
+line while their centres are far apart, and a navmesh that covers the line would let the creature walk
+straight through the obstacle. The line is therefore walked the way `dtNavMeshQuery::raycast` walks one:
+the fixed segment is cast at the current polygon with `dtIntersectSegmentPoly2D`'s own edge test, the
+edge it leaves by is followed through the tile's `dtPoly.neis` (the same map `connectIntLinks` builds
+links from), and an off-mesh connection or a polygon the walker's filter rejects ends the walk. The
+line's height against a global chord decides nothing — a continuous ramp is walkable the whole way up —
+so the two surfaces are compared at each actual portal instead, and a step above `walkable_climb` stops
+the walk because a walker cannot take it even though a ray can. Reaching the goal polygon means the
+navmesh covers the line the LOS pair blocks, which is a tile that disagrees with its collision. Here the
+walk stops after `3` ground polygons at `11.66 m` of the `32.00 m` line, where polygon `3066` has no
+neighbour: the wall's carved gap, ahead of the obstacle's blocking hit at `18.01 m`.
+
+```
+$ python3 apps/cata/check_collision_geometry.py --data-root .../cata-runs/plan32-pipeline/data --chase
+  [PASS] navmesh.tile_arrays: 6312 polygons and 11046 vertices walked out of the tile's own arrays
+  [PASS] navmesh.creature_filter: 6300 of 6312 polygons pass the walker's flags 0x01
+  [PASS] navmesh.ends_on_navmesh: start … polygon 3324, whose surface is -0.27 m above the terrain
+                      there; goal … polygon 2793, whose surface is +2.79 m above the terrain there
+  [PASS] navmesh.route: a 56-polygon route from polygon 3324 to 2793 through the walker's own links
+  [PASS] navmesh.blocked_line_not_walkable: the walker's straight line over the blocked 32.09 m is
+                      obstructed after 3 polygon(s): polygon 3066 edge 1 has no neighbour
+  [PASS] navmesh.unreachable_rejected: no route is reported to a polygon the start cannot reach, and a
+                      point outside the tile resolves to no polygon instead of to the nearest one …
+  Chase path PASS.
+```
+
+Two honest limits are printed with the derivation, because each one bounds what the route means:
+
+- **Single tile.** A step that would leave through a `DT_EXT_LINK` has no neighbour to follow here, so
+  a route that exists only via an adjacent tile reads as unreachable. The tile is checked with the one
+  `.mmtile` the pipeline produced.
+- **The polygon's own surface, not the detail mesh.** The height under a point comes from the polygon's
+  vertex fan, which is what a convex polygon's surface is; Detour can refine that with the detail mesh
+  (`dtPolyDetail`), which this check does not parse.
+
+`--self-check` covers the parse, the filter, the surface height and the line walk synthetically: a
+shared edge routes; a detached polygon, a roof polygon and a polygon whose flags the walker's filter
+rejects are not destinations; a sloped ramp's surface under the point beats the overlapping floor while
+the ramp's centre height would not; two touching rectangles that span the blocked line and hold a 2.5x
+longer route are still reported **walkable** because the walk crosses their shared portal, a 4 m carved
+gap is reported obstructed, a **continuous ramp** whose middle edge is 10 m above its ends is walkable
+(each portal step is 0 m, which a chord comparison would wrongly call a gap), a 5 m step at a portal is
+obstructed, a neighbour the filter rejects ends the walk, and a crossing through **every** edge of a
+polygon — including its closing edge, whose number must be wrapped or it collides with the absent-crossing
+sentinel — is followed; and a vertex index, a neighbour index or a
+vertex count outside this Detour's own arrays is rejected instead of followed. The native run is still
+the judge.
+
 The checker reports thirteen checks, one for each way the artifacts can fail to be loadable: the map
 magic/version/build (15595); every declared map section the terrain loader opens (area, height, liquid,
 holes) inside the file with its own magic, so a section offset beyond EOF fails instead of being
@@ -374,10 +449,12 @@ substitute one for the other.
 - **Client archives provenance** for all three artifact sets; the runs above used the on-disk client
   copy without recording its provenance.
 - **Native acceptance**: the map-0 route, the LOS/height/navmesh queries and the pinned obstacle
-  chase are still unrun, and no server has loaded the produced geometry. Run
-  `apps/cata/check_collision_geometry.py` against the staged root first — it is what makes a silently
-  degraded run (missing, truncated, misnamed or foreign-toolchain artifacts) fail before the run rather
-  than during it.
+  chase are still unrun, and no server has loaded the produced geometry. Both expectations the run has
+  to reproduce are now derived from the artifacts (the clear/blocked LOS pair and the chase route whose
+  blocked line no walkable surface covers). Run
+  `apps/cata/check_collision_geometry.py` against the staged root first (`--chase` too) — it is what
+  makes a silently degraded run (missing, truncated, misnamed or foreign-toolchain artifacts) fail
+  before the run rather than during it.
 
 ## Acceptance plan (unchanged, for when the above is authorized)
 
@@ -387,10 +464,12 @@ is derived from the pinned obstacle's triangles and is recorded above, so the ru
 reproduce; then run the owned native client with the selected tiles loaded
 and server LOS, height and navmesh use enabled, and prove: clear vs blocked LOS against that obstacle,
 correct ground heights at pinned points (the anchor's is `82.630`), one normal creature chase that paths
-around the obstacle, and a normal walk/stop/logout/relog at a legal position. Deterministic cases:
+around the obstacle (both pinned expectations are derived above: the LOS pair, and the chase route with
+its blocked `32.00 m` line that no walkable surface covers), and a normal
+walk/stop/logout/relog at a legal position. Deterministic cases:
 wrong-build/version headers, truncated or missing selected tiles/models, clear/blocked query expectations,
-unreachable path handling. Acceptance must fail (not silently pass) when geometry is unavailable or
-disabled.
+unreachable path handling (`--chase` reports the rejected disconnected polygon and off-tile point).
+Acceptance must fail (not silently pass) when geometry is unavailable or disabled.
 
 ## Not covered by this record
 
