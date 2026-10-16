@@ -18,6 +18,8 @@
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "adt.h"
+#include <cstddef>
+#include <cstring>
 
 // Helper
 int holetab_h[4] = { 0x1111, 0x2222, 0x4444, 0x8888 };
@@ -56,6 +58,8 @@ ADT_file::~ADT_file()
 void ADT_file::free()
 {
     a_grid = nullptr;
+    memset(cells, 0, sizeof(cells));
+    cellsFound = 0;
     FileLoader::free();
 }
 
@@ -73,7 +77,85 @@ bool ADT_file::prepareLoadedData()
     if (!a_grid->prepareLoadedData())
         return false;
 
-    return true;
+    return BuildMCNKCellIndex();
+}
+
+// Cataclysm root ADTs have no MCIN index - offsMCIN is 0 and the MCNK cells follow the other
+// chunks directly - so the cells have to be located by walking the chunk list. Each cell is
+// recorded under its own iy/ix, the order the conversion loops consume, and the sub-chunks it
+// reads are validated. Returns false for a malformed, incomplete or duplicate-cell chunk list.
+bool ADT_file::BuildMCNKCellIndex()
+{
+    uint8* data = GetData();
+    uint32 const dataSize = GetDataSize();
+    uint32 offset = 0;
+
+    // Bytes a consumed MCLQ has to provide: the converter reads through the end of its flag grid.
+    uint32 const requiredMclqBytes = offsetof(adt_MCLQ, data);
+
+    while (offset + 8 <= dataSize)
+    {
+        uint32 const chunkSize = *reinterpret_cast<uint32*>(data + offset + 4);
+        uint32 const payloadOffset = offset + 8;
+
+        // Bounds-check the declared size before reading the payload: a chunk that would run past
+        // the end of the file is malformed and must not be dereferenced.
+        if (chunkSize > dataSize - payloadOffset)
+            return false;
+
+        // Sub-chunk offsets are relative to the chunk start, header included, while chunkSize counts
+        // the payload only, so the full extent is what they have to fit inside.
+        uint32 const chunkExtent = chunkSize + 8;
+
+        if (*reinterpret_cast<uint32*>(data + offset) == MCNKMagic.fcc)
+        {
+            if (chunkSize < sizeof(adt_MCNK) - 8)
+                return false;
+
+            adt_MCNK* cell = reinterpret_cast<adt_MCNK*>(data + offset);
+            if (cell->ix >= ADT_CELLS_PER_GRID || cell->iy >= ADT_CELLS_PER_GRID)
+                return false;
+
+            // A repeated coordinate would leave another slot empty, so the completeness check in
+            // ConvertADT rejects duplicates as well.
+            if (cells[cell->iy][cell->ix])
+                return false;
+
+            // Validate only the sub-chunks the conversion reads, against the MCNK's full extent:
+            // heights always come from MCVT, while the legacy MCLQ is consumed only when
+            // sizeMCLQ > 8, because Cataclysm moved liquid to the root MH2O chunk and leaves
+            // offsMCLQ pointing at the end of the cell - validating it unconditionally would reject
+            // every Cataclysm cell.
+            if (cell->offsMCVT)
+            {
+                if (cell->offsMCVT > chunkExtent || chunkExtent - cell->offsMCVT < sizeof(adt_MCVT))
+                    return false;
+
+                if (!cell->getMCVT()->prepareLoadedData())
+                    return false;
+            }
+
+            if (cell->offsMCLQ && cell->sizeMCLQ > 8)
+            {
+                // The converter reads the whole 8x8 flag grid and 9x9 liquid grid, so a short MCLQ
+                // has to be rejected rather than read past its end.
+                if (cell->offsMCLQ > chunkExtent || chunkExtent - cell->offsMCLQ < requiredMclqBytes)
+                    return false;
+
+                adt_MCLQ* mclq = cell->getMCLQ();
+                if (mclq->size < requiredMclqBytes - 8 || !mclq->prepareLoadedData())
+                    return false;
+            }
+
+            cells[cell->iy][cell->ix] = cell;
+            ++cellsFound;
+        }
+
+        offset = payloadOffset + chunkSize;
+    }
+
+    // Leftover bytes cannot form a chunk header.
+    return offset == dataSize;
 }
 
 bool adt_MHDR::prepareLoadedData()
