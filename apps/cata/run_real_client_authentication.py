@@ -195,7 +195,7 @@ PLAN32_GEOMETRY_MODE = "plan32-geometry"
 # One acceptance mode carries the remaining Plan 32 stages; each generation runs one stage from a
 # pinned seed, so no travel between pinned points is needed. Stages arrive in this order; only the
 # implemented ones are accepted by prepare/run/verify.
-PLAN32_GEOMETRY_STAGES = ("blocked", "clear")
+PLAN32_GEOMETRY_STAGES = ("blocked", "clear", "chase")
 # The fixture is an entry with no static spawns anywhere near the seeds and a name no other nearby
 # unit shares: Tab-nearest is not deterministic in the abbey (ambient hostiles wander through Tab
 # range), so targeting goes through the client-local "/target <name>" macro instead (the level-up
@@ -214,7 +214,29 @@ PLAN32_GEOMETRY_SEEDS = {
         "character": (-8775.13, -220.95, 85.254, 2.766),
         "dummy": (-8798.946, -211.566, 82.845),
     },
+    # Chase: the player rounds the abbey's east corner while the aggroed fixture follows. The
+    # corner (validated offline against the tile's own polygons and the obstacle's triangles)
+    # runs north 15 m then east 12 m; every follower shortcut across it hits Nsabbey.wmo while a
+    # navmesh route exists around. Facing is cardinal north so both legs are exact axis moves
+    # (forward, then strafe) with no turn-timing error.
+    "chase": {
+        "character": (-8862, -202, 80.386, math.pi / 2),
+        "dummy": (-8842, -212, 82.339),
+    },
 }
+# Chase observation contract, all pinned before the run. The follower path must be decisively
+# longer than its straight line (a clipper walks ratio ~1.0), must end at melee range, must be
+# continuous (no teleports), and must include a melee engagement; any of those missing fails the
+# run instead of passing.
+PLAN32_CHASE_P2 = (-8850, -187)
+PLAN32_CHASE_START_TOLERANCE = 4.0
+PLAN32_CHASE_END_TOLERANCE = 6.0
+PLAN32_CHASE_DETOUR_RATIO = 1.25
+PLAN32_CHASE_ARRIVAL_DISTANCE = 6.0
+PLAN32_CHASE_MAX_SPLINE_GAP = 10.0
+# Aggro casts per stage: the LOS stages cast twice (Codex requires both attempts uncancelled);
+# the chase needs one aggro cast before the run leg.
+PLAN32_EXPECTED_COUNTS = {"blocked": [1, 2], "clear": [1, 2], "chase": [1]}
 # Runtime z must reproduce the seeded terrain height within this; the accepted geometry run settled
 # to 1 mm, so 10 cm leaves room for packet float rounding without hiding a wrong surface.
 PLAN32_GEOMETRY_HEIGHT_TOLERANCE = 0.1
@@ -2219,6 +2241,27 @@ def automate_plan32_geometry(generation: Generation) -> None:
     capture_desktop_screenshot(generation, "desktop-after-second-cast.png")
 
 
+def automate_plan32_chase(generation: Generation) -> None:
+    # One aggro cast at the fixture, then a north leg and an east strafe leg around the abbey's
+    # east corner while the aggroed fixture follows. Facing stays cardinal north the whole time,
+    # so both legs are exact axis moves with no turn-timing error. No Escape anywhere.
+    capture_desktop_screenshot(generation, "desktop-before-target.png")
+    automate_key_sequence(
+        generation, PLAN32_GEOMETRY_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05,
+    )
+    time.sleep(1.0)  # let the client resolve the name and register the target
+    capture_desktop_screenshot(generation, "desktop-after-target.png")
+    automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(7.0)  # let the cast resolve; a hit aggros the fixture
+    capture_desktop_screenshot(generation, "desktop-after-cast.png")
+    time.sleep(8.0)  # let the fixture close to melee
+    automate_key_sequence(generation, ("w",), hold_seconds=2.2, gap_seconds=0.4)
+    automate_key_sequence(generation, ("e",), hold_seconds=1.8, gap_seconds=0.4)
+    capture_desktop_screenshot(generation, "desktop-after-leg.png")
+    time.sleep(40.0)  # arrival window for the detour
+    capture_desktop_screenshot(generation, "desktop-after-wait.png")
+
+
 def automate_issue97_phases(generation: Generation, deadline: float) -> None:
     # Measure accepted stops; startup input can cover much less distance than later taps.
     stages = []
@@ -2796,7 +2839,10 @@ def run_client(args: argparse.Namespace) -> None:
                     generation["mode"] == PLAN32_GEOMETRY_MODE and selection_sent
                     and not plan32_geometry_sent and in_world_control_marker_count(generation) > 0
                 ):
-                    automate_plan32_geometry(generation)
+                    if generation.get("plan32_stage") == "chase":
+                        automate_plan32_chase(generation)
+                    else:
+                        automate_plan32_geometry(generation)
                     plan32_geometry_sent = True
                 if (
                     generation["mode"] == CHAT_MESSAGE_MODE and selection_sent and not chat_message_sent
@@ -3104,6 +3150,13 @@ CMSG_CAST_SPELL_OPCODE = 0x4C07
 SMSG_CAST_FAILED_OPCODE = 0x4D16
 SMSG_SPELL_GO_OPCODE = 0x6E16
 SPELL_FAILED_LINE_OF_SIGHT_RESULT = 49
+SMSG_ON_MONSTER_MOVE_OPCODE = 0x6E17
+SMSG_ATTACKERSTATEUPDATE_OPCODE = 0x0B25
+# MoveSplineFlag bits (MoveSplineFlag.h) needed to walk a monster-move body.
+SPLINE_FLAG_CYCLIC = 0x00001000
+SPLINE_FLAG_UNCOMPRESSED_PATH = 0x00400000
+SPLINE_FLAG_ANIMATION = 0x01000000
+SPLINE_FLAG_PARABOLIC = 0x02000000
 
 
 def read_packed_guid(data: bytes, offset: int) -> tuple[int, int]:
@@ -3166,6 +3219,160 @@ def plan32_packet_events(generation: Generation) -> list[dict[str, object]]:
             })
         offset += PKT_PACKET_HEADER_SIZE + (length - 4)
     return events
+
+
+def unpack_pack_xyz(packed: int) -> tuple[float, float, float]:
+    """One appendPackXYZ word: 11-bit x, 11-bit y, 10-bit z, each in 0.25 steps, sign-extended."""
+    x = packed & 0x7FF
+    y = (packed >> 11) & 0x7FF
+    z = (packed >> 22) & 0x3FF
+    if x & 0x400:
+        x -= 0x800
+    if y & 0x400:
+        y -= 0x800
+    if z & 0x200:
+        z -= 0x400
+    return x * 0.25, y * 0.25, z * 0.25
+
+
+def plan32_monster_moves(generation: Generation) -> list[dict[str, object]]:
+    """Every SMSG_ON_MONSTER_MOVE as (mover GUID, world polyline): the mover, its real position,
+    then the spline points, uncompressed or PackXYZ-compressed (offsets from the start/end
+    midpoint, as the server writes them). Layout from MoveSplineInit + PacketBuilder."""
+    path = Path(generation["paths"]["logs"]) / "packets.pkt"
+    if not path.is_file():
+        return []
+    data = path.read_bytes()
+    moves: list[dict[str, object]] = []
+    offset = PKT_LOG_HEADER_SIZE
+    while offset + PKT_PACKET_HEADER_SIZE <= len(data):
+        _, _, _, optional_size, length = struct.unpack_from("<IIIII", data, offset)
+        if optional_size != 20 or length > 65535 or length < 4:
+            raise RuntimeError(f"plan32 packet log desynchronised at byte {offset}")
+        opcode = struct.unpack_from("<I", data, offset + 40)[0]
+        payload = data[offset + 44:offset + 40 + length]
+        if opcode == SMSG_ON_MONSTER_MOVE_OPCODE:
+            cursor = 0
+            mover, cursor = read_packed_guid(payload, cursor)
+            cursor += 1  # VehicleExitVoluntary
+            start = struct.unpack_from("<fff", payload, cursor)
+            cursor += 12
+            cursor += 4  # splineId
+            facing = payload[cursor]
+            cursor += 1
+            facing_target = None
+            if facing == 2:
+                cursor += 12
+            elif facing == 3:
+                # FacingInfo.target is a raw uint64, not a packed GUID. A chase faces its
+                # victim, so this independently corroborates who the mover is after.
+                facing_target = struct.unpack_from("<Q", payload, cursor)[0]
+                cursor += 8
+            elif facing == 4:
+                cursor += 4
+            elif facing != 0:
+                raise RuntimeError(f"plan32 unknown monster-move facing {facing}")
+            flags = struct.unpack_from("<I", payload, cursor)[0]
+            cursor += 4
+            if flags & SPLINE_FLAG_CYCLIC:
+                raise RuntimeError("plan32 cyclic spline path is not supported")
+            if flags & SPLINE_FLAG_ANIMATION:
+                cursor += 1 + 4
+            cursor += 4  # duration
+            if flags & SPLINE_FLAG_PARABOLIC:
+                cursor += 4 + 4
+            points = [start]
+            if flags & SPLINE_FLAG_UNCOMPRESSED_PATH:
+                count = struct.unpack_from("<I", payload, cursor)[0]
+                cursor += 4
+                for _ in range(count):
+                    points.append(struct.unpack_from("<fff", payload, cursor))
+                    cursor += 12
+            else:
+                last_idx = struct.unpack_from("<I", payload, cursor)[0]
+                cursor += 4
+                dest = struct.unpack_from("<fff", payload, cursor)
+                cursor += 12
+                if last_idx > 1:
+                    middle = tuple((a + b) / 2.0 for a, b in zip(start, dest))
+                    for _ in range(1, last_idx):
+                        packed = struct.unpack_from("<I", payload, cursor)[0]
+                        cursor += 4
+                        off = unpack_pack_xyz(packed)
+                        points.append(tuple(m - o for m, o in zip(middle, off)))
+                points.append(dest)
+            moves.append({"mover": mover, "points": points, "facing_target": facing_target})
+        offset += PKT_PACKET_HEADER_SIZE + (length - 4)
+    return moves
+
+
+def plan32_attackerstate(generation: Generation) -> list[dict[str, object]]:
+    """Every SMSG_ATTACKERSTATEUPDATE as (attacker, victim, damage): HitInfo, both packed GUIDs,
+    then the full damage. Any outcome counts — even a miss proves melee engagement range."""
+    path = Path(generation["paths"]["logs"]) / "packets.pkt"
+    if not path.is_file():
+        return []
+    data = path.read_bytes()
+    swings: list[dict[str, object]] = []
+    offset = PKT_LOG_HEADER_SIZE
+    while offset + PKT_PACKET_HEADER_SIZE <= len(data):
+        _, _, _, optional_size, length = struct.unpack_from("<IIIII", data, offset)
+        if optional_size != 20 or length > 65535 or length < 4:
+            raise RuntimeError(f"plan32 packet log desynchronised at byte {offset}")
+        opcode = struct.unpack_from("<I", data, offset + 40)[0]
+        payload = data[offset + 44:offset + 40 + length]
+        if opcode == SMSG_ATTACKERSTATEUPDATE_OPCODE:
+            cursor = 4  # HitInfo
+            attacker, cursor = read_packed_guid(payload, cursor)
+            victim, cursor = read_packed_guid(payload, cursor)
+            damage = struct.unpack_from("<I", payload, cursor)[0]
+            swings.append({"attacker": attacker, "victim": victim, "damage": damage})
+        offset += PKT_PACKET_HEADER_SIZE + (length - 4)
+    return swings
+
+
+def plan32_chase_tracks(generation: Generation) -> dict[str, object]:
+    """The chase observation, keyed to the agreed selection: the fixture's spline packets and
+    its melee swings at the player. Reparsing the capture here keeps the evidence literal free
+    of ordering constraints; the file is small."""
+    events = [
+        event for event in plan32_packet_events(generation)
+        if event["opcode"] in {
+            "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO",
+        }
+    ]
+    target = selections_target_fixture(events)
+    moves = [
+        {"mover": move["mover"], "points": move["points"],
+         "facing_target": move["facing_target"]}
+        for move in plan32_monster_moves(generation)
+        if move["mover"] == target
+    ] if target is not None else []
+    swings = [
+        {"attacker": swing["attacker"], "victim": swing["victim"], "damage": swing["damage"]}
+        for swing in plan32_attackerstate(generation)
+        if swing["attacker"] == target and swing["victim"] == CHARACTER_GUID
+    ] if target is not None else []
+    return {"target": target, "moves": moves, "swings": swings}
+
+
+def plan32_path_metrics(points: list[tuple[float, float, float]]) -> tuple[float, float, float]:
+    """(polyline length, straight distance, max consecutive gap) in 2D, after dropping points
+    closer than 2 m: repathed splines overlap, and the overlap must not inflate the length."""
+    simplified = [points[0]]
+    for point in points[1:]:
+        if math.hypot(point[0] - simplified[-1][0], point[1] - simplified[-1][1]) >= 2.0:
+            simplified.append(point)
+    length = sum(
+        math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(simplified, simplified[1:])
+    )
+    straight = math.hypot(
+        simplified[-1][0] - simplified[0][0], simplified[-1][1] - simplified[0][1],
+    )
+    gaps = [
+        math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(simplified, simplified[1:])
+    ]
+    return length, straight, max(gaps) if gaps else 0.0
 
 
 def ground_movement_action_samples(
@@ -3661,6 +3868,14 @@ def sanitized_evidence(
             ] if plan32_geometry_mode else None
         ),
         "plan32_settle_z": plan32_settle_z(generation) if plan32_geometry_mode else None,
+        "plan32_player_samples": (
+            ground_movement_samples(generation) if plan32_geometry_mode else None
+        ),
+        "plan32_chase": (
+            plan32_chase_tracks(generation)
+            if plan32_geometry_mode and generation.get("plan32_stage") == "chase"
+            else None
+        ),
         "creation_marker_count": creation_marker_count_value if creation_mode else None,
         "post_marker_hold_seconds": (
             generation.get("post_marker_hold_seconds", 0) if generation["mode"] in POST_MARKER_MODES else None
@@ -3876,7 +4091,7 @@ def verify(args: argparse.Namespace) -> None:
             # verify_plan32_seeds) and the target-frame screenshot.
             casts_ok = (
                 target is not None
-                and [event.get("count") for event in sent] == [1, 2]
+                and [event.get("count") for event in sent] == PLAN32_EXPECTED_COUNTS.get(str(stage))
                 and all(event.get("spell") == PLAN32_GEOMETRY_SPELL_ID for event in sent)
                 and all(event.get("target") == target for event in sent)
             )
@@ -3898,6 +4113,56 @@ def verify(args: argparse.Namespace) -> None:
                 )
             elif stage == "clear":
                 stage_ok = casts_ok and len(goes) >= 1 and not fails
+            elif stage == "chase":
+                chase = evidence["plan32_chase"] or {}
+                samples = evidence["plan32_player_samples"] or []
+                ops = [str(sample["opcode"]) for sample in samples]
+                # The run leg as driven: forward tap, stop, strafe tap, strafe stop, in that
+                # order (a settle fall or extra heartbeats anywhere in between are fine).
+                run_leg = [
+                    "MSG_MOVE_START_FORWARD", "MSG_MOVE_STOP",
+                    "MSG_MOVE_START_STRAFE_RIGHT", "MSG_MOVE_STOP_STRAFE",
+                ]
+                remaining = list(ops)
+                leg_ok = True
+                for want in run_leg:
+                    if want in remaining:
+                        remaining = remaining[remaining.index(want) + 1:]
+                    else:
+                        leg_ok = False
+                        break
+                start_ok = bool(samples) and math.hypot(
+                    float(samples[0]["x"]) - PLAN32_GEOMETRY_SEEDS["chase"]["character"][0],
+                    float(samples[0]["y"]) - PLAN32_GEOMETRY_SEEDS["chase"]["character"][1],
+                ) <= PLAN32_CHASE_START_TOLERANCE
+                end_ok = bool(samples) and math.hypot(
+                    float(samples[-1]["x"]) - PLAN32_CHASE_P2[0],
+                    float(samples[-1]["y"]) - PLAN32_CHASE_P2[1],
+                ) <= PLAN32_CHASE_END_TOLERANCE
+                points = [
+                    point for move in chase.get("moves", [])
+                    for point in move["points"]
+                ]
+                if len(points) >= 2:
+                    length, straight, gap = plan32_path_metrics(points)
+                    detour_ok = (
+                        straight > 1.0
+                        and length / straight >= PLAN32_CHASE_DETOUR_RATIO
+                        and gap <= PLAN32_CHASE_MAX_SPLINE_GAP
+                    )
+                    arrival_ok = math.hypot(
+                        points[-1][0] - float(samples[-1]["x"]),
+                        points[-1][1] - float(samples[-1]["y"]),
+                    ) <= PLAN32_CHASE_ARRIVAL_DISTANCE if samples else False
+                else:
+                    detour_ok = False
+                    arrival_ok = False
+                engagement_ok = len(chase.get("swings", [])) >= 1
+                stage_ok = (
+                    casts_ok and len(goes) >= 1 and not fails
+                    and leg_ok and start_ok and end_ok
+                    and detour_ok and arrival_ok and engagement_ok
+                )
             else:
                 stage_ok = False
             character_ok = character_ok and (
@@ -3947,6 +4212,8 @@ def verify(args: argparse.Namespace) -> None:
                 and generation.get("plan32_stage") == "blocked"
                 else "plan32_geometry_clear_pass" if plan32_geometry_mode
                 and generation.get("plan32_stage") == "clear"
+                else "plan32_geometry_chase_pass" if plan32_geometry_mode
+                and generation.get("plan32_stage") == "chase"
                 else "ground_movement_pass" if ground_movement_mode
                 else "basic_movement_pass" if basic_movement_mode
                 else "in_world_control_bootstrap_pass" if in_world_control_mode
@@ -4736,7 +5003,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     # predict the fixture's wire GUID. The synthetic value below only exercises the parser and the
     # selection-anchored correlation shape.
     fixture = 0xF13000016900064A
-    assert set(PLAN32_GEOMETRY_SEEDS) == set(PLAN32_GEOMETRY_STAGES) == {"blocked", "clear"}
+    assert set(PLAN32_GEOMETRY_SEEDS) == set(PLAN32_GEOMETRY_STAGES) == {"blocked", "clear", "chase"}
     assert "-8854.766" in plan32_world_seed_sql("blocked") and "80.422" in plan32_world_seed_sql("blocked")
     assert ",361,0,12,12," in plan32_world_seed_sql("blocked")
     assert ",2809," not in plan32_world_seed_sql("blocked")
@@ -4798,6 +5065,64 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         {"opcode": "CMSG_SET_SELECTION", "target": fixture},
     ]) is None
     assert selections_target_fixture([]) is None
+    # Chase pieces: monster-move bodies (compressed and uncompressed), attackerstate, metrics.
+    assert PLAN32_EXPECTED_COUNTS == {"blocked": [1, 2], "clear": [1, 2], "chase": [1]}
+    assert PLAN32_GEOMETRY_SEEDS["chase"]["character"][:3] == (-8862, -202, 80.386)
+    assert PLAN32_GEOMETRY_SEEDS["chase"]["dummy"] == (-8842, -212, 82.339)
+    mover_packed = pack_guid(fixture)
+
+    def move_pkt(extra: bytes, flags: int = 0) -> bytes:
+        # mover, exit byte, real position, spline id, facing normal, flags, duration
+        return (mover_packed + bytes([0]) + struct.pack("<fff", 0.0, 0.0, 0.0)
+                + struct.pack("<I", 7) + bytes([0]) + struct.pack("<I", flags)
+                + struct.pack("<i", 1000) + extra)
+
+    def pack_xyz(x: float, y: float, z: float) -> bytes:
+        packed = (int(x / 0.25) & 0x7FF) | ((int(y / 0.25) & 0x7FF) << 11) | ((int(z / 0.25) & 0x3FF) << 22)
+        return struct.pack("<I", packed)
+
+    def midpoint(start: tuple, end: tuple) -> tuple:
+        return tuple((a + b) / 2.0 for a, b in zip(start, end))
+
+    # 11-bit x/y and 10-bit z at 0.25 steps, sign-extended: maxima are 1023 and 511 steps.
+    assert unpack_pack_xyz(0x3FF | (0x3FF << 11) | (0x1FF << 22)) == (255.75, 255.75, 127.75)
+    assert unpack_pack_xyz(0) == (0.0, 0.0, 0.0)
+    assert unpack_pack_xyz(struct.unpack("<I", pack_xyz(-2.5, -1.0, -0.5))[0]) == (-2.5, -1.0, -0.5)
+    # L-shaped detour: (0,0) -> (0,10) -> (10,10): length 20, straight ~14.14, ratio ~1.41.
+    assert plan32_path_metrics([(0.0, 0.0, 0.0), (0.0, 10.0, 0.0), (10.0, 10.0, 0.0)])[0:2] == (
+        20.0, 14.142135623730951,
+    )
+    uncompressed = move_pkt(
+        struct.pack("<I", 2) + struct.pack("<ffffff", 0, 10, 0, 10, 10, 0),
+        SPLINE_FLAG_UNCOMPRESSED_PATH,
+    )
+    dest, off1, off2 = (10.0, 0.0, 0.0), (2.5, 0.0, 0.0), (7.5, 0.0, 0.0)
+    middle = midpoint((0.0, 0.0, 0.0), dest)
+    stored1 = tuple(middle[i] - off1[i] for i in range(3))
+    stored2 = tuple(middle[i] - off2[i] for i in range(3))
+    compressed = move_pkt(
+        struct.pack("<I", 3) + struct.pack("<fff", *dest)
+        + pack_xyz(*stored1) + pack_xyz(*stored2)
+    )
+    swing = (struct.pack("<I", 0) + pack_guid(fixture) + pack_guid(CHARACTER_GUID)
+             + struct.pack("<I", 5))
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary) / "logs"
+        logs.mkdir()
+        (logs / "packets.pkt").write_bytes(
+            b"PKT" + bytes(63)
+            + pkt(C2S, SMSG_ON_MONSTER_MOVE_OPCODE, uncompressed)
+            + pkt(C2S, SMSG_ON_MONSTER_MOVE_OPCODE, compressed)
+            + pkt(S2C, SMSG_ATTACKERSTATEUPDATE_OPCODE, swing)
+        )
+        chase_generation: Generation = {"paths": {"logs": str(logs)}}
+        chase_moves = plan32_monster_moves(chase_generation)
+        chase_swings = plan32_attackerstate(chase_generation)
+    assert len(chase_moves) == 2 and all(m["mover"] == fixture for m in chase_moves)
+    assert [len(m["points"]) for m in chase_moves] == [3, 4]
+    assert chase_moves[1]["points"][-1] == (10.0, 0.0, 0.0)
+    assert len(chase_swings) == 1 and chase_swings[0]["damage"] == 5
+    assert chase_swings[0]["attacker"] == fixture and chase_swings[0]["victim"] == CHARACTER_GUID
     print("Real-client runner self-check passed")
 
 
