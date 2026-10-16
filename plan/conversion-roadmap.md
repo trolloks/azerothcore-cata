@@ -267,6 +267,14 @@ existing evidence. This updates only the tracker. It does not import game data o
 `--self-test` exercises the tracker's rejection cases. Keep the existing conversion checker for its
 separate packet and upstream-delta audit; do not replace it with this inventory check.
 
+When editing these TSVs, by hand or by script, preserve the stored field values exactly: read and
+write them as plain text (split/join on `\t`) rather than round-tripping through a CSV writer with an
+escape character. A `QUOTE_NONE` writer escapes every quote it emits, so a note containing `"` gains
+`\"`, and each repeat of the rewrite doubles it again. That silently corrupted `client:Phase.dbc`'s
+note across three commits — no backslashes in its introducing commit, fourteen on master, thirty in a
+later branch — and it had to be repaired from `e9bbc9c0a`. Only rows you intend to change should
+differ.
+
 The final release gate requires complete scope inventories, verified functionality and data rows,
 reviewed exceptions, no required blocked/deferred work, reproducible installation/upgrades, supported
 builds, representative full client journeys, and recovery/security checks. Until those conditions
