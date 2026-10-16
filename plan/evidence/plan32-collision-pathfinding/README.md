@@ -1,13 +1,18 @@
 # Plan 32: reproducible Northshire collision and pathfinding (issue #134)
 
-Status: **parser fixes, the extraction pipeline, the harness geometry path, the scenario's data pins and
-the derived chase route are done, including the derived clear/blocked LOS pair.** The frozen tile has all
-three artifact sets,
+Status: **parser fixes, the extraction pipeline, the harness geometry path, the scenario's data pins, the
+derived clear/blocked LOS pair and the derived chase route are done, and a geometry-enabled native run has
+now loaded the artifacts and passed the `ground-movement` boundary** (see "Geometry-enabled native run"
+below). The frozen tile has all three artifact sets,
 verified against the server's own naming and header constants; `prepare --geometry` can stage them and
 enable LOS/height/navmesh; and the pinned obstacle, the ground heights, the LOS pair and the chase route
 (read under the walker's own filter, with the blocked line no walkable surface covers) are read out of
-those artifacts rather than guessed (`apps/cata/check_collision_geometry.py`). **Native map-0 acceptance
-is STILL UNRUN** — no server has loaded the artifacts yet.
+those artifacts rather than guessed (`apps/cata/check_collision_geometry.py`). **The native map-0
+acceptance is partly proven**: the geometry is loaded by a server and a world-entry/walk boundary passes,
+while the clear/blocked LOS pair, the pinned ground heights as a server query, the pinned-obstacle chase
+and the walk/stop/logout/relog leg are still unrun. The tracking rows stay as they are — `assets:maps`,
+`assets:mmaps`, `assets:vmaps`, `maps-collision` and `data-pipeline` blocked, `creature-ai` partial with
+its Plan 32 pathfinding claim blocked.
 
 ## Frozen scenario
 
@@ -435,41 +440,100 @@ substitute one for the other.
    skipped and not attached. Raw logs live outside Git at
    `.../cata-runs/plan32-archive-migration/`.
 
+## Geometry-enabled native run (2026-10-16)
+
+The server/game targets were built from merged `master` (`22219fd4b`, Release), one owned generation was
+prepared with `--geometry` against the root above, and the mode below ran against the real build-15595
+client.
+
+| Fact | Value |
+| --- | --- |
+| Mode | `ground-movement` |
+| Staging | `MoveMaps.Enable=1`, `vmap.enableLOS=1`, `vmap.enableHeight=1`; the server logged `VMap support included. LineOfSight:true, getHeight:true, indoorCheck:true PetLOS:true` |
+| Verdict | harness `accepted` / `ground_movement_pass` (with #150's world-entry-landing fix) |
+| Movement | the six key pairs accepted, deltas action-appropriate, stable after the final stop |
+| Height cross-check | settled live z `82.4957` at `(-8945.393, -132.482)` against the artifact-derived terrain height `82.495` there (stand height +0.001 m) |
+| Navmesh identity | the staged mmap tile is the one the checker reads: 6312 polygons, 11046 vertices |
+| Client render | a `gnome-screenshot -w` capture of the owned window shows the world rendered; `window.xwd` cannot show it because DXVK's Vulkan swapchain is not readable by X |
+
+The harness root, generation, logs and raw captures are outside Git (`.../cata-runs/plan32-acceptance/`,
+its own manifest root because the older Plan 7 root sits below the harness's 25 GiB floor; its database
+cache is built, so later prepares there are fast). `prepare` copies the four data sets into the
+generation, so the staged-and-loaded claim covers exactly those bytes. The MySQL development files this
+build needs are `libmysqlclient-dev` 8.0.46 at `/usr/include/mysql` and
+`/usr/lib/x86_64-linux-gnu/libmysqlclient.so` on this host — the `/tmp/mysql-dev` staging tree in the
+older build note does not survive a reboot.
+
+**What this does not prove.** The client's movement data is not a server query: no server-side height or
+LOS result was observed, so the pinned heights and the LOS pair remain expectations. No creature has
+chased anything, and walk/stop/logout/relog under geometry has not been observed. A later `--geometry`
+run must rebuild `worldserver`/`authserver` first — `prepare` refuses binaries whose `--version` does not
+report the current HEAD.
+
 ## Blockers (each needs explicit authorization or input)
 
-- **Build authorization — satisfied for the tools.** The four map tools build from this branch, so
-  the parser fixes are compiled rather than inspected, and every run above used that binary. The
-  server/game targets were not built.
-- **Harness data staging and geometry path — addressed by `prepare --geometry`.** It requires a
-  non-empty `vmaps/` and `mmaps/` under `--data-root`, stages them with the same content-hash check
-  used for `dbc/` and `maps/`, and writes `MoveMaps.Enable`, `vmap.enableLOS` and
-  `vmap.enableHeight` as `1`; without the flag every accepted mode behaves exactly as before. The
-  harness's own `self-check` now covers both directions. It has not been exercised by a run yet, so
-  the staging proof is still only that the sets are complete, not that a given grid loads.
+- **Build authorization — satisfied for the tools and the server.** The four map tools build from this
+  branch, so the parser fixes are compiled rather than inspected, and every extraction run above used
+  that binary. `worldserver`/`authserver` also build from merged `master` and are what the
+  2026-10-16 geometry run used.
+- **Harness data staging and geometry path — exercised by a run.** `prepare --geometry` requires a
+  non-empty `vmaps/` and `mmaps/` under `--data-root`, stages them with the same content-hash check used
+  for `dbc/` and `maps/`, and writes `MoveMaps.Enable`, `vmap.enableLOS` and `vmap.enableHeight` as `1`;
+  without the flag every accepted mode behaves exactly as before. The 2026-10-16 run proves the staging
+  for map 0 grid 48,32 is loadable, not merely complete: the server came up with LOS, height and
+  `MoveMaps` enabled and the client walked in the world. Other grids are still only complete, not proven
+  loadable.
 - **Client archives provenance** for all three artifact sets; the runs above used the on-disk client
   copy without recording its provenance.
-- **Native acceptance**: the map-0 route, the LOS/height/navmesh queries and the pinned obstacle
-  chase are still unrun, and no server has loaded the produced geometry. Both expectations the run has
-  to reproduce are now derived from the artifacts (the clear/blocked LOS pair and the chase route whose
-  blocked line no walkable surface covers). Run
-  `apps/cata/check_collision_geometry.py` against the staged root first (`--chase` too) — it is what
-  makes a silently degraded run (missing, truncated, misnamed or foreign-toolchain artifacts) fail
-  before the run rather than during it.
+- **Native acceptance**: the geometry is loaded and one world-entry/walk boundary passes, but the clear
+  and blocked LOS pair, the pinned ground heights as a server result, the pinned obstacle chase and the
+  walk/stop/logout/relog leg are still unrun. Both expectations those stages have to reproduce are
+  derived from the artifacts (the clear/blocked LOS pair and the chase route whose blocked line no
+  walkable surface covers). Run `apps/cata/check_collision_geometry.py` against the staged root first
+  (`--chase` too) — it is what makes a silently degraded run (missing, truncated, misnamed or
+  foreign-toolchain artifacts) fail before the run rather than during it.
 
-## Acceptance plan (unchanged, for when the above is authorized)
+## Acceptance plan for the remaining stages (pinned before their implementation)
 
-Before the run, `apps/cata/check_collision_geometry.py` must pass against the exact root `--data-root`
-stages (it fails on missing, truncated, misnamed or foreign-toolchain artifacts). The clear/blocked pair
-is derived from the pinned obstacle's triangles and is recorded above, so the run has the expectation to
-reproduce; then run the owned native client with the selected tiles loaded
-and server LOS, height and navmesh use enabled, and prove: clear vs blocked LOS against that obstacle,
-correct ground heights at pinned points (the anchor's is `82.630`), one normal creature chase that paths
-around the obstacle (both pinned expectations are derived above: the LOS pair, and the chase route with
-its blocked `32.00 m` line that no walkable surface covers), and a normal
-walk/stop/logout/relog at a legal position. Deterministic cases:
-wrong-build/version headers, truncated or missing selected tiles/models, clear/blocked query expectations,
-unreachable path handling (`--chase` reports the rejected disconnected polygon and off-tile point).
-Acceptance must fail (not silently pass) when geometry is unavailable or disabled.
+Before any run, `apps/cata/check_collision_geometry.py` must pass against the exact root `--data-root`
+stages (it fails on missing, truncated, misnamed or foreign-toolchain artifacts). Issue #134's acceptance
+then requires, with the selected tiles loaded and server LOS, height and navmesh use enabled: clear vs
+blocked LOS against the pinned obstacle, correct ground heights at pinned points, one normal creature
+chase that paths around the obstacle, and a normal walk/stop/logout/relog at a legal position. The
+2026-10-16 run covers the loading and walk boundaries; the rest needs the client driven to pinned states,
+and each stage's evidence is pinned here before a mode that drives it is written.
+
+- **LOS pair.** The endpoint coordinates are query inputs, not places the character has to stand. Pin the
+  API, both endpoints, the phase, the eye-height offsets and a tolerance, and expect the derived results:
+  the blocked `32.09 m` line hits `Nsabbey.wmo` group 6 triangle 590 at `18.01 m`, the clear line has no
+  hits. The observation has to reach the server's own query rather than the client's prediction, and a
+  normal spell cast whose LOS requirement the server enforces — `SMSG_CAST_FAILED` for the blocked line
+  against `SMSG_SPELL_GO` for the clear one — is a mechanism the harness already drives.
+- **Pinned ground heights.** `Map::GetHeight` selects between the grid height and the vmap surface, so a
+  terrain value is not the expected answer where a model supplies the floor, and the goal point's
+  `+2.79 m` navmesh-over-terrain difference has to be settled before its Z is pinned. The LOS pair's
+  eye-height endpoints are not spawn heights. Pin the query, the coordinates and a tolerance per point.
+- **Pinned obstacle chase.** A successful path query is not evidence: `PathGenerator::CalculatePath`
+  returns success with `PATHFIND_NOT_USING_PATH` whenever the navmesh, the query or either endpoint tile
+  is unavailable, so a shortcut around a missing mmap looks like a path. The observation must reject that
+  type, forced shortcuts and teleports. It starts from a normal pull while LOS is clear (proximity
+  acquisition itself checks LOS, so a creature seeded behind the wall can never pull), and then the
+  creature's own path type plus timestamped server-side positions must continue to melee range within a
+  declared tolerance, with no premature evade. The checker's exact 56-polygon route is *not* the
+  expectation: it is single-tile, carries no detail mesh, and a chase stops at melee range.
+- **Walk/stop/logout/relog** at a legal position under geometry, with the position persisted across the
+  relog.
+- **Setup constraints.** This build is Release with `SCRIPTS=none`, so the Commands scripts are disabled
+  and a GM grant alone cannot supply `.tele` or `.npc add`; a GM player as chase target also sets
+  `forceDest` in `TargetedMovementGenerator`, which is exactly the forced shortcut the chase must
+  exclude. A seeded character row sets the login position only — it does not move a live player — so the
+  remaining states have to be reached by ordinary movement, and the row must not be reseeded between the
+  final logout and the relog.
+- Deterministic rejection cases run on isolated inputs rather than by altering artifacts beneath a
+  running server: wrong-build/version headers, truncated or missing selected tiles/models, the
+  clear/blocked query expectations and unreachable path handling (`--chase` reports the rejected
+  disconnected polygon and off-tile point). Acceptance must fail, not silently pass, when geometry is
+  unavailable or disabled.
 
 ## Not covered by this record
 

@@ -582,6 +582,14 @@ required first. Two things about `var/build-plan7` that will otherwise cost time
   `/tmp/mysql-dev`. MariaDB's headers (`/usr/include/mariadb`) are *not* a substitute — they
   lack `mysql_ssl_mode` and `mysql_stmt_bind_named_param`, and linking against them trips the
   `ACE00046` client/compile version assertion at startup.
+- If the host has the real MySQL client development files installed (2026-10-16: `libmysqlclient-dev`
+  8.0.46), point the cache at them instead of building a staging tree — verified working:
+  `cmake -S . -B var/build-plan7 -DMYSQL_CONFIG=/usr/bin/mysql_config
+  -DMYSQL_INCLUDE_DIR=/usr/include/mysql -DMYSQL_LIBRARY=/usr/lib/x86_64-linux-gnu/libmysqlclient.so`.
+  The host `mysql` client binary being MariaDB's is irrelevant; only the headers and library are
+  compiled and linked against. Keep `/usr/include/mysql` as the include root — it is the layout that
+  makes `mysql_com.h`'s `"mysql/udf_registration_types.h"` include resolve, so the self-referential
+  symlink below is only needed for a hand-built staging tree.
 - `mysql_com.h` includes `"mysql/udf_registration_types.h"`, so the include root needs a
   self-referential `mysql -> .` symlink inside it.
 
