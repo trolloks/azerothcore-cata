@@ -785,6 +785,12 @@ def polygon_centre(polygon, verts):
     return tuple(component / polygon["vert_count"] for component in centre)
 
 
+def polygon_vertex(polygon, verts, edge):
+    """One vertex of a polygon, through the tile's own index array."""
+    base = polygon["verts"][edge] * 3
+    return (verts[base], verts[base + 1], verts[base + 2])
+
+
 def polygon_height(polygon, verts, point):
     """The polygon's surface height under a point, or None when the point is outside it.
 
@@ -793,8 +799,7 @@ def polygon_height(polygon, verts, point):
     answer for the polygon's own surface). A ramp or a staircase does not have one height per polygon,
     so a polygon's centre height says nothing about the surface under a given point.
     """
-    corners = [(verts[polygon["verts"][edge] * 3], verts[polygon["verts"][edge] * 3 + 1],
-                verts[polygon["verts"][edge] * 3 + 2]) for edge in range(polygon["vert_count"])]
+    corners = [polygon_vertex(polygon, verts, edge) for edge in range(polygon["vert_count"])]
     for index in range(1, len(corners) - 1):
         height = triangle_height((corners[0], corners[index], corners[index + 1]), point)
         if height is not None:
@@ -851,35 +856,106 @@ def creature_graph(polygons, adjacency, include_flags=NAV_GROUND):
                       for neighbours in adjacency]
 
 
-def navmesh_covers(verts, polygons, walkable, point, tolerance):
-    """(polygon, height) for a walkable surface within tolerance of a point, or (None, None).
+def segment_polygon(polygon, verts, first, second):
+    """dtIntersectSegmentPoly2D: (tmin, tmax, entering edge, leaving edge) in the horizontal plane.
 
-    The creature walks the surface under the point, so coverage means a polygon of its filter whose
-    surface at that point is reachable from it vertically; a polygon at a different level does not
-    cover it.
+    The same vertex walk and the same perpendicular in (x, z) that Detour uses, so a segment that
+    leaves the polygon does so through the edge raycast follows. Both endpoints inside gives -1 for the
+    leaving edge, which is how dtNavMeshQuery::raycast detects that the ray ends in this polygon.
     """
-    for index in walkable:
-        height = polygon_height(polygons[index], verts, point)
-        if height is not None and abs(height - point[1]) <= tolerance:
-            return index, height
-    return None, None
+    tmin, tmax, entering, leaving = 0.0, 1.0, -1, -1
+    direction = (second[0] - first[0], second[1] - first[1], second[2] - first[2])
+    corners = [polygon_vertex(polygon, verts, edge) for edge in range(polygon["vert_count"])]
+    for index in range(len(corners)):
+        previous = corners[index - 1]
+        corner = corners[index]
+        edge = (corner[0] - previous[0], corner[1] - previous[1], corner[2] - previous[2])
+        difference = (first[0] - previous[0], first[1] - previous[1], first[2] - previous[2])
+        perpendicular = edge[2] * difference[0] - edge[0] * difference[2]
+        denominator = direction[2] * edge[0] - direction[0] * edge[2]
+        if abs(denominator) < 1e-12:
+            if perpendicular < 0:
+                return None
+            continue
+        fraction = perpendicular / denominator
+        if denominator < 0:  # the segment enters across this edge
+            if fraction > tmin:
+                tmin, entering = fraction, index - 1
+                if tmin > tmax:
+                    return None
+        elif fraction < tmax:  # the segment leaves across this edge
+            tmax, leaving = fraction, index - 1
+            if tmax < tmin:
+                return None
+    return tmin, tmax, entering, leaving
 
 
-def blocked_line_coverage(verts, polygons, walkable, first, second, tolerance, spacing):
-    """(samples, uncovered): the points of a segment no walkable surface covers.
+def navmesh_line_walk(verts, polygons, include_flags, start_polygon, goal_polygon, first, second, climb):
+    """(crossed, reached, stopped): whether a walker can follow a straight line polygon by polygon.
 
-    spacing is the agent's own walkable radius, so a gap carved for that agent is wider than one step
-    and cannot fall between two samples.
+    This is the single-tile case of dtNavMeshQuery::raycast: cast the fixed segment at the current
+    polygon, follow the edge it leaves by, take the neighbour the tile's own dtPoly.neis gives (the same
+    mapping connectIntLinks builds links from), and skip an off-mesh connection or a polygon the
+    walker's filter rejects. On top of raycast, the surfaces on each side of the crossed edge have to
+    meet within the agent's climb, because a walker cannot take a step above it even though a ray can.
+
+    Reaching the goal polygon means the navmesh covers the straight line, which is what a navmesh that
+    disagrees with the collision would do; a missing neighbour, a filtered-out neighbour or too big a
+    step stops the walk, which is an obstructed line. The line's height against a global chord decides
+    nothing here: a continuous ramp is walkable the whole way up.
     """
-    steps = max(1, int(math.ceil(math.hypot(second[0] - first[0], second[2] - first[2]) / spacing)))
-    samples, uncovered = [], []
-    for step in range(steps + 1):
-        fraction = step / steps
-        point = tuple(first[axis] + fraction * (second[axis] - first[axis]) for axis in range(3))
-        samples.append(point)
-        if navmesh_covers(verts, polygons, walkable, point, tolerance)[0] is None:
-            uncovered.append(point)
-    return samples, uncovered
+    crossed, polygon = [start_polygon], start_polygon
+    for _ in range(len(polygons)):
+        if polygon == goal_polygon:
+            return crossed, True, None
+        intersection = segment_polygon(polygons[polygon], verts, first, second)
+        if intersection is None:
+            return crossed, False, f"the segment does not cross polygon {polygon}"
+        _, furthest, _, leaving = intersection
+        if leaving == -1:
+            # The segment ends inside this polygon, so the goal's own polygon is another level over the
+            # same point: the two surfaces at the goal have to meet within the climb.
+            step = portal_step(polygons[polygon], polygons[goal_polygon], verts, second)
+            if step is not None and step <= climb:
+                if polygon != goal_polygon:
+                    crossed.append(goal_polygon)
+                return crossed, True, None
+            return crossed, False, (f"the segment ends on polygon {polygon}, which is "
+                                    f"{'not measurable' if step is None else f'{step:.2f} m'} from the "
+                                    f"goal's polygon {goal_polygon}")
+        neighbour = polygons[polygon]["neis"][leaving % polygons[polygon]["vert_count"]]
+        edge = leaving % polygons[polygon]["vert_count"]
+        if neighbour == 0:
+            return crossed, False, f"polygon {polygon} edge {edge} has no neighbour"
+        if neighbour & DT_EXT_LINK:
+            return crossed, False, f"polygon {polygon} edge {edge} leaves the tile"
+        neighbour -= 1
+        if polygons[neighbour]["type"] == DT_POLYTYPE_OFFMESH_CONNECTION:
+            return crossed, False, f"polygon {polygon} edge {edge} is an off-mesh connection"
+        if not polygons[neighbour]["flags"] & include_flags:
+            return crossed, False, (f"polygon {neighbour} across edge {edge} fails the walker's "
+                                    f"flags {include_flags:#04x}")
+        # Height continuity at the transition, evaluated on each side of the shared edge.
+        crossing = (first[0] + furthest * (second[0] - first[0]),
+                    first[1] + furthest * (second[1] - first[1]),
+                    first[2] + furthest * (second[2] - first[2]))
+        step = portal_step(polygons[polygon], polygons[neighbour], verts, crossing)
+        if step is None or step > climb:
+            return crossed, False, (f"the step into polygon {neighbour} across edge {edge} is "
+                                    f"{'not measurable' if step is None else f'{step:.2f} m'} "
+                                    f"(climb {climb:.2f} m)")
+        polygon = neighbour
+        crossed.append(neighbour)
+    return crossed, False, "the walk crossed every polygon in the tile without reaching the goal"
+
+
+def portal_step(current, neighbour, verts, crossing):
+    """The height difference between two polygons at a shared edge, or None if unmeasurable."""
+    before = polygon_height(current, verts, crossing)
+    after = polygon_height(neighbour, verts, crossing)
+    if before is None or after is None:
+        return None
+    return abs(before - after)
 
 
 def navmesh_route(verts, polygons, adjacency, start, goal):
@@ -1421,19 +1497,20 @@ def chase_path(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), obstac
                  f"{ends['goal']['polygon']} inside this tile"))
 
     # The route's length cannot show that the corridor leaves the straight line, so the line itself is
-    # tested: the walker's own straight line between the two endpoints is sampled, and no walkable
-    # surface may cover it at the level the walker would take it. The line runs between the resolved
-    # surface heights, not the terrain's, because an endpoint can stand on a raised floor.
+    # walked: the walker's own straight line between the two endpoints is followed polygon by polygon
+    # through the tile's portals at the surfaces it stands on, and reaching the goal polygon means the
+    # navmesh covers the line the LOS pair blocks.
     line = [(end["world"][1], end["surface"], end["world"][0]) for end in (ends["start"], ends["goal"])]
     payload = mmap.payload()
-    samples, uncovered = blocked_line_coverage(verts, polygons, walkable, line[0], line[1],
-                                               payload["walkable_climb"],
-                                               max(payload["walkable_radius"], 0.01))
-    record("navmesh.blocked_line_not_walkable", bool(uncovered),
-           f"{len(uncovered)} of {len(samples)} points on the blocked {pair['blocked']['length']:.2f} m "
-           f"line have no walkable surface within the agent's {payload['walkable_climb']:.2f} m climb"
-           f"{'' if uncovered else ', so this navmesh lets a walker take the line the LOS pair blocks'}"
-           f" (sampled every {payload['walkable_radius']:.2f} m, the agent's own radius)")
+    crossed, reached, stopped = navmesh_line_walk(verts, polygons, include_flags,
+                                                  ends["start"]["polygon"], ends["goal"]["polygon"],
+                                                  line[0], line[1], payload["walkable_climb"])
+    record("navmesh.blocked_line_not_walkable", not reached,
+           (f"the walker's straight line over the blocked {pair['blocked']['length']:.2f} m is "
+            f"obstructed after {len(crossed)} polygon(s): {stopped}" if not reached
+            else f"the navmesh lets a walker follow the blocked {pair['blocked']['length']:.2f} m line "
+                 f"through {len(crossed)} polygons, so this tile disagrees with the collision the LOS "
+                 f"pair recorded"))
 
     reachable = reachable_polygons(adjacency, ends["start"]["polygon"])
     outside = [index for index in walkable if index not in reachable]
@@ -1469,7 +1546,8 @@ def chase_path(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), obstac
                         "polygon": ends[role]["polygon"],
                         "surface": ends[role]["surface"]} for role in ends},
         "straight_line": straight, "route_polygons": len(route) if route else None,
-        "route_cost": cost, "line_samples": len(samples), "line_uncovered": len(uncovered),
+        "route_cost": cost, "line_polygons": crossed, "line_reached_goal": reached,
+        "line_stopped": stopped,
         "detached_polygon": detached, "off_tile_point": list(off_tile) if off_tile else None})
     report["pass"] = all(entry["pass"] for entry in checks)
     return report
@@ -1492,9 +1570,10 @@ def render_chase(report):
             lines.append(f"  {role}: world ({end['world'][0]:.2f},{end['world'][1]:.2f},"
                          f"{end['world'][2]:.2f}) terrain {number(end['ground'], '.3f')} polygon "
                          f"{end['polygon']} surface {offset}")
-        lines.append(f"  straight line {number(facts['straight_line'])} m, {facts['line_uncovered']} of "
-                     f"{facts['line_samples']} sampled points uncovered; route {facts['route_polygons']} "
-                     f"polygons costed at {number(facts['route_cost'])} m over the polygon centres")
+        lines.append(f"  straight line {number(facts['straight_line'])} m walked through "
+                     f"{len(facts['line_polygons'])} polygon(s), reaching the goal: "
+                     f"{facts['line_reached_goal']}; route {facts['route_polygons']} polygons costed at "
+                     f"{number(facts['route_cost'])} m over the polygon centres")
         lines.append(f"  {facts['reachable_polygons']} of {facts['walkable_polygons']} walkable "
                      f"polygons reachable from the start (flags {facts['include_flags']:#04x} of "
                      f"{facts['polygons']}); nearest unreachable polygon {facts['detached_polygon']}")
@@ -1930,7 +2009,7 @@ def self_check():
                 ((6, 7, 8, 9), (0, 0, 0, 0), NAV_GROUND), ((10, 11, 12, 13), (0, 0, 0, 0), NAV_GROUND)]
         verts_, polys_, adjacency_, problems_ = navmesh_graph(tile(mesh, room))
         assert not problems_ and len(polys_) == 4, problems_
-        walkable_, graph_ = creature_graph(polys_, adjacency_)
+        _, graph_ = creature_graph(polys_, adjacency_)
         start = navmesh_polygon(verts_, polys_, (-0.5, 40.0, 1.0), 40.0)
         neighbour = navmesh_polygon(verts_, polys_, (0.5, 40.0, 1.0), 40.0)
         detached = navmesh_polygon(verts_, polys_, (5.5, 40.0, 1.0), 40.0)
@@ -1963,38 +2042,55 @@ def self_check():
         assert navmesh_polygon(ramp_verts, ramp_polys, (0.0, 0.2, 1.0), 0.2) == 0, \
             "the overlapping floor was selected over the ramp surface at the point"
         assert navmesh_polygon(ramp_verts, ramp_polys, (0.0, 0.2, 1.0), 3.0) == 1
-        # The blocked line's own coverage decides, not the route's length. Two touching rectangles span
-        # the line and their centres sit 100 m apart while the line is 40 m long, so a route between its
-        # ends exists and is 2.5x longer than the line the LOS pair blocks — the shape a length ratio
-        # wrongly calls a detour — while the line itself is covered, which is what has to fail. The same
-        # shape with a 4 m carved gap is what a correct navmesh looks like.
+        # The blocked line is walked polygon by polygon, and only the actual portal transitions decide:
+        # two touching rectangles span the line and their centres sit 100 m apart while the line is 40 m
+        # long, so a length ratio would call it a detour even though a walker can follow the line all
+        # the way — the check must call that walkable. A 4 m carved gap is the obstructed shape. A
+        # continuous ramp whose middle edge is 10 m above the ends is walkable too: each portal step is
+        # 0 m, and a chord comparison is what would wrongly read those samples as a gap.
         span_verts = [(-100.0, 40.0, -100.0), (-100.0, 40.0, 100.0), (0.0, 40.0, 100.0),
                       (0.0, 40.0, -100.0), (0.0, 40.0, -100.0), (0.0, 40.0, 100.0),
                       (100.0, 40.0, 100.0), (100.0, 40.0, -100.0)]
         carved_verts = [(-100.0, 40.0, -100.0), (-100.0, 40.0, 100.0), (-2.0, 40.0, 100.0),
                         (-2.0, 40.0, -100.0), (2.0, 40.0, -100.0), (2.0, 40.0, 100.0),
                         (100.0, 40.0, 100.0), (100.0, 40.0, -100.0)]
-        touching = [((0, 1, 2, 3), (0, 0, 0, 2), NAV_GROUND), ((4, 5, 6, 7), (0, 0, 0, 1), NAV_GROUND)]
+        ramp_verts = [(-100.0, 40.0, -100.0), (-100.0, 40.0, 100.0), (0.0, 50.0, 100.0),
+                      (0.0, 50.0, -100.0), (0.0, 50.0, -100.0), (0.0, 50.0, 100.0),
+                      (100.0, 40.0, 100.0), (100.0, 40.0, -100.0)]
+        step_verts = [(-100.0, 40.0, -100.0), (-100.0, 40.0, 100.0), (0.0, 40.0, 100.0),
+                      (0.0, 40.0, -100.0), (0.0, 45.0, -100.0), (0.0, 45.0, 100.0),
+                      (100.0, 45.0, 100.0), (100.0, 45.0, -100.0)]
+        # poly 0 (x −100..0) leaves through its edge 2 (x = 0) into poly 1; poly 1 leaves through its
+        # edges 0 (x = 0) back into poly 0. None leaves in the carved shape, whose gap is 4 m wide.
+        touching = [((0, 1, 2, 3), (0, 0, 2, 0), NAV_GROUND), ((4, 5, 6, 7), (1, 0, 0, 0), NAV_GROUND)]
         carved = [((0, 1, 2, 3), (0, 0, 0, 0), NAV_GROUND), ((4, 5, 6, 7), (0, 0, 0, 0), NAV_GROUND)]
-        first_line, second_line = (-20.0, 40.0, 0.0), (20.0, 40.0, 0.0)
-        # "touching" has no gap, so the navmesh covers the blocked line: navmesh.blocked_line_not_walkable
-        # must fail there even though the route exists and is longer than the line.
-        for label, vertices, polygons, linked, gap in (
-                ("touching", span_verts, touching, True, False),
-                ("carved", carved_verts, carved, False, True)):
+        ramp = [((0, 1, 2, 3), (0, 0, 2, 0), NAV_GROUND), ((4, 5, 6, 7), (1, 0, 0, 0), NAV_GROUND)]
+        step = [((0, 1, 2, 3), (0, 0, 2, 0), NAV_GROUND), ((4, 5, 6, 7), (1, 0, 0, 0), NAV_GROUND)]
+        water_second = [((0, 1, 2, 3), (0, 0, 2, 0), NAV_GROUND), ((4, 5, 6, 7), (1, 0, 0, 0), 0x08)]
+        first_line, second_line = (-20.0, 0.0, 0.0), (20.0, 0.0, 0.0)
+        for label, vertices, polygons, linked, walkable in (
+                ("touching", span_verts, touching, True, True),
+                ("carved", carved_verts, carved, False, False),
+                ("ramp", ramp_verts, ramp, True, True),
+                ("step", step_verts, step, True, False),
+                ("water", span_verts, water_second, False, False)):
             verts_, polys_, adjacency_, _ = navmesh_graph(tile(vertices, polygons))
-            walkable_, graph_ = creature_graph(polys_, adjacency_)
+            _, graph_ = creature_graph(polys_, adjacency_)
             route, cost = navmesh_route(verts_, polys_, graph_,
-                                        navmesh_polygon(verts_, polys_, first_line, 40.0),
-                                        navmesh_polygon(verts_, polys_, second_line, 40.0))
-            samples, uncovered = blocked_line_coverage(verts_, polys_, walkable_, first_line,
-                                                       second_line, 0.53, 0.53)
-            # The agent's own radius is the step, so a carved gap wider than it cannot be stepped over.
-            assert len(samples) - 1 >= 40.0 / 0.53, (label, len(samples))
+                                        navmesh_polygon(verts_, polys_, first_line, 0.0),
+                                        navmesh_polygon(verts_, polys_, second_line, 0.0))
+            crossed, reached, stopped = navmesh_line_walk(verts_, polys_, NAV_GROUND, 0, 1,
+                                                          first_line, second_line, 1.6)
             assert (route is not None) == linked, (label, route)
             if route:
-                assert cost > 2.0 * 40.0, (label, cost)
-            assert bool(uncovered) == gap, (label, len(uncovered), len(samples))
+                # Centre-to-centre steps overstate a path, so the length cannot be the detour test.
+                assert cost >= 2.0 * 40.0, (label, cost)
+            assert reached == walkable, (label, reached, stopped)
+            assert crossed[0] == 0, (label, crossed)
+            if walkable:
+                assert stopped is None and crossed[-1] == 1, (label, crossed)
+            else:
+                assert stopped is not None, (label, crossed)
         # A vertex or neighbour index outside its array is corrupt data, not a usable graph.
         assert navmesh_graph(tile([(0.0, 40.0, 0.0)], [((0, 1, 2, 3), (0, 0, 0, 0), NAV_GROUND)]))[3]
         assert any("links to polygon" in problem for problem in
@@ -2009,9 +2105,9 @@ def self_check():
         assert "Chase path FAIL" in render_chase(
             {"data_root": "x", "map": 0, "grid": [32, 32], "checks": [], "gaps": [],
              "facts": {"ends": {}, "straight_line": None, "route_polygons": None, "route_cost": None,
-                       "line_samples": 0, "line_uncovered": 0, "reachable_polygons": 0,
-                       "walkable_polygons": 0, "polygons": 0, "include_flags": NAV_GROUND,
-                       "detached_polygon": None}, "pass": False})
+                       "line_polygons": [0], "line_reached_goal": False, "line_stopped": "x",
+                       "reachable_polygons": 0, "walkable_polygons": 0, "polygons": 0,
+                       "include_flags": NAV_GROUND, "detached_polygon": None}, "pass": False})
         # An unavailable neighbouring terrain height must render, not raise.
         unavailable = {"data_root": "x", "map": 0, "anchor": [0.0, 0.0, 0.0], "grid": [32, 32],
                        "checks": [{"check": "c", "pass": True, "detail": "d"}], "gaps": [],
