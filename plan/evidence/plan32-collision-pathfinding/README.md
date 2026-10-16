@@ -1,9 +1,9 @@
 # Plan 32: reproducible Northshire collision and pathfinding (issue #134)
 
-Status: **parser fixes and the whole extraction pipeline are done and validated against the real
-client; the frozen tile now has all three artifact sets, verified against the server's own naming and
-header constants. Native map-0 acceptance STILL UNRUN** — the harness cannot stage `vmaps`/`mmaps`
-or enable geometry yet, and no server has loaded the artifacts.
+Status: **parser fixes, the extraction pipeline and the harness geometry path are done.** The frozen
+tile has all three artifact sets, verified against the server's own naming and header constants, and
+`prepare --geometry` can now stage them and enable LOS/height/navmesh. **Native map-0 acceptance is
+STILL UNRUN** — no server has loaded the artifacts yet.
 
 This record covers "freeze the scenario, required data/artifact manifest and blockers", "audit the
 pinned reference and affected shared AC callers", and the Cata parser prerequisites that audit
@@ -247,13 +247,12 @@ corrected by checking them against the struct, which is worth remembering when r
 - **Build authorization — satisfied for the tools.** The four map tools build from this branch, so
   the parser fixes are compiled rather than inspected, and every run above used that binary. The
   server/game targets were not built.
-- **Harness data staging and geometry path.** The artifacts now exist and match what the server asks
-  for, but the harness cannot use them yet: `apps/cata/run_real_client_authentication.py` `prepare`
-  copies only `dbc/` and `maps/` into the run's `DataDir` and pins `maps/` with a `data_maps_hash`
-  content check, so `vmaps/` and `mmaps/` never reach the server; and `write_configs` writes
-  `MoveMaps.Enable=0`, `vmap.enableLOS=0`, `vmap.enableHeight=0`. Using these artifacts needs a
-  staging path for the other two sets (with their hashes) plus a mode that leaves those three
-  settings enabled — otherwise enabling geometry only yields FileNotFound on every tile.
+- **Harness data staging and geometry path — addressed by `prepare --geometry`.** It requires a
+  non-empty `vmaps/` and `mmaps/` under `--data-root`, stages them with the same content-hash check
+  used for `dbc/` and `maps/`, and writes `MoveMaps.Enable`, `vmap.enableLOS` and
+  `vmap.enableHeight` as `1`; without the flag every accepted mode behaves exactly as before. The
+  harness's own `self-check` now covers both directions. It has not been exercised by a run yet, so
+  the staging proof is still only that the sets are complete, not that a given grid loads.
 - **Client archives provenance** for all three artifact sets; the runs above used the on-disk client
   copy without recording its provenance.
 - **Native acceptance**: the map-0 route, the LOS/height/navmesh queries and the pinned obstacle
