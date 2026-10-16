@@ -571,6 +571,20 @@ exactly the one marker-adjacent `MSG_MOVE_FALL_LAND` (`ground_movement_action_sa
 requires the exact 12-opcode list, all six directional pairs and the post-stop stability, so a
 landing anywhere else stays a failure. The raw sequence remains in the evidence unchanged.
 
+`--mode plan32-geometry` carries the Plan 32 pinned stages, one stage per generation selected by
+`PLAN32_STAGE` (`blocked` or `clear`; prepare, run and the seed checks all read it). Each stage
+seeds the fixture at artifact-derived coordinates, targets it once by its unique name through the
+client-local `/target` macro, and casts Fireball twice uncancelled. Verify reads the packet
+capture (`packets.pkt`, staged for this mode's generations) instead of opcode names: every cast
+must name spell 133 at the agreed selection with counters 1 and 2, blocked requires two
+`SMSG_CAST_FAILED` with result 49 and no `SPELL_GO`, clear requires a player-cast `SPELL_GO` and
+no failure, and the runtime z at the seed must reproduce the derived terrain height within 10 cm.
+Two facts this mode depends on: grid loading creates units with server-assigned map-local lows
+(keeping the DB guid only as spawnId), so identity binds to the agreed selection plus a
+seed-uniqueness gate rather than a precomputed GUID; and `WorldSocket` enables per-session packet
+logging whenever `PacketLogFile` is configured (previously a dead key without a GM command this
+`SCRIPTS=none` build does not have; empty by default).
+
 ## Building before a run
 
 `prepare` refuses binaries whose `--version` does not report the current HEAD, so a build is
