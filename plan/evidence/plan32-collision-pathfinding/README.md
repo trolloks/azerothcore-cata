@@ -1,9 +1,11 @@
 # Plan 32: reproducible Northshire collision and pathfinding (issue #134)
 
-Status: **parser fixes, the extraction pipeline and the harness geometry path are done.** The frozen
-tile has all three artifact sets, verified against the server's own naming and header constants, and
-`prepare --geometry` can now stage them and enable LOS/height/navmesh. **Native map-0 acceptance is
-STILL UNRUN** — no server has loaded the artifacts yet.
+Status: **parser fixes, the extraction pipeline, the harness geometry path and the scenario's data
+pins are done.** The frozen tile has all three artifact sets, verified against the server's own naming
+and header constants; `prepare --geometry` can stage them and enable LOS/height/navmesh; and the pinned
+obstacle and ground heights are now read out of those artifacts
+(`apps/cata/check_collision_geometry.py`), so the run has expectations to be judged against.
+**Native map-0 acceptance is STILL UNRUN** — no server has loaded the artifacts yet.
 
 This record covers "freeze the scenario, required data/artifact manifest and blockers", "audit the
 pinned reference and affected shared AC callers", and the Cata parser prerequisites that audit
@@ -42,9 +44,10 @@ server's `{gx}{gy}` load order are the same bytes, and `mmaps_generator --tile 3
 file. (An earlier draft of this record wrote `0003248.map` and `--tile 48,32`, i.e. only 32/48
 swapped between the classes; that selects the transposed tile and leaves the anchor's server grid
 without terrain or navmesh.) The route and its neighbouring tiles stay inside the anchored 3x3
-server-grid block (`gx` 47..49, `gy` 31..33); the exact walked polyline and the pinned obstacle are
-frozen once geometry exists, because both are read out of the extracted collision data rather than
-guessed.
+server-grid block (`gx` 47..49, `gy` 31..33). The pinned obstacle is read out of the extracted collision
+data rather than guessed, and is now pinned — see "Scenario facts read out of the artifacts" below; the
+one remaining item is the clear/blocked LOS pair, which has to come from the model's triangles rather
+than from its bounding box, for the reason recorded there.
 
 ## Required inputs (to be pinned before extraction)
 
@@ -142,6 +145,100 @@ Headers were checked too: both VMAP files start with `VMAP_4.8` (what `readChunk
 mmtile header is `mmapMagic = 0x4d4d4150`, `dtVersion = 7` (`DT_NAVMESH_VERSION`), `mmapVersion =
 20` (`MMAP_VERSION`, `MapDefines.h`) — a first read of the hexdump mis-assigned those fields and was
 corrected by checking them against the struct, which is worth remembering when reading these files.
+
+## Scenario facts read out of the artifacts (validated 2026-10-16)
+
+The freeze deferred "the exact walked polyline and the pinned obstacle ... because both are read out of
+the extracted collision data rather than guessed". Geometry exists now, so they were read out, with
+`apps/cata/check_collision_geometry.py`, which parses the artifacts exactly as the server does and
+asserts that they are structurally loadable and internally coherent.
+
+Settling the conventions needed measurement, not a summary:
+
+- **The vmap files store positions in the server's internal representation, not in world coordinates.**
+  `VMapMgr2::convertPositionToInternalRep`, which every `MapCollisionData` vmap query goes through, maps
+  `world -> (mid - x, mid - y, z)` with `mid = 0.5 * 64 * 533.33333 = 17066.667`. Read without inverting
+  that, every object sits outside the 64x64 map grid and lands nowhere near the terrain. With the inverse
+  applied, the median **|z - terrain|** residual over the 692 spawns of `000_32_48.vmtile` is **0.11 m**
+  (signed median 0.00 m), using heights from `0004832.map` through the server's own
+  `getHeightFromFloat` interpolation. That residual is what pins the convention. The check uses the
+  magnitude, not the signed median: with signed values a spread of large positive and negative
+  placement errors around zero would cancel and read as objects on the ground.
+- **The two names for one tile disagree in order.** Map and mmap tiles are `{id}{gx:02}{gy:02}`; vmap
+  tiles are `{id:03}_{gy:02}_{gx:02}`. The anchor's files are therefore `0004832.map`, `0004832.mmtile`
+  and `000_32_48.vmtile`. A transposed vmap tile is a plausible mistake and is now detectable: 692 of the
+  736 spawns (94%) fall in the grid the file is named for.
+
+Pinned facts, in world coordinates, with heights from the map tile rather than from the server:
+
+| Fact | Value |
+| --- | --- |
+| Anchor (harness fixture) | `(-8949.95, -132.493, 83.5312)`, server grid `(48, 32)` |
+| Terrain height at the anchor | `82.630` — the fixture stands `+0.901` above it |
+| Pinned obstacle | `Nsabbey.wmo`, `ID 72420`, in `000_32_48.vmtile` |
+| Obstacle position | `(-8897.00, -178.30, 80.07)` — 70.0 m from the anchor, terrain there `80.29` |
+| Obstacle extents | `x[-8950.03, -8831.42] y[-248.44, -129.90] z[80.10, 169.18]` |
+| Other candidates within 200 m | `Abbeygate02.wmo` (175 m, residual -0.00), `Abbeygate01.wmo` (139 m, -0.50) |
+
+**A bound cannot decide an LOS case.** The stored bound is the model's computed extent, and for a
+building WMO that extent includes its grounds: `Nsabbey.wmo`'s box contains the fixture position itself.
+A segment crossing the box therefore proves nothing about a query result, so the clear/blocked pair has
+to be derived from the model's own triangles. That is the one freeze item still open, recorded as such
+below instead of being guessed at.
+
+The checker reports thirteen checks, one for each way the artifacts can fail to be loadable: the map
+magic/version/build (15595); every declared map section the terrain loader opens (area, height, liquid,
+holes) inside the file with its own magic, so a section offset beyond EOF fails instead of being
+ignored; the height section in its flat, int16, int8 and float forms, with `MAP_HEIGHT_NO_HEIGHT`
+treated as the constant field `getHeightFromFlat` returns rather than as missing terrain; the vmap
+tile's exact record consumption, so a truncated tile fails instead of being half-read; the required
+`{id}.vmtree` parsed as the BIH `StaticMapTree::InitMap` reads — bounds, entry count, object count,
+then `GOBJ` — with every tile reference checked against that object count, because `LoadMapTile` skips
+a reference at or above `iNTreeValues` and that object then has no collision;
+each spawn's model resolving as `<name>.vmo`, which is the only name `WorldModelStore` opens; the
+tile/contents agreement; the on-terrain residual; one `dtNavMeshParams` with usable
+tileWidth/tileHeight/maxTiles; the mmtile header (`MMAP_MAGIC`, `dtVersion 7`, `mmapVersion 20`) with
+`header + size == file length`; and the `dtMeshHeader` inside the declared payload — magic, version,
+its tile index recomputed from the params the way `MapBuilder` writes it, and `dtNavMesh::addTile`'s
+own aligned buffer arithmetic with **this tree's** element sizes, so the counts must describe arrays
+that fit in the declared payload. Those sizes are not the upstream defaults: the vendored Detour
+enables `DT_POLYREF64` (it is in `deps/recastnavigation/recastnavigation.diff`), which makes
+`dtPolyRef` eight bytes and `dtLink` sixteen, and `dtMeshHeader` is 100 bytes, ending in
+`bvQuantFactor`. For the anchor tile the counts need **exactly** the 1,227,528 declared bytes, which
+is what confirms the arithmetic rather than merely fitting inside it. An empty, truncated or arbitrary
+payload therefore cannot pass. The optional flight-bounds arrays the
+height loader reads (`MAP_HEIGHT_HAS_FLIGHT_BOUNDS`, two arrays of nine int16) are checked too,
+including on flat terrain. Against the produced set it passes:
+
+```
+$ python3 apps/cata/check_collision_geometry.py --data-root .../cata-runs/plan32-pipeline/data
+  [PASS] map.sections: area@44(520) height@564(132152) liquid@132716(41548) holes@174264(512)
+  [PASS] vmap.tree: 000.vmtree carries b'VMAP_4.8', the tiled flag 1, a BIH of 814683 entries and
+                      197613 objects, then GOBJ (4049233/4049233 bytes)
+  [PASS] vmap.tree_references: every tile reference is within the tree's 197613 objects
+  [PASS] vmap.objects_on_terrain: median |z - terrain| 0.11 m over 692 objects (signed median -0.00)
+  [PASS] mmap.payload: dtMeshHeader inside the declared payload: magic 0x444e4156 version 7,
+                      6312 polygons, 11046 vertices, tile 13,13 consistent with the params; the
+                      counts need 1227528 of the 1227528 declared bytes (bvQuantFactor 3.750)
+  [GAP ] vmap.models: 1 of 117 referenced models do not resolve (Innchandelier.m2)
+  anchor terrain height 82.630 (position z 83.531, stand height +0.901)
+  Collision geometry PASS.
+```
+
+One gap is reported rather than swallowed: `Innchandelier.m2`, referenced by this tile, has no
+`<name>.vmo`, which is the only name `WorldModelStore::AcquireModelInstance` opens, so the server will
+log a model load failure and that object has no collision. The scenario's own obstacles all resolve, so
+it does not affect the frozen route — but it is exactly the class of missing prerequisite the run must
+not discover by accident. The checker fails outright when a scaffold the scenario *does* depend on is
+absent or unusable (no `{id}.vmtree`, a tree that cannot be parsed, a tile reference outside its
+object count, no obstacle model, a payload its own counts do not fit).
+
+It rejects what should be rejected, and one of those rejections matters in practice: an empty data root
+fails on the missing tile, and **the pinned reference tree's own data directory fails**, because that set
+is in TrinityCore's `ModelSpawn` layout (`uint8` flags) while this server reads `uint32`. The two are not
+interchangeable, so the harness's documented `--data-root` example — which points at the reference tree —
+must not be used for a geometry-enabled run; the extraction root must be. Nothing in the scenario may
+substitute one for the other.
 
 ## Tool audit findings (build-free)
 
@@ -255,17 +352,25 @@ corrected by checking them against the struct, which is worth remembering when r
   the staging proof is still only that the sets are complete, not that a given grid loads.
 - **Client archives provenance** for all three artifact sets; the runs above used the on-disk client
   copy without recording its provenance.
+- **Pinned clear/blocked LOS pair**: the obstacle is pinned, but the pair itself still has to be derived
+  from the model's triangles; its bounding box is not sufficient, for the reason recorded above.
 - **Native acceptance**: the map-0 route, the LOS/height/navmesh queries and the pinned obstacle
-  chase are still unrun, and no server has loaded the produced geometry.
+  chase are still unrun, and no server has loaded the produced geometry. Run
+  `apps/cata/check_collision_geometry.py` against the staged root first — it is what makes a silently
+  degraded run (missing, truncated, misnamed or foreign-toolchain artifacts) fail before the run rather
+  than during it.
 
 ## Acceptance plan (unchanged, for when the above is authorized)
 
-Run the owned native client with the selected tiles loaded and server LOS, height and navmesh use
-enabled, and prove: clear vs blocked LOS against a pinned obstacle, correct ground heights at pinned
-points, one normal creature chase that paths around that obstacle, and a normal walk/stop/logout/
-relog at a legal position. Deterministic cases: wrong-build/version headers, truncated or missing
-selected tiles/models, clear/blocked query expectations, unreachable path handling. Acceptance must
-fail (not silently pass) when geometry is unavailable or disabled.
+Before the run, `apps/cata/check_collision_geometry.py` must pass against the exact root `--data-root`
+stages (it fails on missing, truncated, misnamed or foreign-toolchain artifacts). Derive the clear/blocked
+pair from the pinned obstacle's triangles, then run the owned native client with the selected tiles loaded
+and server LOS, height and navmesh use enabled, and prove: clear vs blocked LOS against that obstacle,
+correct ground heights at pinned points (the anchor's is `82.630`), one normal creature chase that paths
+around the obstacle, and a normal walk/stop/logout/relog at a legal position. Deterministic cases:
+wrong-build/version headers, truncated or missing selected tiles/models, clear/blocked query expectations,
+unreachable path handling. Acceptance must fail (not silently pass) when geometry is unavailable or
+disabled.
 
 ## Not covered by this record
 
