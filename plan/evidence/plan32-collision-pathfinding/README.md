@@ -198,11 +198,12 @@ a reference at or above `iNTreeValues` and that object then has no collision;
 each spawn's model resolving as `<name>.vmo`, which is the only name `WorldModelStore` opens; the
 tile/contents agreement; the on-terrain residual; one `dtNavMeshParams` with usable
 tileWidth/tileHeight/maxTiles; the mmtile header (`MMAP_MAGIC`, `dtVersion 7`, `mmapVersion 20`) with
-`header + size == file length`; and the `dtMeshHeader` inside the declared payload (magic, version, its tile index recomputed from
-the params the way `MapBuilder` writes it, and `dtNavMesh::addTile`'s own aligned buffer arithmetic,
-so the counts must describe arrays that fit in the declared payload), so an empty, truncated or
-arbitrary payload cannot pass. The optional flight-bounds arrays the height loader reads
-(`MAP_HEIGHT_HAS_FLIGHT_BOUNDS`, two arrays of nine int16) are checked too, including on flat terrain. Against the produced set it passes:
+`header + size == file length`; and the `dtMeshHeader` inside the declared payload — magic, version,
+its tile index recomputed from the params the way `MapBuilder` writes it, and `dtNavMesh::addTile`'s
+own aligned buffer arithmetic, so the counts must describe arrays that fit in the declared payload. An
+empty, truncated or arbitrary payload therefore cannot pass. The optional flight-bounds arrays the
+height loader reads (`MAP_HEIGHT_HAS_FLIGHT_BOUNDS`, two arrays of nine int16) are checked too,
+including on flat terrain. Against the produced set it passes:
 
 ```
 $ python3 apps/cata/check_collision_geometry.py --data-root .../cata-runs/plan32-pipeline/data
