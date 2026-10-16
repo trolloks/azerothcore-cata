@@ -200,8 +200,13 @@ tile/contents agreement; the on-terrain residual; one `dtNavMeshParams` with usa
 tileWidth/tileHeight/maxTiles; the mmtile header (`MMAP_MAGIC`, `dtVersion 7`, `mmapVersion 20`) with
 `header + size == file length`; and the `dtMeshHeader` inside the declared payload — magic, version,
 its tile index recomputed from the params the way `MapBuilder` writes it, and `dtNavMesh::addTile`'s
-own aligned buffer arithmetic, so the counts must describe arrays that fit in the declared payload. An
-empty, truncated or arbitrary payload therefore cannot pass. The optional flight-bounds arrays the
+own aligned buffer arithmetic with **this tree's** element sizes, so the counts must describe arrays
+that fit in the declared payload. Those sizes are not the upstream defaults: the vendored Detour
+enables `DT_POLYREF64` (it is in `deps/recastnavigation/recastnavigation.diff`), which makes
+`dtPolyRef` eight bytes and `dtLink` sixteen, and `dtMeshHeader` is 100 bytes, ending in
+`bvQuantFactor`. For the anchor tile the counts need **exactly** the 1,227,528 declared bytes, which
+is what confirms the arithmetic rather than merely fitting inside it. An empty, truncated or arbitrary
+payload therefore cannot pass. The optional flight-bounds arrays the
 height loader reads (`MAP_HEIGHT_HAS_FLIGHT_BOUNDS`, two arrays of nine int16) are checked too,
 including on flat terrain. Against the produced set it passes:
 
@@ -214,7 +219,7 @@ $ python3 apps/cata/check_collision_geometry.py --data-root .../cata-runs/plan32
   [PASS] vmap.objects_on_terrain: median |z - terrain| 0.11 m over 692 objects (signed median -0.00)
   [PASS] mmap.payload: dtMeshHeader inside the declared payload: magic 0x444e4156 version 7,
                       6312 polygons, 11046 vertices, tile 13,13 consistent with the params; the
-                      counts describe 1129744 of the 1227528 declared bytes
+                      counts need 1227528 of the 1227528 declared bytes (bvQuantFactor 3.750)
   [GAP ] vmap.models: 1 of 117 referenced models do not resolve (Innchandelier.m2)
   anchor terrain height 82.630 (position z 83.531, stand height +0.901)
   Collision geometry PASS.

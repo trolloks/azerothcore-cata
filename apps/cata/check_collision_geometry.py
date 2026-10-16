@@ -58,15 +58,17 @@ MMAP_VERSION = 20
 # struct before fileHeader.size bytes of dtNavMesh tile data.
 MMAP_TILE_HEADER_SIZE = 56
 DT_NAVMESH_PARAMS_SIZE = 28
-DT_MESH_HEADER_SIZE = 96
+# dtMeshHeader is fifteen ints, three walkable floats, bmin, bmax and bvQuantFactor.
+DT_MESH_HEADER_SIZE = 100
 # dtNavMesh::addTile sizes its buffers from the header counts, so the payload has to hold them.
-# Element sizes are the fields of the structs in DetourNavMesh.h:
+# Element sizes are this tree's Detour, not the upstream defaults:
+#   dtLink 16 because DT_POLYREF64 is defined (deps/recastnavigation/recastnavigation.diff enables it
+#   deliberately) and makes dtPolyRef 8 bytes: dtPolyRef + next + edge/side/bmin/bmax
 #   dtPoly 32 (firstLink 4, verts 6x2, neis 6x2, flags 2, vertCount 1, areaAndtype 1)
-#   dtLink 12 (dtPolyRef 4, next 4, edge/side/bmin/bmax 1 each)
 #   dtPolyDetail 12 (two 4-byte bases, two bytes, padded), dtBVNode 16 (six int16 plus an int)
 #   dtOffMeshConnection 36 (six floats, a float, two shorts, two bytes, an int)
 DT_POLY_SIZE = 32
-DT_LINK_SIZE = 12
+DT_LINK_SIZE = 16
 DT_POLY_DETAIL_SIZE = 12
 DT_BV_NODE_SIZE = 16
 DT_OFF_MESH_CONNECTION_SIZE = 36
@@ -329,13 +331,13 @@ class MmapFiles:
         """The dtMeshHeader that dtNavMesh::addTile validates at the start of the tile data."""
         if self.header_size + DT_MESH_HEADER_SIZE > self.tile_size:
             return None
-        fields = struct.unpack_from("<15i9f", self.data, self.header_size)
+        fields = struct.unpack_from("<15i10f", self.data, self.header_size)
         return {"magic": fields[0], "version": fields[1], "x": fields[2], "y": fields[3],
                 "layer": fields[4], "poly_count": fields[6], "vert_count": fields[7],
                 "max_link_count": fields[8], "detail_mesh_count": fields[9],
                 "detail_vert_count": fields[10], "detail_tri_count": fields[11],
                 "bv_node_count": fields[12], "off_mesh_con_count": fields[13],
-                "bmin": fields[18:21], "bmax": fields[21:24]}
+                "bmin": fields[18:21], "bmax": fields[21:24], "bv_quant_factor": fields[24]}
 
     def required_payload(self, payload):
         """dtNavMesh::addTile's own buffer arithmetic, in the same order and alignment."""
@@ -505,7 +507,8 @@ def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=
            else f"dtMeshHeader inside the declared payload: magic {DT_NAVMESH_MAGIC:#010x} version "
                 f"{DT_NAVMESH_VERSION}, {payload['poly_count']} polygons, {payload['vert_count']} "
                 f"vertices, tile {payload['x']},{payload['y']} consistent with the params; the counts "
-                f"describe {required} of the {mmap.declared_size} declared bytes")
+                f"need {required} of the {mmap.declared_size} declared bytes "
+                f"(bvQuantFactor {payload['bv_quant_factor']:.3f})")
 
     anchor_height = terrain(anchor_x, anchor_y)
     obstacles, candidates = [], []
@@ -680,9 +683,9 @@ def build_mmap(orig=(-7466.6665, 1.1754943508222875e-38, -16000.0), max_polys=-2
 
 def build_mmtile(tile_x, tile_y, bmin, bmax, payload_bytes=4096, magic=DT_NAVMESH_MAGIC,
                  version=DT_NAVMESH_VERSION, poly_count=10, vert_count=20):
-    mesh = struct.pack("<15i9f", magic, version, tile_x, tile_y, 0, 0, poly_count, vert_count,
+    mesh = struct.pack("<15i10f", magic, version, tile_x, tile_y, 0, 0, poly_count, vert_count,
                        30, 0, 0, 0, 0, 0, 0, 1.6, 0.53, 1.6,
-                       bmin[0], bmin[1], bmin[2], bmax[0], bmax[1], bmax[2])
+                       bmin[0], bmin[1], bmin[2], bmax[0], bmax[1], bmax[2], 1.0)
     payload = mesh + b"\0" * max(0, payload_bytes - len(mesh))
     header = struct.pack("<4I", MMAP_MAGIC, DT_NAVMESH_VERSION, MMAP_VERSION, len(payload))
     header += b"\x01\x00\x00\x00"
@@ -775,6 +778,12 @@ def self_check():
     assert read_vmap_tree(VMAP_MAGIC + b"\x01" + b"NODE")[0] is not None
     assert read_vmap_tree(build_vmtree()[:-4])[0] is not None
     # The median the coherence check uses must be of magnitudes, not of signed values.
+    payload_probe = MmapFiles.__new__(MmapFiles)
+    assert payload_probe.required_payload(
+        {"vert_count": 20, "poly_count": 10, "max_link_count": 30, "detail_mesh_count": 0,
+         "detail_vert_count": 0, "detail_tri_count": 0, "bv_node_count": 0,
+         "off_mesh_con_count": 0}) == 1140
+    assert DT_MESH_HEADER_SIZE == 100 and DT_LINK_SIZE == 16
     assert median([3.0, 1.0, 2.0]) == 2.0
     assert median([-100.0, 0.0, 100.0]) == 0.0 and median_abs([-100.0, 0.0, 100.0]) == 100.0
 
@@ -804,6 +813,12 @@ def self_check():
         (wrong_mesh / "mmaps" / f"000{gx:02d}{gy:02d}.mmtile").write_bytes(
             build_mmtile(0, 0, (0.0, 0.0, 0.0), (1.0, 1.0, 1.0), magic=0x12345678))
         assert not check(wrong_mesh, 0, (32.0, 32.0, 40.0))["pass"], "a wrong mesh magic was accepted"
+        undercounted = Path(temporary) / "undercounted-payload"
+        # 1016 is what the previous arithmetic produced for 10 polygons, 20 vertices and 30 links with
+        # a 96-byte header and 12-byte links; the real layout needs 1140, so this must not pass.
+        write_synthetic_root(undercounted, payload_bytes=1016)
+        assert not check(undercounted, 0, (32.0, 32.0, 40.0))["pass"], \
+            "a payload sized by the undercounting arithmetic was accepted"
         short_payload = Path(temporary) / "short-payload"
         write_synthetic_root(short_payload, payload_bytes=DT_MESH_HEADER_SIZE)
         assert not check(short_payload, 0, (32.0, 32.0, 40.0))["pass"], \
