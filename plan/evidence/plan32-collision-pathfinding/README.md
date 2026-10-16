@@ -186,28 +186,34 @@ A segment crossing the box therefore proves nothing about a query result, so the
 to be derived from the model's own triangles. That is the one freeze item still open, recorded as such
 below instead of being guessed at.
 
-The checker reports twelve checks, one for each way the artifacts can fail to be loadable: the map
+The checker reports thirteen checks, one for each way the artifacts can fail to be loadable: the map
 magic/version/build (15595); every declared map section the terrain loader opens (area, height, liquid,
 holes) inside the file with its own magic, so a section offset beyond EOF fails instead of being
 ignored; the height section in its flat, int16, int8 and float forms, with `MAP_HEIGHT_NO_HEIGHT`
 treated as the constant field `getHeightFromFlat` returns rather than as missing terrain; the vmap
 tile's exact record consumption, so a truncated tile fails instead of being half-read; the required
-`{id}.vmtree` and its `NODE` chunk, without which `StaticMapTree::InitMap` cannot initialise at all;
+`{id}.vmtree` parsed as the BIH `StaticMapTree::InitMap` reads — bounds, entry count, object count,
+then `GOBJ` — with every tile reference checked against that object count, because `LoadMapTile` skips
+a reference at or above `iNTreeValues` and that object then has no collision;
 each spawn's model resolving as `<name>.vmo`, which is the only name `WorldModelStore` opens; the
 tile/contents agreement; the on-terrain residual; one `dtNavMeshParams` with usable
 tileWidth/tileHeight/maxTiles; the mmtile header (`MMAP_MAGIC`, `dtVersion 7`, `mmapVersion 20`) with
-`header + size == file length`; and the `dtMeshHeader` inside the declared payload (magic, version,
-counts, and its tile index recomputed from the params the way `MapBuilder` writes it), so an empty or
-arbitrary payload cannot pass. Against the produced set it passes:
+`header + size == file length`; and the `dtMeshHeader` inside the declared payload (magic, version, its tile index recomputed from
+the params the way `MapBuilder` writes it, and `dtNavMesh::addTile`'s own aligned buffer arithmetic,
+so the counts must describe arrays that fit in the declared payload), so an empty, truncated or
+arbitrary payload cannot pass. The optional flight-bounds arrays the height loader reads
+(`MAP_HEIGHT_HAS_FLIGHT_BOUNDS`, two arrays of nine int16) are checked too, including on flat terrain. Against the produced set it passes:
 
 ```
 $ python3 apps/cata/check_collision_geometry.py --data-root .../cata-runs/plan32-pipeline/data
   [PASS] map.sections: area@44(520) height@564(132152) liquid@132716(41548) holes@174264(512)
-  [PASS] vmap.tree: 000.vmtree carries b'VMAP_4.8' and a NODE chunk, which is what
-                      StaticMapTree::InitMap needs before any spawn can load
+  [PASS] vmap.tree: 000.vmtree carries b'VMAP_4.8', the tiled flag 1, a BIH of 814683 entries and
+                      197613 objects, then GOBJ (4049233/4049233 bytes)
+  [PASS] vmap.tree_references: every tile reference is within the tree's 197613 objects
   [PASS] vmap.objects_on_terrain: median |z - terrain| 0.11 m over 692 objects (signed median -0.00)
   [PASS] mmap.payload: dtMeshHeader inside the declared payload: magic 0x444e4156 version 7,
-                      6312 polygons, 11046 vertices, tile 13,13 consistent with the params
+                      6312 polygons, 11046 vertices, tile 13,13 consistent with the params; the
+                      counts describe 1129744 of the 1227528 declared bytes
   [GAP ] vmap.models: 1 of 117 referenced models do not resolve (Innchandelier.m2)
   anchor terrain height 82.630 (position z 83.531, stand height +0.901)
   Collision geometry PASS.
@@ -218,7 +224,8 @@ One gap is reported rather than swallowed: `Innchandelier.m2`, referenced by thi
 log a model load failure and that object has no collision. The scenario's own obstacles all resolve, so
 it does not affect the frozen route — but it is exactly the class of missing prerequisite the run must
 not discover by accident. The checker fails outright when a scaffold the scenario *does* depend on is
-absent (no `{id}.vmtree`, no obstacle model, no usable payload).
+absent or unusable (no `{id}.vmtree`, a tree that cannot be parsed, a tile reference outside its
+object count, no obstacle model, a payload its own counts do not fit).
 
 It rejects what should be rejected, and one of those rejections matters in practice: an empty data root
 fails on the missing tile, and **the pinned reference tree's own data directory fails**, because that set
