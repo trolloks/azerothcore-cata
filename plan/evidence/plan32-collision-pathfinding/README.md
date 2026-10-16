@@ -186,13 +186,16 @@ derived from the model's own triangles (`--los-pair`):
 
 Both endpoints sit at a unit's eye height — the terrain plus `Unit::GetCollisionHeight`'s default
 (`2.03128`), which is what `WorldObject::IsWithinLOS` adds before `Map::isInLineOfSight` runs. The search
-is the server's own: the segment is walked over the tile's spawns with the bound culling the tile tree
-does, then tested against each model's triangles through `ModelInstance`'s transform
+is the server's own: the segment is walked over **every** spawn, culled only by the segment/bound
+intersection the tile tree itself uses — not by any distance heuristic, because a large model's bound can
+cross a segment while its centre is nowhere near it — then tested against each model's triangles through
+`ModelInstance`'s transform
 (`iInvRot * (origin - iPos) * iInvScale` and `iInvRot * direction`), and the same
 `G3D::Matrix3::fromEulerAnglesZYX` call that the extractor, the assembler and the server all use. A
 blocked line is only accepted when its nearest hit is the pinned obstacle, and a clear line when it hits
 nothing at all; the blocked line's hit is additionally required to intersect the obstacle's stored bound,
-so the triangles and the artifact agree rather than merely agreeing with themselves.
+so the triangles and the artifact agree rather than merely agreeing with themselves, and the chosen clear
+line is re-tested against every spawn before it is reported.
 
 One honest limitation: the blocked line crosses the obstacle's stored bound and the clear line does not.
 The sharper contrast — a clear line that stays *inside* those grounds, isolating the wall from the
@@ -212,7 +215,9 @@ a reference at or above `iNTreeValues` and that object then has no collision;
 each spawn's model resolving as `<name>.vmo`, which is the only name `WorldModelStore` opens; the
 tile/contents agreement; the on-terrain residual; one `dtNavMeshParams` with usable
 tileWidth/tileHeight/maxTiles; the mmtile header (`MMAP_MAGIC`, `dtVersion 7`, `mmapVersion 20`) with
-`header + size == file length`; the reported obstacles' `.vmo` files parsing and carrying collision triangles;
+`header + size == file length`; the reported obstacles' `.vmo` files parsing, carrying collision triangles, and having every triangle
+index inside its group's vertex array (a model can satisfy the byte count while the indices are
+unusable, and the server indexes the vertex array directly);
 and the `dtMeshHeader` inside the declared payload — magic, version,
 its tile index recomputed from the params the way `MapBuilder` writes it, and `dtNavMesh::addTile`'s
 own aligned buffer arithmetic with **this tree's** element sizes, so the counts must describe arrays

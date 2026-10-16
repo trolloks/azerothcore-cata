@@ -344,6 +344,12 @@ class WorldModel:
             if offset + 12 * triangles > len(data):
                 raise ValueError(f"{path}: group {index} declares {triangles} triangles beyond the file")
             group["triangles"] = struct.unpack_from(f"<{3 * triangles}I", data, offset)
+            worst = max(group["triangles"]) if group["triangles"] else 0
+            if worst >= count:
+                # The byte count can be satisfied while the indices are unusable; the server indexes
+                # the vertex array directly, so this is invalid collision data, not an obstacle.
+                raise ValueError(f"{path}: group {index} triangle index {worst} is outside its "
+                                 f"{count} vertices")
             offset += 12 * triangles
             if data[offset:offset + 4] != b"MBIH":
                 raise ValueError(f"{path}: group {index} expected MBIH, found {data[offset:offset + 4]!r}")
@@ -993,19 +999,19 @@ def derive_los_pair(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312),
     best = None
     for wall in walls[:60]:
         # The longest blocked segment through this wall is the most robust query, so try the widest
-        # offsets first and keep the longest the wall supports.
+        # offsets first and keep the longest the wall supports. Every candidate is tested against the
+        # full spawn set: segment_hits culls by the segment/bound intersection, the same broad phase
+        # the tile's tree uses, so a large model whose bound centre is far away but whose edge crosses
+        # the segment is still tested.
         midpoint = internal_to_world(*wall["midpoint"])
-        nearby = [spawn for spawn in spawns if spawn["internal_bound"] and max(
-            abs((spawn["internal_bound"][0][axis] + spawn["internal_bound"][1][axis]) / 2
-                - wall["midpoint"][axis]) for axis in range(3)) < 90.0]
         blocked = None
         for offset in (20.0, 16.0, 13.0, 10.0, 8.0, 6.0, 5.0, 4.0, 3.0, 2.5):
             first, second = push(wall, offset), push(wall, -offset)
             if first is None or second is None:
                 continue
-            if not point_is_free(nearby, models, first) or not point_is_free(nearby, models, second):
+            if not point_is_free(spawns, models, first) or not point_is_free(spawns, models, second):
                 continue
-            hits, length = segment_hits(nearby, models, first, second)
+            hits, length = segment_hits(spawns, models, first, second)
             if hits and hits[0]["name"] == obstacle_name:
                 blocked = {"first": first, "second": second, "length": length, "hits": hits,
                            "offset": offset, "wall": wall}
@@ -1019,19 +1025,15 @@ def derive_los_pair(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312),
     blocked = best
     if blocked:
         wall = blocked["wall"]
-        midpoint = internal_to_world(*wall["midpoint"])
-        nearby = [spawn for spawn in spawns if spawn["internal_bound"] and max(
-            abs((spawn["internal_bound"][0][axis] + spawn["internal_bound"][1][axis]) / 2
-                - wall["midpoint"][axis]) for axis in range(3)) < 90.0]
         clear = None
         for shift in (3.0, 5.0, 7.0, 10.0, 14.0, 20.0, 28.0, 36.0, 45.0, 60.0):
             first = push(wall, shift + blocked["offset"])
             second = push(wall, shift - blocked["offset"])
             if first is None or second is None:
                 continue
-            if not point_is_free(nearby, models, first) or not point_is_free(nearby, models, second):
+            if not point_is_free(spawns, models, first) or not point_is_free(spawns, models, second):
                 continue
-            hits, length = segment_hits(nearby, models, first, second)
+            hits, length = segment_hits(spawns, models, first, second)
             if not hits:
                 clear = {"first": first, "second": second, "length": length, "hits": [], "offset": shift}
                 break
@@ -1044,6 +1046,8 @@ def derive_los_pair(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312),
         direction = tuple(component / length for component in delta)
         if not bound_crossed(store["internal_bound"], origin, direction, length):
             raise ValueError("the blocking hit does not intersect the obstacle's stored bound")
+        if segment_hits(spawns, models, clear["first"], clear["second"])[0]:
+            raise ValueError("the chosen clear line is hit when every spawn is considered")
         clear_origin = world_to_internal(*clear["first"])
         clear_delta = vec_sub(world_to_internal(*clear["second"]), clear_origin)
         clear_length = vec_length(clear_delta)
@@ -1284,6 +1288,29 @@ def self_check():
                         (0.0, 0.0, 1.0), 10.0) is not None
     assert ray_triangle((0.0, -1.0, 0.0), (0.0, 1.0, 0.0), (-1.0, 0.0, 3.0), (1.0, 0.0, 3.0),
                         (0.0, 0.0, 5.0), 10.0) is None
+    # A triangle index outside the vertex array is invalid data, not a usable model.
+    broken_vmo = build_vmo([((-1.0, -1.0, -1.0), (1.0, 1.0, 1.0),
+                             [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],
+                             [(0, 1, 99)])])
+    try:
+        WorldModel(broken_vmo, "<broken>")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a triangle index outside the vertex array was accepted")
+    # A bound can cross a segment while its centre is far away, so the broad phase cannot be the
+    # centre distance: segment_hits has to find this hit.
+    far = {"index": 0, "flags": 0x4, "adt_id": 0, "id": 77, "name": "Far.wmo", "rotation": (0.0, 0.0, 0.0),
+           "scale": 1.0, "internal": (0.0, 0.0, 0.0), "bound": None,
+           "internal_bound": ((-500.0, -500.0, 0.0), (200.0, 200.0, 80.0))}
+    far_models = ModelCache(Path("."))
+    far_models._models["Far.wmo"] = WorldModel(wall, "<far>")
+    far_hits, _ = segment_hits([far], far_models, internal_to_world(0.0, -4.0, 5.0),
+                               internal_to_world(0.0, 8.0, 5.0))
+    assert far_hits and far_hits[0]["name"] == "Far.wmo", far_hits
+    far_centre = tuple((far["internal_bound"][0][axis] + far["internal_bound"][1][axis]) / 2
+                       for axis in range(3))
+    assert max(abs(far_centre[0] - 0.0), abs(far_centre[1] - 2.0)) > 90.0, far_centre
     assert bound_crossed(((-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)), (0.0, -5.0, 0.0), (0.0, 1.0, 0.0), 10.0)
     assert not bound_crossed(((-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)), (9.0, -5.0, 0.0), (0.0, 1.0, 0.0), 10.0)
     # A planar height field must interpolate back exactly; a wrong triangle or corner pair breaks it.
@@ -1422,6 +1449,28 @@ def self_check():
         assert pair["blocked"]["hits"] and pair["blocked"]["hits"][0]["name"] == "Nsabbey.wmo", pair
         assert not pair["clear"]["hits"] and pair["blocked"]["length"] >= 20.0, pair
         assert abs(pair["eye_height"] - DEFAULT_COLLISION_HEIGHT) < 1e-9
+        # End to end for the same concern: a second WMO whose bound is huge and whose centre is far
+        # away, but whose wall crosses the line the search would otherwise call clear.
+        big_root = Path(temporary) / "big-bound"
+        write_synthetic_root(big_root, model_names=("Nsabbey.wmo", "Big.wmo"), spawns=[
+            ("Nsabbey.wmo", 72420, (32.0, 32.0, 40.0), (12.0, 12.0, 30.0), (52.0, 52.0, 50.0)),
+            ("Big.wmo", 99, (32.0, 38.0, 40.0), (32.0 - 500.0, 38.0 - 500.0, 0.0),
+             (32.0 + 200.0, 38.0 + 200.0, 80.0))])
+        try:
+            big_pair = derive_los_pair(big_root, 0, (32.0, 32.0, 40.0))
+        except ValueError:
+            big_pair = None
+        if big_pair:
+            big_spawns = []
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    path_ = big_root / "vmaps" / f"000_{32 + dy:02d}_{32 + dx:02d}.vmtile"
+                    if path_.is_file():
+                        big_spawns.extend(read_vmap_tile(path_.read_bytes())[0])
+            big_models = ModelCache(big_root)
+            assert not segment_hits(big_spawns, big_models, big_pair["clear"]["first"],
+                                    big_pair["clear"]["second"])[0], \
+                "the derived clear line is blocked when every spawn is considered"
         # An unavailable neighbouring terrain height must render, not raise.
         unavailable = {"data_root": "x", "map": 0, "anchor": [0.0, 0.0, 0.0], "grid": [32, 32],
                        "checks": [{"check": "c", "pass": True, "detail": "d"}], "gaps": [],
