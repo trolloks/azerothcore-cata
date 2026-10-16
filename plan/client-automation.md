@@ -195,7 +195,9 @@ Point `--data-root` at the extraction root — the directory holding `dbc/`, `ma
 `mmaps/` — and make sure it is one this tree's tools produced: the pinned reference tree's data
 directory is in TrinityCore's `ModelSpawn` layout (`uint8` flags) while this server reads `uint32`, so
 the two sets cannot be swapped. `python3 apps/cata/check_collision_geometry.py --data-root <root>`
-reports that, along with missing, truncated or misnamed tiles, before a run starts. Without the flag
+reports that, along with missing, truncated, misnamed or unloadable artifacts — a declared map
+section outside the file, a missing `{id}.vmtree`, a spawn whose model has no `.vmo`, or an unusable
+Detour payload — before a run starts. Without the flag
 nothing changes, so geometry-free modes keep their accepted behaviour.
 
 The sets have to match the server's own naming, which is not uniform: for map 0 the server asks for

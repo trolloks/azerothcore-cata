@@ -2,18 +2,21 @@
 
 This is the pre-flight for the Plan 32 native acceptance, not a substitute for it. It reads the
 artifacts the server will read, using the server's own formats, naming and conversions, and it
-proves that they are structurally loadable and internally coherent: the tile a file is named for
-is the tile its contents describe, and the objects sit on the terrain. It also prints the frozen
-scenario facts (the anchor's ground height, the pinned obstacle) that the run must reproduce.
+checks that they can actually be loaded: every file the loaders open is required, every declared
+section is inside the file, and every payload carries the header the reader validates.
 
 It never claims that a server loaded the artifacts, that a query matched, or that a path exists.
 Those are the acceptance's job; this only makes a silently degraded run detectable in advance.
 
-Layouts are taken from this tree, not from a summary:
-  * maps/{id:03}{gx:02}{gy:02}.map        GridTerrainLoader / GridTerrainData::LoadHeightData
+Layouts and constants are taken from this tree, not from a summary:
+  * maps/{id:03}{gx:02}{gy:02}.map        GridTerrainData::Load / LoadAreaData / LoadLiquidData /
+                                          LoadHolesData / getHeightFromFloat / getHeightFromFlat
   * vmaps/{id:03}_{gy:02}_{gx:02}.vmtile  StaticMapTree::LoadMapTile / ModelSpawn::readFromFile
-  * mmaps/{id:03}{gx:02}{gy:02}.mmtile    MMapMgr::LoadTile / MmapTileHeader
+  * vmaps/{id:03}.vmtree                  StaticMapTree::InitMap
+  * vmaps/<spawn.name>.vmo                WorldModelStore::AcquireModelInstance (always ".vmo")
   * mmaps/{id:03}.mmap                    MMapMgr::LoadNavMesh (a single dtNavMeshParams)
+  * mmaps/{id:03}{gx:02}{gy:02}.mmtile    MMapMgr::LoadTile / MmapTileHeader (56 bytes, asserted in
+                                          MapDefines.h) / dtNavMesh::addTile's payload validation
 Grid coordinates follow the server's ComputeGridCoord, not ComputeGridCoordSimple: gx = 32 - x/533.33
 and gy = 32 - y/533.33, and vmap tile files are named with {gy}_{gx} while map and mmap tiles use
 {gx}{gy}. The two orders disagree, which is exactly what the tile/contents agreement check detects.
@@ -22,29 +25,44 @@ import argparse
 import json
 import struct
 import sys
+import tempfile
 from pathlib import Path
 
 CLIENT_BUILD = 15595
 # MapMagic.asUInt in GridTerrainData.h: the loader compares the uint32, not the characters.
 MAP_MAGIC = 0x5350414D
 MAP_VERSION = 10
+AREA_MAGIC = b"AREA"
 HEIGHT_MAGIC = b"MHGT"
+LIQUID_MAGIC = b"MLIQ"
+MAP_AREA_NO_AREA = 0x0001
+MAP_LIQUID_NO_TYPE = 0x0001
+MAP_LIQUID_NO_HEIGHT = 0x0002
 MAP_HEIGHT_NO_HEIGHT = 0x0001
 MAP_HEIGHT_AS_INT16 = 0x0002
 MAP_HEIGHT_AS_INT8 = 0x0004
+AREA_MAP_BYTES = 16 * 16 * 2
+LIQUID_ENTRY_BYTES = 16 * 16 * 2
+LIQUID_FLAGS_BYTES = 16 * 16
+HOLES_BYTES = 16 * 16 * 2
 VMAP_MAGIC = b"VMAP_4.8"
+MOD_M2 = 1
 MOD_HAS_BOUND = 1 << 2
 MMAP_MAGIC = 0x4D4D4150
+DT_NAVMESH_MAGIC = 0x444E4156
 DT_NAVMESH_VERSION = 7
 MMAP_VERSION = 20
+# static_assert(sizeof(MmapTileHeader) == 56) in MapDefines.h, and MMapMgr::LoadTile reads the whole
+# struct before fileHeader.size bytes of dtNavMesh tile data.
+MMAP_TILE_HEADER_SIZE = 56
+DT_NAVMESH_PARAMS_SIZE = 28
+DT_MESH_HEADER_SIZE = 96
 SIZE_OF_GRIDS = 533.33333
 MAP_RESOLUTION = 128
 MAX_NUMBER_OF_GRIDS = 64
 # VMapMgr2::convertPositionToInternalRep: the vmap files are in the internal representation, and
 # every query converts into it, so reading the artifacts back out needs the inverse.
 MID = 0.5 * MAX_NUMBER_OF_GRIDS * SIZE_OF_GRIDS
-MMAP_TILE_HEADER_SIZE = 56
-DT_NAVMESH_PARAMS_SIZE = 28
 VMAP_TILE_AGREEMENT_MIN = 0.80
 ON_GROUND_MEDIAN_MAX = 5.0
 
@@ -60,56 +78,73 @@ def internal_to_world(x, y, z):
     return (MID - x, MID - y, z)
 
 
+def median(values):
+    ordered = sorted(values)
+    return ordered[len(ordered) // 2] if ordered else float("nan")
+
+
+def median_abs(values):
+    return median([abs(value) for value in values])
+
+
 class MapTile:
-    """A loaded maps/*.map tile: the headers the loader validates and the terrain heights."""
+    """A maps/*.map tile: the sections GridTerrainData::Load reads and the terrain heights."""
 
     def __init__(self, data, path):
         self.path = path
+        self.data = data
         self.size = len(data)
         header = struct.unpack_from("<11I", data, 0)
-        (self.map_magic, self.map_version, self.build, _, area_size, height_offset, _, _, _, _, _) = header
+        (self.map_magic, self.map_version, self.build, area_offset, self.area_size,
+         self.height_offset, self.height_size, self.liquid_offset, self.liquid_size,
+         self.holes_offset, self.holes_size) = header
         if self.map_magic != MAP_MAGIC:
             raise ValueError(f"{path}: not a map tile (magic {self.map_magic:#010x})")
-        self.has_area = area_size > 8
-        self.grid_height = 0.0
+        self.area_offset = area_offset
         self._kind = None
         self._v9 = None
         self._v8 = None
         self._multiplier = 1.0
-        if height_offset + 16 > len(data):
-            raise ValueError(f"{path}: height section offset {height_offset} is beyond the file")
-        fourcc, flags, grid_height, grid_max = struct.unpack_from("<4sIff", data, height_offset)
+        self._base = 0.0
+        self.grid_height = 0.0
+        self.grid_max_height = 0.0
+        self.height_flags = 0
+
+    def load_height_section(self):
+        """The height section, with the flat/quantised/float forms the loader distinguishes."""
+        fourcc, flags, grid_height, grid_max = struct.unpack_from("<4sIff", self.data, self.height_offset)
         if fourcc != HEIGHT_MAGIC:
-            raise ValueError(f"{path}: height section is {fourcc!r}, not {HEIGHT_MAGIC!r}")
+            raise ValueError(f"{self.path}: height section is {fourcc!r}, not {HEIGHT_MAGIC!r}")
         self.height_flags = flags
         self.grid_height = grid_height
         self.grid_max_height = grid_max
         if flags & MAP_HEIGHT_NO_HEIGHT:
+            # getHeightFromFlat returns gridHeight everywhere: valid flat terrain, not absent data.
+            self._kind = "flat"
             return
-        offset = height_offset + 16
         if flags & MAP_HEIGHT_AS_INT16:
-            count9, count8, fmt, step = 129 * 129, 128 * 128, "H", 2
+            count9, count8, fmt, step, self._kind = 129 * 129, 128 * 128, "H", 2, "int16"
             self._multiplier = (grid_max - grid_height) / 65535.0
-            self._kind = "int16"
         elif flags & MAP_HEIGHT_AS_INT8:
-            count9, count8, fmt, step = 129 * 129, 128 * 128, "B", 1
+            count9, count8, fmt, step, self._kind = 129 * 129, 128 * 128, "B", 1, "int8"
             self._multiplier = (grid_max - grid_height) / 255.0
-            self._kind = "int8"
         else:
-            count9, count8, fmt, step = 129 * 129, 128 * 128, "f", 4
-            self._kind = "float"
-        needed = offset + (count9 + count8) * step
-        if needed > len(data):
-            raise ValueError(f"{path}: height data needs {needed} bytes, file has {len(data)}")
-        self._v9 = struct.unpack_from(f"<{count9}{fmt}", data, offset)
-        self._v8 = struct.unpack_from(f"<{count8}{fmt}", data, offset + count9 * step)
+            count9, count8, fmt, step, self._kind = 129 * 129, 128 * 128, "f", 4, "float"
+        offset = self.height_offset + 16
+        if offset + (count9 + count8) * step > self.size:
+            raise ValueError(f"{self.path}: height data needs {offset + (count9 + count8) * step} bytes, "
+                             f"file has {self.size}")
+        self._v9 = struct.unpack_from(f"<{count9}{fmt}", self.data, offset)
+        self._v8 = struct.unpack_from(f"<{count8}{fmt}", self.data, offset + count9 * step)
         # Float heights are absolute; the quantised forms are relative to gridHeight.
-        self._base = 0.0 if self._kind == "float" else grid_height
+        self._base = 0.0 if self._kind == "float" else self.grid_height
 
     def height(self, x, y):
-        """GridTerrainData::getHeightFromFloat, the triangle interpolation the server uses."""
-        if self._v9 is None:
+        """getHeightFromFloat (and getHeightFromFlat) as the server interpolates them."""
+        if self._kind is None:
             return None
+        if self._kind == "flat":
+            return self.grid_height
         gx = MAP_RESOLUTION * (32 - x / SIZE_OF_GRIDS)
         gy = MAP_RESOLUTION * (32 - y / SIZE_OF_GRIDS)
         ix, iy = int(gx), int(gy)
@@ -127,6 +162,50 @@ class MapTile:
         else:
             a, b, c = (h2 + h4 - h5, h4 - h2, h5 - h4) if fx > fy else (h4 - h3, h3 + h4 - h5, h5 - h4)
         return a * fx + b * fy + c
+
+
+def section_problems(tile, data):
+    """Every section GridTerrainData::Load opens must exist, have its magic and fit in the file."""
+    problems = []
+    if tile.area_offset:
+        if tile.area_offset + 8 > len(data):
+            problems.append(f"area section at {tile.area_offset} is beyond the file")
+        else:
+            fourcc, flags, _ = struct.unpack_from("<4sHH", data, tile.area_offset)
+            if fourcc != AREA_MAGIC:
+                problems.append(f"area fourcc {fourcc!r} is not {AREA_MAGIC!r}")
+            elif not flags & MAP_AREA_NO_AREA and tile.area_offset + 8 + AREA_MAP_BYTES > len(data):
+                problems.append(f"area map needs {tile.area_offset + 8 + AREA_MAP_BYTES} bytes")
+    if tile.liquid_offset:
+        if tile.liquid_offset + 16 > len(data):
+            problems.append(f"liquid section at {tile.liquid_offset} is beyond the file")
+        else:
+            fourcc, flags, _flags, _type, _ox, _oy, width, height, _level = \
+                struct.unpack_from("<4sBBHBBBBf", data, tile.liquid_offset)
+            if fourcc != LIQUID_MAGIC:
+                problems.append(f"liquid fourcc {fourcc!r} is not {LIQUID_MAGIC!r}")
+            else:
+                needed = tile.liquid_offset + 16
+                if not flags & MAP_LIQUID_NO_TYPE:
+                    needed += LIQUID_ENTRY_BYTES + LIQUID_FLAGS_BYTES
+                if not flags & MAP_LIQUID_NO_HEIGHT:
+                    needed += width * height * 4
+                if needed > len(data):
+                    problems.append(f"liquid data needs {needed} bytes")
+    if tile.holes_size and tile.holes_offset + HOLES_BYTES > len(data):
+        problems.append(f"holes at {tile.holes_offset} need {HOLES_BYTES} bytes")
+    return problems
+
+
+def read_vmap_tree(data):
+    """StaticMapTree::InitMap: magic, the tiled flag, then the NODE chunk the tree lives in."""
+    if data[0:8] != VMAP_MAGIC:
+        return f"tree magic is {data[0:8]!r}, expected {VMAP_MAGIC!r}"
+    if len(data) < 13:
+        return f"tree is {len(data)} bytes, too short for the tiled flag and NODE chunk"
+    if data[9:13] != b"NODE":
+        return f"tree chunk is {data[9:13]!r}, expected b'NODE'"
+    return None
 
 
 def read_vmap_tile(data):
@@ -178,25 +257,32 @@ def read_vmap_tile(data):
 
 
 class MmapFiles:
-    """The two mmaps artifacts, checked the way MMapMgr loads them."""
+    """The two mmaps artifacts, checked the way MMapMgr and dtNavMesh consume them."""
 
     def __init__(self, par_path, tile_path):
-        self.par_path = par_path
-        self.tile_path = tile_path
+        self.params_path = par_path
         self.params_size = len(par_path.read_bytes())
-        data = tile_path.read_bytes()
-        magic, dt_version, mmap_version, size = struct.unpack_from("<4I", data, 0)
+        self.data = tile_path.read_bytes()
+        self.tile_size = len(self.data)
+        magic, dt_version, mmap_version, size = struct.unpack_from("<4I", self.data, 0)
         self.magic = magic
         self.dt_version = dt_version
         self.mmap_version = mmap_version
         self.declared_size = size
-        self.actual_size = len(data)
         self.header_size = MMAP_TILE_HEADER_SIZE
 
+    def params(self):
+        """dtNavMeshParams as MMapMgr::LoadNavMesh reads it before dtNavMesh::init."""
+        return struct.unpack_from("<3f2f2i", self.params_path.read_bytes(), 0)
 
-def median(values):
-    ordered = sorted(values)
-    return ordered[len(ordered) // 2] if ordered else float("nan")
+    def payload(self):
+        """The dtMeshHeader that dtNavMesh::addTile validates at the start of the tile data."""
+        if self.header_size + DT_MESH_HEADER_SIZE > self.tile_size:
+            return None
+        fields = struct.unpack_from("<15i9f", self.data, self.header_size)
+        return {"magic": fields[0], "version": fields[1], "x": fields[2], "y": fields[3],
+                "layer": fields[4], "poly_count": fields[6], "vert_count": fields[7],
+                "max_link_count": fields[8], "bmin": fields[18:21], "bmax": fields[21:24]}
 
 
 def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=1, radius=200.0):
@@ -204,6 +290,7 @@ def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=
     anchor_x, anchor_y, anchor_z = anchor
     gx, gy = grid_coord(anchor_x, anchor_y)
     checks = []
+    gaps = []
 
     def record(name, ok, detail):
         checks.append({"check": name, "pass": bool(ok), "detail": detail})
@@ -211,26 +298,45 @@ def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=
 
     map_path = data_root / "maps" / f"{map_id:03d}{gx:02d}{gy:02d}.map"
     vmap_path = data_root / "vmaps" / f"{map_id:03d}_{gy:02d}_{gx:02d}.vmtile"
+    tree_path = data_root / "vmaps" / f"{map_id:03d}.vmtree"
     par_path = data_root / "mmaps" / f"{map_id:03d}.mmap"
     mtile_path = data_root / "mmaps" / f"{map_id:03d}{gx:02d}{gy:02d}.mmtile"
-    for path in (map_path, vmap_path, par_path, mtile_path):
+    for path in (map_path, vmap_path, tree_path, par_path, mtile_path):
         if not path.is_file():
             record(f"present:{path.name}", False, f"{path} is missing")
             return {"data_root": str(data_root), "map": map_id, "anchor": list(anchor),
-                    "grid": [gx, gy], "checks": checks, "facts": {}, "pass": False}
+                    "grid": [gx, gy], "checks": checks, "gaps": gaps, "facts": {}, "pass": False}
 
-    tile = MapTile(map_path.read_bytes(), str(map_path))
+    data = map_path.read_bytes()
+    tile = MapTile(data, str(map_path))
     record("map.headers", tile.map_magic == MAP_MAGIC and tile.map_version == MAP_VERSION
            and tile.build == CLIENT_BUILD,
            f"magic {tile.map_magic:#010x} version {tile.map_version} build {tile.build} "
            f"(expected {MAP_MAGIC:#010x} {MAP_VERSION} {CLIENT_BUILD})")
-    record("map.height_section", tile._kind is not None,
-           f"MHGT flags {tile.height_flags:#06x} heights {tile._kind} "
-           f"{tile.grid_height:.2f}..{tile.grid_max_height:.2f}")
+    problems = section_problems(tile, data)
+    record("map.sections", not problems,
+           "every declared section the terrain loader opens is present and inside the file: "
+           f"area@{tile.area_offset}({tile.area_size}) height@{tile.height_offset}({tile.height_size}) "
+           f"liquid@{tile.liquid_offset}({tile.liquid_size}) holes@{tile.holes_offset}({tile.holes_size})"
+           + (f" - {'; '.join(problems)}" if problems else ""))
+    height_ok = True
+    height_detail = ""
+    try:
+        tile.load_height_section()
+        height_detail = (f"MHGT flags {tile.height_flags:#06x} heights {tile._kind} "
+                         f"{tile.grid_height:.2f}..{tile.grid_max_height:.2f}")
+    except (ValueError, struct.error) as error:
+        height_ok = False
+        height_detail = str(error)
+    record("map.height_section", height_ok, height_detail)
 
     spawns, consumed = read_vmap_tile(vmap_path.read_bytes())
     record("vmap.structure", consumed == vmap_path.stat().st_size,
            f"{len(spawns)} spawns consumed {consumed} of {vmap_path.stat().st_size} bytes")
+    tree_problem = read_vmap_tree(tree_path.read_bytes())
+    record("vmap.tree", tree_problem is None,
+           tree_problem or f"{tree_path.name} carries {VMAP_MAGIC!r} and a NODE chunk, which is what "
+                           f"StaticMapTree::InitMap needs before any spawn can load")
 
     def terrain(x, y):
         tile_gx, tile_gy = grid_coord(x, y)
@@ -239,9 +345,14 @@ def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=
         path = data_root / "maps" / f"{map_id:03d}{tile_gx:02d}{tile_gy:02d}.map"
         if not path.is_file():
             return None
-        return MapTile(path.read_bytes(), str(path)).height(x, y)
+        neighbour = MapTile(path.read_bytes(), str(path))
+        try:
+            neighbour.load_height_section()
+        except (ValueError, struct.error):
+            return None
+        return neighbour.height(x, y)
 
-    in_tile, on_ground, residuals = 0, 0, []
+    in_tile, residuals = 0, []
     for spawn in spawns:
         x, y, z = spawn["world"]
         if grid_coord(x, y) != (gx, gy):
@@ -250,36 +361,70 @@ def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=
         height = terrain(x, y)
         if height is None:
             continue
-        residual = z - height
-        residuals.append(residual)
-        if abs(residual) <= ON_GROUND_MEDIAN_MAX:
-            on_ground += 1
+        residuals.append(z - height)
     agreement = in_tile / len(spawns) if spawns else 0.0
     record("vmap.tile_matches_contents", agreement >= VMAP_TILE_AGREEMENT_MIN,
            f"{in_tile}/{len(spawns)} spawns ({agreement:.1%}) fall in the grid {gx},{gy} the file is "
            f"named for (the vmap file name is <id>_<gy>_<gx>, so a transposed or mismatched tile "
            f"shows up here)")
-    ground_median = median(residuals)
-    record("vmap.objects_on_terrain", abs(ground_median) <= ON_GROUND_MEDIAN_MAX and on_ground > 0,
-           f"median |z - terrain| residual {ground_median:+.2f} over {len(residuals)} objects in the "
-           f"tile, {on_ground} within {ON_GROUND_MEDIAN_MAX:.0f} m; a wrong frame or a missing map "
-           f"tile moves this by thousands of metres")
+    # The magnitude is what the check claims: signed residuals cancel, so a spread of placement
+    # errors around zero would otherwise look like objects on the ground.
+    absolute = median_abs(residuals)
+    signed = median(residuals)
+    record("vmap.objects_on_terrain", absolute <= ON_GROUND_MEDIAN_MAX and residuals,
+           f"median |z - terrain| {absolute:.2f} m over {len(residuals)} objects in the tile "
+           f"(signed median {signed:+.2f}); a wrong frame or a missing map tile moves this by "
+           f"thousands of metres")
 
     mmap = MmapFiles(par_path, mtile_path)
-    record("mmap.params", mmap.params_size == DT_NAVMESH_PARAMS_SIZE,
-           f"{par_path.name} is {mmap.params_size} bytes (a single dtNavMeshParams is "
-           f"{DT_NAVMESH_PARAMS_SIZE})")
+    params = mmap.params()
+    finite = all(value == value and abs(value) != float("inf") for value in params)
+    record("mmap.params", mmap.params_size == DT_NAVMESH_PARAMS_SIZE and finite
+           and params[3] > 0 and params[4] > 0 and params[5] > 0 and params[6] != 0,
+           f"{par_path.name} is {mmap.params_size} bytes (one dtNavMeshParams is "
+           f"{DT_NAVMESH_PARAMS_SIZE}); tileWidth {params[3]:.2f} tileHeight {params[4]:.2f} "
+           f"maxTiles {params[5]} maxPolys {params[6]} (dtNavMesh::init reads maxPolys as unsigned, so "
+           f"a 1<<31 value is the generator's own encoding)")
     record("mmap.tile_headers",
            mmap.magic == MMAP_MAGIC and mmap.dt_version == DT_NAVMESH_VERSION
            and mmap.mmap_version == MMAP_VERSION
-           and mmap.header_size + mmap.declared_size == mmap.actual_size,
+           and mmap.header_size + mmap.declared_size == mmap.tile_size,
            f"magic {mmap.magic:#010x} dtVersion {mmap.dt_version} mmapVersion {mmap.mmap_version} "
-           f"header+size {mmap.header_size}+{mmap.declared_size} vs file {mmap.actual_size}")
+           f"header+size {mmap.header_size}+{mmap.declared_size} vs file {mmap.tile_size}")
+    payload = mmap.payload()
+    payload_problems = []
+    if payload is None:
+        payload_problems.append(f"payload is shorter than a {DT_MESH_HEADER_SIZE}-byte dtMeshHeader")
+    else:
+        if payload["magic"] != DT_NAVMESH_MAGIC:
+            payload_problems.append(f"mesh magic {payload['magic']:#010x} is not {DT_NAVMESH_MAGIC:#010x}")
+        if payload["version"] != DT_NAVMESH_VERSION:
+            payload_problems.append(f"mesh version {payload['version']} is not {DT_NAVMESH_VERSION}")
+        for key in ("poly_count", "vert_count", "max_link_count"):
+            if payload[key] < 0:
+                payload_problems.append(f"{key} {payload[key]} is negative")
+        if payload["poly_count"] <= 0 or payload["vert_count"] <= 0:
+            payload_problems.append("payload declares no polygons or no vertices")
+        if payload["magic"] == DT_NAVMESH_MAGIC and payload["version"] == DT_NAVMESH_VERSION \
+                and payload["poly_count"] > 0:
+            # MapBuilder.cpp computes the tile's place in the params grid from its own bounds, so
+            # the header has to agree with both or the tile is not the one the params describe.
+            centre_x = (payload["bmin"][0] + payload["bmax"][0]) / 2
+            centre_z = (payload["bmin"][2] + payload["bmax"][2]) / 2
+            got_x = int((centre_x - params[0]) / params[3]) if params[3] else None
+            got_y = int((centre_z - params[2]) / params[4]) if params[4] else None
+            if got_x != payload["x"] or got_y != payload["y"]:
+                payload_problems.append(f"header tile {payload['x']},{payload['y']} disagrees with the "
+                                        f"params and bounds ({got_x},{got_y})")
+    record("mmap.payload", not payload_problems,
+           "; ".join(payload_problems) if payload_problems
+           else f"dtMeshHeader inside the declared payload: magic {DT_NAVMESH_MAGIC:#010x} version "
+                f"{DT_NAVMESH_VERSION}, {payload['poly_count']} polygons, {payload['vert_count']} "
+                f"vertices, tile {payload['x']},{payload['y']} consistent with the params")
 
     anchor_height = terrain(anchor_x, anchor_y)
-    obstacles = []
+    obstacles, candidates = [], []
     if neighbours:
-        candidates = []
         for dx in range(-neighbours, neighbours + 1):
             for dy in range(-neighbours, neighbours + 1):
                 path = data_root / "vmaps" / f"{map_id:03d}_{gy + dy:02d}_{gx + dx:02d}.vmtile"
@@ -289,7 +434,7 @@ def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=
                 candidates.extend(extra)
         buildings = {}
         for spawn in candidates:
-            if not spawn["bound"] or spawn["flags"] & 1:  # MOD_M2: doodads, not buildings
+            if not spawn["bound"] or spawn["flags"] & MOD_M2:  # doodads, not buildings
                 continue
             spawn["distance"] = ((spawn["world"][0] - anchor_x) ** 2
                                  + (spawn["world"][1] - anchor_y) ** 2) ** 0.5
@@ -315,40 +460,74 @@ def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=
                               "world_bounds": [list(spawn["bound"][0]), list(spawn["bound"][1])],
                               "terrain_at_position": height,
                               "residual": None if height is None else spawn["world"][2] - height})
+
+    # WorldModelStore::AcquireModelInstance always opens <name>.vmo; a spawn without one loads as a
+    # missing model at run time. The scenario's own obstacles have to resolve; anything else is
+    # reported so the run is not surprised, rather than silently accepted.
+    def resolves(name):
+        return (data_root / "vmaps" / f"{name}.vmo").is_file()
+
+    scenario_missing = [obstacle["name"] for obstacle in obstacles if not resolves(obstacle["name"])]
+    record("vmap.models_scenario", not scenario_missing,
+           "every reported obstacle's model resolves as <name>.vmo"
+           + (f" - missing: {', '.join(scenario_missing)}" if scenario_missing else ""))
+    unique_names = sorted({spawn["name"] for spawn in spawns})
+    unresolved = [name for name in unique_names if not resolves(name)]
+    if unresolved:
+        gaps.append({"gap": "vmap.models", "count": len(unresolved), "of": len(unique_names),
+                     "models": unresolved[:10],
+                     "detail": "referenced by the anchor tile but with no <name>.vmo, so the server "
+                               "logs a model load failure and that object has no collision"})
     facts = {
         "anchor": {"position": [anchor_x, anchor_y, anchor_z], "terrain_height": anchor_height,
                    "stand_height": None if anchor_height is None else anchor_z - anchor_height},
         "vmap_tile": vmap_path.name, "vmap_spawns": len(spawns), "spawns_in_tile": in_tile,
-        "on_ground_fraction": None if not residuals else on_ground / len(residuals),
-        "median_residual": ground_median, "obstacles": obstacles,
+        "median_absolute_residual": absolute, "median_signed_residual": signed,
+        "navmesh": {"mesh_bounds": {"x": [payload["bmin"][0], payload["bmax"][0]],
+                                    "z": [payload["bmin"][2], payload["bmax"][2]]}
+                    if payload else None,
+                    "params_orig": [params[0], params[2]], "tile": [payload["x"], payload["y"]]
+                    if payload else None},
+        "obstacles": obstacles,
         "bounds_do_not_decide_los": ("The obstacle bounds are the computed model extents, and for a "
                                      "building WMO that includes its grounds; a segment crossing a bound "
                                      "therefore does not prove a blocked query. Derive the clear and "
                                      "blocked pair from the model's own triangles, not from these boxes."),
+        "not_verified": ("Model file contents, the Detour-side meaning of the tile's x/y outside the "
+                         "generator's own formula, and whether any query or path succeeds."),
     }
     return {"data_root": str(data_root), "map": map_id, "anchor": list(anchor), "grid": [gx, gy],
-            "checks": checks, "facts": facts, "pass": all(c["pass"] for c in checks)}
+            "checks": checks, "gaps": gaps, "facts": facts,
+            "pass": all(entry["pass"] for entry in checks)}
 
 
 def render(report):
+    def number(value, spec=".3f"):
+        return "unavailable" if value is None else format(value, spec)
+
     lines = [f"collision geometry: data-root {report['data_root']} map {report['map']} "
              f"grid {report['grid'][0]},{report['grid'][1]}"]
     for check in report["checks"]:
         lines.append(f"  [{'PASS' if check['pass'] else 'FAIL'}] {check['check']}: {check['detail']}")
+    for gap in report["gaps"]:
+        lines.append(f"  [GAP ] {gap['gap']}: {gap['count']} of {gap['of']} referenced models do not "
+                     f"resolve ({', '.join(gap['models'])})")
     facts = report["facts"]
     if facts:
         anchor = facts["anchor"]
-        lines.append(f"  anchor terrain height {anchor['terrain_height']:.3f} "
-                     f"(position z {anchor['position'][2]:.3f}, stand height {anchor['stand_height']:+.3f})")
+        lines.append(f"  anchor terrain height {number(anchor['terrain_height'])} "
+                     f"(position z {anchor['position'][2]:.3f}, stand height "
+                     f"{number(anchor['stand_height'], '+.3f')})")
         lines.append(f"  {facts['vmap_spawns']} vmap spawns, {facts['spawns_in_tile']} in the anchor tile, "
-                     f"median residual {facts['median_residual']:+.2f} m")
+                     f"median |residual| {number(facts['median_absolute_residual'], '.2f')} m")
         for obstacle in facts["obstacles"]:
             low, high = obstacle["world_bounds"]
             lines.append(f"  obstacle {obstacle['name']} id {obstacle['id']} "
                          f"{obstacle['distance_from_anchor']:6.1f} m from the anchor, footprint "
                          f"{obstacle['footprint']:.0f} m2, position "
                          f"({obstacle['world_position'][0]:.2f},{obstacle['world_position'][1]:.2f},"
-                         f"{obstacle['world_position'][2]:.2f}) residual {obstacle['residual']:+.2f} m")
+                         f"{obstacle['world_position'][2]:.2f}) residual "
+                         f"{number(obstacle['residual'], '+.2f')} m")
             lines.append(f"    world bounds x[{low[0]:.2f},{high[0]:.2f}] y[{low[1]:.2f},{high[1]:.2f}] "
                          f"z[{low[2]:.2f},{high[2]:.2f}]")
     lines.append(f"Collision geometry {'PASS' if report['pass'] else 'FAIL'}. This does not prove a "
@@ -356,68 +535,200 @@ def render(report):
     return "\n".join(lines)
 
 
+def build_map(heights="flat", flat_height=40.0, liquid_offset=0, holes_size=0, area_offset=0,
+              area_flags=0):
+    """A synthetic map tile: used by the self-check to exercise the loader's sections."""
+    HEADER_SIZE = 44  # map_fileheader: eleven uint32 fields
+    area = b""
+    if area_offset:
+        area = b"\0" * (area_offset - HEADER_SIZE) + struct.pack("<4sHH", AREA_MAGIC, area_flags, 9)
+        if not area_flags & MAP_AREA_NO_AREA:
+            area += b"\0" * AREA_MAP_BYTES
+    height_offset = HEADER_SIZE + len(area)
+    if heights == "flat":
+        section = struct.pack("<4sIff", HEIGHT_MAGIC, MAP_HEIGHT_NO_HEIGHT, flat_height, flat_height)
+    else:
+        v9 = [float(x + y) for x in range(129) for y in range(129)]
+        v8 = [float((x + 0.5) + (y + 0.5)) for x in range(128) for y in range(128)]
+        section = struct.pack("<4sIff", HEIGHT_MAGIC, 0, 0.0, 300.0)
+        section += struct.pack(f"<{129 * 129}f", *v9) + struct.pack(f"<{128 * 128}f", *v8)
+    holes_offset = HEADER_SIZE + len(area) + len(section) if holes_size else 0
+    header = struct.pack("<11I", MAP_MAGIC, MAP_VERSION, CLIENT_BUILD, area_offset, AREA_MAP_BYTES,
+                         height_offset, len(section), liquid_offset, 0, holes_offset, holes_size)
+    tail = b"\0" * HOLES_BYTES if holes_size else b""
+    return header + area + section + tail
+
+
+def build_vmtile(spawns):
+    """A synthetic .vmtile; each spawn is (name, id, world position, world low, world high)."""
+    records = b""
+    for name, spawn_id, world, low, high in spawns:
+        internal = (MID - world[0], MID - world[1], world[2])
+        i_low = (MID - low[0], MID - low[1], low[2])
+        i_high = (MID - high[0], MID - high[1], high[2])
+        flags = MOD_HAS_BOUND if low else MOD_M2
+        records += struct.pack("<IHI", flags, 0, spawn_id) + struct.pack("<3f", *internal)
+        records += struct.pack("<3f", 0.0, 0.0, 0.0) + struct.pack("<f", 1.0)
+        if low:
+            records += struct.pack("<3f", *i_low) + struct.pack("<3f", *i_high)
+        encoded = name.encode()
+        records += struct.pack("<I", len(encoded)) + encoded + struct.pack("<I", 0)
+    return VMAP_MAGIC + struct.pack("<I", len(spawns)) + records
+
+
+def build_vmtree():
+    return VMAP_MAGIC + b"\x01" + b"NODE" + struct.pack("<I", 0) + b"GOBJ"
+
+
+def build_mmap(orig=(-7466.6665, 1.1754943508222875e-38, -16000.0), max_polys=-2147483648):
+    return struct.pack("<3f2f2i", *orig, SIZE_OF_GRIDS, SIZE_OF_GRIDS, 839, max_polys)
+
+
+def build_mmtile(tile_x, tile_y, bmin, bmax, payload_bytes=4096, magic=DT_NAVMESH_MAGIC,
+                 version=DT_NAVMESH_VERSION, poly_count=10, vert_count=20):
+    mesh = struct.pack("<15i9f", magic, version, tile_x, tile_y, 0, 0, poly_count, vert_count,
+                       30, 0, 0, 0, 0, 0, 0, 1.6, 0.53, 1.6,
+                       bmin[0], bmin[1], bmin[2], bmax[0], bmax[1], bmax[2])
+    payload = mesh + b"\0" * max(0, payload_bytes - len(mesh))
+    header = struct.pack("<4I", MMAP_MAGIC, DT_NAVMESH_VERSION, MMAP_VERSION, len(payload))
+    header += b"\x01\x00\x00\x00"
+    header += b"\0" * (MMAP_TILE_HEADER_SIZE - len(header))
+    return header + payload
+
+
+def write_synthetic_root(root, spawns=None, heights="flat", liquid_offset=0, with_tree=True,
+                         model_names=("Nsabbey.wmo",), anchor=(32.0, 32.0), flat_height=40.0):
+    """A minimal but loadable data root for the anchor grid of the given anchor position."""
+    root = Path(root)
+    for name in ("maps", "vmaps", "mmaps"):
+        (root / name).mkdir(parents=True, exist_ok=True)
+    gx, gy = grid_coord(*anchor)
+    (root / "maps" / f"000{gx:02d}{gy:02d}.map").write_bytes(
+        build_map(heights=heights, flat_height=flat_height, liquid_offset=liquid_offset))
+    if spawns is None:
+        spawns = [("Nsabbey.wmo", 72420, (anchor[0] - 10.0, anchor[1], flat_height),
+                   (anchor[0] - 20.0, anchor[1] - 20.0, flat_height - 10.0),
+                   (anchor[0] + 20.0, anchor[1] + 20.0, flat_height + 10.0))]
+    (root / "vmaps" / f"000_{gy:02d}_{gx:02d}.vmtile").write_bytes(build_vmtile(spawns))
+    if with_tree:
+        (root / "vmaps" / "000.vmtree").write_bytes(build_vmtree())
+    for name in model_names:
+        (root / "vmaps" / f"{name}.vmo").write_bytes(VMAP_MAGIC + b"WMOD" + b"\0" * 64)
+    params = build_mmap()
+    (root / "mmaps" / "000.mmap").write_bytes(params)
+    orig = struct.unpack_from("<3f", params, 0)
+    bmin = (anchor[0] - 200.0, 40.0, anchor[1] - 200.0)
+    bmax = (anchor[0] + 200.0, 200.0, anchor[1] + 200.0)
+    # Match the generator's own placement formula so the payload check has something consistent.
+    tile_x = int(((bmin[0] + bmax[0]) / 2 - orig[0]) / SIZE_OF_GRIDS)
+    tile_y = int(((bmin[2] + bmax[2]) / 2 - orig[2]) / SIZE_OF_GRIDS)
+    (root / "mmaps" / f"000{gx:02d}{gy:02d}.mmtile").write_bytes(
+        build_mmtile(tile_x, tile_y, bmin, bmax))
+    return gx, gy
+
+
 def self_check():
-    """Synthetic cases for the parsing and the height maths; no artifacts required."""
-    # A planar height field h = x + y over the whole tile grid must interpolate back exactly.
-    v9 = [float(x + y) for x in range(129) for y in range(129)]
-    v8 = [float((x + 0.5) + (y + 0.5)) for x in range(128) for y in range(128)]
-    body = struct.pack("<4sIff", HEIGHT_MAGIC, 0, 0.0, 300.0)
-    body += struct.pack(f"<{129 * 129}f", *v9) + struct.pack(f"<{128 * 128}f", *v8)
-    header = struct.pack("<11I", 0x5350414D, MAP_VERSION, CLIENT_BUILD, 0, 0, 64, len(body), 0, 0, 0, 0)
-    buffer = header + b"\0" * (64 - len(header)) + body
-    tile = MapTile(buffer, "<synthetic>")
-    assert tile.build == CLIENT_BUILD and tile._kind == "float"
-    for x, y in ((-8949.95, -132.493), (0.0, 0.0), (-16000.0, 15000.0)):
+    """Synthetic cases for the maths, the parser and the false-PASS cases a pre-flight must reject."""
+    # A planar height field must interpolate back exactly; a wrong triangle or corner pair breaks it.
+    tile = MapTile(build_map(heights="planar"), "<synthetic>")
+    tile.load_height_section()
+    for x, y in ((100.0, 100.0), (0.0, 0.0), (-16000.0, 15000.0)):
         gx = MAP_RESOLUTION * (32 - x / SIZE_OF_GRIDS)
         gy = MAP_RESOLUTION * (32 - y / SIZE_OF_GRIDS)
         ix = int(gx) & (MAP_RESOLUTION - 1)
         iy = int(gy) & (MAP_RESOLUTION - 1)
-        # The field is h = row + column, so the interpolation has to return it exactly; picking the
-        # wrong triangle or the wrong corner pair breaks planarity and this assertion catches it.
         expected = (ix + iy) + (gx - int(gx)) + (gy - int(gy))
         assert abs(tile.height(x, y) - expected) < 1e-6, (x, y, tile.height(x, y), expected)
-    # An int16 section must scale by (max - min) / 65535 and add gridHeight.
-    body16 = struct.pack("<4sIff", HEIGHT_MAGIC, MAP_HEIGHT_AS_INT16, 100.0, 200.0)
-    body16 += struct.pack(f"<{129 * 129}H", *([32768] * (129 * 129)))
-    body16 += struct.pack(f"<{128 * 128}H", *([32768] * (128 * 128)))
-    header16 = struct.pack("<11I", 0x5350414D, MAP_VERSION, CLIENT_BUILD, 0, 0, 64, len(body16), 0, 0, 0, 0)
-    tile16 = MapTile(header16 + b"\0" * (64 - len(header16)) + body16, "<synthetic16>")
-    assert tile16._kind == "int16"
-    assert abs(tile16.height(0.0, 0.0) - 150.0) < 0.01, tile16.height(0.0, 0.0)
-    # The grid the server computes must match its own examples, and the vmap file order is {gy}_{gx}.
+    # MAP_HEIGHT_NO_HEIGHT is valid flat terrain and must not read as absent.
+    flat_bytes = build_map(heights="flat", flat_height=42.0)
+    flat = MapTile(flat_bytes, "<flat>")
+    flat.load_height_section()
+    assert flat._kind == "flat" and flat.height(1.0, 2.0) == 42.0
+    assert not section_problems(flat, flat_bytes)
+    # A declared section beyond EOF must be rejected, not ignored.
+    bogus = build_map(heights="planar")
+    header = list(struct.unpack_from("<11I", bogus, 0))
+    header[7] = 99999999  # liquidMapOffset beyond the file
+    header[8] = 16
+    broken = struct.pack("<11I", *header) + bogus[44:]
+    assert section_problems(MapTile(broken, "<broken>"), broken), "an out-of-file section was accepted"
+    # Grid maths, the internal representation and the vmap parser.
     assert grid_coord(-8949.95, -132.493) == (48, 32)
     assert grid_coord(0.0, 0.0) == (32, 32)
     assert grid_coord(-20000.0, -20000.0) == (63, 63)
     assert abs(MID - 17066.66667) < 1e-3
-    # A synthetic vmap tile round-trips, including the mirror and the bound renormalisation.
-    name = b"Nsabbey.wmo"
-    record_bytes = struct.pack("<IHI", MOD_HAS_BOUND, 0, 72420)
-    record_bytes += struct.pack("<3f", 25963.67, 17244.96, 80.07)
-    record_bytes += struct.pack("<3f", 0.0, 0.0, 0.0) + struct.pack("<f", 1.0)
-    record_bytes += struct.pack("<3f", 25898.0, 17197.0, 80.1) + struct.pack("<3f", 26017.0, 17315.0, 169.2)
-    record_bytes += struct.pack("<I", len(name)) + name + struct.pack("<I", 7)
-    tile_bytes = VMAP_MAGIC + struct.pack("<I", 1) + record_bytes
-    spawns, consumed = read_vmap_tile(tile_bytes)
-    assert consumed == len(tile_bytes) and len(spawns) == 1
-    spawn = spawns[0]
-    assert spawn["name"] == "Nsabbey.wmo" and spawn["id"] == 72420
-    assert abs(spawn["world"][0] - -8897.0) < 0.01 and abs(spawn["world"][1] - -178.30) < 0.01
-    low, high = spawn["bound"]
+    spawns, consumed = read_vmap_tile(build_vmtile(
+        [("Nsabbey.wmo", 72420, (-8897.0, -178.3, 80.07), (-8950.33, -248.44, 80.1),
+          (-8831.42, -129.90, 169.18))]))
+    assert consumed == len(build_vmtile(
+        [("Nsabbey.wmo", 72420, (-8897.0, -178.3, 80.07), (-8950.33, -248.44, 80.1),
+          (-8831.42, -129.90, 169.18))]))
+    assert spawns[0]["name"] == "Nsabbey.wmo" and spawns[0]["id"] == 72420
+    assert abs(spawns[0]["world"][0] - -8897.0) < 0.01 and abs(spawns[0]["world"][1] - -178.30) < 0.01
+    low, high = spawns[0]["bound"]
     assert low[0] < high[0] and low[1] < high[1] and abs(low[0] - -8950.33) < 0.01
-    # Structural rejection: a truncated spawn list must be reported rather than half-read.
-    try:
-        read_vmap_tile(tile_bytes[:-8])
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("a truncated vmap tile was accepted")
-    try:
-        read_vmap_tile(b"NOPE_4.8" + tile_bytes[8:])
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("a wrong vmap magic was accepted")
+    for broken in (build_vmtile([])[:-8], b"NOPE_4.8" + build_vmtile([])[8:]):
+        try:
+            read_vmap_tile(broken)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("a truncated or wrongly magicked vmap tile was accepted")
+    assert read_vmap_tree(build_vmtree()) is None
+    assert read_vmap_tree(b"NOPE_4.8" + build_vmtree()[8:]) is not None
+    # The median the coherence check uses must be of magnitudes, not of signed values.
     assert median([3.0, 1.0, 2.0]) == 2.0
+    assert median([-100.0, 0.0, 100.0]) == 0.0 and median_abs([-100.0, 0.0, 100.0]) == 100.0
+
+    # A loadable synthetic root must pass, and each way of breaking it must fail rather than pass.
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary) / "good"
+        gx, gy = write_synthetic_root(root)
+        report = check(root, 0, (32.0, 32.0, 40.0))
+        assert report["pass"], [c for c in report["checks"] if not c["pass"]]
+        assert report["facts"]["obstacles"], "the synthetic obstacle was not reported"
+        assert render(report)
+        missing_any = check(root, 0, (9000.0, 9000.0, 40.0))
+        assert not missing_any["pass"], "missing artifacts for another grid were accepted"
+        no_tree = Path(temporary) / "no-tree"
+        write_synthetic_root(no_tree)
+        (no_tree / "vmaps" / "000.vmtree").unlink()
+        assert not check(no_tree, 0, (32.0, 32.0, 40.0))["pass"], "a missing vmtree was accepted"
+        no_model = Path(temporary) / "no-model"
+        write_synthetic_root(no_model, model_names=())
+        assert not check(no_model, 0, (32.0, 32.0, 40.0))["pass"], "a missing obstacle model was accepted"
+        empty_payload = Path(temporary) / "empty-payload"
+        gx, gy = write_synthetic_root(empty_payload)
+        (empty_payload / "mmaps" / f"000{gx:02d}{gy:02d}.mmtile").write_bytes(b"\0" * MMAP_TILE_HEADER_SIZE)
+        assert not check(empty_payload, 0, (32.0, 32.0, 40.0))["pass"], "an empty Detour payload was accepted"
+        wrong_mesh = Path(temporary) / "wrong-mesh"
+        gx, gy = write_synthetic_root(wrong_mesh)
+        (wrong_mesh / "mmaps" / f"000{gx:02d}{gy:02d}.mmtile").write_bytes(
+            build_mmtile(0, 0, (0.0, 0.0, 0.0), (1.0, 1.0, 1.0), magic=0x12345678))
+        assert not check(wrong_mesh, 0, (32.0, 32.0, 40.0))["pass"], "a wrong mesh magic was accepted"
+        bogus_section = Path(temporary) / "bogus-section"
+        write_synthetic_root(bogus_section, liquid_offset=99999999)
+        assert not check(bogus_section, 0, (32.0, 32.0, 40.0))["pass"], "an out-of-file section was accepted"
+        split = Path(temporary) / "split"
+        write_synthetic_root(split, spawns=[
+            ("Nsabbey.wmo", 72420, (32.0, 32.0, -60.0), (22.0, 22.0, -70.0), (42.0, 42.0, -50.0)),
+            ("Pastor.wmo", 1, (32.0, 32.0, 40.0), (22.0, 22.0, 30.0), (42.0, 42.0, 50.0)),
+            ("Shelf.wmo", 2, (32.0, 32.0, 140.0), (22.0, 22.0, 130.0), (42.0, 42.0, 150.0))],
+            model_names=("Nsabbey.wmo", "Pastor.wmo", "Shelf.wmo"))
+        assert not check(split, 0, (32.0, 32.0, 40.0))["pass"], \
+            "residual signs cancelling into a passing median was accepted"
+        # An unavailable neighbouring terrain height must render, not raise.
+        unavailable = {"data_root": "x", "map": 0, "anchor": [0.0, 0.0, 0.0], "grid": [32, 32],
+                       "checks": [{"check": "c", "pass": True, "detail": "d"}], "gaps": [],
+                       "facts": {"anchor": {"position": [0.0, 0.0, 0.0], "terrain_height": None,
+                                            "stand_height": None},
+                                 "vmap_spawns": 1, "spawns_in_tile": 0,
+                                 "median_absolute_residual": None, "obstacles": [
+                                     {"name": "n", "id": 1, "distance_from_anchor": 1.0, "footprint": 1.0,
+                                      "world_position": [0.0, 0.0, 0.0], "residual": None,
+                                      "world_bounds": [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]}]},
+                       "pass": True}
+        assert "unavailable" in render(unavailable)
     print("Collision geometry checker self-check passed")
 
 
@@ -455,6 +766,6 @@ def main():
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except (OSError, ValueError, struct.error, KeyError) as error:
+    except (OSError, ValueError, TypeError, struct.error, KeyError) as error:
         print(f"collision geometry check failed: {error}", file=sys.stderr)
         sys.exit(1)
