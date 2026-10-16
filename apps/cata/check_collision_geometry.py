@@ -23,6 +23,7 @@ and gy = 32 - y/533.33, and vmap tile files are named with {gy}_{gx} while map a
 """
 import argparse
 import json
+import math
 import struct
 import sys
 import tempfile
@@ -80,6 +81,12 @@ MAX_NUMBER_OF_GRIDS = 64
 MID = 0.5 * MAX_NUMBER_OF_GRIDS * SIZE_OF_GRIDS
 VMAP_TILE_AGREEMENT_MIN = 0.80
 ON_GROUND_MEDIAN_MAX = 5.0
+# Unit::GetCollisionHeight's default for a normally scaled unit (DEFAULT_COLLISION_HEIGHT), which
+# WorldObject::IsWithinLOS adds to both endpoints before Map::isInLineOfSight runs.
+DEFAULT_COLLISION_HEIGHT = 2.03128
+WALL_MAX_VERTICAL = 0.35
+WALL_MIN_EDGE = 1.0
+WALL_GROUND_MARGIN = 3.0
 
 
 def grid_coord(x, y):
@@ -91,6 +98,59 @@ def grid_coord(x, y):
 def internal_to_world(x, y, z):
     """Inverse of VMapMgr2::convertPositionToInternalRep (mid - world, so world = mid - internal)."""
     return (MID - x, MID - y, z)
+
+
+def world_to_internal(x, y, z):
+    """VMapMgr2::convertPositionToInternalRep, the direction every vmap query goes."""
+    return (MID - x, MID - y, z)
+
+
+def vec_sub(a, b):
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def vec_cross(a, b):
+    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+
+
+def vec_dot(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def vec_length(a):
+    return vec_dot(a, a) ** 0.5
+
+
+def vec_normalized(a):
+    length = vec_length(a)
+    return (a[0] / length, a[1] / length, a[2] / length) if length else (0.0, 0.0, 0.0)
+
+
+def mat3_mul(a, b):
+    return tuple(tuple(sum(a[row][k] * b[k][col] for k in range(3)) for col in range(3))
+                 for row in range(3))
+
+
+def mat3_transpose(a):
+    return tuple(tuple(a[col][row] for col in range(3)) for row in range(3))
+
+
+def mat3_vec(m, v):
+    """G3D::Matrix3::operator*(Vector3): row-major, row dot column."""
+    return tuple(m[row][0] * v[0] + m[row][1] * v[1] + m[row][2] * v[2] for row in range(3))
+
+
+def rotation_matrix(rotation):
+    """G3D::Matrix3::fromEulerAnglesZYX(pi*y/180, pi*x/180, pi*z/180), i.e. Rz * (Ry * Rx)."""
+    angle_z, angle_y, angle_x = (math.radians(rotation[1]), math.radians(rotation[0]),
+                                 math.radians(rotation[2]))
+    cos_z, sin_z = math.cos(angle_z), math.sin(angle_z)
+    cos_y, sin_y = math.cos(angle_y), math.sin(angle_y)
+    cos_x, sin_x = math.cos(angle_x), math.sin(angle_x)
+    matrix_z = ((cos_z, -sin_z, 0.0), (sin_z, cos_z, 0.0), (0.0, 0.0, 1.0))
+    matrix_y = ((cos_y, 0.0, sin_y), (0.0, 1.0, 0.0), (-sin_y, 0.0, cos_y))
+    matrix_x = ((1.0, 0.0, 0.0), (0.0, cos_x, -sin_x), (0.0, sin_x, cos_x))
+    return mat3_mul(matrix_z, mat3_mul(matrix_y, matrix_x))
 
 
 def median(values):
@@ -221,6 +281,275 @@ def section_problems(tile, data):
     return problems
 
 
+def read_bih(data, offset, path):
+    """BoundingIntervalHierarchy::readFromFile: bounds, entry count, object count.
+
+    Returns the object count and the offset after the block; every declared count is bounds-checked
+    because the server's fread fails on a short read.
+    """
+    if offset + 28 > len(data):
+        raise ValueError(f"{path}: BIH block at {offset} is beyond the file")
+    tree_size = struct.unpack_from("<I", data, offset + 24)[0]
+    offset += 28
+    if offset + 4 * tree_size > len(data):
+        raise ValueError(f"{path}: BIH declares {tree_size} tree entries beyond the file")
+    offset += 4 * tree_size
+    count = struct.unpack_from("<I", data, offset)[0]
+    offset += 4
+    if offset + 4 * count > len(data):
+        raise ValueError(f"{path}: BIH declares {count} objects beyond the file")
+    return count, offset + 4 * count
+
+
+class WorldModel:
+    """A vmaps/<name>.vmo, parsed as WorldModel::readFile and GroupModel::readFromFile do."""
+
+    def __init__(self, data, path):
+        self.path = path
+        self.size = len(data)
+        if data[0:8] != VMAP_MAGIC:
+            raise ValueError(f"{path}: magic {data[0:8]!r} is not {VMAP_MAGIC!r}")
+        if data[8:12] != b"WMOD":
+            raise ValueError(f"{path}: expected a WMOD chunk at 8, found {data[8:12]!r}")
+        offset = 20  # magic, WMOD, chunkSize, RootWMOID
+        if data[offset:offset + 4] != b"GMOD":
+            raise ValueError(f"{path}: expected a GMOD chunk, found {data[offset:offset + 4]!r}")
+        groups = struct.unpack_from("<I", data, offset + 4)[0]
+        offset += 8
+        self.groups = []
+        for index in range(groups):
+            if offset + 32 > len(data):
+                raise ValueError(f"{path}: group {index} starts beyond the file")
+            bound = struct.unpack_from("<6f", data, offset)
+            flags, wmo_id = struct.unpack_from("<2I", data, offset + 24)
+            offset += 32
+            if data[offset:offset + 4] != b"VERT":
+                raise ValueError(f"{path}: group {index} expected VERT, found {data[offset:offset + 4]!r}")
+            count = struct.unpack_from("<I", data, offset + 8)[0]
+            offset += 12
+            group = {"index": index, "flags": flags, "wmo_id": wmo_id,
+                     "bound": (bound[0:3], bound[3:6]), "vertices": (), "triangles": ()}
+            self.groups.append(group)
+            if count == 0:
+                # GroupModel::readFromFile returns here: a group without collision geometry.
+                continue
+            if offset + 12 * count > len(data):
+                raise ValueError(f"{path}: group {index} declares {count} vertices beyond the file")
+            group["vertices"] = struct.unpack_from(f"<{3 * count}f", data, offset)
+            offset += 12 * count
+            if data[offset:offset + 4] != b"TRIM":
+                raise ValueError(f"{path}: group {index} expected TRIM, found {data[offset:offset + 4]!r}")
+            triangles = struct.unpack_from("<I", data, offset + 8)[0]
+            offset += 12
+            if offset + 12 * triangles > len(data):
+                raise ValueError(f"{path}: group {index} declares {triangles} triangles beyond the file")
+            group["triangles"] = struct.unpack_from(f"<{3 * triangles}I", data, offset)
+            offset += 12 * triangles
+            if data[offset:offset + 4] != b"MBIH":
+                raise ValueError(f"{path}: group {index} expected MBIH, found {data[offset:offset + 4]!r}")
+            group["mesh_objects"], offset = read_bih(data, offset + 4, path)
+            if data[offset:offset + 4] != b"LIQU":
+                raise ValueError(f"{path}: group {index} expected LIQU, found {data[offset:offset + 4]!r}")
+            liquid_size = struct.unpack_from("<I", data, offset + 4)[0]
+            offset += 8
+            if liquid_size:
+                offset = skip_wmo_liquid(data, offset, path)
+        if data[offset:offset + 4] != b"GBIH":
+            raise ValueError(f"{path}: expected a GBIH chunk after the groups, "
+                             f"found {data[offset:offset + 4]!r}")
+        self.group_objects, offset = read_bih(data, offset + 4, path)
+        self.consumed = offset
+
+    def triangle_count(self):
+        return sum(len(group["triangles"]) // 3 for group in self.groups)
+
+    def triangle(self, group_index, triangle_index):
+        group = self.groups[group_index]
+        base = triangle_index * 3
+        vertices = group["vertices"]
+        return tuple(tuple(vertices[3 * group["triangles"][base + corner] + axis]
+                           for axis in range(3)) for corner in range(3))
+
+
+def skip_wmo_liquid(data, offset, path):
+    """WmoLiquid::readFromFile: tiles, a corner, a type, then heights and flags."""
+    if offset + 24 > len(data):
+        raise ValueError(f"{path}: liquid block at {offset} is beyond the file")
+    tiles_x, tiles_y = struct.unpack_from("<2I", data, offset)
+    offset += 24  # tilesX, tilesY, corner (3 floats), type
+    if tiles_x and tiles_y:
+        offset += 4 * (tiles_x + 1) * (tiles_y + 1) + tiles_x * tiles_y
+    else:
+        offset += 4
+    if offset > len(data):
+        raise ValueError(f"{path}: liquid block runs beyond the file")
+    return offset
+
+
+class TerrainReader:
+    """The server's terrain heights over one map, tile by tile (getHeightFromFloat)."""
+
+    def __init__(self, data_root, map_id=0):
+        self.data_root = Path(data_root)
+        self.map_id = map_id
+        self._tiles = {}
+
+    def height(self, x, y):
+        tile_x, tile_y = grid_coord(x, y)
+        key = (tile_x, tile_y)
+        if key not in self._tiles:
+            path = self.data_root / "maps" / f"{self.map_id:03d}{tile_x:02d}{tile_y:02d}.map"
+            tile = None
+            if path.is_file():
+                try:
+                    tile = MapTile(path.read_bytes(), str(path))
+                    tile.load_height_section()
+                except (ValueError, struct.error):
+                    tile = None
+            self._tiles[key] = tile
+        tile = self._tiles[key]
+        return None if tile is None else tile.height(x, y)
+
+
+class ModelCache:
+    """vmaps/<name>.vmo files, parsed once, with failures remembered as absent."""
+
+    def __init__(self, data_root):
+        self.data_root = Path(data_root)
+        self._models = {}
+
+    def load(self, name):
+        if name not in self._models:
+            path = self.data_root / "vmaps" / f"{name}.vmo"
+            model = None
+            if path.is_file():
+                try:
+                    model = WorldModel(path.read_bytes(), str(path))
+                except (ValueError, struct.error):
+                    model = None
+            self._models[name] = model
+        return self._models[name]
+
+
+def bound_crossed(bound, origin, direction, max_distance):
+    """G3D::Ray::intersectionTime(AABox), as a slab test over the ray's reach."""
+    lower, upper = 0.0, max_distance
+    for axis in range(3):
+        low, high = bound[0][axis], bound[1][axis]
+        delta, start = direction[axis], origin[axis]
+        if abs(delta) < 1e-12:
+            if start < low or start > high:
+                return False
+            continue
+        first, second = (low - start) / delta, (high - start) / delta
+        if first > second:
+            first, second = second, first
+        lower, upper = max(lower, first), min(upper, second)
+        if lower > upper:
+            return False
+    return True
+
+
+def segment_hits(spawns, models, first, second):
+    """StaticMapTree::isInLineOfSight's work for one segment: bound culling, then triangles."""
+    origin = world_to_internal(*first)
+    target = world_to_internal(*second)
+    delta = vec_sub(target, origin)
+    length = vec_length(delta)
+    if length < 1e-6:
+        return [], 0.0
+    direction = tuple(component / length for component in delta)
+    hits = []
+    for spawn in spawns:
+        if not spawn["internal_bound"]:
+            continue
+        if not bound_crossed(spawn["internal_bound"], origin, direction, length):
+            continue
+        model = models.load(spawn["name"])
+        if model is None:
+            continue
+        hit = model_hit(Instance(spawn), model, origin, direction, length)
+        if hit:
+            hits.append({"name": spawn["name"], "id": spawn["id"], "distance": hit[0],
+                         "group": hit[1], "triangle": hit[2]})
+    hits.sort(key=lambda hit: hit["distance"])
+    return hits, length
+
+
+def point_is_free(spawns, models, point, probe=0.75):
+    """A point clear of collision geometry sideways: not embedded in a wall or a prop.
+
+    Vertical probes are deliberately omitted: a building WMO carries its own floors and plaza, so a
+    point standing on them is above geometry without being inside it.
+    """
+    x, y, z = point
+    probes = ((x + probe, y, z), (x - probe, y, z), (x, y + probe, z), (x, y - probe, z))
+    return all(not segment_hits(spawns, models, point, other)[0] for other in probes)
+
+
+class Instance:
+    """ModelInstance and ModelInstance::intersectRay, in the internal representation."""
+
+    def __init__(self, spawn):
+        self.spawn = spawn
+        self.rotation = rotation_matrix(spawn["rotation"])
+        self.inverse = mat3_transpose(self.rotation)  # a rotation's inverse is its transpose
+        self.inverse_scale = 1.0 / spawn["scale"] if spawn["scale"] else 0.0
+
+    def to_model(self, origin, direction):
+        """iInvRot * (origin - iPos) * iInvScale and iInvRot * direction, as the server does."""
+        offset = vec_sub(origin, self.spawn["internal"])
+        rotated = mat3_vec(self.inverse, offset)
+        return (tuple(component * self.inverse_scale for component in rotated),
+                mat3_vec(self.inverse, direction))
+
+    def to_internal(self, point):
+        """The forward transform the assembler uses: iRotation * (point * iScale) + iPos."""
+        scaled = tuple(component * self.spawn["scale"] for component in point)
+        rotated = mat3_vec(self.rotation, scaled)
+        return tuple(rotated[axis] + self.spawn["internal"][axis] for axis in range(3))
+
+
+def ray_triangle(origin, direction, a, b, c, max_distance):
+    """Moller-Trumbore; the hit distance along direction, or None."""
+    edge1 = vec_sub(b, a)
+    edge2 = vec_sub(c, a)
+    pvec = vec_cross(direction, edge2)
+    determinant = vec_dot(edge1, pvec)
+    if abs(determinant) < 1e-9:
+        return None
+    inverse = 1.0 / determinant
+    tvec = vec_sub(origin, a)
+    u = vec_dot(tvec, pvec) * inverse
+    if u < -1e-6 or u > 1 + 1e-6:
+        return None
+    qvec = vec_cross(tvec, edge1)
+    v = vec_dot(direction, qvec) * inverse
+    if v < -1e-6 or u + v > 1 + 1e-6:
+        return None
+    distance = vec_dot(edge2, qvec) * inverse
+    return distance if 1e-4 <= distance <= max_distance else None
+
+
+def model_hit(instance, model, origin, direction, max_distance):
+    """The nearest triangle of a model the ray hits, with its group and triangle index."""
+    model_origin, model_direction = instance.to_model(origin, direction)
+    model_max = max_distance * instance.inverse_scale
+    best = None
+    for group in model.groups:
+        if not group["triangles"]:
+            continue
+        for index in range(len(group["triangles"]) // 3):
+            distance = ray_triangle(model_origin, model_direction,
+                                    *model.triangle(group["index"], index), model_max)
+            if distance is not None and (best is None or distance < best[0]):
+                best = (distance, group["index"], index)
+    if best is None:
+        return None
+    # The server scales the hit distance back and reports it in internal units.
+    return (best[0] * instance.spawn["scale"], best[1], best[2])
+
+
 def read_vmap_tree(data):
     """StaticMapTree::InitMap: magic, the tiled flag, the BIH, then the GOBJ chunk.
 
@@ -235,27 +564,14 @@ def read_vmap_tree(data):
     tiled = data[8]
     if data[9:13] != b"NODE":
         return f"tree chunk is {data[9:13]!r}, expected b'NODE'", None
+    offset = 13
     try:
-        offset = 13 + 24  # AABox lo/hi, six floats
-        if offset > len(data):
-            return f"tree ends before the BIH bounds, which need 24 bytes after NODE", None
-        tree_size = struct.unpack_from("<I", data, offset)[0]
-        offset += 4
-        if offset + 4 * tree_size > len(data):
-            return (f"BIH declares {tree_size} tree entries ({4 * tree_size} bytes) beyond the "
-                    f"{len(data)}-byte file; readFromFile fails on that short read", None)
-        offset += 4 * tree_size
-        count = struct.unpack_from("<I", data, offset)[0]
-        offset += 4
-        if offset + 4 * count > len(data):
-            return (f"BIH declares {count} objects ({4 * count} bytes) beyond the file; the primitive "
-                    f"count would be a short read", None)
-        offset += 4 * count
-        if data[offset:offset + 4] != b"GOBJ":
-            return f"chunk after the BIH is {data[offset:offset + 4]!r}, expected b'GOBJ'", None
-    except struct.error as error:
-        return f"tree could not be parsed: {error}", None
-    return None, {"tiled": tiled, "tree_entries": tree_size, "objects": count,
+        count, offset = read_bih(data, offset, "<vmtree>")
+    except (ValueError, struct.error) as error:
+        return f"tree BIH could not be parsed: {error}", None
+    if data[offset:offset + 4] != b"GOBJ":
+        return f"chunk after the BIH is {data[offset:offset + 4]!r}, expected b'GOBJ'", None
+    return None, {"tiled": tiled, "tree_entries": None, "objects": count,
                   "consumed": offset + 4, "size": len(data)}
 
 
@@ -295,6 +611,7 @@ def read_vmap_tile(data):
         offset += name_length
         referenced = struct.unpack_from("<I", data, offset)[0]
         offset += 4
+        internal_bound = bound
         world = internal_to_world(*pos)
         if bound:
             world_bounds = (internal_to_world(*bound[0]), internal_to_world(*bound[1]))
@@ -304,7 +621,8 @@ def read_vmap_tile(data):
                       bound[1][2]))
         spawns.append({"index": index, "flags": flags, "adt_id": adt_id, "id": spawn_id,
                        "internal": pos, "world": world, "rotation": rotation, "scale": scale,
-                       "bound": bound, "name": name, "referenced": referenced})
+                       "bound": bound, "internal_bound": internal_bound, "name": name,
+                       "referenced": referenced})
     return spawns, offset
 
 
@@ -417,19 +735,11 @@ def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=
                f"without collision)"
                + (f" - {len(outside)} outside, first at spawn {outside[0]}" if outside else ""))
 
+    terrain_reader = TerrainReader(data_root, map_id)
+    terrain_reader._tiles[(gx, gy)] = tile
+
     def terrain(x, y):
-        tile_gx, tile_gy = grid_coord(x, y)
-        if (tile_gx, tile_gy) == (gx, gy):
-            return tile.height(x, y)
-        path = data_root / "maps" / f"{map_id:03d}{tile_gx:02d}{tile_gy:02d}.map"
-        if not path.is_file():
-            return None
-        neighbour = MapTile(path.read_bytes(), str(path))
-        try:
-            neighbour.load_height_section()
-        except (ValueError, struct.error):
-            return None
-        return neighbour.height(x, y)
+        return terrain_reader.height(x, y)
 
     in_tile, residuals = 0, []
     for spawn in spawns:
@@ -559,6 +869,15 @@ def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=
     record("vmap.models_scenario", not scenario_missing,
            "every reported obstacle's model resolves as <name>.vmo"
            + (f" - missing: {', '.join(scenario_missing)}" if scenario_missing else ""))
+    obstacle_models = ModelCache(data_root)
+    shapeless = []
+    for obstacle in obstacles:
+        model = obstacle_models.load(obstacle["name"])
+        if model is None or not model.triangle_count():
+            shapeless.append(obstacle["name"])
+    record("vmap.model_geometry", not shapeless,
+           "every reported obstacle's .vmo parses and carries collision triangles"
+           + (f" - without geometry: {', '.join(shapeless)}" if shapeless else ""))
     unique_names = sorted({spawn["name"] for spawn in spawns})
     unresolved = [name for name in unique_names if not resolves(name)]
     if unresolved:
@@ -587,6 +906,194 @@ def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=
     return {"data_root": str(data_root), "map": map_id, "anchor": list(anchor), "grid": [gx, gy],
             "checks": checks, "gaps": gaps, "facts": facts,
             "pass": all(entry["pass"] for entry in checks)}
+
+
+def derive_los_pair(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312),
+                    obstacle_name="Nsabbey.wmo", neighbours=1, eye=DEFAULT_COLLISION_HEIGHT):
+    """Derive the scenario's blocked and clear LOS pair from the obstacle's own triangles.
+
+    Both endpoints sit at a unit's eye height above the terrain, which is what WorldObject::IsWithinLOS
+    feeds to Map::isInLineOfSight, and the pair is only accepted when the blocking triangles all belong
+    to the pinned obstacle and a parallel pair shifted outward is clear of every object.
+    """
+    data_root = Path(data_root)
+    terrain = TerrainReader(data_root, map_id)
+    models = ModelCache(data_root)
+    gx, gy = grid_coord(anchor[0], anchor[1])
+    spawns = []
+    for dx in range(-neighbours, neighbours + 1):
+        for dy in range(-neighbours, neighbours + 1):
+            path = data_root / "vmaps" / f"{map_id:03d}_{gy + dy:02d}_{gx + dx:02d}.vmtile"
+            if path.is_file():
+                spawns.extend(read_vmap_tile(path.read_bytes())[0])
+    instances = [spawn for spawn in spawns if spawn["name"] == obstacle_name and spawn["bound"]]
+    if not instances:
+        raise ValueError(f"no {obstacle_name} spawn near the anchor")
+    store = max(instances, key=lambda spawn: (spawn["bound"][1][0] - spawn["bound"][0][0])
+                * (spawn["bound"][1][1] - spawn["bound"][0][1]))
+    model = models.load(store["name"])
+    if model is None or not model.triangle_count():
+        raise ValueError(f"{store['name']}.vmo carries no collision triangles")
+    instance = Instance(store)
+    # The model's own vertices transformed by the instance, to report against the stored bound.
+    extent_low, extent_high = [1e9] * 3, [-1e9] * 3
+    for group in model.groups:
+        vertices = group["vertices"]
+        for index in range(len(vertices) // 3):
+            point = instance.to_internal((vertices[3 * index], vertices[3 * index + 1],
+                                          vertices[3 * index + 2]))
+            for axis in range(3):
+                extent_low[axis] = min(extent_low[axis], point[axis])
+                extent_high[axis] = max(extent_high[axis], point[axis])
+    lo, hi = extent_low, extent_high
+
+    centre = [0.0, 0.0, 0.0]
+    for group in model.groups:
+        low, high = group["bound"]
+        for axis in range(3):
+            centre[axis] += (low[axis] + high[axis]) / 2
+    centre = instance.to_internal(tuple(component / len(model.groups) for component in centre))
+
+    walls = []
+    for group in model.groups:
+        for index in range(len(group["triangles"]) // 3):
+            corners = [instance.to_internal(vertex) for vertex in model.triangle(group["index"], index)]
+            normal = vec_normalized(vec_cross(vec_sub(corners[1], corners[0]), vec_sub(corners[2], corners[0])))
+            if abs(normal[2]) > WALL_MAX_VERTICAL:
+                continue
+            low, high = sorted(corners, key=lambda point: point[2])[:2]
+            width = vec_length(vec_sub(high, low))
+            if width < WALL_MIN_EDGE:
+                continue
+            midpoint = tuple((low[axis] + high[axis]) / 2 for axis in range(3))
+            world = internal_to_world(*midpoint)
+            ground = terrain.height(world[0], world[1])
+            if ground is None or abs(world[2] - ground) > WALL_GROUND_MARGIN:
+                continue
+            horizontal = vec_normalized((normal[0], normal[1], 0.0))
+            # Point the normal away from the model's centre: outward is the walkable side.
+            toward_centre = (centre[0] - midpoint[0], centre[1] - midpoint[1], 0.0)
+            if vec_dot(horizontal, toward_centre) > 0:
+                horizontal = tuple(-component for component in horizontal)
+            tangent = (-horizontal[1], horizontal[0], 0.0)
+            walls.append({"group": group["index"], "triangle": index, "midpoint": midpoint,
+                          "normal": horizontal, "tangent": tangent, "width": width,
+                          "corners_world": [internal_to_world(*corner) for corner in corners]})
+    walls.sort(key=lambda wall: wall["width"], reverse=True)
+
+    def push(wall, along_normal, along_tangent=0.0):
+        internal = tuple(wall["midpoint"][axis] + along_normal * wall["normal"][axis]
+                         + along_tangent * wall["tangent"][axis] for axis in range(3))
+        world = internal_to_world(*internal)
+        ground = terrain.height(world[0], world[1])
+        if ground is None:
+            return None
+        return (world[0], world[1], ground + eye)
+
+    best = None
+    for wall in walls[:60]:
+        # The longest blocked segment through this wall is the most robust query, so try the widest
+        # offsets first and keep the longest the wall supports.
+        midpoint = internal_to_world(*wall["midpoint"])
+        nearby = [spawn for spawn in spawns if spawn["internal_bound"] and max(
+            abs((spawn["internal_bound"][0][axis] + spawn["internal_bound"][1][axis]) / 2
+                - wall["midpoint"][axis]) for axis in range(3)) < 90.0]
+        blocked = None
+        for offset in (20.0, 16.0, 13.0, 10.0, 8.0, 6.0, 5.0, 4.0, 3.0, 2.5):
+            first, second = push(wall, offset), push(wall, -offset)
+            if first is None or second is None:
+                continue
+            if not point_is_free(nearby, models, first) or not point_is_free(nearby, models, second):
+                continue
+            hits, length = segment_hits(nearby, models, first, second)
+            if hits and hits[0]["name"] == obstacle_name:
+                blocked = {"first": first, "second": second, "length": length, "hits": hits,
+                           "offset": offset, "wall": wall}
+                break
+        if not blocked:
+            continue
+        if best is None or blocked["length"] > best["length"]:
+            best = blocked
+        if best["length"] >= 30.0:
+            break
+    blocked = best
+    if blocked:
+        wall = blocked["wall"]
+        midpoint = internal_to_world(*wall["midpoint"])
+        nearby = [spawn for spawn in spawns if spawn["internal_bound"] and max(
+            abs((spawn["internal_bound"][0][axis] + spawn["internal_bound"][1][axis]) / 2
+                - wall["midpoint"][axis]) for axis in range(3)) < 90.0]
+        clear = None
+        for shift in (3.0, 5.0, 7.0, 10.0, 14.0, 20.0, 28.0, 36.0, 45.0, 60.0):
+            first = push(wall, shift + blocked["offset"])
+            second = push(wall, shift - blocked["offset"])
+            if first is None or second is None:
+                continue
+            if not point_is_free(nearby, models, first) or not point_is_free(nearby, models, second):
+                continue
+            hits, length = segment_hits(nearby, models, first, second)
+            if not hits:
+                clear = {"first": first, "second": second, "length": length, "hits": [], "offset": shift}
+                break
+    if blocked and clear:
+        first_hit = blocked["hits"][0]
+        # The hit and the artifact's own bound have to agree, or one of them is being misread.
+        origin = world_to_internal(*blocked["first"])
+        delta = vec_sub(world_to_internal(*blocked["second"]), origin)
+        length = vec_length(delta)
+        direction = tuple(component / length for component in delta)
+        if not bound_crossed(store["internal_bound"], origin, direction, length):
+            raise ValueError("the blocking hit does not intersect the obstacle's stored bound")
+        clear_origin = world_to_internal(*clear["first"])
+        clear_delta = vec_sub(world_to_internal(*clear["second"]), clear_origin)
+        clear_length = vec_length(clear_delta)
+        clear_direction = tuple(component / clear_length for component in clear_delta)
+        clear_crosses_bound = bound_crossed(store["internal_bound"], clear_origin, clear_direction,
+                                            clear_length)
+        return {"data_root": str(data_root), "map": map_id, "obstacle": store["name"],
+                "obstacle_id": store["id"], "obstacle_position": list(store["world"]),
+                "obstacle_triangles": model.triangle_count(), "eye_height": eye,
+                "blocked": {"first": list(blocked["first"]), "second": list(blocked["second"]),
+                            "length": blocked["length"], "offset_from_wall": blocked["offset"],
+                            "hits": blocked["hits"],
+                            "blocking_triangle_world": [list(corner)
+                                                        for corner in blocked["wall"]["corners_world"]],
+                            "wall_width": blocked["wall"]["width"]},
+                "clear": {"first": list(clear["first"]), "second": list(clear["second"]),
+                          "length": clear["length"], "offset_from_wall": clear["offset"], "hits": [],
+                          "crosses_obstacle_bound": clear_crosses_bound},
+                "hit_model": first_hit["name"],
+                "model_extent_internal": [list(lo), list(hi)],
+                "stored_bound_internal": [list(store["internal_bound"][0]),
+                                          list(store["internal_bound"][1])],
+                "terrain_at_blocked_midpoint": terrain.height(
+                    (blocked["first"][0] + blocked["second"][0]) / 2,
+                    (blocked["first"][1] + blocked["second"][1]) / 2)}
+    raise ValueError("no wall of the pinned obstacle produced a blocked pair with a clear partner")
+
+
+def render_los_pair(pair):
+    lines = [f"LOS pair for {pair['obstacle']} id {pair['obstacle_id']} "
+             f"({pair['obstacle_triangles']} triangles) at "
+             f"({pair['obstacle_position'][0]:.2f},{pair['obstacle_position'][1]:.2f},"
+             f"{pair['obstacle_position'][2]:.2f}); eye height {pair['eye_height']:.5f}"]
+    blocked, clear = pair["blocked"], pair["clear"]
+    lines.append(f"  BLOCKED  ({blocked['first'][0]:9.2f},{blocked['first'][1]:8.2f},"
+                 f"{blocked['first'][2]:7.2f}) -> ({blocked['second'][0]:9.2f},{blocked['second'][1]:8.2f},"
+                 f"{blocked['second'][2]:7.2f})  {blocked['length']:6.2f} m, "
+                 f"{len(blocked['hits'])} hit(s)")
+    for hit in blocked["hits"][:4]:
+        lines.append(f"     hit {hit['distance']:6.2f} m by {hit['name']} group {hit['group']} "
+                     f"triangle {hit['triangle']}")
+    lines.append(f"  CLEAR    ({clear['first'][0]:9.2f},{clear['first'][1]:8.2f},{clear['first'][2]:7.2f})"
+                 f" -> ({clear['second'][0]:9.2f},{clear['second'][1]:8.2f},{clear['second'][2]:7.2f})"
+                 f"  {clear['length']:6.2f} m, no hits")
+    lines.append(f"  the blocked line crosses the obstacle's stored bound, the clear line "
+                 f"{'does' if clear['crosses_obstacle_bound'] else 'does not'} "
+                 f"(that bound is the model extent, which for a building includes its grounds)")
+    lines.append("  Derived from the obstacle's triangles, not its bounds: this is the expectation the "
+                 "native acceptance has to reproduce.")
+    return "\n".join(lines)
 
 
 def render(report):
@@ -693,6 +1200,32 @@ def build_mmtile(tile_x, tile_y, bmin, bmax, payload_bytes=4096, magic=DT_NAVMES
     return header + payload
 
 
+def build_vmo(groups):
+    """A synthetic vmaps/<name>.vmo; each group is (bound low, bound high, vertices, triangles)."""
+    body = struct.pack("<I", 8) + struct.pack("<I", 59)  # WMOD chunkSize, RootWMOID
+    body += b"GMOD" + struct.pack("<I", len(groups))
+    for low, high, vertices, triangles in groups:
+        body += struct.pack("<6f", low[0], low[1], low[2], high[0], high[1], high[2])
+        body += struct.pack("<2I", 0x209, 1)
+        body += b"VERT" + struct.pack("<2I", 12 * len(vertices), len(vertices))
+        for vertex in vertices:
+            body += struct.pack("<3f", *vertex)
+        body += b"TRIM" + struct.pack("<2I", 12 * len(triangles), len(triangles))
+        for triangle in triangles:
+            body += struct.pack("<3I", *triangle)
+        tree = (3 << 30, 0, 0)
+        body += b"MBIH" + struct.pack("<6f", 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+        body += struct.pack("<I", len(tree)) + struct.pack("<3I", *tree)
+        body += struct.pack("<I", len(triangles)) + struct.pack(f"<{len(triangles)}I",
+                                                                *range(len(triangles)))
+        body += b"LIQU" + struct.pack("<I", 0)
+    tree = (3 << 30, 0, 0)
+    body += b"GBIH" + struct.pack("<6f", 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+    body += struct.pack("<I", len(tree)) + struct.pack("<3I", *tree)
+    body += struct.pack("<I", len(groups)) + struct.pack(f"<{len(groups)}I", *range(len(groups)))
+    return VMAP_MAGIC + b"WMOD" + body
+
+
 def write_synthetic_root(root, spawns=None, heights="flat", liquid_offset=0, with_tree=True,
                          model_names=("Nsabbey.wmo",), anchor=(32.0, 32.0), flat_height=40.0,
                          payload_bytes=4096):
@@ -710,8 +1243,11 @@ def write_synthetic_root(root, spawns=None, heights="flat", liquid_offset=0, wit
     (root / "vmaps" / f"000_{gy:02d}_{gx:02d}.vmtile").write_bytes(build_vmtile(spawns))
     if with_tree:
         (root / "vmaps" / "000.vmtree").write_bytes(build_vmtree())
+    wall = build_vmo([((-6.0, 0.0, 0.0), (6.0, 0.0, 12.0),
+                       [(-6.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 0.0, 12.0), (-6.0, 0.0, 12.0)],
+                       [(0, 1, 2), (0, 2, 3)])])
     for name in model_names:
-        (root / "vmaps" / f"{name}.vmo").write_bytes(VMAP_MAGIC + b"WMOD" + b"\0" * 64)
+        (root / "vmaps" / f"{name}.vmo").write_bytes(wall)
     params = build_mmap()
     (root / "mmaps" / "000.mmap").write_bytes(params)
     orig = struct.unpack_from("<3f", params, 0)
@@ -727,6 +1263,29 @@ def write_synthetic_root(root, spawns=None, heights="flat", liquid_offset=0, wit
 
 def self_check():
     """Synthetic cases for the maths, the parser and the false-PASS cases a pre-flight must reject."""
+    # The rotation convention, checked against the one three call sites in this tree share.
+    assert mat3_vec(rotation_matrix((0.0, 90.0, 0.0)), (1.0, 0.0, 0.0))[1] > 0.999
+    assert mat3_vec(rotation_matrix((0.0, 0.0, 0.0)), (1.0, 2.0, 3.0)) == (1.0, 2.0, 3.0)
+    identity = Instance({"internal": (0.0, 0.0, 0.0), "rotation": (0.0, 0.0, 0.0), "scale": 1.0})
+    moved = Instance({"internal": (0.0, 0.0, 0.0), "rotation": (0.0, 90.0, 0.0), "scale": 1.0})
+    assert abs(moved.to_internal((1.0, 0.0, 0.0))[1] - 1.0) < 1e-9
+    assert abs(identity.to_internal((1.0, 0.0, 0.0))[0] - 1.0) < 1e-9
+    # A wall model: a vertical quad in the x-z plane at y = 0, plus a ray across and beside it.
+    wall = build_vmo([((-5.0, 0.0, 0.0), (5.0, 0.0, 10.0),
+                       [(-5.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 0.0, 10.0), (-5.0, 0.0, 10.0)],
+                       [(0, 1, 2), (0, 2, 3)])])
+    model = WorldModel(wall, "<vmo>")
+    assert model.triangle_count() == 2 and model.consumed == len(wall)
+    hit = model_hit(identity, model, (0.0, -3.0, 5.0), (0.0, 1.0, 0.0), 10.0)
+    assert hit is not None and abs(hit[0] - 3.0) < 1e-6, hit
+    assert model_hit(identity, model, (0.0, -3.0, 5.0), (-1.0, 0.0, 0.0), 10.0) is None
+    assert model_hit(identity, model, (0.0, -3.0, 5.0), (0.0, 1.0, 0.0), 1.0) is None  # out of reach
+    assert ray_triangle((0.0, -1.0, 0.0), (0.0, 1.0, 0.0), (-1.0, 0.0, -1.0), (1.0, 0.0, -1.0),
+                        (0.0, 0.0, 1.0), 10.0) is not None
+    assert ray_triangle((0.0, -1.0, 0.0), (0.0, 1.0, 0.0), (-1.0, 0.0, 3.0), (1.0, 0.0, 3.0),
+                        (0.0, 0.0, 5.0), 10.0) is None
+    assert bound_crossed(((-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)), (0.0, -5.0, 0.0), (0.0, 1.0, 0.0), 10.0)
+    assert not bound_crossed(((-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)), (9.0, -5.0, 0.0), (0.0, 1.0, 0.0), 10.0)
     # A planar height field must interpolate back exactly; a wrong triangle or corner pair breaks it.
     tile = MapTile(build_map(heights="planar"), "<synthetic>")
     tile.load_height_section()
@@ -856,6 +1415,13 @@ def self_check():
             model_names=("Nsabbey.wmo", "Pastor.wmo", "Shelf.wmo"))
         assert not check(split, 0, (32.0, 32.0, 40.0))["pass"], \
             "residual signs cancelling into a passing median was accepted"
+        # The pair search has to find the synthetic wall and a clear line beside it.
+        pair_root = Path(temporary) / "pair"
+        write_synthetic_root(pair_root)
+        pair = derive_los_pair(pair_root, 0, (32.0, 32.0, 40.0))
+        assert pair["blocked"]["hits"] and pair["blocked"]["hits"][0]["name"] == "Nsabbey.wmo", pair
+        assert not pair["clear"]["hits"] and pair["blocked"]["length"] >= 20.0, pair
+        assert abs(pair["eye_height"] - DEFAULT_COLLISION_HEIGHT) < 1e-9
         # An unavailable neighbouring terrain height must render, not raise.
         unavailable = {"data_root": "x", "map": 0, "anchor": [0.0, 0.0, 0.0], "grid": [32, 32],
                        "checks": [{"check": "c", "pass": True, "detail": "d"}], "gaps": [],
@@ -882,6 +1448,10 @@ def main():
     parser.add_argument("--radius", type=float, default=200.0,
                         help="only report obstacles within this many metres of the anchor (default 200)")
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
+    parser.add_argument("--los-pair", action="store_true",
+                        help="derive the blocked/clear LOS pair from the pinned obstacle's triangles")
+    parser.add_argument("--obstacle", default="Nsabbey.wmo",
+                        help="obstacle for --los-pair (default Nsabbey.wmo)")
     parser.add_argument("--self-check", action="store_true", help="run the synthetic checks only")
     args = parser.parse_args()
     if args.self_check:
@@ -897,6 +1467,10 @@ def main():
         parser.error("--anchor must be x,y,z")
     if len(anchor) != 3:
         parser.error("--anchor must be x,y,z")
+    if args.los_pair:
+        pair = derive_los_pair(args.data_root, args.map, anchor, args.obstacle, args.neighbours)
+        print(json.dumps(pair, indent=2, sort_keys=True) if args.json else render_los_pair(pair))
+        return 0
     report = check(args.data_root, args.map, anchor, args.neighbours, args.radius)
     print(json.dumps(report, indent=2, sort_keys=True) if args.json else render(report))
     return 0 if report["pass"] else 1
