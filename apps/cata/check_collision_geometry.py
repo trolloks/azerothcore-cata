@@ -41,6 +41,8 @@ MAP_LIQUID_NO_HEIGHT = 0x0002
 MAP_HEIGHT_NO_HEIGHT = 0x0001
 MAP_HEIGHT_AS_INT16 = 0x0002
 MAP_HEIGHT_AS_INT8 = 0x0004
+MAP_HEIGHT_HAS_FLIGHT_BOUNDS = 0x0008
+FLIGHT_BOUNDS_BYTES = 9 * 2 * 2
 AREA_MAP_BYTES = 16 * 16 * 2
 LIQUID_ENTRY_BYTES = 16 * 16 * 2
 LIQUID_FLAGS_BYTES = 16 * 16
@@ -57,6 +59,17 @@ MMAP_VERSION = 20
 MMAP_TILE_HEADER_SIZE = 56
 DT_NAVMESH_PARAMS_SIZE = 28
 DT_MESH_HEADER_SIZE = 96
+# dtNavMesh::addTile sizes its buffers from the header counts, so the payload has to hold them.
+# Element sizes are the fields of the structs in DetourNavMesh.h:
+#   dtPoly 32 (firstLink 4, verts 6x2, neis 6x2, flags 2, vertCount 1, areaAndtype 1)
+#   dtLink 12 (dtPolyRef 4, next 4, edge/side/bmin/bmax 1 each)
+#   dtPolyDetail 12 (two 4-byte bases, two bytes, padded), dtBVNode 16 (six int16 plus an int)
+#   dtOffMeshConnection 36 (six floats, a float, two shorts, two bytes, an int)
+DT_POLY_SIZE = 32
+DT_LINK_SIZE = 12
+DT_POLY_DETAIL_SIZE = 12
+DT_BV_NODE_SIZE = 16
+DT_OFF_MESH_CONNECTION_SIZE = 36
 SIZE_OF_GRIDS = 533.33333
 MAP_RESOLUTION = 128
 MAX_NUMBER_OF_GRIDS = 64
@@ -118,11 +131,11 @@ class MapTile:
         self.height_flags = flags
         self.grid_height = grid_height
         self.grid_max_height = grid_max
+        offset = self.height_offset + 16
         if flags & MAP_HEIGHT_NO_HEIGHT:
             # getHeightFromFlat returns gridHeight everywhere: valid flat terrain, not absent data.
             self._kind = "flat"
-            return
-        if flags & MAP_HEIGHT_AS_INT16:
+        elif flags & MAP_HEIGHT_AS_INT16:
             count9, count8, fmt, step, self._kind = 129 * 129, 128 * 128, "H", 2, "int16"
             self._multiplier = (grid_max - grid_height) / 65535.0
         elif flags & MAP_HEIGHT_AS_INT8:
@@ -130,14 +143,23 @@ class MapTile:
             self._multiplier = (grid_max - grid_height) / 255.0
         else:
             count9, count8, fmt, step, self._kind = 129 * 129, 128 * 128, "f", 4, "float"
-        offset = self.height_offset + 16
-        if offset + (count9 + count8) * step > self.size:
-            raise ValueError(f"{self.path}: height data needs {offset + (count9 + count8) * step} bytes, "
-                             f"file has {self.size}")
-        self._v9 = struct.unpack_from(f"<{count9}{fmt}", self.data, offset)
-        self._v8 = struct.unpack_from(f"<{count8}{fmt}", self.data, offset + count9 * step)
-        # Float heights are absolute; the quantised forms are relative to gridHeight.
-        self._base = 0.0 if self._kind == "float" else self.grid_height
+        if self._kind != "flat":
+            if offset + (count9 + count8) * step > self.size:
+                raise ValueError(f"{self.path}: height data needs {offset + (count9 + count8) * step} "
+                                 f"bytes, file has {self.size}")
+            self._v9 = struct.unpack_from(f"<{count9}{fmt}", self.data, offset)
+            self._v8 = struct.unpack_from(f"<{count8}{fmt}", self.data, offset + count9 * step)
+            # Float heights are absolute; the quantised forms are relative to gridHeight.
+            self._base = 0.0 if self._kind == "float" else grid_height
+            offset += (count9 + count8) * step
+        # LoadHeightData reads two arrays of nine int16 whenever the flag is set, flat included.
+        if flags & MAP_HEIGHT_HAS_FLIGHT_BOUNDS:
+            if offset + FLIGHT_BOUNDS_BYTES > self.size:
+                raise ValueError(f"{self.path}: flight bounds need {offset + FLIGHT_BOUNDS_BYTES} bytes, "
+                                 f"file has {self.size}")
+            offset += FLIGHT_BOUNDS_BYTES
+        if offset > self.size:
+            raise ValueError(f"{self.path}: height section ends at {offset}, file has {self.size}")
 
     def height(self, x, y):
         """getHeightFromFloat (and getHeightFromFlat) as the server interpolates them."""
@@ -198,14 +220,41 @@ def section_problems(tile, data):
 
 
 def read_vmap_tree(data):
-    """StaticMapTree::InitMap: magic, the tiled flag, then the NODE chunk the tree lives in."""
+    """StaticMapTree::InitMap: magic, the tiled flag, the BIH, then the GOBJ chunk.
+
+    BoundingIntervalHierarchy::readFromFile reads bounds, a tree-entry count and an object count
+    before GOBJ, and fails on a short read; the object count becomes iNTreeValues, which is what the
+    tile's references are validated against.
+    """
     if data[0:8] != VMAP_MAGIC:
-        return f"tree magic is {data[0:8]!r}, expected {VMAP_MAGIC!r}"
+        return f"tree magic is {data[0:8]!r}, expected {VMAP_MAGIC!r}", None
     if len(data) < 13:
-        return f"tree is {len(data)} bytes, too short for the tiled flag and NODE chunk"
+        return f"tree is {len(data)} bytes, too short for the tiled flag and NODE chunk", None
+    tiled = data[8]
     if data[9:13] != b"NODE":
-        return f"tree chunk is {data[9:13]!r}, expected b'NODE'"
-    return None
+        return f"tree chunk is {data[9:13]!r}, expected b'NODE'", None
+    try:
+        offset = 13 + 24  # AABox lo/hi, six floats
+        if offset > len(data):
+            return f"tree ends before the BIH bounds, which need 24 bytes after NODE", None
+        tree_size = struct.unpack_from("<I", data, offset)[0]
+        offset += 4
+        if offset + 4 * tree_size > len(data):
+            return (f"BIH declares {tree_size} tree entries ({4 * tree_size} bytes) beyond the "
+                    f"{len(data)}-byte file; readFromFile fails on that short read", None)
+        offset += 4 * tree_size
+        count = struct.unpack_from("<I", data, offset)[0]
+        offset += 4
+        if offset + 4 * count > len(data):
+            return (f"BIH declares {count} objects ({4 * count} bytes) beyond the file; the primitive "
+                    f"count would be a short read", None)
+        offset += 4 * count
+        if data[offset:offset + 4] != b"GOBJ":
+            return f"chunk after the BIH is {data[offset:offset + 4]!r}, expected b'GOBJ'", None
+    except struct.error as error:
+        return f"tree could not be parsed: {error}", None
+    return None, {"tiled": tiled, "tree_entries": tree_size, "objects": count,
+                  "consumed": offset + 4, "size": len(data)}
 
 
 def read_vmap_tile(data):
@@ -242,7 +291,8 @@ def read_vmap_tile(data):
                 f"reference tree, cannot be read by this server)")
         name = data[offset:offset + name_length].decode("latin-1").rstrip("\x00")
         offset += name_length
-        offset += 4  # the referenced tree element
+        referenced = struct.unpack_from("<I", data, offset)[0]
+        offset += 4
         world = internal_to_world(*pos)
         if bound:
             world_bounds = (internal_to_world(*bound[0]), internal_to_world(*bound[1]))
@@ -252,7 +302,7 @@ def read_vmap_tile(data):
                       bound[1][2]))
         spawns.append({"index": index, "flags": flags, "adt_id": adt_id, "id": spawn_id,
                        "internal": pos, "world": world, "rotation": rotation, "scale": scale,
-                       "bound": bound, "name": name})
+                       "bound": bound, "name": name, "referenced": referenced})
     return spawns, offset
 
 
@@ -282,7 +332,25 @@ class MmapFiles:
         fields = struct.unpack_from("<15i9f", self.data, self.header_size)
         return {"magic": fields[0], "version": fields[1], "x": fields[2], "y": fields[3],
                 "layer": fields[4], "poly_count": fields[6], "vert_count": fields[7],
-                "max_link_count": fields[8], "bmin": fields[18:21], "bmax": fields[21:24]}
+                "max_link_count": fields[8], "detail_mesh_count": fields[9],
+                "detail_vert_count": fields[10], "detail_tri_count": fields[11],
+                "bv_node_count": fields[12], "off_mesh_con_count": fields[13],
+                "bmin": fields[18:21], "bmax": fields[21:24]}
+
+    def required_payload(self, payload):
+        """dtNavMesh::addTile's own buffer arithmetic, in the same order and alignment."""
+        def aligned(value):
+            return (value + 3) & ~3
+
+        return (DT_MESH_HEADER_SIZE
+                + aligned(12 * payload["vert_count"])
+                + aligned(DT_POLY_SIZE * payload["poly_count"])
+                + aligned(DT_LINK_SIZE * payload["max_link_count"])
+                + aligned(DT_POLY_DETAIL_SIZE * payload["detail_mesh_count"])
+                + aligned(12 * payload["detail_vert_count"])
+                + aligned(4 * payload["detail_tri_count"])
+                + aligned(DT_BV_NODE_SIZE * payload["bv_node_count"])
+                + aligned(DT_OFF_MESH_CONNECTION_SIZE * payload["off_mesh_con_count"]))
 
 
 def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=1, radius=200.0):
@@ -333,10 +401,19 @@ def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=
     spawns, consumed = read_vmap_tile(vmap_path.read_bytes())
     record("vmap.structure", consumed == vmap_path.stat().st_size,
            f"{len(spawns)} spawns consumed {consumed} of {vmap_path.stat().st_size} bytes")
-    tree_problem = read_vmap_tree(tree_path.read_bytes())
+    tree_problem, tree_info = read_vmap_tree(tree_path.read_bytes())
     record("vmap.tree", tree_problem is None,
-           tree_problem or f"{tree_path.name} carries {VMAP_MAGIC!r} and a NODE chunk, which is what "
-                           f"StaticMapTree::InitMap needs before any spawn can load")
+           tree_problem or f"{tree_path.name} carries {VMAP_MAGIC!r}, the tiled flag {tree_info['tiled']}, "
+                           f"a BIH of {tree_info['tree_entries']} entries and "
+                           f"{tree_info['objects']} objects, then GOBJ "
+                           f"({tree_info['consumed']}/{tree_info['size']} bytes)")
+    if tree_info:
+        outside = [spawn["index"] for spawn in spawns if spawn["referenced"] >= tree_info["objects"]]
+        record("vmap.tree_references", not outside,
+               f"every tile reference is within the tree's {tree_info['objects']} objects "
+               f"(LoadMapTile skips a reference of {tree_info['objects']} or more, leaving that object "
+               f"without collision)"
+               + (f" - {len(outside)} outside, first at spawn {outside[0]}" if outside else ""))
 
     def terrain(x, y):
         tile_gx, tile_gy = grid_coord(x, y)
@@ -400,11 +477,18 @@ def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=
             payload_problems.append(f"mesh magic {payload['magic']:#010x} is not {DT_NAVMESH_MAGIC:#010x}")
         if payload["version"] != DT_NAVMESH_VERSION:
             payload_problems.append(f"mesh version {payload['version']} is not {DT_NAVMESH_VERSION}")
-        for key in ("poly_count", "vert_count", "max_link_count"):
+        for key in ("poly_count", "vert_count", "max_link_count", "detail_mesh_count",
+                    "detail_vert_count", "detail_tri_count", "bv_node_count", "off_mesh_con_count"):
             if payload[key] < 0:
                 payload_problems.append(f"{key} {payload[key]} is negative")
         if payload["poly_count"] <= 0 or payload["vert_count"] <= 0:
             payload_problems.append("payload declares no polygons or no vertices")
+        if payload["max_link_count"] <= 0:
+            payload_problems.append("payload declares no links, and addTile writes links[count-1]")
+        required = mmap.required_payload(payload)
+        if required > mmap.declared_size:
+            payload_problems.append(f"the declared {mmap.declared_size}-byte payload is smaller than "
+                                    f"the {required} bytes its counts describe")
         if payload["magic"] == DT_NAVMESH_MAGIC and payload["version"] == DT_NAVMESH_VERSION \
                 and payload["poly_count"] > 0:
             # MapBuilder.cpp computes the tile's place in the params grid from its own bounds, so
@@ -420,7 +504,8 @@ def check(data_root, map_id=0, anchor=(-8949.95, -132.493, 83.5312), neighbours=
            "; ".join(payload_problems) if payload_problems
            else f"dtMeshHeader inside the declared payload: magic {DT_NAVMESH_MAGIC:#010x} version "
                 f"{DT_NAVMESH_VERSION}, {payload['poly_count']} polygons, {payload['vert_count']} "
-                f"vertices, tile {payload['x']},{payload['y']} consistent with the params")
+                f"vertices, tile {payload['x']},{payload['y']} consistent with the params; the counts "
+                f"describe {required} of the {mmap.declared_size} declared bytes")
 
     anchor_height = terrain(anchor_x, anchor_y)
     obstacles, candidates = [], []
@@ -576,8 +661,17 @@ def build_vmtile(spawns):
     return VMAP_MAGIC + struct.pack("<I", len(spawns)) + records
 
 
-def build_vmtree():
-    return VMAP_MAGIC + b"\x01" + b"NODE" + struct.pack("<I", 0) + b"GOBJ"
+def build_vmtree(objects=1, tree_entries=3):
+    """A tree StaticMapTree::InitMap can load: magic, tiled flag, NODE, BIH, GOBJ.
+
+    The BIH is bounds (six floats), a tree-entry count and its entries, then an object count and its
+    entries; the object count becomes iNTreeValues.
+    """
+    entries = [3 << 30] + [0] * (tree_entries - 1)
+    body = struct.pack("<6f", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    body += struct.pack("<I", tree_entries) + struct.pack(f"<{tree_entries}I", *entries)
+    body += struct.pack("<I", objects) + struct.pack(f"<{objects}I", *range(objects))
+    return VMAP_MAGIC + b"\x01" + b"NODE" + body + b"GOBJ"
 
 
 def build_mmap(orig=(-7466.6665, 1.1754943508222875e-38, -16000.0), max_polys=-2147483648):
@@ -597,7 +691,8 @@ def build_mmtile(tile_x, tile_y, bmin, bmax, payload_bytes=4096, magic=DT_NAVMES
 
 
 def write_synthetic_root(root, spawns=None, heights="flat", liquid_offset=0, with_tree=True,
-                         model_names=("Nsabbey.wmo",), anchor=(32.0, 32.0), flat_height=40.0):
+                         model_names=("Nsabbey.wmo",), anchor=(32.0, 32.0), flat_height=40.0,
+                         payload_bytes=4096):
     """A minimal but loadable data root for the anchor grid of the given anchor position."""
     root = Path(root)
     for name in ("maps", "vmaps", "mmaps"):
@@ -623,7 +718,7 @@ def write_synthetic_root(root, spawns=None, heights="flat", liquid_offset=0, wit
     tile_x = int(((bmin[0] + bmax[0]) / 2 - orig[0]) / SIZE_OF_GRIDS)
     tile_y = int(((bmin[2] + bmax[2]) / 2 - orig[2]) / SIZE_OF_GRIDS)
     (root / "mmaps" / f"000{gx:02d}{gy:02d}.mmtile").write_bytes(
-        build_mmtile(tile_x, tile_y, bmin, bmax))
+        build_mmtile(tile_x, tile_y, bmin, bmax, payload_bytes=payload_bytes))
     return gx, gy
 
 
@@ -674,8 +769,11 @@ def self_check():
             pass
         else:
             raise AssertionError("a truncated or wrongly magicked vmap tile was accepted")
-    assert read_vmap_tree(build_vmtree()) is None
-    assert read_vmap_tree(b"NOPE_4.8" + build_vmtree()[8:]) is not None
+    problem, info = read_vmap_tree(build_vmtree(objects=7, tree_entries=5))
+    assert problem is None and info["objects"] == 7 and info["consumed"] == info["size"]
+    assert read_vmap_tree(b"NOPE_4.8" + build_vmtree()[8:])[0] is not None
+    assert read_vmap_tree(VMAP_MAGIC + b"\x01" + b"NODE")[0] is not None
+    assert read_vmap_tree(build_vmtree()[:-4])[0] is not None
     # The median the coherence check uses must be of magnitudes, not of signed values.
     assert median([3.0, 1.0, 2.0]) == 2.0
     assert median([-100.0, 0.0, 100.0]) == 0.0 and median_abs([-100.0, 0.0, 100.0]) == 100.0
@@ -706,6 +804,32 @@ def self_check():
         (wrong_mesh / "mmaps" / f"000{gx:02d}{gy:02d}.mmtile").write_bytes(
             build_mmtile(0, 0, (0.0, 0.0, 0.0), (1.0, 1.0, 1.0), magic=0x12345678))
         assert not check(wrong_mesh, 0, (32.0, 32.0, 40.0))["pass"], "a wrong mesh magic was accepted"
+        short_payload = Path(temporary) / "short-payload"
+        write_synthetic_root(short_payload, payload_bytes=DT_MESH_HEADER_SIZE)
+        assert not check(short_payload, 0, (32.0, 32.0, 40.0))["pass"], \
+            "a payload too small for the arrays its counts describe was accepted"
+        truncated_tree = Path(temporary) / "truncated-tree"
+        gx, gy = write_synthetic_root(truncated_tree)
+        (truncated_tree / "vmaps" / "000.vmtree").write_bytes(VMAP_MAGIC + b"\x01" + b"NODE")
+        assert not check(truncated_tree, 0, (32.0, 32.0, 40.0))["pass"], \
+            "a tree without its BIH was accepted"
+        foreign_ref = Path(temporary) / "foreign-ref"
+        gx, gy = write_synthetic_root(foreign_ref)
+        tile_path = foreign_ref / "vmaps" / f"000_{gy:02d}_{gx:02d}.vmtile"
+        payload = tile_path.read_bytes()
+        tile_path.write_bytes(payload[:-4] + struct.pack("<I", 5))
+        assert not check(foreign_ref, 0, (32.0, 32.0, 40.0))["pass"], \
+            "a tile reference outside the tree's objects was accepted"
+        no_flight = Path(temporary) / "no-flight-bounds"
+        gx, gy = write_synthetic_root(no_flight, heights="flat")
+        map_path = no_flight / "maps" / f"000{gx:02d}{gy:02d}.map"
+        raw = bytearray(map_path.read_bytes())
+        height_offset = struct.unpack_from("<11I", raw, 0)[5]
+        struct.pack_into("<I", raw, height_offset + 4,
+                         MAP_HEIGHT_NO_HEIGHT | MAP_HEIGHT_HAS_FLIGHT_BOUNDS)
+        map_path.write_bytes(bytes(raw))
+        assert not check(no_flight, 0, (32.0, 32.0, 40.0))["pass"], \
+            "a height section claiming flight bounds without them was accepted"
         bogus_section = Path(temporary) / "bogus-section"
         write_synthetic_root(bogus_section, liquid_offset=99999999)
         assert not check(bogus_section, 0, (32.0, 32.0, 40.0))["pass"], "an out-of-file section was accepted"
