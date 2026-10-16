@@ -860,8 +860,10 @@ def segment_polygon(polygon, verts, first, second):
     """dtIntersectSegmentPoly2D: (tmin, tmax, entering edge, leaving edge) in the horizontal plane.
 
     The same vertex walk and the same perpendicular in (x, z) that Detour uses, so a segment that
-    leaves the polygon does so through the edge raycast follows. Both endpoints inside gives -1 for the
-    leaving edge, which is how dtNavMeshQuery::raycast detects that the ray ends in this polygon.
+    leaves the polygon does so through the edge raycast follows. The edge of loop index i runs from
+    corner i-1 to corner i, and Detour stores that closing index as nverts-1, so the edge number is
+    wrapped here too; -1 is reserved for a crossing that does not exist, which is how
+    dtNavMeshQuery::raycast detects that the ray ends in this polygon.
     """
     tmin, tmax, entering, leaving = 0.0, 1.0, -1, -1
     direction = (second[0] - first[0], second[1] - first[1], second[2] - first[2])
@@ -880,11 +882,11 @@ def segment_polygon(polygon, verts, first, second):
         fraction = perpendicular / denominator
         if denominator < 0:  # the segment enters across this edge
             if fraction > tmin:
-                tmin, entering = fraction, index - 1
+                tmin, entering = fraction, (index - 1) % len(corners)
                 if tmin > tmax:
                     return None
         elif fraction < tmax:  # the segment leaves across this edge
-            tmax, leaving = fraction, index - 1
+            tmax, leaving = fraction, (index - 1) % len(corners)
             if tmax < tmin:
                 return None
     return tmin, tmax, entering, leaving
@@ -923,8 +925,8 @@ def navmesh_line_walk(verts, polygons, include_flags, start_polygon, goal_polygo
             return crossed, False, (f"the segment ends on polygon {polygon}, which is "
                                     f"{'not measurable' if step is None else f'{step:.2f} m'} from the "
                                     f"goal's polygon {goal_polygon}")
-        neighbour = polygons[polygon]["neis"][leaving % polygons[polygon]["vert_count"]]
-        edge = leaving % polygons[polygon]["vert_count"]
+        neighbour = polygons[polygon]["neis"][leaving]
+        edge = leaving
         if neighbour == 0:
             return crossed, False, f"polygon {polygon} edge {edge} has no neighbour"
         if neighbour & DT_EXT_LINK:
@@ -2091,6 +2093,41 @@ def self_check():
                 assert stopped is None and crossed[-1] == 1, (label, crossed)
             else:
                 assert stopped is not None, (label, crossed)
+        # A crossing through a polygon's closing edge (from its last corner back to corner 0) is a real
+        # portal: the edge number must be wrapped, or it collides with the -1 sentinel and the walk
+        # reports an obstruction over a connected corridor. Every edge is tested by mirroring a second
+        # rectangle across it, with the square's edge 3 being the closing one.
+        width = 100.0
+        square = [(0.0, 40.0, 0.0), (0.0, 40.0, width), (width, 40.0, width), (width, 40.0, 0.0)]
+        across = [(-width, 40.0, 0.0), (-width, 40.0, width), (0.0, 40.0, width), (0.0, 40.0, 0.0),
+                  (0.0, 40.0, width), (0.0, 40.0, 2 * width), (width, 40.0, 2 * width),
+                  (width, 40.0, width),
+                  (width, 40.0, 0.0), (width, 40.0, width), (2 * width, 40.0, width),
+                  (2 * width, 40.0, 0.0),
+                  (0.0, 40.0, -width), (0.0, 40.0, 0.0), (width, 40.0, 0.0), (width, 40.0, -width)]
+        ends = [(-width / 2, 40.0, width / 2), (width / 2, 40.0, 1.5 * width),
+                (1.5 * width, 40.0, width / 2), (width / 2, 40.0, -width / 2)]
+        start_of_line = (width / 2, 40.0, width / 2)
+        for edge in range(4):
+            verts_, polys_, adjacency_, _ = navmesh_graph(tile(
+                square + across[4 * edge:4 * edge + 4],
+                [((0, 1, 2, 3), tuple(2 if number == edge else 0 for number in range(4)), NAV_GROUND),
+                 ((4, 5, 6, 7), (0, 0, 0, 0), NAV_GROUND)]))
+            _, _, entering, leaving = segment_polygon(polys_[0], verts_, start_of_line, ends[edge])
+            assert (entering, leaving) == (-1, edge), (edge, entering, leaving)
+            crossed, reached, stopped = navmesh_line_walk(verts_, polys_, NAV_GROUND, 0, 1,
+                                                          start_of_line, ends[edge], 1.6)
+            assert reached and crossed == [0, 1] and stopped is None, (edge, crossed, reached, stopped)
+        # A segment that never leaves a polygon keeps -1 for its leaving edge, and the walk reports the
+        # segment ending there rather than a portal it cannot follow.
+        verts_, polys_, _, _ = navmesh_graph(tile(square + across[:4],
+                                                  [((0, 1, 2, 3), (0, 0, 0, 2), NAV_GROUND),
+                                                   ((4, 5, 6, 7), (0, 0, 0, 0), NAV_GROUND)]))
+        inside = segment_polygon(polys_[0], verts_, (width / 2, 40.0, width / 2),
+                                 (width / 4, 40.0, width / 4))
+        assert inside[2] == -1 and inside[3] == -1, inside
+        assert navmesh_line_walk(verts_, polys_, NAV_GROUND, 0, 1, (width / 2, 40.0, width / 2),
+                                 (width / 4, 40.0, width / 4), 1.6)[1] is False
         # A vertex or neighbour index outside its array is corrupt data, not a usable graph.
         assert navmesh_graph(tile([(0.0, 40.0, 0.0)], [((0, 1, 2, 3), (0, 0, 0, 0), NAV_GROUND)]))[3]
         assert any("links to polygon" in problem for problem in

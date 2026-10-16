@@ -272,7 +272,9 @@ the ramp's centre height would not; two touching rectangles that span the blocke
 longer route are still reported **walkable** because the walk crosses their shared portal, a 4 m carved
 gap is reported obstructed, a **continuous ramp** whose middle edge is 10 m above its ends is walkable
 (each portal step is 0 m, which a chord comparison would wrongly call a gap), a 5 m step at a portal is
-obstructed, and a neighbour the filter rejects ends the walk; and a vertex index, a neighbour index or a
+obstructed, a neighbour the filter rejects ends the walk, and a crossing through **every** edge of a
+polygon — including its closing edge, whose number must be wrapped or it collides with the absent-crossing
+sentinel — is followed; and a vertex index, a neighbour index or a
 vertex count outside this Detour's own arrays is rejected instead of followed. The native run is still
 the judge.
 
