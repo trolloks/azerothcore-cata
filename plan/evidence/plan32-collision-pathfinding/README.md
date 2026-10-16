@@ -223,7 +223,7 @@ match — including the ones with flags 0. This tile has `6300` of `6312` polygo
 | --- | --- |
 | Start (blocked, first end) | `(-8830.95, -198.96)`, terrain `82.801`, polygon `3324`, surface `-0.27` m |
 | Goal (blocked, second end) | `(-8860.72, -187.23)`, terrain `80.339`, polygon `2793`, surface `+2.79` m |
-| Blocked straight line | `32.00 m`; `9` of `62` points have no walkable surface within the `1.60 m` climb |
+| Blocked straight line | `32.00 m`; the walk stops after `3` polygons at `11.66 m`, where `3066` has no neighbour |
 | Route | `56` polygons, `261.45 m` of centre-to-centre steps (reported, not asserted) |
 | Start's component | `3767 of 6300` walkable polygons |
 | Rejected | polygon `2753` (start cannot reach it) and a point past the tile edge — no route for either |
@@ -231,12 +231,16 @@ match — including the ones with flags 0. This tile has `6300` of `6312` polygo
 **The detour is tested on the line, not inferred from the route's length.** A longer centre-to-centre
 cost does not show that the corridor leaves the straight line: two large polygons can span a blocked
 line while their centres are far apart, and a navmesh that covers the line would let the creature walk
-straight through the obstacle. So the walker's own straight line between the two endpoints — at the
-surface heights they stand on, since an endpoint can be on a raised floor — is sampled every
-`walkable_radius` (the agent's own radius, so a gap carved for that agent is wider than one step and
-cannot fall between two samples) and the check fails when every point has a walkable surface within
-`walkable_climb` of it. On this tile the uncovered points land at 12.1–13.6 m and 17.3–19.4 m along the
-line, around the obstacle's blocking hit at 18.0 m, which is the wall's carved gap.
+straight through the obstacle. The line is therefore walked the way `dtNavMeshQuery::raycast` walks one:
+the fixed segment is cast at the current polygon with `dtIntersectSegmentPoly2D`'s own edge test, the
+edge it leaves by is followed through the tile's `dtPoly.neis` (the same map `connectIntLinks` builds
+links from), and an off-mesh connection or a polygon the walker's filter rejects ends the walk. The
+line's height against a global chord decides nothing — a continuous ramp is walkable the whole way up —
+so the two surfaces are compared at each actual portal instead, and a step above `walkable_climb` stops
+the walk because a walker cannot take it even though a ray can. Reaching the goal polygon means the
+navmesh covers the line the LOS pair blocks, which is a tile that disagrees with its collision. Here the
+walk stops after `3` ground polygons at `11.66 m` of the `32.00 m` line, where polygon `3066` has no
+neighbour: the wall's carved gap, ahead of the obstacle's blocking hit at `18.01 m`.
 
 ```
 $ python3 apps/cata/check_collision_geometry.py --data-root .../cata-runs/plan32-pipeline/data --chase
@@ -245,9 +249,8 @@ $ python3 apps/cata/check_collision_geometry.py --data-root .../cata-runs/plan32
   [PASS] navmesh.ends_on_navmesh: start … polygon 3324, whose surface is -0.27 m above the terrain
                       there; goal … polygon 2793, whose surface is +2.79 m above the terrain there
   [PASS] navmesh.route: a 56-polygon route from polygon 3324 to 2793 through the walker's own links
-  [PASS] navmesh.blocked_line_not_walkable: 9 of 62 points on the blocked 32.09 m line have no
-                      walkable surface within the agent's 1.60 m climb (sampled every 0.53 m, the
-                      agent's own radius)
+  [PASS] navmesh.blocked_line_not_walkable: the walker's straight line over the blocked 32.09 m is
+                      obstructed after 3 polygon(s): polygon 3066 edge 1 has no neighbour
   [PASS] navmesh.unreachable_rejected: no route is reported to a polygon the start cannot reach, and a
                       point outside the tile resolves to no polygon instead of to the nearest one …
   Chase path PASS.
@@ -262,13 +265,16 @@ Two honest limits are printed with the derivation, because each one bounds what 
   vertex fan, which is what a convex polygon's surface is; Detour can refine that with the detail mesh
   (`dtPolyDetail`), which this check does not parse.
 
-`--self-check` covers the parse, the filter, the surface height and the coverage test synthetically: a
+`--self-check` covers the parse, the filter, the surface height and the line walk synthetically: a
 shared edge routes; a detached polygon, a roof polygon and a polygon whose flags the walker's filter
 rejects are not destinations; a sloped ramp's surface under the point beats the overlapping floor while
-the ramp's centre height would not; two touching rectangles that span the blocked line and hold a longer
-route are still rejected because the line is covered, while the same shape with a carved gap is not; and
-a vertex index, a neighbour index or a vertex count outside this Detour's own arrays is rejected instead
-of followed. The native run is still the judge.
+the ramp's centre height would not; two touching rectangles that span the blocked line and hold a 2.5x
+longer route are still reported **walkable** because the walk crosses their shared portal, a 4 m carved
+gap is reported obstructed, a **continuous ramp** whose middle edge is 10 m above its ends is walkable
+(each portal step is 0 m, which a chord comparison would wrongly call a gap), a 5 m step at a portal is
+obstructed, and a neighbour the filter rejects ends the walk; and a vertex index, a neighbour index or a
+vertex count outside this Detour's own arrays is rejected instead of followed. The native run is still
+the judge.
 
 The checker reports thirteen checks, one for each way the artifacts can fail to be loadable: the map
 magic/version/build (15595); every declared map section the terrain loader opens (area, height, liquid,
