@@ -191,6 +191,32 @@ TARGET_TARGETED_SPELL_CAST_ACTION_BUTTON = 0
 # (see above).
 TARGET_TARGETED_SPELL_CAST_DUMMY_GUID = 99990001
 TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY = 2809
+PLAN32_GEOMETRY_MODE = "plan32-geometry"
+# One acceptance mode carries the remaining Plan 32 stages; each generation runs one stage from a
+# pinned seed, so no travel between pinned points is needed. Stages arrive in this order; only the
+# implemented ones are accepted by prepare/run/verify.
+PLAN32_GEOMETRY_STAGES = ("blocked", "clear")
+# Blocked: caster at the pinned blocked-line start, Boar 80% along that line behind the abbey wall
+# (the probed setup: 25.67 m, comparable to the clear attempt below). Clear: caster at the pinned
+# clear-line start, Boar 80% along that line (same 25.67 m, a matched control on open ground), so
+# the full 32.09 m pinned line stays the expectation while both attempts share one distance. Every
+# Z below is the artifact terrain height at that point, read out of the staged root before any run.
+PLAN32_GEOMETRY_SEEDS = {
+    "blocked": {
+        "character": (-8830.95, -198.96, 82.801, 2.766),
+        "dummy": (-8854.766, -189.576, 80.422),
+    },
+    "clear": {
+        "character": (-8775.13, -220.95, 85.254, 2.766),
+        "dummy": (-8798.946, -211.566, 82.845),
+    },
+}
+# Runtime z must reproduce the seeded terrain height within this; the accepted geometry run settled
+# to 1 mm, so 10 cm leaves room for packet float rounding without hiding a wrong surface.
+PLAN32_GEOMETRY_HEIGHT_TOLERANCE = 0.1
+PLAN32_GEOMETRY_SPELL_ID = TARGET_TARGETED_SPELL_CAST_SPELL_ID
+PLAN32_GEOMETRY_ACTION_BUTTON = TARGET_TARGETED_SPELL_CAST_ACTION_BUTTON
+PLAN32_GEOMETRY_TARGET_KEY = "Tab"
 INVALID_TARGET_SPELL_CAST_MODE = "invalid-target-spell-cast"
 # Issue #85's remaining "invalid-target negative case" acceptance item, exercised via the action
 # bar like the other cast modes above. Reuses the Fireball grant from target_targeted_spell_cast_
@@ -247,7 +273,7 @@ POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
     IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
     WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-    INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
+    INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
 })
 CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
@@ -267,6 +293,18 @@ if ISSUE97:
 ISSUE97_PHASED_CREATURE_GUID, ISSUE97_CONTROL_CREATURE_GUID, ISSUE97_PHASED_GO_GUID = 9970001, 9970002, 9970001
 ISSUE97_CREATURE_ENTRY, ISSUE97_CONTROL_CREATURE_ENTRY = 197, 823
 ISSUE97_GO_ENTRY, ISSUE97_PHASE_ID = 2843, 125
+# Plan 32 geometry stages seed from the table above, same env-gated pattern as ISSUE97. Only
+# prepare and run need the variable (both seed from it); verify reads the stage back out of the
+# generation record, so a verify without the variable still checks the right expectations.
+if os.environ.get("PLAN32_STAGE", "") in PLAN32_GEOMETRY_SEEDS:
+    CHARACTER_POSITION = PLAN32_GEOMETRY_SEEDS[os.environ["PLAN32_STAGE"]]["character"][:3]
+    CHARACTER_ORIENTATION = PLAN32_GEOMETRY_SEEDS[os.environ["PLAN32_STAGE"]]["character"][3]
+
+
+def plan32_stage() -> str:
+    """The Plan 32 stage this command was asked for; empty when none was (or when verify reads a
+    generation whose record already carries it)."""
+    return os.environ.get("PLAN32_STAGE", "")
 
 
 def plan_number(mode: str) -> str:
@@ -280,6 +318,8 @@ def plan_number(mode: str) -> str:
         return "22"
     if mode in {GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE}:
         return "23"
+    if mode == PLAN32_GEOMETRY_MODE:
+        return "32"
     if mode == RUN_SPEED_MODE:
         return "16"
     if mode == BASIC_MOVEMENT_MODE:
@@ -669,6 +709,32 @@ def basic_spell_cast_seed_sql() -> str:
 
 def target_targeted_spell_cast_seed_sql() -> str:
     return spell_grant_seed_sql(TARGET_TARGETED_SPELL_CAST_SPELL_ID, TARGET_TARGETED_SPELL_CAST_ACTION_BUTTON)
+
+
+def plan32_spell_seed_sql() -> str:
+    return spell_grant_seed_sql(PLAN32_GEOMETRY_SPELL_ID, PLAN32_GEOMETRY_ACTION_BUTTON)
+
+
+def plan32_world_seed_sql(stage: str) -> str:
+    dummy_x, dummy_y, dummy_z = PLAN32_GEOMETRY_SEEDS[stage]["dummy"]
+    return (
+        "INSERT INTO `creature` "
+        "(`guid`,`id`,`map`,`zoneId`,`areaId`,`position_x`,`position_y`,`position_z`,"
+        "`wander_distance`,`MovementType`) "
+        f"VALUES ({TARGET_TARGETED_SPELL_CAST_DUMMY_GUID},{TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY},"
+        f"{CHARACTER_MAP},{CHARACTER_ZONE},{CHARACTER_ZONE},{dummy_x},{dummy_y},{dummy_z},0,0) "
+        "ON DUPLICATE KEY UPDATE `position_x`=VALUES(`position_x`),`position_y`=VALUES(`position_y`),"
+        "`position_z`=VALUES(`position_z`);"
+    )
+
+
+def plan32_dummy_full_guid() -> int:
+    """The Boar's full 64-bit GUID as it appears on the wire (counter | entry << 24 | hi << 48)."""
+    return (
+        TARGET_TARGETED_SPELL_CAST_DUMMY_GUID
+        | (TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY << 24)
+        | (0xF130 << 48)
+    )
 
 
 def target_targeted_spell_cast_world_seed_sql() -> str:
@@ -1180,6 +1246,11 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         "Ra.Enable": "0",
         "SOAP.Enabled": "0",
         "Cluster.Enabled": "0",
+        # The Plan 32 mode verifies against the wire payloads (cast counters, the CAST_FAILED
+        # reason byte), so its generations always capture them. Filenames are relative to LogsDir;
+        # empty everywhere else, which leaves packet logging off (sessions also need the flag the
+        # socket reads from this same key).
+        "PacketLogFile": '"packets.pkt"' if generation["mode"] == PLAN32_GEOMETRY_MODE else '""',
         "Appender.Server": '2,5,1,WorldServer.log,w',
         "Logger.network": (
             "5,Server" if ISSUE97 or generation["mode"] in {
@@ -2102,6 +2173,23 @@ def automate_ground_movement(generation: Generation) -> None:
     automate_key_sequence(generation, GROUND_MOVEMENT_KEYS)
 
 
+def automate_plan32_geometry(generation: Generation) -> None:
+    # One walk tap (height and walk evidence at the seed), then Tab-target and two ordinary,
+    # uncancelled Fireball casts. No Escape: Codex's confirmation requires both attempts to run
+    # through their observation windows so a failure cannot be a client-side cancel.
+    capture_desktop_screenshot(generation, "desktop-before-target.png")
+    automate_key_sequence(generation, ("w",), hold_seconds=0.6, gap_seconds=0.4)
+    automate_key_sequence(generation, (PLAN32_GEOMETRY_TARGET_KEY,))
+    time.sleep(1.0)  # let the client register the new target before casting
+    capture_desktop_screenshot(generation, "desktop-after-target.png")
+    automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(6.0)  # let the first cast resolve (Fireball has a real cast time)
+    capture_desktop_screenshot(generation, "desktop-after-first-cast.png")
+    automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(6.0)
+    capture_desktop_screenshot(generation, "desktop-after-second-cast.png")
+
+
 def automate_issue97_phases(generation: Generation, deadline: float) -> None:
     # Measure accepted stops; startup input can cover much less distance than later taps.
     stages = []
@@ -2531,6 +2619,15 @@ def run_client(args: argparse.Namespace) -> None:
     if generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE:
         mysql(manifest, generation, target_targeted_spell_cast_seed_sql(), generation["schemas"]["characters"])
         mysql(manifest, generation, target_targeted_spell_cast_world_seed_sql(), generation["schemas"]["world"])
+    if generation["mode"] == PLAN32_GEOMETRY_MODE:
+        stage = plan32_stage()
+        if stage not in PLAN32_GEOMETRY_SEEDS:
+            raise RuntimeError(
+                f"plan32-geometry needs PLAN32_STAGE in {sorted(PLAN32_GEOMETRY_SEEDS)}; got {stage!r}"
+            )
+        generation["plan32_stage"] = stage
+        mysql(manifest, generation, plan32_spell_seed_sql(), generation["schemas"]["characters"])
+        mysql(manifest, generation, plan32_world_seed_sql(stage), generation["schemas"]["world"])
     if generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE:
         mysql(manifest, generation, target_targeted_spell_cast_seed_sql(), generation["schemas"]["characters"])
     if generation["mode"] == LEVEL_UP_MODE:
@@ -2593,6 +2690,7 @@ def run_client(args: argparse.Namespace) -> None:
         walk_run_mode_switch_sent = False
         spell_cast_sent = False
         target_targeted_spell_cast_sent = False
+        plan32_geometry_sent = False
         chat_message_sent = False
         invalid_target_spell_cast_sent = False
         level_up_sent = False
@@ -2664,6 +2762,12 @@ def run_client(args: argparse.Namespace) -> None:
                 ):
                     automate_target_targeted_spell_cast(generation)
                     target_targeted_spell_cast_sent = True
+                if (
+                    generation["mode"] == PLAN32_GEOMETRY_MODE and selection_sent
+                    and not plan32_geometry_sent and in_world_control_marker_count(generation) > 0
+                ):
+                    automate_plan32_geometry(generation)
+                    plan32_geometry_sent = True
                 if (
                     generation["mode"] == CHAT_MESSAGE_MODE and selection_sent and not chat_message_sent
                     and in_world_control_marker_count(generation) > 0
@@ -2960,6 +3064,78 @@ def ground_movement_sequence(generation: Generation) -> list[str]:
     return [str(sample["opcode"]) for sample in ground_movement_samples(generation)]
 
 
+# Wire numbers from src/server/game/Server/Protocol/Opcodes.h; payload layouts from
+# WorldSession::HandleCastSpellOpcode (cast), Spell::WriteCastResultInfo (failed) and
+# Spell::SendSpellGo (go). Only the Plan 32 mode reads the capture.
+PKT_LOG_HEADER_SIZE = 66
+PKT_PACKET_HEADER_SIZE = 44
+CMSG_SET_SELECTION_OPCODE = 0x506
+CMSG_CAST_SPELL_OPCODE = 0x4C07
+SMSG_CAST_FAILED_OPCODE = 0x4D16
+SMSG_SPELL_GO_OPCODE = 0x6E16
+SPELL_FAILED_LINE_OF_SIGHT_RESULT = 49
+
+
+def read_packed_guid(data: bytes, offset: int) -> tuple[int, int]:
+    """One packed GUID: a mask byte followed by the non-zero bytes in order."""
+    mask = data[offset]
+    guid = 0
+    cursor = offset + 1
+    for index in range(8):
+        if mask & (1 << index):
+            guid |= data[cursor] << (index * 8)
+            cursor += 1
+    return guid, cursor
+
+
+def plan32_packet_events(generation: Generation) -> list[dict[str, object]]:
+    """The cast correlation for one Plan 32 run, in arrival order: selections (target GUID),
+    casts (counter, spell, target GUID or None) and their outcomes (failed: counter, spell,
+    result; go: caster, counter, spell). Anything else on the wire is ignored."""
+    path = Path(generation["paths"]["logs"]) / "packets.pkt"
+    if not path.is_file():
+        return []
+    data = path.read_bytes()
+    events: list[dict[str, object]] = []
+    offset = PKT_LOG_HEADER_SIZE
+    while offset + PKT_PACKET_HEADER_SIZE <= len(data):
+        direction, _, _, optional_size, length = struct.unpack_from("<IIIII", data, offset)
+        if optional_size != 20 or length > 65535 or length < 4:
+            raise RuntimeError(f"plan32 packet log desynchronised at byte {offset}")
+        opcode = struct.unpack_from("<I", data, offset + 40)[0]
+        payload = data[offset + 44:offset + 40 + length]
+        side = "c2s" if direction == 0x47534D43 else "s2c"
+        if opcode == CMSG_SET_SELECTION_OPCODE:
+            target, _ = read_packed_guid(payload, 0)
+            events.append({"opcode": "CMSG_SET_SELECTION", "side": side, "target": target})
+        elif opcode == CMSG_CAST_SPELL_OPCODE:
+            count = payload[0]
+            spell = struct.unpack_from("<I", payload, 1)[0]
+            mask = struct.unpack_from("<I", payload, 10)[0]
+            target = None
+            if mask & 0x00000002:
+                target, _ = read_packed_guid(payload, 14)
+            events.append({
+                "opcode": "CMSG_CAST_SPELL", "side": side, "count": count,
+                "spell": spell, "target": target,
+            })
+        elif opcode == SMSG_CAST_FAILED_OPCODE:
+            events.append({
+                "opcode": "SMSG_CAST_FAILED", "side": side, "count": payload[0],
+                "spell": struct.unpack_from("<I", payload, 1)[0], "result": payload[5],
+            })
+        elif opcode == SMSG_SPELL_GO_OPCODE:
+            caster, cursor = read_packed_guid(payload, 0)
+            _, cursor = read_packed_guid(payload, cursor)
+            events.append({
+                "opcode": "SMSG_SPELL_GO", "side": side, "caster": caster,
+                "count": payload[cursor],
+                "spell": struct.unpack_from("<I", payload, cursor + 1)[0],
+            })
+        offset += PKT_PACKET_HEADER_SIZE + (length - 4)
+    return events
+
+
 def ground_movement_action_samples(
     samples: list[dict[str, str | float]],
 ) -> list[dict[str, str | float]]:
@@ -3102,6 +3278,28 @@ TARGET_TARGETED_SPELL_CAST_SEQUENCE = re.compile(
     r"\bSMSG_CAST_FAILED\b.*?\bCMSG_CAST_SPELL\b.*?\bSMSG_SPELL_GO\b",
     re.DOTALL,
 )
+PLAN32_CAST_PACKET = re.compile(r"\bC->S:\s+.*?\bCMSG_CAST_SPELL\b")
+
+
+def plan32_cast_marker_count(generation: Generation) -> int:
+    after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
+    after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
+    return len(PLAN32_CAST_PACKET.findall(after_sync))
+
+
+def plan32_settle_z(generation: Generation) -> float | None:
+    """The z of the first post-marker movement sample: the walk tap's START carries the spawn
+    position (after any world-entry settle), so this is the runtime height at the pinned point
+    even though the tap then walks away from it."""
+    samples = ground_movement_samples(generation)
+    return float(samples[0]["z"]) if samples else None
+
+
+def selections_target_boar(events: list[dict[str, object]], boar: int) -> bool:
+    """The automation presses Tab once: the last selection must be the Boar, so the casts that
+    follow cannot be aimed at a nearer friendly unit or a critter."""
+    selections = [event for event in events if event["opcode"] == "CMSG_SET_SELECTION"]
+    return bool(selections) and selections[-1].get("target") == boar
 
 
 def target_targeted_spell_cast_marker_count(generation: Generation) -> int:
@@ -3159,7 +3357,7 @@ POST_MARKER_MODES = frozenset({
     INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
     GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE, CHARACTER_CREATION_MODE,
     BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
-    LEVEL_UP_MODE,
+    LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -3176,6 +3374,7 @@ POST_MARKER_COUNTERS = {
     CHAT_MESSAGE_MODE: chat_message_marker_count,
     INVALID_TARGET_SPELL_CAST_MODE: invalid_target_spell_cast_marker_count,
     LEVEL_UP_MODE: level_up_settle_signal,
+    PLAN32_GEOMETRY_MODE: plan32_cast_marker_count,
 }
 
 
@@ -3323,10 +3522,11 @@ def sanitized_evidence(
     chat_message_mode = generation["mode"] == CHAT_MESSAGE_MODE
     invalid_target_spell_cast_mode = generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE
     level_up_mode = generation["mode"] == LEVEL_UP_MODE
+    plan32_geometry_mode = generation["mode"] == PLAN32_GEOMETRY_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
         WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
+        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
@@ -3356,6 +3556,7 @@ def sanitized_evidence(
             and "characters_completed" in milestones
             else "jump_fall_land_pass_candidate" if jump_fall_land_mode and "characters_completed" in milestones
             else "ground_movement_pass_candidate" if ground_movement_mode and "characters_completed" in milestones
+            else "plan32_geometry_pass_candidate" if plan32_geometry_mode and "characters_completed" in milestones
             else "basic_movement_pass_candidate" if basic_movement_mode and "characters_completed" in milestones
             else "in_world_control_bootstrap_candidate" if in_world_control_mode and "characters_completed" in milestones
             else "map_insertion_object_bootstrap_candidate" if map_insertion_mode and "characters_completed" in milestones
@@ -3406,6 +3607,18 @@ def sanitized_evidence(
         "invalid_target_spell_cast_sequence_count": (
             invalid_target_spell_cast_marker_count(generation) if invalid_target_spell_cast_mode else None
         ),
+        "plan32_stage": generation.get("plan32_stage") if plan32_geometry_mode else None,
+        "plan32_casts": (
+            [
+                {key: event[key] for key in ("opcode", "side", "count", "spell", "target", "result", "caster")
+                 if key in event}
+                for event in plan32_packet_events(generation)
+                if event["opcode"] in {
+                    "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO",
+                }
+            ] if plan32_geometry_mode else None
+        ),
+        "plan32_settle_z": plan32_settle_z(generation) if plan32_geometry_mode else None,
         "creation_marker_count": creation_marker_count_value if creation_mode else None,
         "post_marker_hold_seconds": (
             generation.get("post_marker_hold_seconds", 0) if generation["mode"] in POST_MARKER_MODES else None
@@ -3465,10 +3678,11 @@ def verify(args: argparse.Namespace) -> None:
     chat_message_mode = generation["mode"] == CHAT_MESSAGE_MODE
     invalid_target_spell_cast_mode = generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE
     level_up_mode = generation["mode"] == LEVEL_UP_MODE
+    plan32_geometry_mode = generation["mode"] == PLAN32_GEOMETRY_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
         WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
+        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     rows = character_row_count(manifest, generation) if character_mode else None
@@ -3599,6 +3813,54 @@ def verify(args: argparse.Namespace) -> None:
                 and evidence["cast_failed_marker_count"] > 0
                 and evidence["target_targeted_spell_cast_sequence_count"] > 0
             )
+        if plan32_geometry_mode:
+            stage = generation.get("plan32_stage")
+            casts = evidence["plan32_casts"] or []
+            boar = plan32_dummy_full_guid()
+            first_selection = next(
+                (index for index, event in enumerate(casts)
+                 if event["opcode"] == "CMSG_SET_SELECTION"), None,
+            )
+            after_selection = casts[first_selection:] if first_selection is not None else []
+            sent = [event for event in after_selection if event["opcode"] == "CMSG_CAST_SPELL"]
+            fails = [event for event in after_selection if event["opcode"] == "SMSG_CAST_FAILED"]
+            goes = [
+                event for event in after_selection
+                if event["opcode"] == "SMSG_SPELL_GO" and event.get("spell") == PLAN32_GEOMETRY_SPELL_ID
+                and event.get("caster") == CHARACTER_GUID
+            ]
+            # Every request names Fireball at the Boar with the client's own counters, in order.
+            casts_ok = (
+                [event.get("count") for event in sent] == [1, 2]
+                and all(event.get("spell") == PLAN32_GEOMETRY_SPELL_ID for event in sent)
+                and all(event.get("target") == boar for event in sent)
+            )
+            settle_z = evidence["plan32_settle_z"]
+            expected_z = PLAN32_GEOMETRY_SEEDS.get(str(stage), {}).get("character", (None, None, None))[2]
+            height_ok = (
+                settle_z is not None and expected_z is not None
+                and abs(float(settle_z) - expected_z) <= PLAN32_GEOMETRY_HEIGHT_TOLERANCE
+            )
+            if stage == "blocked":
+                stage_ok = (
+                    casts_ok
+                    and [
+                        (event.get("count"), event.get("spell"), event.get("result"))
+                        for event in fails
+                    ] == [(1, PLAN32_GEOMETRY_SPELL_ID, SPELL_FAILED_LINE_OF_SIGHT_RESULT),
+                          (2, PLAN32_GEOMETRY_SPELL_ID, SPELL_FAILED_LINE_OF_SIGHT_RESULT)]
+                    and not goes
+                )
+            elif stage == "clear":
+                stage_ok = casts_ok and len(goes) >= 1 and not fails
+            else:
+                stage_ok = False
+            character_ok = character_ok and (
+                stage in PLAN32_GEOMETRY_SEEDS
+                and selections_target_boar(casts, boar)
+                and stage_ok
+                and height_ok
+            )
         if chat_message_mode:
             character_ok = character_ok and evidence["chat_message_marker_count"] > 0
         if invalid_target_spell_cast_mode:
@@ -3636,6 +3898,10 @@ def verify(args: argparse.Namespace) -> None:
                 else "invalid_target_spell_cast_pass" if invalid_target_spell_cast_mode
                 else "jump_fall_land_pass" if jump_fall_land_mode
                 else "walk_run_mode_switch_pass" if walk_run_mode_switch_mode
+                else "plan32_geometry_blocked_pass" if plan32_geometry_mode
+                and generation.get("plan32_stage") == "blocked"
+                else "plan32_geometry_clear_pass" if plan32_geometry_mode
+                and generation.get("plan32_stage") == "clear"
                 else "ground_movement_pass" if ground_movement_mode
                 else "basic_movement_pass" if basic_movement_mode
                 else "in_world_control_bootstrap_pass" if in_world_control_mode
@@ -4415,6 +4681,69 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert exported_inputs(True)["geometry"] is True
     assert exported_inputs(False) != exported_inputs(True)
     assert exported_inputs(True)["vmaps_tree_sha256"] == "e" * 64
+
+    # Plan 32 geometry mode: wire correlation against a synthetic capture
+    assert PLAN32_GEOMETRY_MODE in POPULATED_CHARACTER_MODES
+    assert PLAN32_GEOMETRY_MODE in POST_MARKER_MODES
+    assert plan_number(PLAN32_GEOMETRY_MODE) == "32"
+    boar = plan32_dummy_full_guid()
+    # counter 99990001 is 0x05F5B101, wider than 24 bits, so its top nibble bleeds into the
+    # entry field exactly as ObjectGuid(hi, entry, counter) ORs it: entry reads 0x0AFD.
+    assert boar == 0xF130000AFDF5B9F1
+    assert set(PLAN32_GEOMETRY_SEEDS) == set(PLAN32_GEOMETRY_STAGES) == {"blocked", "clear"}
+    assert "-8854.766" in plan32_world_seed_sql("blocked") and "80.422" in plan32_world_seed_sql("blocked")
+    assert "-8798.946" in plan32_world_seed_sql("clear") and "82.845" in plan32_world_seed_sql("clear")
+    assert f"VALUES ({CHARACTER_GUID},0,0,{PLAN32_GEOMETRY_SPELL_ID},0)" in plan32_spell_seed_sql()
+
+    def pack_guid(value: int) -> bytes:
+        mask = 0
+        body = b""
+        for index in range(8):
+            byte = (value >> (index * 8)) & 0xFF
+            if byte:
+                mask |= 1 << index
+                body += bytes([byte])
+        return bytes([mask]) + body
+
+    def pkt(direction: int, opcode: int, payload: bytes) -> bytes:
+        return (
+            struct.pack("<IIIII", direction, 0, 0, 20, len(payload) + 4)
+            + bytes(20) + struct.pack("<I", opcode) + payload
+        )
+
+    C2S, S2C = 0x47534D43, 0x47534D53
+    player = pack_guid(CHARACTER_GUID)
+    boar_packed = pack_guid(boar)
+    synthetic = (
+        b"PKT" + bytes(63)
+        + pkt(C2S, CMSG_SET_SELECTION_OPCODE, boar_packed)
+        + pkt(C2S, CMSG_CAST_SPELL_OPCODE,
+              bytes([1]) + struct.pack("<I", 133) + bytes(4) + struct.pack("<I", 2) + boar_packed)
+        + pkt(S2C, SMSG_CAST_FAILED_OPCODE, bytes([1]) + struct.pack("<I", 133) + bytes([49]))
+        + pkt(C2S, CMSG_CAST_SPELL_OPCODE,
+              bytes([2]) + struct.pack("<I", 133) + bytes(4) + struct.pack("<I", 2) + boar_packed)
+        + pkt(S2C, SMSG_CAST_FAILED_OPCODE, bytes([2]) + struct.pack("<I", 133) + bytes([49]))
+        + pkt(S2C, SMSG_SPELL_GO_OPCODE, player + player + bytes([3]) + struct.pack("<I", 133))
+    )
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary) / "logs"
+        logs.mkdir()
+        (logs / "packets.pkt").write_bytes(synthetic)
+        probe_generation: Generation = {"paths": {"logs": str(logs)}}
+        events = plan32_packet_events(probe_generation)
+    assert [event["opcode"] for event in events] == [
+        "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED",
+        "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO",
+    ]
+    assert events[0]["target"] == boar
+    assert [(e.get("count"), e.get("spell")) for e in events if e["opcode"] == "CMSG_CAST_SPELL"] == [(1, 133), (2, 133)]
+    assert [(e.get("count"), e.get("spell"), e.get("result")) for e in events if e["opcode"] == "SMSG_CAST_FAILED"] == [(1, 133, 49), (2, 133, 49)]
+    assert events[-1]["caster"] == CHARACTER_GUID and events[-1]["spell"] == 133
+    assert selections_target_boar(events, boar)
+    assert not selections_target_boar(
+        [{"opcode": "CMSG_SET_SELECTION", "target": CHARACTER_GUID}], boar,
+    )
+    assert not selections_target_boar([], boar)
     print("Real-client runner self-check passed")
 
 
@@ -4457,7 +4786,7 @@ def parser() -> argparse.ArgumentParser:
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,
             RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE,
             BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-            INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
+            INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
         ), default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)
