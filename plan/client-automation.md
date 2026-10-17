@@ -571,6 +571,36 @@ exactly the one marker-adjacent `MSG_MOVE_FALL_LAND` (`ground_movement_action_sa
 requires the exact 12-opcode list, all six directional pairs and the post-stop stability, so a
 landing anywhere else stays a failure. The raw sequence remains in the evidence unchanged.
 
+`--mode plan32-geometry` carries the Plan 32 pinned stages, one stage per generation selected by
+`PLAN32_STAGE` (`blocked`, `clear` or `chase`; prepare validates it, freezes it into the
+generation's `inputs` together with that stage's seeds, and run reads the frozen value and refuses
+a conflicting environment — a retry also re-seeds the character row, so it restarts from the
+pinned point). Every stage seeds the fixture at artifact-derived coordinates and targets it once
+by its unique name through the client-local `/target` macro. The LOS stages cast Fireball twice
+uncancelled; the chase stage casts once to aggro, then runs a pinned two-leg corner while the
+followed fixture must path around the same wall to melee range. Verify reads the packet capture
+(`packets.pkt`, staged for this mode's generations) instead of opcode names: every cast must name
+spell 133 at the agreed selection with the stage's own counters, each request's client counter
+must come back on its own outcome (the wire carries `CMSG_CANCEL_CAST`, so a cancel between the
+two fails the run), blocked requires two `SMSG_CAST_FAILED` with result 49 and no `SPELL_GO`,
+clear and chase require a player-cast `SPELL_GO` and no failure. Identity binds to the agreed
+selection plus the fixture's own create block: its entry field, its `HIGHGUID_UNIT` bits and its
+position must agree with the seeded spawn, the position advanced by the fixture's own spline
+packets at each cast (a fixture that never moved, as in the blocked stage, keeps its spawn). Two
+further conditions the mode rests on: the run must have used the artifacts the seeds were derived
+from (recorded vmap/mmap hashes, the server config's `MoveMaps.Enable`, `vmap.enableLOS` and
+`vmap.enableHeight`, and its `VMap support included. LineOfSight:true` startup line), and every
+cast's ray, re-derived from those vmaps between the two units' cast-time positions at eye height
+and again at a low point on the fixture, must break on the pinned obstacle for the blocked stage
+and be whole for the clear and chase stages. The chase stage additionally requires the staged
+mmap to route the fixture from its spawn to the player's end point with a real detour around that
+obstacle, so the detour it shows on the wire is what the data demands rather than an accident.
+Two facts this mode depends on: grid loading creates units with server-assigned map-local lows
+(keeping the DB guid only as spawnId), so identity binds to the agreed selection plus a
+seed-uniqueness gate rather than a precomputed GUID; and `WorldSocket` enables per-session packet
+logging whenever `PacketLogFile` is configured (previously a dead key without a GM command this
+`SCRIPTS=none` build does not have; empty by default).
+
 ## Building before a run
 
 `prepare` refuses binaries whose `--version` does not report the current HEAD, so a build is
