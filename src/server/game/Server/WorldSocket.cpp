@@ -181,7 +181,8 @@ WorldSocket::WorldSocket(IoContextTcpSocket&& socket)
       // to do nothing until a GM command flipped the per-session flag; that command lives in the
       // Commands scripts, so harness runs (SCRIPTS=none) could never capture payloads. Empty by
       // default, so behavior is unchanged unless the key is set.
-      _compressionStream(nullptr), _sendBufferSize(4096), _loggingPackets(!sConfigMgr->GetOption<std::string>("PacketLogFile", "").empty())
+      _compressionStream(nullptr), _sendBufferSize(4096),
+      _loggingPackets(!sConfigMgr->GetOption<std::string>("PacketLogFile", "").empty())
 {
     Acore::Crypto::GetRandomBytes(_authSeed);
     _headerBuffer.Resize(/*sizeof(ClientPktHeader)*/ 2);
