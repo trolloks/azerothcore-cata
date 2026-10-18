@@ -4575,30 +4575,36 @@ def plan32_chase_tracks(generation: Generation) -> dict[str, object]:
                     for share, _ in records
                 ],
                 "last_ticks": last_ticks,
-                "index": index,
+                "index": int(move["index"]),
             })
         for position, span in enumerate(spans):
             points, ticks = span["points"], span["ticks"]
             following = spans[position + 1] if position + 1 < len(spans) else None
+            # A packet that resumes from somewhere else at the tick this span's occupancy ends has
+            # already moved the mover by then, and only where the player's stop got there first,
+            # which the capture's own packet order has to say, does the position still stand. The
+            # same question decides the span's own endpoint, but only where that packet landed on
+            # it: a packet later than the spline's end leaves the endpoint the mover's own, while
+            # its arrival still ends the occupancy there.
+            superseded = (
+                following is not None
+                and math.dist(points[-1], following["points"][0]) > PLAN32_CHASE_JOIN_TOLERANCE
+                and not (final_stop is not None
+                         and int(final_stop["index"]) < int(following["index"]))
+            )
+            endpoint_superseded = superseded and int(following["ticks"][0]) == int(span["last_ticks"])
             if position:
                 join = math.dist(spans[position - 1]["points"][-1], points[0])
                 if join > PLAN32_CHASE_JOIN_TOLERANCE:
                     joins.append({"ticks": ticks[0], "gap": round(join, 3), "leg": len(legs)})
+            walk_legs = len(legs)
             for index in range(len(points) - 1):
                 legs.append({"from": points[index], "to": points[index + 1],
                              "first_ticks": ticks[index], "last_ticks": ticks[index + 1]})
+            if len(legs) > walk_legs:
+                legs[-1]["end_exclusive"] = endpoint_superseded
             hold_end = following["ticks"][0] if following else int(end_ticks)
             if hold_end >= int(span["last_ticks"]):
-                # Where the next packet puts the mover somewhere else, this position is only its
-                # own up to that packet: one later in the same millisecond has already moved it,
-                # so only the capture's packet order can say whether the stop came first.
-                superseded = (
-                    following is not None
-                    and math.dist(points[-1], following["points"][0])
-                    > PLAN32_CHASE_JOIN_TOLERANCE
-                    and not (final_stop is not None
-                             and int(final_stop["index"]) < int(following["index"]))
-                )
                 legs.append({"point": points[-1], "first_ticks": span["last_ticks"],
                              "last_ticks": hold_end, "exclusive": superseded})
         if arrival is not None:
@@ -4611,6 +4617,8 @@ def plan32_chase_tracks(generation: Generation) -> dict[str, object]:
                         arrival, PLAN32_CHASE_ARRIVAL_DISTANCE, floor,
                     )
                     if hit is None:
+                        continue
+                    if leg.get("end_exclusive") and math.dist(hit["point"], leg["to"]) < 1e-9:
                         continue
                     cut = (position, hit["point"], max(int(hit["ticks"]), floor))
                 else:
@@ -7155,6 +7163,78 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert len(superseded["joins"]) == 1 and superseded["joins"][0]["ticks"] == 3000
     assert abs(float(superseded["joins"][0]["gap"]) - 90.0) < 1e-9 and superseded["swings"] == []
     assert math.dist(superseded["executed"][-1], [10.0, 0.0, 0.0]) > PLAN32_CHASE_ARRIVAL_DISTANCE
+    # The stop-first order on the other kind of boundary: the detour is over and the mover stands
+    # at its endpoint, so the stop at 3000 lands while it is still there - the arrival is dated
+    # 3000 at (10,0) and the reset's own jump stays outside the observation.
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary) / "logs"
+        logs.mkdir()
+        (logs / "WorldServer.log").write_text(chase_log((10.0, 0.0)))
+        (logs / "packets.pkt").write_bytes(
+            b"PKT" + bytes(63)
+            + pkt(C2S, CMSG_SET_SELECTION_OPCODE, struct.pack("<Q", fixture))
+            + pkt(C2S, MSG_MOVE_START_FORWARD_OPCODE, b"", ticks=1000)
+            + pkt(S2C, SMSG_ON_MONSTER_MOVE_OPCODE, fast, ticks=1200)
+            + pkt(C2S, MSG_MOVE_STOP_STRAFE_OPCODE, b"", ticks=3000)
+            + pkt(S2C, SMSG_ON_MONSTER_MOVE_OPCODE, returned_reset, ticks=3000)
+            + pkt(S2C, SMSG_ATTACKERSTATEUPDATE_OPCODE, swing, ticks=3200)
+            + pkt(S2C, 0x3914, b"", ticks=6000)
+        )
+        hold_generation: Generation = {"paths": {"logs": str(logs), "raw_evidence": str(logs)}}
+        held = plan32_chase_tracks(hold_generation)
+    assert held["arrival_ticks"] == 3000 and held["joins"] == []
+    assert len(held["swings"]) == 1 and held["swings"][0]["ticks"] == 3200
+    assert math.dist(held["executed"][-1], [10.0, 0.0, 0.0]) <= PLAN32_CHASE_ARRIVAL_DISTANCE
+    # And the reset-first order at the walk's own endpoint: the packet that already moved the
+    # mover is the one that says where it is, so the endpoint at 2100 must not be read as the
+    # arrival - the observation keeps the 90 m jump it left behind and fails the stage on it.
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary) / "logs"
+        logs.mkdir()
+        (logs / "WorldServer.log").write_text(chase_log((10.0, 0.0)))
+        (logs / "packets.pkt").write_bytes(
+            b"PKT" + bytes(63)
+            + pkt(C2S, CMSG_SET_SELECTION_OPCODE, struct.pack("<Q", fixture))
+            + pkt(C2S, MSG_MOVE_START_FORWARD_OPCODE, b"", ticks=1000)
+            + pkt(S2C, SMSG_ON_MONSTER_MOVE_OPCODE, fast, ticks=1200)
+            + pkt(S2C, SMSG_ON_MONSTER_MOVE_OPCODE, returned_reset, ticks=2100)
+            + pkt(C2S, MSG_MOVE_STOP_STRAFE_OPCODE, b"", ticks=2100)
+            + pkt(S2C, SMSG_ATTACKERSTATEUPDATE_OPCODE, swing, ticks=2200)
+            + pkt(S2C, 0x3914, b"", ticks=6000)
+        )
+        left_first_generation: Generation = {"paths": {"logs": str(logs), "raw_evidence": str(logs)}}
+        left_first = plan32_chase_tracks(left_first_generation)
+    assert left_first["arrival_ticks"] == 6000, "the observation's own end, not a dated arrival"
+    assert len(left_first["joins"]) == 1 and left_first["joins"][0]["ticks"] == 2100
+    assert abs(float(left_first["joins"][0]["gap"]) - 90.0) < 1e-9 and left_first["swings"] == []
+    assert math.dist(left_first["executed"][-1], [10.0, 0.0, 0.0]) > PLAN32_CHASE_ARRIVAL_DISTANCE
+    # The same order where the reset interrupts the detour mid-spline instead: the position the
+    # walk had interpolated to at the interruption tick is no more the mover's own than a
+    # completed spline's last vertex is, so no arrival may be dated from it either.
+    interrupted_detour = move_pkt(
+        struct.pack("<I", 3) + struct.pack("<fffffffff", 0, 10, 0, 10, 10, 0, 10, 0, 0),
+        SPLINE_FLAG_UNCOMPRESSED_PATH, duration=10000,
+    )
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary) / "logs"
+        logs.mkdir()
+        (logs / "WorldServer.log").write_text(chase_log((10.0, 0.0)))
+        (logs / "packets.pkt").write_bytes(
+            b"PKT" + bytes(63)
+            + pkt(C2S, CMSG_SET_SELECTION_OPCODE, struct.pack("<Q", fixture))
+            + pkt(C2S, MSG_MOVE_START_FORWARD_OPCODE, b"", ticks=1000)
+            + pkt(S2C, SMSG_ON_MONSTER_MOVE_OPCODE, interrupted_detour, ticks=1200)
+            + pkt(S2C, SMSG_ON_MONSTER_MOVE_OPCODE, returned_reset, ticks=10000)
+            + pkt(C2S, MSG_MOVE_STOP_STRAFE_OPCODE, b"", ticks=10000)
+            + pkt(S2C, SMSG_ATTACKERSTATEUPDATE_OPCODE, swing, ticks=10200)
+            + pkt(S2C, 0x3914, b"", ticks=15000)
+        )
+        interrupted_generation: Generation = {"paths": {"logs": str(logs), "raw_evidence": str(logs)}}
+        interrupted = plan32_chase_tracks(interrupted_generation)
+    assert interrupted["arrival_ticks"] == 15000 and interrupted["swings"] == []
+    assert len(interrupted["joins"]) == 1 and interrupted["joins"][0]["ticks"] == 10000
+    assert abs(float(interrupted["joins"][0]["gap"]) - 90.072) < 0.01
+    assert math.dist(interrupted["executed"][-1], [10.0, 0.0, 0.0]) > PLAN32_CHASE_ARRIVAL_DISTANCE
     # A pass that only grazes the arrival radius is still an arrival, dated exactly where it
     # touches: the 6 m touch at (10,10) is at 7200, and the swing there proves melee range.
     grazing = move_pkt(
