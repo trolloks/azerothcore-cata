@@ -179,10 +179,11 @@ WorldSocket::WorldSocket(IoContextTcpSocket&& socket)
     : Socket(std::move(socket)), _OverSpeedPings(0), _worldSession(nullptr), _authed(false),
       // Sessions created while PacketLogFile is configured log their packets. The file alone used
       // to do nothing until a GM command flipped the per-session flag; that command lives in the
-      // Commands scripts, so harness runs (SCRIPTS=none) could never capture payloads. Empty by
-      // default, so behavior is unchanged unless the key is set.
+      // Commands scripts, so harness runs (SCRIPTS=none) could never capture payloads. The packet
+      // log reads and caches that configuration once at startup, so this asks it instead of the
+      // config manager: no per-connection lookup, no missing-key warning per connection.
       _compressionStream(nullptr), _sendBufferSize(4096),
-      _loggingPackets(!sConfigMgr->GetOption<std::string>("PacketLogFile", "").empty())
+      _loggingPackets(sPacketLog->CanLogPacket())
 {
     Acore::Crypto::GetRandomBytes(_authSeed);
     _headerBuffer.Resize(/*sizeof(ClientPktHeader)*/ 2);
