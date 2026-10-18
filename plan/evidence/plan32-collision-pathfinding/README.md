@@ -464,11 +464,73 @@ build needs are `libmysqlclient-dev` 8.0.46 at `/usr/include/mysql` and
 `/usr/lib/x86_64-linux-gnu/libmysqlclient.so` on this host — the `/tmp/mysql-dev` staging tree in the
 older build note does not survive a reboot.
 
-**What this does not prove.** The client's movement data is not a server query: no server-side height or
-LOS result was observed, so the pinned heights and the LOS pair remain expectations. No creature has
-chased anything, and walk/stop/logout/relog under geometry has not been observed. A later `--geometry`
-run must rebuild `worldserver`/`authserver` first — `prepare` refuses binaries whose `--version` does not
-report the current HEAD.
+**What the stages above do not prove.** The server's height query is exercised through movement
+acceptance — the server accepts the landing at the pinned point and its Z matches the artifact-derived
+seed within 0.1 m — not through an explicit height API probe. No client archive provenance was
+recorded for the staged artifacts. A later `--geometry` run must rebuild `worldserver`/`authserver`
+first — `prepare` refuses binaries whose `--version` does not report the current HEAD.
+
+## Geometry-mode acceptance (2026-10-18)
+
+`--mode plan32-geometry` drives one pinned stage per generation, selected and frozen through
+`PLAN32_STAGE`. Four generations reached `accepted` on the 2026-10-18 branch (`f01ef8c7e`, then
+`25e319c7e` for the session signals):
+
+- **Blocked, generation 6** (re-verified offline under the strengthened predicates) —
+  `plan32_geometry_blocked_pass`. Two `SMSG_CAST_FAILED` result 49 at the client's counters 1 and 2
+  and no `SPELL_GO`; both cast rays break on `Nsabbey.wmo` at eye and low height, 18.01 m into the
+  32.09 m line.
+- **Clear, generation 7** (re-verified offline) — `plan32_geometry_clear_pass`. `SMSG_SPELL_GO` at
+  counters 1 and 2 with no failure; both rays whole at both heights for both casts.
+- **Chase, generation 13** — `plan32_geometry_chase_pass`. One `SPELL_GO`, then the followed
+  fixture's own splines around the courtyard wall: 7 points, detour 2.02 (≥ 1.25), arrival 1.61 m,
+  gap 4.13 m (≤ 10), 36 melee swings. The pull ray is whole while the fixture's straight line to the
+  player's end point breaks on `Nsabbey.wmo` at both heights, and the staged mmap routes it 28.64 m
+  against 8.49 m straight.
+- **Relog, generation 15** — `plan32_geometry_relog_pass`. The walk tap is accepted to a stop at
+  `(-8779.044, -219.407, 85.008)`, exactly one `SMSG_LOGOUT_COMPLETE` follows with two
+  `CMSG_PLAYER_LOGIN` requests, and the landing after the second login is at that identical
+  position; both login requests and callbacks name the seeded character, and the walked stop is
+  4.21 m from the seeded login point.
+
+Each generation is its own harness run (`prepare --geometry`, `run`, `verify`) with the staged
+vmaps/mmaps/maps/dbc copied into it and hashed. What the verdicts rest on, beyond the stage rows:
+
+- **The run's own artifacts.** `plan32_geometry_facts` records the staged vmap and mmap content
+  hashes, the worldserver config's `MoveMaps.Enable`, `vmap.enableLOS` and `vmap.enableHeight`, and
+  the server's `VMap support included. LineOfSight:true, getHeight:true, indoorCheck:true PetLOS:true`
+  line; verify requires each to match that generation's staged inputs, and prepare refuses the mode
+  without `--geometry`.
+- **The selected unit's identity.** The macro's selection is bound to the fixture's own create block:
+  entry 361 in the field and in the GUID bits, `HIGHGUID_UNIT`, and a position within 0.5 m of the
+  seeded spawn, advanced by that unit's own spline packets at each cast.
+- **The cast correlation.** Every request's client counter has to come back on its own outcome for the
+  same spell at the agreed target, with no cancel between request and answer and the exact expected
+  counter list; a synthetic tamper check covers the predicate.
+- **The rays, not the flag.** Cast rays are re-derived from the staged vmaps between the two units'
+  cast-time positions at eye height and at a low point on the fixture. The blocked stage must break on
+  the pinned obstacle at both heights; the clear and chase stages must stay whole at both.
+- **Movement ownership and pins.** The accepted ground-movement samples, owned window and endpoint,
+  the stability hold and the character-row identity are the harness's usual checks; the run's settle Z
+  is compared with the pinned seed Z within 0.1 m, and the seeded points sit on the derived lines
+  within 0.25 m (6 mm perpendicular on the clear line in the relog run).
+- **The chase and relog stage claims.** The chase detour is measured from the fixture's own spline
+  points and stops at the move that arrives at the player, so an evading fixture's walk home cannot
+  inflate it; the staged route and the broken straight line carry the "must path around" burden. The
+  relog verdict reads the run's log in order: the walk under test is what came before the server
+  completed the logout, and the returned position is the first accepted movement after a
+  `CMSG_PLAYER_LOGIN` that followed it, agreeing with the walk's stop within 0.5 m while both stay
+  at least 1 m from the seeded login point — so the position came from the row the server saved at
+  logout rather than a reseed, and neither a landing nor a login inside the first session can stand
+  in for the return.
+
+Failures kept in the record: generations 8 and 9 used a corner that the navmesh calls walkable while
+the vmaps call wall, so the player's own walk stopped against it; the accepted corner is validated
+against both. Generation 11 typed its `/target` macro before any movement and lost the first
+keypresses to the window-focus handover — its own screenshot shows "arget saytr" as a say — so the
+chase automation now retries until the server logs the selection it produces. Generation 14 proved the
+relog persistence and then failed on a wrong success condition: the server's time-sync liveness line
+is not per session, so the second login is identified by its world-entry landing instead.
 
 ## Blockers (each needs explicit authorization or input)
 
@@ -483,17 +545,16 @@ report the current HEAD.
   for map 0 grid 48,32 is loadable, not merely complete: the server came up with LOS, height and
   `MoveMaps` enabled and the client walked in the world. Other grids are still only complete, not proven
   loadable.
+- **Native acceptance — satisfied 2026-10-18.** The clear and blocked LOS pair, the pinned heights as
+  accepted movement, the pinned-obstacle chase and the walk/stop/logout/relog leg are recorded in
+  "Geometry-mode acceptance" above. The client archive provenance below stays open.
 - **Client archives provenance** for all three artifact sets; the runs above used the on-disk client
   copy without recording its provenance.
-- **Native acceptance**: the geometry is loaded and one world-entry/walk boundary passes, but the clear
-  and blocked LOS pair, the pinned ground heights as a server result, the pinned obstacle chase and the
-  walk/stop/logout/relog leg are still unrun. Both expectations those stages have to reproduce are
-  derived from the artifacts (the clear/blocked LOS pair and the chase route whose blocked line no
-  walkable surface covers). Run `apps/cata/check_collision_geometry.py` against the staged root first
-  (`--chase` too) — it is what makes a silently degraded run (missing, truncated, misnamed or
-  foreign-toolchain artifacts) fail before the run rather than during it.
 
 ## Acceptance plan for the remaining stages (pinned before their implementation)
+
+Status: executed 2026-10-18 — see "Geometry-mode acceptance" above; the plan is kept as the pinned
+pre-implementation record.
 
 Before any run, `apps/cata/check_collision_geometry.py` must pass against the exact root `--data-root`
 stages (it fails on missing, truncated, misnamed or foreign-toolchain artifacts). Issue #134's acceptance
