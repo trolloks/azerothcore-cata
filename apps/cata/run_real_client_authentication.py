@@ -2347,13 +2347,27 @@ def automate_plan32_chase(generation: Generation) -> None:
     capture_desktop_screenshot(generation, "desktop-after-wait.png")
 
 
+def plan32_tapped_stop(generation: Generation) -> bool:
+    """Whether a movement tap has been accepted to its stop since the in-world marker: the live
+    signal a walk tap produced, checked because the first keypresses after the client comes up can
+    be lost to the window-focus handover (see the chase's macro retry)."""
+    return any(
+        str(sample["opcode"]) == "MSG_MOVE_STOP" for sample in ground_movement_samples(generation)
+    )
+
+
 def automate_plan32_relog(generation: Generation) -> None:
     # Walk the pinned route, stop, then drop the session and take it up again: the position the
     # walk stopped at has to be the one the next login arrives at. No cast here — an engaged
     # fixture holds the character in combat, and the client refuses to log out in combat.
     capture_desktop_screenshot(generation, "desktop-before-walk.png")
-    automate_key_sequence(generation, ("w",), hold_seconds=0.6, gap_seconds=0.4)
-    time.sleep(1.0)  # let the stop land
+    for _ in range(3):
+        automate_key_sequence(generation, ("w",), hold_seconds=0.6, gap_seconds=0.4)
+        time.sleep(1.0)  # let the stop land
+        if plan32_tapped_stop(generation):
+            break
+    else:
+        raise RuntimeError("plan32 relog walk did not reach its stop")
     capture_desktop_screenshot(generation, "desktop-after-walk.png")
     deadline = time.monotonic() + 60.0
     completed = len(LOGOUT_COMPLETE_PATTERN.findall(world_log_text(generation)))
@@ -4512,13 +4526,13 @@ def player_login_diagnostic(generation: Generation) -> str:
 
 def selection_proof_is_complete(
     selection: dict[str, object] | None, transcript: list[dict[str, str]],
-    enum_events: list[dict[str, int]],
+    enum_events: list[dict[str, int]], logins: int = 1,
 ) -> bool:
     expected_enum = {
         "account_id": ACCOUNT_ID, "guid_low": CHARACTER_GUID, "list_position": CHARACTER_LIST_POSITION,
     }
     return (
-        enum_events == [expected_enum]
+        enum_events == [expected_enum] * logins
         and selection == {
             "action": "enter",
             "seeded_guid_low": CHARACTER_GUID,
@@ -4527,7 +4541,7 @@ def selection_proof_is_complete(
             "callback_guid_low": CHARACTER_GUID,
             "legit_characters_admission": True,
         }
-        and sum(item == {"direction": "c2s", "opcode": "CMSG_PLAYER_LOGIN"} for item in transcript) == 1
+        and sum(item == {"direction": "c2s", "opcode": "CMSG_PLAYER_LOGIN"} for item in transcript) == logins
     )
 
 
@@ -4826,6 +4840,9 @@ def verify(args: argparse.Namespace) -> None:
         INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
+    # The relog stage drives the whole login twice, so the login-shaped evidence below expects two
+    # complete sessions that both name the same seeded character.
+    expected_logins = 2 if plan32_geometry_mode and generation.get("plan32_stage") == "relog" else 1
     rows = character_row_count(manifest, generation) if character_mode else None
     realm_count = realm_character_count(manifest, generation) if populated_mode else None
     seed = (
@@ -4841,10 +4858,17 @@ def verify(args: argparse.Namespace) -> None:
     selection = {
         "action": generation.get("selection_action"),
         "seeded_guid_low": seed["guid_low"] if seed is not None else None,
-        "enumerated_guid_low": enum_events[0]["guid_low"] if len(enum_events) == 1 else None,
-        "request_guid_low": requests[0] if len(requests) == 1 else None,
-        "callback_guid_low": callbacks[0] if len(callbacks) == 1 else None,
-        "legit_characters_admission": len(callbacks) == 1,
+        "enumerated_guid_low": enum_events[0]["guid_low"] if enum_events and len(set(
+            event["guid_low"] for event in enum_events)) == 1 else None,
+        "request_guid_low": (
+            requests[0] if len(requests) == expected_logins and len(set(requests)) == 1 else None
+        ),
+        "callback_guid_low": (
+            callbacks[0] if len(callbacks) == expected_logins and len(set(callbacks)) == 1 else None
+        ),
+        "legit_characters_admission": (
+            len(callbacks) == expected_logins and len(set(callbacks)) == 1
+        ),
     } if login_mode else None
     evidence = sanitized_evidence(
         generation, milestones, transcript, character_rows=rows, realm_count=realm_count, enumerated=enumerated,
@@ -4888,7 +4912,7 @@ def verify(args: argparse.Namespace) -> None:
             character_ok = character_ok and realm_count == 1 and enum_events == [{
                 "account_id": ACCOUNT_ID, "guid_low": CHARACTER_GUID,
                 "list_position": CHARACTER_LIST_POSITION,
-            }]
+            }] * expected_logins
         if selection_mode:
             character_ok = character_ok and selection_proof_is_complete(selection, transcript, enum_events)
         if initial_packets_mode:
@@ -4907,8 +4931,10 @@ def verify(args: argparse.Namespace) -> None:
                 and evidence["post_marker_snapshots"] == 2
             )
         if in_world_control_mode:
-            character_ok = character_ok and selection_proof_is_complete(selection, transcript, enum_events) and (
-                evidence["in_world_control_marker_count"] == 1
+            character_ok = character_ok and selection_proof_is_complete(
+                selection, transcript, enum_events, expected_logins
+            ) and (
+                evidence["in_world_control_marker_count"] == expected_logins
                 and bool(evidence["in_world_control_packet_prefix"])
                 and "C->S:CMSG_TIME_SYNC_RESP" in evidence["in_world_control_packet_prefix"]
                 and evidence["post_marker_hold_seconds"] >= 5
