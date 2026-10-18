@@ -572,13 +572,16 @@ requires the exact 12-opcode list, all six directional pairs and the post-stop s
 landing anywhere else stays a failure. The raw sequence remains in the evidence unchanged.
 
 `--mode plan32-geometry` carries the Plan 32 pinned stages, one stage per generation selected by
-`PLAN32_STAGE` (`blocked`, `clear` or `chase`; prepare validates it, freezes it into the
+`PLAN32_STAGE` (`blocked`, `clear`, `chase` or `relog`; prepare validates it, freezes it into the
 generation's `inputs` together with that stage's seeds, and run reads the frozen value and refuses
 a conflicting environment — a retry also re-seeds the character row, so it restarts from the
-pinned point). Every stage seeds the fixture at artifact-derived coordinates and targets it once
-by its unique name through the client-local `/target` macro. The LOS stages cast Fireball twice
-uncancelled; the chase stage casts once to aggro, then runs a pinned two-leg corner while the
-followed fixture must path around the same wall to melee range. Verify reads the packet capture
+pinned point). Every casting stage seeds the fixture at artifact-derived coordinates and targets it
+once by its unique name through the client-local `/target` macro. The LOS stages cast Fireball
+twice uncancelled; the chase stage casts once to aggro, then runs a pinned two-leg corner while the
+followed fixture must path around the same wall to melee range; the relog stage casts nothing — an
+engaged fixture would hold the character in combat and the client refuses to log out in combat — so
+it walks the clear stage's pinned route, stops, types `/logout` and enters the world again from the
+character screen. Verify reads the packet capture
 (`packets.pkt`, staged for this mode's generations) instead of opcode names: every cast must name
 spell 133 at the agreed selection with the stage's own counters, each request's client counter
 must come back on its own outcome (the wire carries `CMSG_CANCEL_CAST`, so a cancel between the
@@ -594,7 +597,12 @@ cast's ray, re-derived from those vmaps between the two units' cast-time positio
 and again at a low point on the fixture, must break on the pinned obstacle for the blocked stage
 and be whole for the clear and chase stages. The chase stage additionally requires the staged
 mmap to route the fixture from its spawn to the player's end point with a real detour around that
-obstacle, so the detour it shows on the wire is what the data demands rather than an accident.
+obstacle, so the detour it shows on the wire is what the data demands rather than an accident. The
+relog stage's own requirement is persistence: the movement samples split at each session's own
+in-world control marker, the stop the walk reached must be at least 1 m from the seeded login
+point, and the first sample after the second marker — the landing of the session that came back —
+must agree with that stop within 0.5 m, with exactly one `SMSG_LOGOUT_COMPLETE` and exactly two
+in-world sessions, so the position the client arrived at is the row the server saved at logout.
 Two facts this mode depends on: grid loading creates units with server-assigned map-local lows
 (keeping the DB guid only as spawnId), so identity binds to the agreed selection plus a
 seed-uniqueness gate rather than a precomputed GUID; and `WorldSocket` enables per-session packet
