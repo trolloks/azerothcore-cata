@@ -2356,6 +2356,18 @@ def plan32_tapped_stop(generation: Generation) -> bool:
     )
 
 
+def plan32_landing_count(generation: Generation) -> int:
+    """How many world-entry landings the client's accepted movement produced: one per session.
+
+    The server's time-sync liveness line is not a per-session signal — it is logged only while a
+    session has no clock delta yet, so an already-in-world character's second login does not add
+    one — while the client lands once every time it enters the world."""
+    return sum(
+        1 for sample in ground_movement_samples(generation)
+        if str(sample["opcode"]) == "MSG_MOVE_FALL_LAND"
+    )
+
+
 def automate_plan32_relog(generation: Generation) -> None:
     # Walk the pinned route, stop, then drop the session and take it up again: the position the
     # walk stopped at has to be the one the next login arrives at. No cast here — an engaged
@@ -2381,13 +2393,13 @@ def automate_plan32_relog(generation: Generation) -> None:
     else:
         raise RuntimeError("plan32 relog logout did not complete")
     capture_desktop_screenshot(generation, "desktop-after-logout.png")
-    # The character screen's own default action is Enter World; press it until the new session
-    # reports itself in world (the same key the harness uses to enter on a fresh login).
-    sessions = in_world_control_marker_count(generation)
-    for _ in range(5):
+    # The character screen's own default action is Enter World; press it until the client has
+    # landed in the world again (a second world-entry landing), which is what a session produces.
+    landings = plan32_landing_count(generation)
+    for _ in range(6):
         automate_character_selection(generation)
         time.sleep(3.0)
-        if in_world_control_marker_count(generation) > sessions:
+        if plan32_landing_count(generation) > landings:
             break
     else:
         raise RuntimeError("plan32 relog login did not complete")
@@ -3276,20 +3288,20 @@ def ground_movement_samples(generation: Generation) -> list[dict[str, str | floa
 
 
 def plan32_relog_sessions(generation: Generation) -> dict[str, list[dict[str, str | float]]]:
-    """The movement samples of a relog run, split at the second in-world control marker.
+    """The movement samples of a relog run, split at the second world-entry landing.
 
-    Every session logs that marker when it resolves its first time sync, so the samples between
-    the first two markers are the walk under test and the ones after the second are the session
-    the walk's position came back to. Splitting on the marker rather than on a landing keeps a
-    settle fall inside the first session from reading as the return."""
-    after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
-    first_session, _, second_session = after_map.partition(IN_WORLD_CONTROL_MARKER)[2].partition(
-        IN_WORLD_CONTROL_MARKER
-    )
-    return {
-        "pre_logout": movement_samples_in(first_session),
-        "post_relogin": movement_samples_in(second_session),
-    }
+    The client lands once every time it enters the world, so everything before the second
+    MSG_MOVE_FALL_LAND is the walk under test and that landing starts the session the walk's
+    position came back to. The server's time-sync liveness line cannot serve here: it is logged
+    only while a session has no clock delta yet, so the second login of an already-in-world
+    character does not add one. Neither session jumps, so the two entries are the only landings."""
+    samples = ground_movement_samples(generation)
+    landings = [
+        index for index, sample in enumerate(samples)
+        if str(sample["opcode"]) == "MSG_MOVE_FALL_LAND"
+    ]
+    split = landings[1] if len(landings) > 1 else len(samples)
+    return {"pre_logout": samples[:split], "post_relogin": samples[split:]}
 
 
 def ground_movement_sequence(generation: Generation) -> list[str]:
@@ -4931,10 +4943,19 @@ def verify(args: argparse.Namespace) -> None:
                 and evidence["post_marker_snapshots"] == 2
             )
         if in_world_control_mode:
+            # The marker is the server's time-sync liveness line, logged once while a session has
+            # no clock delta yet: a relog's second session (an already-in-world character) does not
+            # add another, so that stage only requires the first one and proves its two sessions
+            # through the second enumeration, login request, callback and world-entry landing.
+            marker_ok = (
+                evidence["in_world_control_marker_count"] >= 1
+                if plan32_geometry_mode and generation.get("plan32_stage") == "relog"
+                else evidence["in_world_control_marker_count"] == expected_logins
+            )
             character_ok = character_ok and selection_proof_is_complete(
                 selection, transcript, enum_events, expected_logins
             ) and (
-                evidence["in_world_control_marker_count"] == expected_logins
+                marker_ok
                 and bool(evidence["in_world_control_packet_prefix"])
                 and "C->S:CMSG_TIME_SYNC_RESP" in evidence["in_world_control_packet_prefix"]
                 and evidence["post_marker_hold_seconds"] >= 5
@@ -5104,7 +5125,8 @@ def verify(args: argparse.Namespace) -> None:
                 stage_ok = (
                     stop is not None and relogin is not None
                     and str(stop["opcode"]) == "MSG_MOVE_STOP"
-                    and in_world_control_marker_count(generation) == 2
+                    and len(player_login_requests(generation)) == 2
+                    and plan32_landing_count(generation) == 2
                     and len(LOGOUT_COMPLETE_PATTERN.findall(world_log_text(generation))) == 1
                     and math.hypot(float(relogin["x"]) - float(stop["x"]),
                                    float(relogin["y"]) - float(stop["y"])) <= PLAN32_RELOG_TOLERANCE
@@ -6247,8 +6269,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         first_leg: dict[str, object] = plan32_chase_tracks(chase_generation)
         chase_log((10.0, 0.0))
         whole_chase: dict[str, object] = plan32_chase_tracks(chase_generation)
-        # Relog: the walk under test sits between the two sessions' own in-world markers, and the
-        # sample after the second marker is the position the next login arrived at.
+        # Relog: the walk under test sits before the second session's own world-entry landing, and
+        # that landing carries the position the next login arrived at.
         (logs / "WorldServer.log").write_text(
             "Finished object update bootstrap after adding to map\n" + IN_WORLD_CONTROL_MARKER
             + "\nAccepted Cataclysm ground movement [MSG_MOVE_FALL_LAND 0x380A (14346)] after movement "
@@ -6257,8 +6279,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             + "validation: x=-8775.13, y=-220.95, z=85.254, o=2.766\n"
             + "Accepted Cataclysm ground movement [MSG_MOVE_STOP 0x320A (12810)] after movement "
             + "validation: x=-8779.03, y=-219.41, z=85.01, o=2.766\n"
-            + IN_WORLD_CONTROL_MARKER
-            + "\nAccepted Cataclysm ground movement [MSG_MOVE_FALL_LAND 0x380A (14346)] after movement "
+            + "Accepted Cataclysm ground movement [MSG_MOVE_FALL_LAND 0x380A (14346)] after movement "
             + "validation: x=-8779.03, y=-219.41, z=85.01, o=2.766\n"
         )
         relog_sessions = plan32_relog_sessions(chase_generation)
