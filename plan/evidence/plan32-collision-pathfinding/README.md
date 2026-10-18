@@ -517,9 +517,12 @@ vmaps/mmaps/maps/dbc copied into it and hashed. What the verdicts rest on, beyon
 - **The chase and relog stage claims.** The chase detour is measured from the fixture's own spline
   points and stops at the move that arrives at the player, so an evading fixture's walk home cannot
   inflate it; the staged route and the broken straight line carry the "must path around" burden. The
-  relog verdict splits the movement samples at the second world-entry landing and requires it to agree
-  with the walk's stop within 0.5 m while both stay at least 1 m from the seeded login point, so the
-  position came from the row the server saved at logout rather than a reseed.
+  relog verdict reads the run's log in order: the walk under test is what came before the server
+  completed the logout, and the returned position is the first accepted movement after a
+  `CMSG_PLAYER_LOGIN` that followed it, agreeing with the walk's stop within 0.5 m while both stay
+  at least 1 m from the seeded login point — so the position came from the row the server saved at
+  logout rather than a reseed, and neither a landing nor a login inside the first session can stand
+  in for the return.
 
 Failures kept in the record: generations 8 and 9 used a corner that the navmesh calls walkable while
 the vmaps call wall, so the player's own walk stopped against it; the accepted corner is validated

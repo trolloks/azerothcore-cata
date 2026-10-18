@@ -3296,31 +3296,36 @@ def plan32_relog_timeline(generation: Generation) -> dict[str, object]:
     A landing alone is not enough: a session that falls twice would let a landing that happened
     before the logout stand in for the position the next login arrives at. So the log is read in
     order — the walk under test is what came before the server completed the logout, and the
-    returned samples are those after the next CMSG_PLAYER_LOGIN — and a landing outside the second
-    login's interval can never be read as the position that came back."""
+    returned samples are those after a CMSG_PLAYER_LOGIN that followed it — and neither a landing
+    outside the second login's interval nor a login that preceded the logout can satisfy the
+    sequence this stage claims."""
     walk: list[dict[str, str | float]] = []
     returned: list[dict[str, str | float]] = []
     logouts = 0
     logins = 0
+    logins_after_logout = 0
     for line in world_log_text(generation).splitlines():
         if LOGOUT_COMPLETE_PATTERN.search(line):
             logouts += 1
             continue
         if PLAN32_LOGIN_RECEIVED_PATTERN.search(line):
             logins += 1
+            if logouts:
+                logins_after_logout += 1
             continue
         samples = movement_samples_in(line)
         if not samples:
             continue
         if logouts == 0:
             walk.append(samples[0])
-        elif logins >= 2:
+        elif logins_after_logout:
             returned.append(samples[0])
     return {
         "walk": walk,
         "returned": returned,
         "logout_completes": logouts,
         "login_requests": logins,
+        "logins_after_logout": logins_after_logout,
     }
 
 
@@ -3328,9 +3333,9 @@ def plan32_relog_problems(generation: Generation) -> list[str]:
     """The relog stage's own predicate, as what is wrong with it (empty when it holds).
 
     The walk must have stopped before the session ended, exactly one logout must have completed,
-    the client must have logged in again, and the first accepted movement after that login must be
-    a landing agreeing with the stop: the position the server saved at logout — not a re-seed and
-    not another landing inside the session that walked."""
+    the client must have logged in again after that logout, and the first accepted movement after
+    that login must be a landing agreeing with the stop: the position the server saved at logout —
+    not a re-seed and not another landing inside the session that walked."""
     timeline = plan32_relog_timeline(generation)
     walked, returned = timeline["walk"], timeline["returned"]
     stop = walked[-1] if walked else None
@@ -3341,6 +3346,8 @@ def plan32_relog_problems(generation: Generation) -> list[str]:
         problems.append(f"expected one SMSG_LOGOUT_COMPLETE, saw {timeline['logout_completes']}")
     if timeline["login_requests"] != 2:
         problems.append(f"expected two CMSG_PLAYER_LOGIN requests, saw {timeline['login_requests']}")
+    if timeline["logins_after_logout"] != 1:
+        problems.append("no CMSG_PLAYER_LOGIN followed the completed logout")
     if plan32_landing_count(generation) != 2:
         problems.append(
             f"expected two world-entry landings, saw {plan32_landing_count(generation)}"
@@ -6316,10 +6323,16 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         chase_log((10.0, 0.0))
         whole_chase: dict[str, object] = plan32_chase_tracks(chase_generation)
         # Relog: the walk under test sits before the server's completed logout, and the landing
-        # after the next login carries the position that came back. The predicate reads the log in
-        # order, so a second landing placed before the logout — the false positive a global count
-        # cannot catch — must be reported.
-        def relog_log(landing_before_logout: bool) -> None:
+        # after the login that follows it carries the position that came back. The predicate reads
+        # the log in order, so the two decoys a global count cannot catch — a second landing placed
+        # before the logout, and both logins before the logout — must both be reported.
+        def relog_log(order: str) -> None:
+            def landing() -> str:
+                return (
+                    "Accepted Cataclysm ground movement [MSG_MOVE_FALL_LAND 0x380A (14346)] after "
+                    "movement validation: x=-8779.03, y=-219.41, z=85.01, o=2.766"
+                )
+
             lines = [
                 "Finished object update bootstrap after adding to map",
                 IN_WORLD_CONTROL_MARKER,
@@ -6331,23 +6344,23 @@ four Completed: COP_GET_CHARACTERS result=TRUE
                 "Accepted Cataclysm ground movement [MSG_MOVE_STOP 0x320A (12810)] after movement "
                 "validation: x=-8779.03, y=-219.41, z=85.01, o=2.766",
             ]
-            landing = (
-                "Accepted Cataclysm ground movement [MSG_MOVE_FALL_LAND 0x380A (14346)] after movement "
-                "validation: x=-8779.03, y=-219.41, z=85.01, o=2.766"
-            )
-            if landing_before_logout:
-                lines.append(landing)
+            if order == "landing_before_logout":
+                lines.append(landing())
+            if order == "login_before_logout":
+                lines.append("2026-10-18 19:36:51 Received CMSG_PLAYER_LOGIN for account 900000.")
             lines.append("2026-10-18 19:36:52 S->C: 127.0.0.1 [SMSG_LOGOUT_COMPLETE 0x2137 (8503)]")
-            lines.append("2026-10-18 19:36:53 Received CMSG_PLAYER_LOGIN for account 900000.")
-            if not landing_before_logout:
-                lines.append(landing)
+            if order == "ordered":
+                lines.append("2026-10-18 19:36:53 Received CMSG_PLAYER_LOGIN for account 900000.")
+                lines.append(landing())
             (logs / "WorldServer.log").write_text("\n".join(lines) + "\n")
 
-        relog_log(False)
+        relog_log("ordered")
         relog_timeline = plan32_relog_timeline(chase_generation)
         ordered_problems = plan32_relog_problems(chase_generation)
-        relog_log(True)
+        relog_log("landing_before_logout")
         early_landing_problems = plan32_relog_problems(chase_generation)
+        relog_log("login_before_logout")
+        early_login_problems = plan32_relog_problems(chase_generation)
     assert len(chase_moves) == 2 and all(m["mover"] == fixture for m in chase_moves)
     assert [len(m["points"]) for m in chase_moves] == [3, 4]
     assert chase_moves[1]["points"][-1] == (10.0, 0.0, 0.0)
@@ -6359,11 +6372,13 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert len(first_leg["swings"]) == 1 and len(whole_chase["moves"]) == 2
     assert len(relog_timeline["walk"]) == 3 and len(relog_timeline["returned"]) == 1
     assert relog_timeline["logout_completes"] == 1 and relog_timeline["login_requests"] == 2
+    assert relog_timeline["logins_after_logout"] == 1
     assert str(relog_timeline["walk"][-1]["opcode"]) == "MSG_MOVE_STOP"
     assert relog_timeline["returned"][0]["x"] == relog_timeline["walk"][-1]["x"]
     assert relog_timeline["returned"][0]["y"] == relog_timeline["walk"][-1]["y"]
     assert ordered_problems == []
     assert early_landing_problems, "a landing before the logout must not pass as the return"
+    assert early_login_problems, "a login before the logout must not pass as the return"
     print("Real-client runner self-check passed")
 
 
