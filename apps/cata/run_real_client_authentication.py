@@ -3287,21 +3287,80 @@ def ground_movement_samples(generation: Generation) -> list[dict[str, str | floa
     return movement_samples_in(after_sync)
 
 
-def plan32_relog_sessions(generation: Generation) -> dict[str, list[dict[str, str | float]]]:
-    """The movement samples of a relog run, split at the second world-entry landing.
+PLAN32_LOGIN_RECEIVED_PATTERN = re.compile(r"Received CMSG_PLAYER_LOGIN for account \d+\.")
 
-    The client lands once every time it enters the world, so everything before the second
-    MSG_MOVE_FALL_LAND is the walk under test and that landing starts the session the walk's
-    position came back to. The server's time-sync liveness line cannot serve here: it is logged
-    only while a session has no clock delta yet, so the second login of an already-in-world
-    character does not add one. Neither session jumps, so the two entries are the only landings."""
-    samples = ground_movement_samples(generation)
-    landings = [
-        index for index, sample in enumerate(samples)
-        if str(sample["opcode"]) == "MSG_MOVE_FALL_LAND"
-    ]
-    split = landings[1] if len(landings) > 1 else len(samples)
-    return {"pre_logout": samples[:split], "post_relogin": samples[split:]}
+
+def plan32_relog_timeline(generation: Generation) -> dict[str, object]:
+    """The relog run's movement samples, cut at the session boundaries the server logged itself.
+
+    A landing alone is not enough: a session that falls twice would let a landing that happened
+    before the logout stand in for the position the next login arrives at. So the log is read in
+    order — the walk under test is what came before the server completed the logout, and the
+    returned samples are those after the next CMSG_PLAYER_LOGIN — and a landing outside the second
+    login's interval can never be read as the position that came back."""
+    walk: list[dict[str, str | float]] = []
+    returned: list[dict[str, str | float]] = []
+    logouts = 0
+    logins = 0
+    for line in world_log_text(generation).splitlines():
+        if LOGOUT_COMPLETE_PATTERN.search(line):
+            logouts += 1
+            continue
+        if PLAN32_LOGIN_RECEIVED_PATTERN.search(line):
+            logins += 1
+            continue
+        samples = movement_samples_in(line)
+        if not samples:
+            continue
+        if logouts == 0:
+            walk.append(samples[0])
+        elif logins >= 2:
+            returned.append(samples[0])
+    return {
+        "walk": walk,
+        "returned": returned,
+        "logout_completes": logouts,
+        "login_requests": logins,
+    }
+
+
+def plan32_relog_problems(generation: Generation) -> list[str]:
+    """The relog stage's own predicate, as what is wrong with it (empty when it holds).
+
+    The walk must have stopped before the session ended, exactly one logout must have completed,
+    the client must have logged in again, and the first accepted movement after that login must be
+    a landing agreeing with the stop: the position the server saved at logout — not a re-seed and
+    not another landing inside the session that walked."""
+    timeline = plan32_relog_timeline(generation)
+    walked, returned = timeline["walk"], timeline["returned"]
+    stop = walked[-1] if walked else None
+    relogin = returned[0] if returned else None
+    seed = PLAN32_GEOMETRY_SEEDS["relog"]["character"]
+    problems: list[str] = []
+    if timeline["logout_completes"] != 1:
+        problems.append(f"expected one SMSG_LOGOUT_COMPLETE, saw {timeline['logout_completes']}")
+    if timeline["login_requests"] != 2:
+        problems.append(f"expected two CMSG_PLAYER_LOGIN requests, saw {timeline['login_requests']}")
+    if plan32_landing_count(generation) != 2:
+        problems.append(
+            f"expected two world-entry landings, saw {plan32_landing_count(generation)}"
+        )
+    if stop is None or str(stop["opcode"]) != "MSG_MOVE_STOP":
+        problems.append("the walk did not end in an accepted stop before the logout")
+    if relogin is None or str(relogin["opcode"]) != "MSG_MOVE_FALL_LAND":
+        problems.append("the session after the logout produced no world-entry landing")
+    if stop is not None and relogin is not None:
+        if math.hypot(float(relogin["x"]) - float(stop["x"]),
+                      float(relogin["y"]) - float(stop["y"])) > PLAN32_RELOG_TOLERANCE:
+            problems.append("the landing does not agree with the walked stop")
+        if abs(float(relogin["z"]) - float(stop["z"])) > PLAN32_RELOG_TOLERANCE:
+            problems.append("the landing's height does not agree with the walked stop")
+    for name, sample in (("stop", stop), ("landing", relogin)):
+        if sample is not None and math.hypot(
+            float(sample["x"]) - seed[0], float(sample["y"]) - seed[1]
+        ) < PLAN32_RELOG_MIN_TRAVEL:
+            problems.append(f"the {name} sits on the seeded login point")
+    return problems
 
 
 def ground_movement_sequence(generation: Generation) -> list[str]:
@@ -4082,7 +4141,7 @@ def plan32_stage_geometry(generation: Generation, stage: str) -> dict[str, objec
         samples = ground_movement_samples(generation)
         # A relog run's flat sample list carries two sessions: the cast point is the last sample of
         # the one that did the walking, not the position the next login landed on.
-        cast_samples = plan32_relog_sessions(generation)["pre_logout"] if stage == "relog" else samples
+        cast_samples = plan32_relog_timeline(generation)["walk"] if stage == "relog" else samples
         player = plan32_player_cast_point(stage, cast_samples)
         target = selections_target_fixture(plan32_packet_events(generation))
         fixture_positions = {
@@ -4786,6 +4845,11 @@ def sanitized_evidence(
             if plan32_geometry_mode and generation.get("plan32_stage") == "chase"
             else None
         ),
+        "plan32_relog_problems": (
+            plan32_relog_problems(generation)
+            if plan32_geometry_mode and generation.get("plan32_stage") == "relog"
+            else None
+        ),
         "creation_marker_count": creation_marker_count_value if creation_mode else None,
         "post_marker_hold_seconds": (
             generation.get("post_marker_hold_seconds", 0) if generation["mode"] in POST_MARKER_MODES else None
@@ -5113,29 +5177,11 @@ def verify(args: argparse.Namespace) -> None:
             elif stage == "clear":
                 stage_ok = casts_ok and len(goes) >= 1 and not fails
             elif stage == "relog":
-                # No cast here: the walk is the action under test. The samples split at each
-                # session's own in-world marker, so the position the stop reached (and not the
-                # seeded login point) is the one the server handed the next login — a position it
-                # only holds from the row it saved while logging the first session out.
-                sessions = plan32_relog_sessions(generation)
-                walked, returned = sessions["pre_logout"], sessions["post_relogin"]
-                stop = walked[-1] if walked else None
-                relogin = returned[0] if returned else None
-                seed = PLAN32_GEOMETRY_SEEDS["relog"]["character"]
-                stage_ok = (
-                    stop is not None and relogin is not None
-                    and str(stop["opcode"]) == "MSG_MOVE_STOP"
-                    and len(player_login_requests(generation)) == 2
-                    and plan32_landing_count(generation) == 2
-                    and len(LOGOUT_COMPLETE_PATTERN.findall(world_log_text(generation))) == 1
-                    and math.hypot(float(relogin["x"]) - float(stop["x"]),
-                                   float(relogin["y"]) - float(stop["y"])) <= PLAN32_RELOG_TOLERANCE
-                    and abs(float(relogin["z"]) - float(stop["z"])) <= PLAN32_RELOG_TOLERANCE
-                    and math.hypot(float(stop["x"]) - seed[0],
-                                   float(stop["y"]) - seed[1]) >= PLAN32_RELOG_MIN_TRAVEL
-                    and math.hypot(float(relogin["x"]) - seed[0],
-                                   float(relogin["y"]) - seed[1]) >= PLAN32_RELOG_MIN_TRAVEL
-                )
+                # No cast here: the walk is the action under test, and its predicate lives in
+                # plan32_relog_problems so the synthetic check can exercise the same code. It reads
+                # the log in order — walk before the completed logout, landing after the second
+                # login — so a landing inside the first session cannot stand in for the return.
+                stage_ok = not plan32_relog_problems(generation)
             elif stage == "chase":
                 chase = evidence["plan32_chase"] or {}
                 samples = evidence["plan32_player_samples"] or []
@@ -6269,20 +6315,39 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         first_leg: dict[str, object] = plan32_chase_tracks(chase_generation)
         chase_log((10.0, 0.0))
         whole_chase: dict[str, object] = plan32_chase_tracks(chase_generation)
-        # Relog: the walk under test sits before the second session's own world-entry landing, and
-        # that landing carries the position the next login arrived at.
-        (logs / "WorldServer.log").write_text(
-            "Finished object update bootstrap after adding to map\n" + IN_WORLD_CONTROL_MARKER
-            + "\nAccepted Cataclysm ground movement [MSG_MOVE_FALL_LAND 0x380A (14346)] after movement "
-            + "validation: x=-8775.13, y=-220.95, z=85.254, o=2.766\n"
-            + "Accepted Cataclysm ground movement [MSG_MOVE_START_FORWARD 0x7814 (30740)] after movement "
-            + "validation: x=-8775.13, y=-220.95, z=85.254, o=2.766\n"
-            + "Accepted Cataclysm ground movement [MSG_MOVE_STOP 0x320A (12810)] after movement "
-            + "validation: x=-8779.03, y=-219.41, z=85.01, o=2.766\n"
-            + "Accepted Cataclysm ground movement [MSG_MOVE_FALL_LAND 0x380A (14346)] after movement "
-            + "validation: x=-8779.03, y=-219.41, z=85.01, o=2.766\n"
-        )
-        relog_sessions = plan32_relog_sessions(chase_generation)
+        # Relog: the walk under test sits before the server's completed logout, and the landing
+        # after the next login carries the position that came back. The predicate reads the log in
+        # order, so a second landing placed before the logout — the false positive a global count
+        # cannot catch — must be reported.
+        def relog_log(landing_before_logout: bool) -> None:
+            lines = [
+                "Finished object update bootstrap after adding to map",
+                IN_WORLD_CONTROL_MARKER,
+                "2026-10-18 19:36:20 Received CMSG_PLAYER_LOGIN for account 900000.",
+                "Accepted Cataclysm ground movement [MSG_MOVE_FALL_LAND 0x380A (14346)] after movement "
+                "validation: x=-8775.13, y=-220.95, z=85.254, o=2.766",
+                "Accepted Cataclysm ground movement [MSG_MOVE_START_FORWARD 0x7814 (30740)] after "
+                "movement validation: x=-8775.13, y=-220.95, z=85.254, o=2.766",
+                "Accepted Cataclysm ground movement [MSG_MOVE_STOP 0x320A (12810)] after movement "
+                "validation: x=-8779.03, y=-219.41, z=85.01, o=2.766",
+            ]
+            landing = (
+                "Accepted Cataclysm ground movement [MSG_MOVE_FALL_LAND 0x380A (14346)] after movement "
+                "validation: x=-8779.03, y=-219.41, z=85.01, o=2.766"
+            )
+            if landing_before_logout:
+                lines.append(landing)
+            lines.append("2026-10-18 19:36:52 S->C: 127.0.0.1 [SMSG_LOGOUT_COMPLETE 0x2137 (8503)]")
+            lines.append("2026-10-18 19:36:53 Received CMSG_PLAYER_LOGIN for account 900000.")
+            if not landing_before_logout:
+                lines.append(landing)
+            (logs / "WorldServer.log").write_text("\n".join(lines) + "\n")
+
+        relog_log(False)
+        relog_timeline = plan32_relog_timeline(chase_generation)
+        ordered_problems = plan32_relog_problems(chase_generation)
+        relog_log(True)
+        early_landing_problems = plan32_relog_problems(chase_generation)
     assert len(chase_moves) == 2 and all(m["mover"] == fixture for m in chase_moves)
     assert [len(m["points"]) for m in chase_moves] == [3, 4]
     assert chase_moves[1]["points"][-1] == (10.0, 0.0, 0.0)
@@ -6292,10 +6357,13 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     # walk home is never folded into it.
     assert first_leg["target"] == fixture and len(first_leg["moves"]) == 1
     assert len(first_leg["swings"]) == 1 and len(whole_chase["moves"]) == 2
-    assert len(relog_sessions["pre_logout"]) == 3 and len(relog_sessions["post_relogin"]) == 1
-    assert str(relog_sessions["pre_logout"][-1]["opcode"]) == "MSG_MOVE_STOP"
-    assert relog_sessions["post_relogin"][0]["x"] == relog_sessions["pre_logout"][-1]["x"]
-    assert relog_sessions["post_relogin"][0]["y"] == relog_sessions["pre_logout"][-1]["y"]
+    assert len(relog_timeline["walk"]) == 3 and len(relog_timeline["returned"]) == 1
+    assert relog_timeline["logout_completes"] == 1 and relog_timeline["login_requests"] == 2
+    assert str(relog_timeline["walk"][-1]["opcode"]) == "MSG_MOVE_STOP"
+    assert relog_timeline["returned"][0]["x"] == relog_timeline["walk"][-1]["x"]
+    assert relog_timeline["returned"][0]["y"] == relog_timeline["walk"][-1]["y"]
+    assert ordered_problems == []
+    assert early_landing_problems, "a landing before the logout must not pass as the return"
     print("Real-client runner self-check passed")
 
 

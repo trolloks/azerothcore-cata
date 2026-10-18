@@ -476,12 +476,22 @@ first — `prepare` refuses binaries whose `--version` does not report the curre
 `PLAN32_STAGE`. Four generations reached `accepted` on the 2026-10-18 branch (`f01ef8c7e`, then
 `25e319c7e` for the session signals):
 
-| Stage | Generation | Verdict | Governing evidence |
-| --- | --- | --- | --- |
-| blocked | 6 (re-verified offline under the strengthened predicates) | `plan32_geometry_blocked_pass` | two `SMSG_CAST_FAILED` result 49 at the client's counters 1 and 2, no `SPELL_GO`; both cast rays break on `Nsabbey.wmo` at eye and low height, 18.01 m into the 32.09 m line |
-| clear | 7 (re-verified offline) | `plan32_geometry_clear_pass` | `SMSG_SPELL_GO` at counters 1 and 2, no failure; both rays whole at both heights for both casts |
-| chase | 13 | `plan32_geometry_chase_pass` | one `SPELL_GO`, then the followed fixture's own splines around the courtyard wall: 7 points, detour 2.02 (≥ 1.25), arrival 1.5 m, gap 4.13 m (≤ 10), 36 melee swings; pull ray whole while the fixture's straight line to the player's end point breaks on `Nsabbey.wmo` at both heights, and the staged mmap routes it 28.64 m against 8.49 m straight |
-| relog | 15 | `plan32_geometry_relog_pass` | walk tap accepted to a stop at `(-8779.044, -219.407, 85.008)`, exactly one `SMSG_LOGOUT_COMPLETE`, then the second session's `MSG_MOVE_FALL_LAND` at that identical position; both login requests and callbacks name the seeded character, and the seeded login point is 7.9 m away |
+- **Blocked, generation 6** (re-verified offline under the strengthened predicates) —
+  `plan32_geometry_blocked_pass`. Two `SMSG_CAST_FAILED` result 49 at the client's counters 1 and 2
+  and no `SPELL_GO`; both cast rays break on `Nsabbey.wmo` at eye and low height, 18.01 m into the
+  32.09 m line.
+- **Clear, generation 7** (re-verified offline) — `plan32_geometry_clear_pass`. `SMSG_SPELL_GO` at
+  counters 1 and 2 with no failure; both rays whole at both heights for both casts.
+- **Chase, generation 13** — `plan32_geometry_chase_pass`. One `SPELL_GO`, then the followed
+  fixture's own splines around the courtyard wall: 7 points, detour 2.02 (≥ 1.25), arrival 1.61 m,
+  gap 4.13 m (≤ 10), 36 melee swings. The pull ray is whole while the fixture's straight line to the
+  player's end point breaks on `Nsabbey.wmo` at both heights, and the staged mmap routes it 28.64 m
+  against 8.49 m straight.
+- **Relog, generation 15** — `plan32_geometry_relog_pass`. The walk tap is accepted to a stop at
+  `(-8779.044, -219.407, 85.008)`, exactly one `SMSG_LOGOUT_COMPLETE` follows with two
+  `CMSG_PLAYER_LOGIN` requests, and the landing after the second login is at that identical
+  position; both login requests and callbacks name the seeded character, and the walked stop is
+  4.21 m from the seeded login point.
 
 Each generation is its own harness run (`prepare --geometry`, `run`, `verify`) with the staged
 vmaps/mmaps/maps/dbc copied into it and hashed. What the verdicts rest on, beyond the stage rows:

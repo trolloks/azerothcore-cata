@@ -598,11 +598,15 @@ and again at a low point on the fixture, must break on the pinned obstacle for t
 and be whole for the clear and chase stages. The chase stage additionally requires the staged
 mmap to route the fixture from its spawn to the player's end point with a real detour around that
 obstacle, so the detour it shows on the wire is what the data demands rather than an accident. The
-relog stage's own requirement is persistence: the movement samples split at each session's own
-in-world control marker, the stop the walk reached must be at least 1 m from the seeded login
-point, and the first sample after the second marker — the landing of the session that came back —
-must agree with that stop within 0.5 m, with exactly one `SMSG_LOGOUT_COMPLETE` and exactly two
-in-world sessions, so the position the client arrived at is the row the server saved at logout.
+relog stage's own requirement is persistence, and it reads the run's log in order: the walk must
+have ended in an accepted stop before the server completed the logout, the client must have sent its
+second login, and the first accepted movement after that login must be a world-entry landing
+agreeing with the stop within 0.5 m while both stay at least 1 m from the seeded login point — so
+the position the client arrived at is the row the server saved at logout, and a landing inside the
+first session can never stand in for it. Exactly one `SMSG_LOGOUT_COMPLETE` and two
+`CMSG_PLAYER_LOGIN` requests are required. The server's time-sync liveness line is deliberately not
+used for this: `MovementHandler` logs it only while a session's clock-delta queue is empty, so the
+second login of an already-in-world character need not produce one.
 Two facts this mode depends on: grid loading creates units with server-assigned map-local lows
 (keeping the DB guid only as spawnId), so identity binds to the agreed selection plus a
 seed-uniqueness gate rather than a precomputed GUID; and `WorldSocket` enables per-session packet
