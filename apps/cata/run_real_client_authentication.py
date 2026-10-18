@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -19,7 +20,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypedDict
 import uuid
 
 
@@ -191,6 +192,70 @@ TARGET_TARGETED_SPELL_CAST_ACTION_BUTTON = 0
 # (see above).
 TARGET_TARGETED_SPELL_CAST_DUMMY_GUID = 99990001
 TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY = 2809
+PLAN32_GEOMETRY_MODE = "plan32-geometry"
+# One acceptance mode carries the remaining Plan 32 stages; each generation runs one stage from a
+# pinned seed, so no travel between pinned points is needed. Stages arrive in this order; only the
+# implemented ones are accepted by prepare/run/verify.
+PLAN32_GEOMETRY_STAGES = ("blocked", "clear", "chase")
+# The fixture is an entry with no static spawns anywhere near the seeds and a name no other nearby
+# unit shares: Tab-nearest is not deterministic in the abbey (ambient hostiles wander through Tab
+# range), so targeting goes through the client-local "/target <name>" macro instead (the level-up
+# mode's proven mechanism), and verify still requires the selected GUID to equal the seeded one.
+# Saytr (361, faction 14 hostile-to-all like the boar, level 1, no ScriptName) has zero rows
+# anywhere in the world DB. Every Z below is the artifact terrain height at that point, read out
+# of the staged root before any run.
+PLAN32_GEOMETRY_DUMMY_ENTRY = 361
+PLAN32_GEOMETRY_DUMMY_NAME = "saytr"
+PLAN32_GEOMETRY_SEEDS = {
+    "blocked": {
+        "character": (-8830.95, -198.96, 82.801, 2.766),
+        "dummy": (-8854.766, -189.576, 80.422),
+    },
+    "clear": {
+        "character": (-8775.13, -220.95, 85.254, 2.766),
+        "dummy": (-8798.946, -211.566, 82.845),
+    },
+    # Chase: the player pulls the fixture across the abbey's inner courtyard wall, then walks a
+    # two-tap right turn (north 6 m then east 6 m along the cardinal facing) that the follower
+    # cannot take straight. Its spawn stands 1.2 m west of that wall (Nsabbey.wmo group 6
+    # triangle 649), its straight line to the player's end point breaks on the wall at both
+    # heights, and the staged mmap walks it 28.6 m around (ratio 3.37) for the 8.5 m the straight
+    # line covers. The pull ray from the player's start is clear at both heights with the fixture
+    # dead ahead, so the aggro cast lands before the corner is turned.
+    "chase": {
+        "character": (-8876.0, -208.0, 81.313, math.pi / 2),
+        "dummy": (-8876.0, -196.0, 80.221),
+    },
+}
+# Chase observation contract, all pinned before the run. The follower path must be decisively
+# longer than its straight line (a clipper walks ratio ~1.0), must end at melee range, must be
+# continuous (no teleports), and must include a melee engagement; any of those missing fails the
+# run instead of passing.
+PLAN32_CHASE_P2 = (-8870, -202)
+PLAN32_CHASE_START_TOLERANCE = 4.0
+PLAN32_CHASE_END_TOLERANCE = 6.0
+PLAN32_CHASE_DETOUR_RATIO = 1.25
+PLAN32_CHASE_ARRIVAL_DISTANCE = 6.0
+PLAN32_CHASE_MAX_SPLINE_GAP = 10.0
+# Aggro casts per stage: the LOS stages cast twice (Codex requires both attempts uncancelled);
+# the chase needs one aggro cast before the run leg.
+PLAN32_EXPECTED_COUNTS = {"blocked": [1, 2], "clear": [1, 2], "chase": [1]}
+# What the staged vmaps must say about each stage's own cast ray: the blocked stage's line has to
+# be broken by the pinned obstacle, the clear and chase stages' has to be whole.
+PLAN32_STAGE_RAY_EXPECTATION = {"blocked": "blocked", "clear": "clear", "chase": "clear"}
+# The chase's route through the staged mmap must exist, detour and still be short enough for the
+# arrival window; the tool's own route cost is an upper bound (polygon centres), so 45 m is room.
+PLAN32_CHASE_ROUTE_MAX = 45.0
+# Runtime z must reproduce the seeded terrain height within this; the accepted geometry run settled
+# to 1 mm, so 10 cm leaves room for packet float rounding without hiding a wrong surface.
+PLAN32_GEOMETRY_HEIGHT_TOLERANCE = 0.1
+PLAN32_GEOMETRY_SPELL_ID = TARGET_TARGETED_SPELL_CAST_SPELL_ID
+PLAN32_GEOMETRY_ACTION_BUTTON = TARGET_TARGETED_SPELL_CAST_ACTION_BUTTON
+# Client-local "/target <name>" macro: resolves against the client's own object cache, needs no
+# server permission, still sends a genuine CMSG_SET_SELECTION (level-up mode precedent).
+PLAN32_GEOMETRY_TARGET_KEYS = (
+    "Return", "slash", *tuple("target"), "space", *tuple(PLAN32_GEOMETRY_DUMMY_NAME), "Return",
+)
 INVALID_TARGET_SPELL_CAST_MODE = "invalid-target-spell-cast"
 # Issue #85's remaining "invalid-target negative case" acceptance item, exercised via the action
 # bar like the other cast modes above. Reuses the Fireball grant from target_targeted_spell_cast_
@@ -247,7 +312,7 @@ POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
     IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
     WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-    INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
+    INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
 })
 CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
@@ -267,6 +332,51 @@ if ISSUE97:
 ISSUE97_PHASED_CREATURE_GUID, ISSUE97_CONTROL_CREATURE_GUID, ISSUE97_PHASED_GO_GUID = 9970001, 9970002, 9970001
 ISSUE97_CREATURE_ENTRY, ISSUE97_CONTROL_CREATURE_ENTRY = 197, 823
 ISSUE97_GO_ENTRY, ISSUE97_PHASE_ID = 2843, 125
+# Plan 32 geometry stages seed from the table above, but only for that mode: a stray exported
+# PLAN32_STAGE must not relocate another mode's character. prepare freezes the stage into the
+# generation inputs and run refuses an environment that names a different one, so the seeded
+# position, the fixture row and the stage label cannot drift apart.
+def apply_plan32_stage_seed(mode: str, stage: str) -> None:
+    """Move the fixture character onto the stage's pinned point (Plan 32 geometry mode only)."""
+    global CHARACTER_POSITION, CHARACTER_ORIENTATION
+    if mode != PLAN32_GEOMETRY_MODE or stage not in PLAN32_GEOMETRY_SEEDS:
+        return
+    CHARACTER_POSITION = PLAN32_GEOMETRY_SEEDS[stage]["character"][:3]
+    CHARACTER_ORIENTATION = PLAN32_GEOMETRY_SEEDS[stage]["character"][3]
+
+
+def plan32_stage() -> str:
+    """The Plan 32 stage the environment names; empty when none was (or when verify reads a
+    generation whose record already carries it)."""
+    return os.environ.get("PLAN32_STAGE", "")
+
+
+def plan32_stage_or_fail() -> str:
+    """The environment's Plan 32 stage, refused unless it names an implemented one."""
+    stage = plan32_stage()
+    if stage not in PLAN32_GEOMETRY_SEEDS:
+        raise RuntimeError(
+            f"plan32-geometry needs PLAN32_STAGE in {sorted(PLAN32_GEOMETRY_SEEDS)}; got {stage!r}"
+        )
+    return stage
+
+
+def plan32_frozen_stage(generation: Generation) -> str:
+    """The stage prepare froze into this generation, refused when the environment disagrees.
+
+    Binding run to the prepared stage is what keeps the seeded character position, the fixture row
+    and the stage label describing one geometry: an environment naming another stage would move the
+    fixture under a player still standing at the other stage's pinned point.
+    """
+    frozen = generation["inputs"].get("plan32_stage")
+    if frozen not in PLAN32_GEOMETRY_SEEDS:
+        raise RuntimeError("the prepared generation has no frozen Plan 32 stage; prepare it again")
+    requested = plan32_stage()
+    if requested and requested != frozen:
+        raise RuntimeError(
+            f"generation is prepared for Plan 32 stage {frozen!r}; PLAN32_STAGE names {requested!r}"
+        )
+    return str(frozen)
 
 
 def plan_number(mode: str) -> str:
@@ -280,6 +390,8 @@ def plan_number(mode: str) -> str:
         return "22"
     if mode in {GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE}:
         return "23"
+    if mode == PLAN32_GEOMETRY_MODE:
+        return "32"
     if mode == RUN_SPEED_MODE:
         return "16"
     if mode == BASIC_MOVEMENT_MODE:
@@ -669,6 +781,51 @@ def basic_spell_cast_seed_sql() -> str:
 
 def target_targeted_spell_cast_seed_sql() -> str:
     return spell_grant_seed_sql(TARGET_TARGETED_SPELL_CAST_SPELL_ID, TARGET_TARGETED_SPELL_CAST_ACTION_BUTTON)
+
+
+def plan32_spell_seed_sql() -> str:
+    return spell_grant_seed_sql(PLAN32_GEOMETRY_SPELL_ID, PLAN32_GEOMETRY_ACTION_BUTTON)
+
+
+def plan32_world_seed_sql(stage: str) -> str:
+    dummy_x, dummy_y, dummy_z = PLAN32_GEOMETRY_SEEDS[stage]["dummy"]
+    return (
+        "INSERT INTO `creature` "
+        "(`guid`,`id`,`map`,`zoneId`,`areaId`,`position_x`,`position_y`,`position_z`,"
+        "`wander_distance`,`MovementType`) "
+        f"VALUES ({TARGET_TARGETED_SPELL_CAST_DUMMY_GUID},{PLAN32_GEOMETRY_DUMMY_ENTRY},"
+        f"{CHARACTER_MAP},{CHARACTER_ZONE},{CHARACTER_ZONE},{dummy_x},{dummy_y},{dummy_z},0,0) "
+        "ON DUPLICATE KEY UPDATE `position_x`=VALUES(`position_x`),`position_y`=VALUES(`position_y`),"
+        "`position_z`=VALUES(`position_z`);"
+    )
+
+
+def verify_plan32_seeds(manifest: Manifest, generation: Generation) -> None:
+    """The selected unit is the seeded fixture only if no other row of the fixture entry sits
+    near either seed point. Runs in run() after seeding, so a stray same-entry row fails the run
+    instead of silently admitting an ambient target. The run-owned DB is disposable; the check
+    reads it, it never modifies shared data."""
+    points = [
+        PLAN32_GEOMETRY_SEEDS[stage]["character"][:2] for stage in PLAN32_GEOMETRY_SEEDS
+    ] + [
+        PLAN32_GEOMETRY_SEEDS[stage]["dummy"][:2] for stage in PLAN32_GEOMETRY_SEEDS
+    ]
+    conditions = " OR ".join(
+        f"((`position_x`-({x}))*(`position_x`-({x}))+(`position_y`-({y}))*(`position_y`-({y}))) < 22500"
+        for x, y in points
+    )
+    rows = mysql(
+        manifest, generation,
+        f"SELECT `guid`,`position_x`,`position_y` FROM `creature` "
+        f"WHERE `id`={PLAN32_GEOMETRY_DUMMY_ENTRY} AND `map`={CHARACTER_MAP} AND ({conditions});",
+        generation["schemas"]["world"],
+    )
+    found = [line.split("\t") for line in rows.splitlines() if line.strip()]
+    expected = str(TARGET_TARGETED_SPELL_CAST_DUMMY_GUID)
+    if len(found) != 1 or found[0][0] != expected:
+        raise RuntimeError(
+            f"plan32 fixture entry {PLAN32_GEOMETRY_DUMMY_ENTRY} is not unique near the seeds: {found}"
+        )
 
 
 def target_targeted_spell_cast_world_seed_sql() -> str:
@@ -1180,11 +1337,16 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         "Ra.Enable": "0",
         "SOAP.Enabled": "0",
         "Cluster.Enabled": "0",
+        # The Plan 32 mode verifies against the wire payloads (cast counters, the CAST_FAILED
+        # reason byte), so its generations always capture them. Filenames are relative to LogsDir;
+        # empty everywhere else, which leaves packet logging off (sessions also need the flag the
+        # socket reads from this same key).
+        "PacketLogFile": '"packets.pkt"' if generation["mode"] == PLAN32_GEOMETRY_MODE else '""',
         "Appender.Server": '2,5,1,WorldServer.log,w',
         "Logger.network": (
             "5,Server" if ISSUE97 or generation["mode"] in {
                 BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
-                WALK_RUN_MODE_SWITCH_MODE,
+                WALK_RUN_MODE_SWITCH_MODE, PLAN32_GEOMETRY_MODE,
             }
             else "4,Server"
         ),
@@ -1441,15 +1603,19 @@ def geometry_input_hashes(data_root: Path) -> dict[str, str]:
 
 
 def geometry_inputs_differ(stored: dict, requested: dict) -> bool:
-    """True when a prepared generation's geometry inputs differ from the requested ones.
+    """True when a prepared generation's staged inputs differ from the requested ones.
 
     Reusing a prepared generation is idempotent only for the same inputs. A geometry-enabled
     request must not silently continue a generation that was prepared without collision data (or
     with different sets), because nothing would be staged or reconfigured and the caller would get
-    the geometry-free run it did not ask for.
+    the geometry-free run it did not ask for. The frozen Plan 32 stage belongs to the same
+    comparison: reusing the blocked generation for PLAN32_STAGE=clear would keep the player on the
+    blocked point while the fixture moved to the clear one.
     """
     geometry = bool(requested.get("geometry"))
     if bool(stored.get("geometry")) != geometry:
+        return True
+    if stored.get("plan32_stage") != requested.get("plan32_stage"):
         return True
     if not geometry:
         return False
@@ -1488,6 +1654,11 @@ def preflight_prepare(args: argparse.Namespace) -> dict[str, object]:
     if not dbc_root.is_dir() or not (data_root / "maps").is_dir():
         raise RuntimeError("data candidates must contain readable server DBC and Cataclysm maps directories")
     geometry = bool(getattr(args, "geometry", False))
+    if args.mode == PLAN32_GEOMETRY_MODE and not geometry:
+        # The LOS stages are only meaningful against the staged collision and navmesh data: without
+        # --geometry the server would answer every cast from an empty world and the stage verdict
+        # would describe nothing.
+        raise RuntimeError("plan32-geometry requires --geometry (stages vmaps/ and mmaps/)")
     geometry_hashes = geometry_input_hashes(data_root) if geometry else {}
     if args.mode == RUN_SPEED_MODE:
         verify_run_speed_aura_source(dbc_root)
@@ -1554,6 +1725,12 @@ def preflight_prepare(args: argparse.Namespace) -> dict[str, object]:
 def prepare(args: argparse.Namespace) -> None:
     started = time.monotonic()
     inputs = preflight_prepare(args)
+    if args.mode == PLAN32_GEOMETRY_MODE:
+        # Freeze the stage here: run() refuses an environment that names another one, and verify()
+        # requires the recorded stage to match the frozen value.
+        stage = plan32_stage_or_fail()
+        apply_plan32_stage_seed(args.mode, stage)
+        inputs["plan32_stage"] = stage
     print(f"prepare preflight: {time.monotonic() - started:.1f}s", flush=True)
     manifest_path = args.manifest.resolve()
     if manifest_path.exists():
@@ -2102,6 +2279,47 @@ def automate_ground_movement(generation: Generation) -> None:
     automate_key_sequence(generation, GROUND_MOVEMENT_KEYS)
 
 
+def automate_plan32_geometry(generation: Generation) -> None:
+    # One walk tap (height and walk evidence at the seed), then name-target the seeded fixture and
+    # two ordinary, uncancelled Fireball casts. No Escape: Codex's confirmation requires both
+    # attempts to run through their observation windows so a failure cannot be a client-side cancel.
+    capture_desktop_screenshot(generation, "desktop-before-target.png")
+    automate_key_sequence(generation, ("w",), hold_seconds=0.6, gap_seconds=0.4)
+    automate_key_sequence(
+        generation, PLAN32_GEOMETRY_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05,
+    )
+    time.sleep(1.0)  # let the client resolve the name and register the target
+    capture_desktop_screenshot(generation, "desktop-after-target.png")
+    automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(6.0)  # let the first cast resolve (Fireball has a real cast time)
+    capture_desktop_screenshot(generation, "desktop-after-first-cast.png")
+    automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(6.0)
+    capture_desktop_screenshot(generation, "desktop-after-second-cast.png")
+
+
+def automate_plan32_chase(generation: Generation) -> None:
+    # One aggro cast at the fixture, then a two-tap right turn around the courtyard wall: north
+    # 6 m, then east 6 m along the seeded cardinal facing (pi/2), so each tap is an exact axis
+    # move. The fixture (1.2 m west of that wall) cannot follow straight and must walk the
+    # pinned route around it. No Escape anywhere.
+    capture_desktop_screenshot(generation, "desktop-before-target.png")
+    automate_key_sequence(
+        generation, PLAN32_GEOMETRY_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05,
+    )
+    time.sleep(1.0)  # let the client resolve the name and register the target
+    capture_desktop_screenshot(generation, "desktop-after-target.png")
+    automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(7.0)  # let the cast resolve; a hit aggros the fixture
+    capture_desktop_screenshot(generation, "desktop-after-cast.png")
+    time.sleep(8.0)  # let the fixture close to melee
+    automate_key_sequence(generation, ("w",), hold_seconds=0.86, gap_seconds=0.4)
+    automate_key_sequence(generation, ("e",), hold_seconds=0.86, gap_seconds=0.4)
+    capture_desktop_screenshot(generation, "desktop-after-leg.png")
+    time.sleep(40.0)  # arrival window for the detour
+    capture_desktop_screenshot(generation, "desktop-after-wait.png")
+
+
 def automate_issue97_phases(generation: Generation, deadline: float) -> None:
     # Measure accepted stops; startup input can cover much less distance than later taps.
     stages = []
@@ -2531,6 +2749,16 @@ def run_client(args: argparse.Namespace) -> None:
     if generation["mode"] == TARGET_TARGETED_SPELL_CAST_MODE:
         mysql(manifest, generation, target_targeted_spell_cast_seed_sql(), generation["schemas"]["characters"])
         mysql(manifest, generation, target_targeted_spell_cast_world_seed_sql(), generation["schemas"]["world"])
+    if generation["mode"] == PLAN32_GEOMETRY_MODE:
+        stage = plan32_frozen_stage(generation)
+        generation["plan32_stage"] = stage
+        # Re-seed the character row too: a transient retry must start from the frozen stage's pinned
+        # point again, not from wherever the previous attempt's walk left the character.
+        apply_plan32_stage_seed(generation["mode"], stage)
+        mysql(manifest, generation, populated_character_seed_sql(), generation["schemas"]["characters"])
+        mysql(manifest, generation, plan32_spell_seed_sql(), generation["schemas"]["characters"])
+        mysql(manifest, generation, plan32_world_seed_sql(stage), generation["schemas"]["world"])
+        verify_plan32_seeds(manifest, generation)
     if generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE:
         mysql(manifest, generation, target_targeted_spell_cast_seed_sql(), generation["schemas"]["characters"])
     if generation["mode"] == LEVEL_UP_MODE:
@@ -2593,6 +2821,7 @@ def run_client(args: argparse.Namespace) -> None:
         walk_run_mode_switch_sent = False
         spell_cast_sent = False
         target_targeted_spell_cast_sent = False
+        plan32_geometry_sent = False
         chat_message_sent = False
         invalid_target_spell_cast_sent = False
         level_up_sent = False
@@ -2664,6 +2893,15 @@ def run_client(args: argparse.Namespace) -> None:
                 ):
                     automate_target_targeted_spell_cast(generation)
                     target_targeted_spell_cast_sent = True
+                if (
+                    generation["mode"] == PLAN32_GEOMETRY_MODE and selection_sent
+                    and not plan32_geometry_sent and in_world_control_marker_count(generation) > 0
+                ):
+                    if generation.get("plan32_stage") == "chase":
+                        automate_plan32_chase(generation)
+                    else:
+                        automate_plan32_geometry(generation)
+                    plan32_geometry_sent = True
                 if (
                     generation["mode"] == CHAT_MESSAGE_MODE and selection_sent and not chat_message_sent
                     and in_world_control_marker_count(generation) > 0
@@ -2960,6 +3198,947 @@ def ground_movement_sequence(generation: Generation) -> list[str]:
     return [str(sample["opcode"]) for sample in ground_movement_samples(generation)]
 
 
+# Wire numbers from src/server/game/Server/Protocol/Opcodes.h; payload layouts from
+# WorldSession::HandleCastSpellOpcode (cast), Spell::WriteCastResultInfo (failed) and
+# Spell::SendSpellGo (go). Only the Plan 32 mode reads the capture.
+PKT_LOG_HEADER_SIZE = 66
+PKT_PACKET_HEADER_SIZE = 44
+CMSG_SET_SELECTION_OPCODE = 0x506
+CMSG_CAST_SPELL_OPCODE = 0x4C07
+SMSG_CAST_FAILED_OPCODE = 0x4D16
+SMSG_SPELL_GO_OPCODE = 0x6E16
+SPELL_FAILED_LINE_OF_SIGHT_RESULT = 49
+SMSG_ON_MONSTER_MOVE_OPCODE = 0x6E17
+SMSG_ATTACKERSTATEUPDATE_OPCODE = 0x0B25
+# MoveSplineFlag bits (MoveSplineFlag.h) needed to walk a monster-move body.
+SPLINE_FLAG_CYCLIC = 0x00001000
+SPLINE_FLAG_UNCOMPRESSED_PATH = 0x00400000
+SPLINE_FLAG_ANIMATION = 0x01000000
+SPLINE_FLAG_PARABOLIC = 0x02000000
+SPLINE_FLAG_FINAL_POINT = 0x20000000
+SPLINE_FLAG_FINAL_TARGET = 0x40000000
+SPLINE_FLAG_FINAL_ANGLE = 0x80000000
+
+
+def read_packed_guid(data: bytes, offset: int) -> tuple[int, int]:
+    """One packed GUID: a mask byte followed by the non-zero bytes in order."""
+    mask = data[offset]
+    guid = 0
+    cursor = offset + 1
+    for index in range(8):
+        if mask & (1 << index):
+            guid |= data[cursor] << (index * 8)
+            cursor += 1
+    return guid, cursor
+
+
+def plan32_packet_events(generation: Generation) -> list[dict[str, object]]:
+    """The cast correlation for one Plan 32 run, in arrival order: selections (target GUID),
+    casts (counter, spell, target GUID or None) and their outcomes (failed: counter, spell,
+    result; go: caster, counter, spell), each with its packet index so callers can order them
+    against the fixture's own spline packets. Anything else on the wire is ignored."""
+    path = Path(generation["paths"]["logs"]) / "packets.pkt"
+    if not path.is_file():
+        return []
+    data = path.read_bytes()
+    events: list[dict[str, object]] = []
+    offset = PKT_LOG_HEADER_SIZE
+    packet = 0
+    while offset + PKT_PACKET_HEADER_SIZE <= len(data):
+        direction, _, _, optional_size, length = struct.unpack_from("<IIIII", data, offset)
+        if optional_size != 20 or length > 65535 or length < 4:
+            raise RuntimeError(f"plan32 packet log desynchronised at byte {offset}")
+        opcode = struct.unpack_from("<I", data, offset + 40)[0]
+        payload = data[offset + 44:offset + 40 + length]
+        side = "c2s" if direction == 0x47534D43 else "s2c"
+        if opcode == CMSG_SET_SELECTION_OPCODE:
+            # ObjectGuid's own stream operator reads a full uint64, unlike the packed GUIDs in
+            # the cast packets below.
+            target = struct.unpack_from("<Q", payload, 0)[0]
+            events.append({"opcode": "CMSG_SET_SELECTION", "side": side, "index": packet,
+                           "target": target})
+        elif opcode == CMSG_CAST_SPELL_OPCODE:
+            count = payload[0]
+            spell = struct.unpack_from("<I", payload, 1)[0]
+            mask = struct.unpack_from("<I", payload, 10)[0]
+            target = None
+            if mask & 0x00000002:
+                target, _ = read_packed_guid(payload, 14)
+            events.append({
+                "opcode": "CMSG_CAST_SPELL", "side": side, "index": packet, "count": count,
+                "spell": spell, "target": target,
+            })
+        elif opcode == SMSG_CAST_FAILED_OPCODE:
+            events.append({
+                "opcode": "SMSG_CAST_FAILED", "side": side, "index": packet, "count": payload[0],
+                "spell": struct.unpack_from("<I", payload, 1)[0], "result": payload[5],
+            })
+        elif opcode == SMSG_SPELL_GO_OPCODE:
+            caster, cursor = read_packed_guid(payload, 0)
+            _, cursor = read_packed_guid(payload, cursor)
+            events.append({
+                "opcode": "SMSG_SPELL_GO", "side": side, "index": packet, "caster": caster,
+                "count": payload[cursor],
+                "spell": struct.unpack_from("<I", payload, cursor + 1)[0],
+            })
+        elif opcode == CMSG_CANCEL_CAST_OPCODE:
+            events.append({"opcode": "CMSG_CANCEL_CAST", "side": side, "index": packet})
+        offset += PKT_PACKET_HEADER_SIZE + (length - 4)
+        packet += 1
+    return events
+
+
+def unpack_pack_xyz(packed: int) -> tuple[float, float, float]:
+    """One appendPackXYZ word: 11-bit x, 11-bit y, 10-bit z, each in 0.25 steps, sign-extended."""
+    x = packed & 0x7FF
+    y = (packed >> 11) & 0x7FF
+    z = (packed >> 22) & 0x3FF
+    if x & 0x400:
+        x -= 0x800
+    if y & 0x400:
+        y -= 0x800
+    if z & 0x200:
+        z -= 0x400
+    return x * 0.25, y * 0.25, z * 0.25
+
+
+def plan32_monster_moves(generation: Generation) -> list[dict[str, object]]:
+    """Every SMSG_ON_MONSTER_MOVE as (mover GUID, world polyline, packet index): the mover, its
+    real position, then the spline points, uncompressed or PackXYZ-compressed (offsets from the
+    start/end midpoint, as the server writes them). Layout from MoveSplineInit + PacketBuilder."""
+    path = Path(generation["paths"]["logs"]) / "packets.pkt"
+    if not path.is_file():
+        return []
+    data = path.read_bytes()
+    moves: list[dict[str, object]] = []
+    offset = PKT_LOG_HEADER_SIZE
+    packet = 0
+    while offset + PKT_PACKET_HEADER_SIZE <= len(data):
+        _, _, _, optional_size, length = struct.unpack_from("<IIIII", data, offset)
+        if optional_size != 20 or length > 65535 or length < 4:
+            raise RuntimeError(f"plan32 packet log desynchronised at byte {offset}")
+        opcode = struct.unpack_from("<I", data, offset + 40)[0]
+        payload = data[offset + 44:offset + 40 + length]
+        if opcode == SMSG_ON_MONSTER_MOVE_OPCODE:
+            cursor = 0
+            mover, cursor = read_packed_guid(payload, cursor)
+            cursor += 1  # VehicleExitVoluntary
+            start = struct.unpack_from("<fff", payload, cursor)
+            cursor += 12
+            cursor += 4  # splineId
+            facing = payload[cursor]
+            cursor += 1
+            facing_target = None
+            if facing == 2:
+                cursor += 12
+            elif facing == 3:
+                # FacingInfo.target is a raw uint64, not a packed GUID. A chase faces its
+                # victim, so this independently corroborates who the mover is after.
+                facing_target = struct.unpack_from("<Q", payload, cursor)[0]
+                cursor += 8
+            elif facing == 4:
+                cursor += 4
+            elif facing != 0:
+                raise RuntimeError(f"plan32 unknown monster-move facing {facing}")
+            flags = struct.unpack_from("<I", payload, cursor)[0]
+            cursor += 4
+            if flags & SPLINE_FLAG_CYCLIC:
+                raise RuntimeError("plan32 cyclic spline path is not supported")
+            if flags & SPLINE_FLAG_ANIMATION:
+                cursor += 1 + 4
+            cursor += 4  # duration
+            if flags & SPLINE_FLAG_PARABOLIC:
+                cursor += 4 + 4
+            points = [start]
+            if flags & SPLINE_FLAG_UNCOMPRESSED_PATH:
+                count = struct.unpack_from("<I", payload, cursor)[0]
+                cursor += 4
+                for _ in range(count):
+                    points.append(struct.unpack_from("<fff", payload, cursor))
+                    cursor += 12
+            else:
+                last_idx = struct.unpack_from("<I", payload, cursor)[0]
+                cursor += 4
+                dest = struct.unpack_from("<fff", payload, cursor)
+                cursor += 12
+                if last_idx > 1:
+                    middle = tuple((a + b) / 2.0 for a, b in zip(start, dest))
+                    for _ in range(1, last_idx):
+                        packed = struct.unpack_from("<I", payload, cursor)[0]
+                        cursor += 4
+                        off = unpack_pack_xyz(packed)
+                        points.append(tuple(m - o for m, o in zip(middle, off)))
+                points.append(dest)
+            moves.append({"mover": mover, "points": points, "facing_target": facing_target,
+                          "index": packet})
+        offset += PKT_PACKET_HEADER_SIZE + (length - 4)
+        packet += 1
+    return moves
+
+
+def plan32_attackerstate(generation: Generation) -> list[dict[str, object]]:
+    """Every SMSG_ATTACKERSTATEUPDATE as (attacker, victim, damage): HitInfo, both packed GUIDs,
+    then the full damage. Any outcome counts — even a miss proves melee engagement range."""
+    path = Path(generation["paths"]["logs"]) / "packets.pkt"
+    if not path.is_file():
+        return []
+    data = path.read_bytes()
+    swings: list[dict[str, object]] = []
+    offset = PKT_LOG_HEADER_SIZE
+    while offset + PKT_PACKET_HEADER_SIZE <= len(data):
+        _, _, _, optional_size, length = struct.unpack_from("<IIIII", data, offset)
+        if optional_size != 20 or length > 65535 or length < 4:
+            raise RuntimeError(f"plan32 packet log desynchronised at byte {offset}")
+        opcode = struct.unpack_from("<I", data, offset + 40)[0]
+        payload = data[offset + 44:offset + 40 + length]
+        if opcode == SMSG_ATTACKERSTATEUPDATE_OPCODE:
+            cursor = 4  # HitInfo
+            attacker, cursor = read_packed_guid(payload, cursor)
+            victim, cursor = read_packed_guid(payload, cursor)
+            damage = struct.unpack_from("<I", payload, cursor)[0]
+            swings.append({"attacker": attacker, "victim": victim, "damage": damage})
+        offset += PKT_PACKET_HEADER_SIZE + (length - 4)
+    return swings
+
+
+SMSG_UPDATE_OBJECT_OPCODE = 0x4715
+CMSG_CANCEL_CAST_OPCODE = 0x115
+# Object.h UpdateType: only the create forms carry a movement block and update fields, and a live
+# unit arrives as CREATE_OBJECT2 while a world-entry batch uses CREATE_OBJECT.
+UPDATE_TYPE_VALUES = 0
+UPDATE_TYPE_CREATE_OBJECT = 1
+UPDATE_TYPE_CREATE_OBJECT2 = 2
+UPDATE_TYPE_OUT_OF_RANGE = 3
+UPDATE_TYPE_NEAR = 4
+# SharedDefines.h TypeID, the HighGuid::Unit tag in a GUID's top 16 bits, and the update field
+# index of OBJECT_FIELD_ENTRY (ObjectGuid.h's field order).
+TYPEID_UNIT = 3
+HIGHGUID_UNIT = 0xF130
+OBJECT_FIELD_ENTRY = 5
+# The fixture is seeded at its pinned point and does not move before the first cast, so its create
+# position has to reproduce that point closely; the derived-line pins are compared at 25 cm, which
+# is far above the millimetre residuals the derivation shows and far below a different wall.
+PLAN32_FIXTURE_POSITION_TOLERANCE = 0.5
+PLAN32_PIN_TOLERANCE = 0.25
+
+
+class _Plan32Bits:
+    """MSB-first bit reader over a create block's bits section (ByteBuffer's bit order)."""
+
+    def __init__(self, data: bytes, position: int) -> None:
+        self.data = data
+        self.position = position
+        self.bit = 0
+
+    def read_bit(self) -> int:
+        if self.position >= len(self.data):
+            raise RuntimeError("plan32 update object: bit read past the end of the packet")
+        value = (self.data[self.position] >> (7 - self.bit)) & 1
+        self.bit += 1
+        if self.bit == 8:
+            self.bit = 0
+            self.position += 1
+        return value
+
+    def read_bits(self, count: int) -> int:
+        value = 0
+        for _ in range(count):
+            value = (value << 1) | self.read_bit()
+        return value
+
+    def flush(self) -> None:
+        if self.bit:
+            self.bit = 0
+            self.position += 1
+
+
+class _Plan32Reader:
+    """Little-endian cursor over a create block's data section."""
+
+    def __init__(self, data: bytes, position: int = 0) -> None:
+        self.data = data
+        self.position = position
+
+    def _need(self, count: int) -> None:
+        if self.position + count > len(self.data):
+            raise RuntimeError("plan32 update object: read past the end of the packet")
+
+    def u8(self) -> int:
+        self._need(1)
+        value = self.data[self.position]
+        self.position += 1
+        return value
+
+    def u32(self) -> int:
+        self._need(4)
+        value = struct.unpack_from("<I", self.data, self.position)[0]
+        self.position += 4
+        return value
+
+    def f32(self) -> float:
+        self._need(4)
+        value = struct.unpack_from("<f", self.data, self.position)[0]
+        self.position += 4
+        return value
+
+    def skip(self, count: int) -> None:
+        self._need(count)
+        self.position += count
+
+
+def _plan32_byte_seq(reader: _Plan32Reader, guid: int, index: int) -> None:
+    """WriteByteSeq writes a byte only when that GUID byte is non-zero; the block's own GUID says
+    which positions were written."""
+    if (guid >> (8 * index)) & 0xFF:
+        reader.skip(1)
+
+
+def _plan32_transport_bits(bits: _Plan32Bits) -> dict[str, object]:
+    trans_guid = bits.read_bit() << (5 * 8)
+    trans_guid |= bits.read_bit() << (0 * 8)
+    trans_guid |= bits.read_bit() << (3 * 8)
+    trans_guid |= bits.read_bit() << (6 * 8)
+    trans_guid |= bits.read_bit() << (1 * 8)
+    trans_guid |= bits.read_bit() << (4 * 8)
+    trans_guid |= bits.read_bit() << (2 * 8)
+    has_time2 = bool(bits.read_bit())
+    trans_guid |= bits.read_bit() << (7 * 8)
+    return {"guid": trans_guid, "has_time2": has_time2}
+
+
+def _plan32_create_flags(bits: _Plan32Bits) -> dict[str, int]:
+    """UpdateObject's own flag order, PauseTimes included: the 24-bit count is always written even
+    when it is zero, so it is skipped rather than read only when a flag says so."""
+    flags = {}
+    for name in ("PlayerHoverAnim", "SupressedGreetings", "Rotation", "AnimKit", "CombatVictim",
+                 "ThisIsYou", "Vehicle", "MovementUpdate"):
+        flags[name] = bits.read_bit()
+    bits.read_bits(24)
+    for name in ("NoBirthAnim", "MovementTransport", "Stationary", "AreaTrigger", "EnablePortals",
+                 "ServerTime"):
+        flags[name] = bits.read_bit()
+    return flags
+
+
+def _plan32_spline_create_bits(bits: _Plan32Bits) -> dict[str, object]:
+    if not bits.read_bit():
+        return {"active": False, "raw_flags": 0, "path_size": 0}
+    mode = bits.read_bits(2)
+    parabolic_or_animation = bits.read_bit()
+    path_size = bits.read_bits(22)
+    facing_code = bits.read_bits(2)
+    facing_guid = 0
+    if facing_code == 2:
+        for index in (4, 3, 7, 2, 6, 1, 0, 5):
+            facing_guid |= bits.read_bit() << (8 * index)
+    parabolic_starts = bits.read_bit()
+    raw_flags = bits.read_bits(25)
+    return {
+        "active": True, "mode": mode, "path_size": path_size, "facing_code": facing_code,
+        "facing_guid": facing_guid,
+        "parabolic_starts": bool(parabolic_or_animation and parabolic_starts),
+        "raw_flags": raw_flags,
+    }
+
+
+def _plan32_movement_bits(bits: _Plan32Bits) -> dict[str, object]:
+    movement: dict[str, object] = {}
+    flags0_absent = bits.read_bit()
+    movement["orientation_absent"] = bits.read_bit()
+    for _ in range(3):  # guid[7], guid[3], guid[2]
+        bits.read_bit()
+    if not flags0_absent:
+        bits.read_bits(30)
+    bits.read_bit()  # hasSpline && !IsPlayer
+    movement["has_pitch"] = bits.read_bit() == 0
+    has_spline = bits.read_bit()
+    movement["has_fall_data"] = bits.read_bit()
+    movement["has_spline_elevation"] = bits.read_bit() == 0
+    bits.read_bit()  # guid[5]
+    has_transport = bits.read_bit()
+    bits.read_bit()  # HasTime, hardcoded 0; the time word is written anyway
+    movement["has_spline"] = has_spline
+    movement["has_transport"] = has_transport
+    if has_transport:
+        trans_guid = bits.read_bit() << 8
+        movement["transport_time2"] = bool(bits.read_bit())
+        for index in (4, 0, 6):
+            trans_guid |= bits.read_bit() << (8 * index)
+        bits.read_bit()  # Has VehicleRecID, hardcoded 0
+        for index in (7, 5, 3, 2):
+            trans_guid |= bits.read_bit() << (8 * index)
+        movement["trans_guid"] = trans_guid
+    bits.read_bit()  # guid[4]
+    movement["spline"] = _plan32_spline_create_bits(bits) if has_spline else None
+    bits.read_bit()  # guid[6]
+    if movement["has_fall_data"]:
+        movement["fall_direction"] = bool(bits.read_bit())
+    bits.read_bit()  # guid[0]
+    bits.read_bit()  # guid[1]
+    bits.read_bit()  # HeightChangeFailed, hardcoded 0
+    if not bits.read_bit():  # flags1 absent
+        bits.read_bits(12)
+    return movement
+
+
+def _plan32_spline_data(reader: _Plan32Reader, info: dict[str, object] | None) -> None:
+    """The spline's own data words, then the final destination and id that are written whether or
+    not the spline was active."""
+    if info is not None and info.get("active"):
+        raw = int(info["raw_flags"])
+        if raw & SPLINE_FLAG_PARABOLIC and info.get("parabolic_starts"):
+            reader.skip(4)  # vertical acceleration
+        reader.skip(4)  # time passed
+        facing = raw & (SPLINE_FLAG_FINAL_POINT | SPLINE_FLAG_FINAL_TARGET | SPLINE_FLAG_FINAL_ANGLE)
+        if facing == SPLINE_FLAG_FINAL_ANGLE:
+            reader.skip(4)
+        elif facing == SPLINE_FLAG_FINAL_TARGET:
+            for index in (5, 3, 7, 1, 6, 4, 2, 0):
+                _plan32_byte_seq(reader, int(info["facing_guid"]), index)
+        reader.skip(12 * int(info["path_size"]))  # path nodes
+        if facing == SPLINE_FLAG_FINAL_POINT:
+            reader.skip(12)
+        reader.skip(4)  # duration mod next
+        reader.skip(4)  # duration
+        if raw & (SPLINE_FLAG_PARABOLIC | SPLINE_FLAG_ANIMATION):
+            reader.skip(4)  # effect start time
+        reader.skip(4)  # duration mod
+    reader.skip(12)  # final destination
+    reader.skip(4)  # spline id
+
+
+def _plan32_movement_data(reader: _Plan32Reader, guid: int,
+                          movement: dict[str, object]) -> None:
+    _plan32_byte_seq(reader, guid, 4)
+    reader.skip(4)  # run back speed
+    if movement["has_fall_data"]:
+        if movement.get("fall_direction"):
+            reader.skip(12)
+        reader.skip(4)  # fall time
+        reader.skip(4)  # fall z speed
+    reader.skip(4)  # swim back speed
+    if movement["has_spline_elevation"]:
+        reader.skip(4)
+    if movement["has_spline"]:
+        _plan32_spline_data(reader, movement.get("spline"))  # type: ignore[arg-type]
+    position_z = reader.f32()
+    _plan32_byte_seq(reader, guid, 5)
+    if movement["has_transport"]:
+        trans_guid = int(movement.get("trans_guid", 0))
+        _plan32_byte_seq(reader, trans_guid, 5)
+        _plan32_byte_seq(reader, trans_guid, 7)
+        reader.skip(4)  # transport time
+        reader.skip(4)  # offset o
+        if movement.get("transport_time2"):
+            reader.skip(4)
+        reader.skip(4)  # offset y
+        reader.skip(4)  # offset x
+        _plan32_byte_seq(reader, trans_guid, 3)
+        reader.skip(4)  # offset z
+        _plan32_byte_seq(reader, trans_guid, 0)
+        reader.skip(1)  # seat
+        _plan32_byte_seq(reader, trans_guid, 1)
+        _plan32_byte_seq(reader, trans_guid, 6)
+        _plan32_byte_seq(reader, trans_guid, 2)
+        _plan32_byte_seq(reader, trans_guid, 4)
+    position_x = reader.f32()
+    reader.skip(4)  # pitch rate
+    _plan32_byte_seq(reader, guid, 3)
+    _plan32_byte_seq(reader, guid, 0)
+    reader.skip(4)  # swim speed
+    position_y = reader.f32()
+    _plan32_byte_seq(reader, guid, 7)
+    _plan32_byte_seq(reader, guid, 1)
+    _plan32_byte_seq(reader, guid, 2)
+    reader.skip(4)  # walk speed
+    reader.skip(4)  # time
+    reader.skip(4)  # turn rate
+    _plan32_byte_seq(reader, guid, 6)
+    reader.skip(4)  # flight speed
+    orientation = None
+    if not movement["orientation_absent"]:
+        orientation = reader.f32()
+    reader.skip(4)  # run speed
+    if movement["has_pitch"]:
+        reader.skip(4)
+    reader.skip(4)  # flight back speed
+    movement["position"] = (position_x, position_y, position_z)
+    movement["orientation"] = orientation
+
+
+def _plan32_movement(reader: _Plan32Reader, guid: int) -> dict[str, object]:
+    """Object::BuildMovementUpdate: the bits section, a FlushBits, then the data section."""
+    bits = _Plan32Bits(reader.data, reader.position)
+    flags = _plan32_create_flags(bits)
+    movement = _plan32_movement_bits(bits) if flags["MovementUpdate"] else {}
+    transport = _plan32_transport_bits(bits) if flags["MovementTransport"] else None
+    victim_guid = 0
+    if flags["CombatVictim"]:
+        for index in (2, 7, 0, 4, 5, 6, 1, 3):
+            victim_guid |= bits.read_bit() << (8 * index)
+    bits.flush()
+    reader.position = bits.position
+    if flags["MovementUpdate"]:
+        _plan32_movement_data(reader, guid, movement)
+    if flags["Vehicle"]:
+        reader.skip(8)
+    if transport is not None:
+        trans_guid = int(transport["guid"])
+        for index in (0, 5, 3):
+            _plan32_byte_seq(reader, trans_guid, index)
+        reader.skip(4)  # offset x
+        for index in (4, 6, 1):
+            _plan32_byte_seq(reader, trans_guid, index)
+        reader.skip(4)  # transport time
+        reader.skip(4)  # offset y
+        for index in (2, 7):
+            _plan32_byte_seq(reader, trans_guid, index)
+        reader.skip(4)  # offset z
+        reader.skip(1)  # seat
+        reader.skip(4)  # offset o
+        if transport["has_time2"]:
+            reader.skip(4)
+    if flags["Rotation"]:
+        reader.skip(8)  # packed world rotation
+    if flags["AreaTrigger"]:
+        reader.skip(4 * 4 + 1 + 4 * 12)
+    if flags["Stationary"]:
+        reader.skip(4 * 4)
+    if flags["CombatVictim"]:
+        for index in (4, 0, 3, 5, 7, 6, 2, 1):
+            _plan32_byte_seq(reader, victim_guid, index)
+    if flags["ServerTime"]:
+        reader.skip(4)
+    return movement
+
+
+def _plan32_values(reader: _Plan32Reader) -> dict[int, int]:
+    """UpdateMask + UpdateFieldData: block count, one mask per block, then the set fields' values
+    in index order. OBJECT_FIELD_ENTRY is what names the unit without trusting its GUID."""
+    block_count = reader.u8()
+    masks = [reader.u32() for _ in range(block_count)]
+    fields: dict[int, int] = {}
+    for block_index, mask in enumerate(masks):
+        for bit in range(32):
+            if mask & (1 << bit):
+                fields[block_index * 32 + bit] = reader.u32()
+    return fields
+
+
+def _plan32_update_blocks(payload: bytes, packet: int) -> list[dict[str, object]]:
+    reader = _Plan32Reader(payload, 2)  # map id (uint16)
+    blocks: list[dict[str, object]] = []
+    block_count = reader.u32()
+    for _ in range(block_count):
+        update_type = reader.u8()
+        if update_type in (UPDATE_TYPE_OUT_OF_RANGE, UPDATE_TYPE_NEAR):
+            count = reader.u32()
+            for _ in range(count):
+                _, reader.position = read_packed_guid(reader.data, reader.position)
+            continue
+        guid, reader.position = read_packed_guid(reader.data, reader.position)
+        if update_type in (UPDATE_TYPE_CREATE_OBJECT, UPDATE_TYPE_CREATE_OBJECT2):
+            type_id = reader.u8()
+            movement = _plan32_movement(reader, guid)
+            fields = _plan32_values(reader)
+            blocks.append({
+                "packet": packet, "update_type": update_type, "guid": guid, "type_id": type_id,
+                "entry": fields.get(OBJECT_FIELD_ENTRY),
+                "position": movement.get("position"), "orientation": movement.get("orientation"),
+            })
+        elif update_type == UPDATE_TYPE_VALUES:
+            _plan32_values(reader)
+        else:
+            raise RuntimeError(f"plan32 update object: unknown update type {update_type}")
+    if reader.position != len(payload):
+        raise RuntimeError(
+            f"plan32 update object: packet {packet} parsed {reader.position} of {len(payload)} "
+            "bytes; the block walk is out of step with the server's writer"
+        )
+    return blocks
+
+
+def plan32_object_creates(generation: Generation) -> list[dict[str, object]]:
+    """Every created object in the run's SMSG_UPDATE_OBJECT packets, in packet order: GUID, TypeID,
+    entry and create position. The whole capture is read and every update packet must end exactly
+    where its declared block count says, so a desynchronised walk fails the verdict instead of
+    producing a witness that merely looks right."""
+    path = Path(generation["paths"]["logs"]) / "packets.pkt"
+    if not path.is_file():
+        return []
+    data = path.read_bytes()
+    creates: list[dict[str, object]] = []
+    offset = PKT_LOG_HEADER_SIZE
+    packet = 0
+    while offset + PKT_PACKET_HEADER_SIZE <= len(data):
+        _, _, _, optional_size, length = struct.unpack_from("<IIIII", data, offset)
+        if optional_size != 20 or length > 65535 or length < 4:
+            raise RuntimeError(f"plan32 packet log desynchronised at byte {offset}")
+        opcode = struct.unpack_from("<I", data, offset + 40)[0]
+        payload = data[offset + 44:offset + 40 + length]
+        if opcode == SMSG_UPDATE_OBJECT_OPCODE:
+            try:
+                creates.extend(_plan32_update_blocks(payload, packet))
+            except (IndexError, struct.error) as error:
+                raise RuntimeError(
+                    f"plan32 update object packet {packet} did not parse: {error}"
+                ) from error
+        offset += PKT_PACKET_HEADER_SIZE + (length - 4)
+        packet += 1
+    return creates
+
+
+def plan32_fixture_witness(generation: Generation, target: int) -> dict[str, object] | None:
+    """The selected unit as the server itself described it: the create block's TypeID, entry and
+    position for the selected GUID, with the entry cross-checked against the GUID's own bits (the
+    HighGuid::Unit tag plus the creature entry) so a wrong selection cannot pass as the fixture."""
+    create = next(
+        (block for block in plan32_object_creates(generation) if block["guid"] == target), None
+    )
+    if create is None:
+        return None
+    return {
+        "guid": target,
+        "type_id": create.get("type_id"),
+        "entry": create.get("entry"),
+        "entry_from_guid": (target >> 24) & 0xFFFFFF,
+        "guid_high": (target >> 48) & 0xFFFF,
+        "position": [float(component) for component in create["position"]]
+        if create.get("position") else None,
+        "orientation": create.get("orientation"),
+    }
+
+
+def plan32_cast_fixture_positions(generation: Generation, target: int) -> list[dict[str, object]]:
+    """The fixture's position when each cast request to it arrives: its create position advanced by
+    the destination of every spline that reached the client before that request, so a cast made
+    after the fixture moved is checked against where it actually was."""
+    create = next(
+        (block for block in plan32_object_creates(generation) if block["guid"] == target), None
+    )
+    if create is None or not create.get("position"):
+        return []
+    moves = [
+        {"index": move["index"], "destination": list(move["points"][-1])}
+        for move in plan32_monster_moves(generation) if move["mover"] == target
+    ]
+    requests = [
+        {"index": event["index"], "count": event["count"]}
+        for event in plan32_packet_events(generation)
+        if event["opcode"] == "CMSG_CAST_SPELL" and event.get("target") == target
+    ]
+    position = [float(component) for component in create["position"]]
+    snapshots: list[dict[str, object]] = []
+    for item in sorted(moves + requests, key=lambda entry: int(entry["index"])):
+        if "destination" in item:
+            position = [float(component) for component in item["destination"]]
+        else:
+            snapshots.append({"count": item["count"], "position": list(position)})
+    return snapshots
+
+
+def plan32_player_cast_point(stage: str, samples: list[dict[str, object]]) -> list[float] | None:
+    """Where the player was when it cast. The stages cast from a standing position: the LOS stages
+    after their single walk tap (their sample list must be exactly the landing, the start and the
+    stop, so nothing moved after it), the chase before its run legs, which the automation sends
+    after the cast and which the sample list carries afterwards."""
+    if not samples:
+        return None
+    sample = samples[0] if stage == "chase" else samples[-1]
+    return [float(sample["x"]), float(sample["y"]), float(sample["z"])]
+
+
+_PLAN32_GEOMETRY_MODULE: Any = None
+
+
+def plan32_geometry_module() -> Any:
+    """apps/cata/check_collision_geometry.py: the vmap reader that pinned the frozen scenario.
+
+    Loaded by path, because this runner is a script and the tool is only in play for this mode. The
+    rays and routes below then come from the same reader that derived the pins, rather than from a
+    second implementation that could agree with a bug of its own.
+    """
+    global _PLAN32_GEOMETRY_MODULE
+    if _PLAN32_GEOMETRY_MODULE is None:
+        spec = importlib.util.spec_from_file_location(
+            "plan32_collision_geometry", Path(__file__).with_name("check_collision_geometry.py"),
+        )
+        if spec is None or spec.loader is None:
+            raise RuntimeError("check_collision_geometry.py is not next to this runner")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _PLAN32_GEOMETRY_MODULE = module
+    return _PLAN32_GEOMETRY_MODULE
+
+
+def plan32_geometry_facts(generation: Generation) -> dict[str, object]:
+    """Whether the run really had the staged collision and navmesh data in play: the recorded
+    artifact hashes, the config the server was started with and the server's own support line.
+    A verdict about collision data means nothing without all three."""
+    inputs = generation["inputs"]
+    config: dict[str, str | None] = {}
+    config_path = Path(str(generation.get("paths", {}).get("world_config", "")))
+    if config_path.is_file():
+        text = config_path.read_text(errors="replace")
+        for key in ("MoveMaps.Enable", "vmap.enableLOS", "vmap.enableHeight"):
+            match = re.search(rf"^\s*{re.escape(key)}\s*=\s*(\S+)\s*$", text, re.MULTILINE)
+            config[key] = match.group(1) if match else None
+    support = None
+    stdout_path = Path(str(generation.get("paths", {}).get("logs", ""))) / "worldserver.stdout.log"
+    if stdout_path.is_file():
+        for line in stdout_path.read_text(errors="replace").splitlines():
+            if "VMap support included" in line:
+                support = line.strip()
+    return {
+        "data_root": inputs.get("data_root"),
+        "vmaps_hash": inputs.get("data_vmaps_hash"),
+        "mmaps_hash": inputs.get("data_mmaps_hash"),
+        "config": config,
+        "support_line": support,
+    }
+
+
+def plan32_line_pin(line: dict[str, object], seed: list[float], eye: float) -> dict[str, float]:
+    """Where a pinned seed sits on a derived line: the distance along it and the distance off it.
+
+    The fixture seeds are points on the line where the spawn stands, not its far endpoint, and the
+    derivation lifts both endpoints by the unit collision height, so the seed's own z is compared
+    against the first endpoint's z minus that height.
+    """
+    first = [float(component) for component in line["first"]]
+    second = [float(component) for component in line["second"]]
+    length = math.hypot(second[0] - first[0], second[1] - first[1])
+    ux, uy = (second[0] - first[0]) / length, (second[1] - first[1]) / length
+    vx, vy = float(seed[0]) - first[0], float(seed[1]) - first[1]
+    return {
+        "along": vx * ux + vy * uy,
+        "perpendicular": abs(vx * uy - vy * ux),
+        "endpoint_z_delta": first[2] - eye - float(seed[2]),
+    }
+
+
+def plan32_route_facts(data_root: Path, start: list[float], end: list[float],
+                       end_z: float) -> dict[str, object]:
+    """The staged mmap's own answer for a walk between two pinned points: the polygon under each and
+    the route through the tile's links, costed at the polygon centres (an upper bound, as the tool's
+    own route check says). Used for the chase, where rounding the obstacle is the expectation."""
+    module = plan32_geometry_module()
+    gx, gy = module.grid_coord(start[0], start[1])
+    mmap = module.MmapFiles(data_root / "mmaps" / f"{CHARACTER_MAP:03d}.mmap",
+                            data_root / "mmaps" / f"{CHARACTER_MAP:03d}{gx:02d}{gy:02d}.mmtile")
+    verts, polygons, adjacency, problems = module.navmesh_graph(mmap)
+    if problems:
+        raise RuntimeError(f"plan32 mmap tile did not parse: {problems}")
+    _, graph = module.creature_graph(polygons, adjacency, module.NAV_GROUND)
+    first = module.navmesh_polygon(verts, polygons, module.nav_coord(start), start[2])
+    second = module.navmesh_polygon(verts, polygons, module.nav_coord(end), end_z)
+    path, cost = module.navmesh_route(verts, polygons, graph, first, second)
+    straight = math.hypot(end[0] - start[0], end[1] - start[1])
+    return {
+        "start_polygon": first,
+        "end_polygon": second,
+        "route": cost if path else None,
+        "hops": len(path) if path else 0,
+        "straight": straight,
+        "ratio": (cost / straight) if path and straight else None,
+    }
+
+
+def plan32_stage_geometry(generation: Generation, stage: str) -> dict[str, object]:
+    """Every static-geometry fact a stage's verdict rests on, from the staged artifacts only.
+
+    Derived side: the pinned blocked/clear pair is re-derived from the vmaps, the stage's seeds are
+    placed on it and, for the chase, the walk from the player's end point back around the obstacle
+    is routed through the staged mmap. Runtime side: both units' positions at each evaluated cast
+    (the player's from its accepted movement samples, the fixture's from its create block advanced
+    by its own spline packets) and the ray between them at eye height, plus the same ray shortened
+    to a low point on the fixture, so a verdict cannot hinge on which height the implementations
+    offset by. Returns an ``error`` key instead of raising when the artifacts cannot answer, so the
+    failure is recorded in the evidence rather than lost in a traceback.
+    """
+    try:
+        module = plan32_geometry_module()
+        data_root = Path(str(generation["inputs"]["data_root"]))
+        eye = float(module.DEFAULT_COLLISION_HEIGHT)
+        seeds = PLAN32_GEOMETRY_SEEDS[stage]
+        derived = module.derive_los_pair(data_root)
+        gx, gy = module.grid_coord(seeds["character"][0], seeds["character"][1])
+        spawns = module.tile_spawns(data_root, CHARACTER_MAP, gx, gy, 1)
+        models = module.ModelCache(data_root)
+
+        def ray(first: list[float], second: list[float]) -> list[str]:
+            found, _ = module.segment_hits(spawns, models, tuple(first), tuple(second))
+            return [hit["name"] for hit in found]
+
+        samples = ground_movement_samples(generation)
+        player = plan32_player_cast_point(stage, samples)
+        target = selections_target_fixture(plan32_packet_events(generation))
+        fixture_positions = {
+            int(item["count"]): [float(c) for c in item["position"]]
+            for item in (plan32_cast_fixture_positions(generation, target) if target else [])
+        }
+        casts: list[dict[str, object]] = []
+        for count in PLAN32_EXPECTED_COUNTS[stage]:
+            fixture = fixture_positions.get(count)
+            if player is None or fixture is None:
+                casts.append({"count": count, "player": player, "fixture": fixture})
+                continue
+            casts.append({
+                "count": count,
+                "player": player,
+                "fixture": fixture,
+                "eye_hits": ray([player[0], player[1], player[2] + eye],
+                                [fixture[0], fixture[1], fixture[2] + eye]),
+                "low_hits": ray([player[0], player[1], player[2] + eye],
+                                [fixture[0], fixture[1], fixture[2] + 0.5]),
+            })
+        lines = {
+            "blocked": {
+                "first": [float(c) for c in derived["blocked"]["first"]],
+                "second": [float(c) for c in derived["blocked"]["second"]],
+                "length": derived["blocked"]["length"],
+                "offset_from_wall": derived["blocked"].get("offset_from_wall"),
+            },
+            "clear": {
+                "first": [float(c) for c in derived["clear"]["first"]],
+                "second": [float(c) for c in derived["clear"]["second"]],
+                "length": derived["clear"]["length"],
+                "offset_from_wall": derived["clear"].get("offset_from_wall"),
+            },
+        }
+        report: dict[str, object] = {
+            "eye_height": eye,
+            "obstacle": derived.get("obstacle"),
+            "derived": lines,
+            "seeds": {key: list(value) for key, value in seeds.items()},
+            "casts": casts,
+        }
+        if stage in ("blocked", "clear"):
+            line = lines[stage]
+            report["pins"] = {
+                "character": plan32_line_pin(line, list(seeds["character"]), eye),
+                "dummy": plan32_line_pin(line, list(seeds["dummy"]), eye),
+            }
+        if stage == "chase":
+            end = [float(PLAN32_CHASE_P2[0]), float(PLAN32_CHASE_P2[1])]
+            end_sample = next(
+                (sample for sample in reversed(ground_movement_samples(generation))
+                 if abs(float(sample["x"]) - end[0]) <= PLAN32_CHASE_END_TOLERANCE
+                 and abs(float(sample["y"]) - end[1]) <= PLAN32_CHASE_END_TOLERANCE),
+                None,
+            )
+            end_z = float(end_sample["z"]) if end_sample else float(seeds["character"][2])
+            spawn = [float(seeds["dummy"][0]), float(seeds["dummy"][1])]
+            fixture_hits = ray([spawn[0], spawn[1], float(seeds["dummy"][2]) + eye],
+                               [end[0], end[1], end_z + eye])
+            report["chase"] = {
+                "pull_hits": ray([float(seeds["character"][0]), float(seeds["character"][1]),
+                                  float(seeds["character"][2]) + eye],
+                                 [spawn[0], spawn[1], float(seeds["dummy"][2]) + eye]),
+                "fixture_to_end_hits": fixture_hits,
+                "route": plan32_route_facts(
+                    data_root, [spawn[0], spawn[1], float(seeds["dummy"][2])], [end[0], end[1]], end_z,
+                ),
+            }
+        return report
+    except (RuntimeError, ValueError, KeyError, OSError) as error:
+        return {"error": f"{type(error).__name__}: {error}"}
+
+
+def plan32_correlation_problems(stage: str, target: int,
+                                events: list[dict[str, object]]) -> list[str]:
+    """The client's own cast counter is what ties a request to the server's answer: every request's
+    count must come back on its own failed/go outcome, no other outcome may appear, and no cancel
+    may sit between a request and its answer, because that would mean the client gave up on a cast
+    the run claims to have completed."""
+    problems: list[str] = []
+    expected = PLAN32_EXPECTED_COUNTS.get(stage, [])
+    pending: dict[str, object] | None = None
+    seen: list[object] = []
+    for event in events:
+        opcode = event["opcode"]
+        if opcode == "CMSG_CAST_SPELL" and event.get("target") == target:
+            if pending is not None:
+                problems.append(f"cast {pending['count']} had no answer before the next request")
+            pending = event
+            seen.append(event.get("count"))
+        elif opcode == "CMSG_CANCEL_CAST" and pending is not None:
+            problems.append(f"cast {pending['count']} was cancelled before its answer")
+        elif opcode in ("SMSG_CAST_FAILED", "SMSG_SPELL_GO") and pending is not None:
+            if opcode == "SMSG_SPELL_GO" and event.get("caster") != CHARACTER_GUID:
+                continue
+            if event.get("spell") != PLAN32_GEOMETRY_SPELL_ID:
+                continue
+            if event.get("count") != pending.get("count"):
+                problems.append(
+                    f"cast {pending.get('count')} was answered with counter {event.get('count')}"
+                )
+            pending = None
+    if pending is not None:
+        problems.append(f"cast {pending['count']} had no answer")
+    if seen != list(expected):
+        problems.append(f"cast counters {seen} are not the expected {list(expected)}")
+    return problems
+
+
+def plan32_chase_tracks(generation: Generation) -> dict[str, object]:
+    """The chase observation, keyed to the agreed selection: the fixture's spline packets and
+    its melee swings at the player. Reparsing the capture here keeps the evidence literal free
+    of ordering constraints; the file is small.
+
+    The point list stops at the first move that reaches the player's final position, the arrival
+    the run waits for: a fixture whose victim drops walks home, and that return walk must not be
+    folded into the path this mode calls the chase. Stopping early can only shorten the measured
+    path, never lengthen it, so the detour ratio stays a floor rather than an artefact."""
+    events = [
+        event for event in plan32_packet_events(generation)
+        if event["opcode"] in {
+            "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO",
+        }
+    ]
+    target = selections_target_fixture(events)
+    samples = ground_movement_samples(generation)
+    arrival = (float(samples[-1]["x"]), float(samples[-1]["y"])) if samples else None
+    moves: list[dict[str, object]] = []
+    if target is not None:
+        for move in plan32_monster_moves(generation):
+            if move["mover"] != target:
+                continue
+            moves.append({
+                "mover": move["mover"], "points": move["points"],
+                "facing_target": move["facing_target"],
+            })
+            if arrival is not None and move["points"]:
+                last = move["points"][-1]
+                if math.hypot(last[0] - arrival[0], last[1] - arrival[1]) <= PLAN32_CHASE_ARRIVAL_DISTANCE:
+                    break
+    swings = [
+        {"attacker": swing["attacker"], "victim": swing["victim"], "damage": swing["damage"]}
+        for swing in plan32_attackerstate(generation)
+        if swing["attacker"] == target and swing["victim"] == CHARACTER_GUID
+    ] if target is not None else []
+    return {"target": target, "moves": moves, "swings": swings}
+
+
+def plan32_path_metrics(points: list[tuple[float, float, float]]) -> tuple[float, float, float]:
+    """(polyline length, straight distance, max consecutive gap) in 2D, after dropping points
+    closer than 2 m: repathed splines overlap, and the overlap must not inflate the length."""
+    simplified = [points[0]]
+    for point in points[1:]:
+        if math.hypot(point[0] - simplified[-1][0], point[1] - simplified[-1][1]) >= 2.0:
+            simplified.append(point)
+    length = sum(
+        math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(simplified, simplified[1:])
+    )
+    straight = math.hypot(
+        simplified[-1][0] - simplified[0][0], simplified[-1][1] - simplified[0][1],
+    )
+    gaps = [
+        math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(simplified, simplified[1:])
+    ]
+    return length, straight, max(gaps) if gaps else 0.0
+
+
 def ground_movement_action_samples(
     samples: list[dict[str, str | float]],
 ) -> list[dict[str, str | float]]:
@@ -3102,6 +4281,38 @@ TARGET_TARGETED_SPELL_CAST_SEQUENCE = re.compile(
     r"\bSMSG_CAST_FAILED\b.*?\bCMSG_CAST_SPELL\b.*?\bSMSG_SPELL_GO\b",
     re.DOTALL,
 )
+PLAN32_CAST_PACKET = re.compile(r"\bC->S:\s+.*?\bCMSG_CAST_SPELL\b")
+
+
+def plan32_cast_marker_count(generation: Generation) -> int:
+    after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
+    after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
+    return len(PLAN32_CAST_PACKET.findall(after_sync))
+
+
+def plan32_settle_z(generation: Generation) -> float | None:
+    """The z of the first post-marker movement sample: the walk tap's START carries the spawn
+    position (after any world-entry settle), so this is the runtime height at the pinned point
+    even though the tap then walks away from it."""
+    samples = ground_movement_samples(generation)
+    return float(samples[0]["z"]) if samples else None
+
+
+def selections_target_fixture(events: list[dict[str, object]]) -> int | None:
+    """The single unit the automation selected by name.
+
+    Static spawns run under server-assigned map-local lows (grid loading creates units with
+    GenerateLowGuid, keeping the DB guid only as spawnId), so the fixture's wire GUID is not
+    knowable a priori. Identity binds instead to the one selection the /target macro sends:
+    every selection present must agree, and every cast must name that same unit. A differing
+    second selection means the client retargeted on its own and fails the run.
+    """
+    selections = [
+        event.get("target") for event in events if event.get("opcode") == "CMSG_SET_SELECTION"
+    ]
+    if not selections or any(target != selections[-1] for target in selections):
+        return None
+    return selections[-1]
 
 
 def target_targeted_spell_cast_marker_count(generation: Generation) -> int:
@@ -3159,7 +4370,7 @@ POST_MARKER_MODES = frozenset({
     INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
     GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE, CHARACTER_CREATION_MODE,
     BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
-    LEVEL_UP_MODE,
+    LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -3176,6 +4387,7 @@ POST_MARKER_COUNTERS = {
     CHAT_MESSAGE_MODE: chat_message_marker_count,
     INVALID_TARGET_SPELL_CAST_MODE: invalid_target_spell_cast_marker_count,
     LEVEL_UP_MODE: level_up_settle_signal,
+    PLAN32_GEOMETRY_MODE: plan32_cast_marker_count,
 }
 
 
@@ -3323,10 +4535,11 @@ def sanitized_evidence(
     chat_message_mode = generation["mode"] == CHAT_MESSAGE_MODE
     invalid_target_spell_cast_mode = generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE
     level_up_mode = generation["mode"] == LEVEL_UP_MODE
+    plan32_geometry_mode = generation["mode"] == PLAN32_GEOMETRY_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
         WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
+        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
@@ -3339,6 +4552,10 @@ def sanitized_evidence(
         allowed_opcodes.add("CMSG_CHAR_CREATE")
     forbidden_opcodes = FORBIDDEN_CHARACTER_OPCODES - allowed_opcodes
     forbidden = sorted({item["opcode"] for item in transcript if item["opcode"] in forbidden_opcodes})
+    # Parsed once: the cast correlation, the fixture witness and the geometry report all read the
+    # same capture, and the evidence records what they read.
+    plan32_events = plan32_packet_events(generation) if plan32_geometry_mode else []
+    plan32_target = selections_target_fixture(plan32_events) if plan32_geometry_mode else None
     return {
         "schema": 1,
         "build": CLIENT_BUILD,
@@ -3356,6 +4573,7 @@ def sanitized_evidence(
             and "characters_completed" in milestones
             else "jump_fall_land_pass_candidate" if jump_fall_land_mode and "characters_completed" in milestones
             else "ground_movement_pass_candidate" if ground_movement_mode and "characters_completed" in milestones
+            else "plan32_geometry_pass_candidate" if plan32_geometry_mode and "characters_completed" in milestones
             else "basic_movement_pass_candidate" if basic_movement_mode and "characters_completed" in milestones
             else "in_world_control_bootstrap_candidate" if in_world_control_mode and "characters_completed" in milestones
             else "map_insertion_object_bootstrap_candidate" if map_insertion_mode and "characters_completed" in milestones
@@ -3405,6 +4623,36 @@ def sanitized_evidence(
         "level_up_xp_gain_count": level_up_xp_gain_count(generation) if level_up_mode else None,
         "invalid_target_spell_cast_sequence_count": (
             invalid_target_spell_cast_marker_count(generation) if invalid_target_spell_cast_mode else None
+        ),
+        "plan32_stage": generation.get("plan32_stage") if plan32_geometry_mode else None,
+        "plan32_casts": (
+            [
+                {key: event[key] for key in ("opcode", "side", "count", "spell", "target", "result", "caster")
+                 if key in event}
+                for event in plan32_events
+                if event["opcode"] in {
+                    "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO",
+                }
+            ] if plan32_geometry_mode else None
+        ),
+        "plan32_settle_z": plan32_settle_z(generation) if plan32_geometry_mode else None,
+        "plan32_player_samples": (
+            ground_movement_samples(generation) if plan32_geometry_mode else None
+        ),
+        "plan32_fixture": (
+            plan32_fixture_witness(generation, plan32_target)
+            if plan32_geometry_mode and plan32_target else None
+        ),
+        "plan32_geometry_facts": plan32_geometry_facts(generation) if plan32_geometry_mode else None,
+        "plan32_geometry": (
+            plan32_stage_geometry(generation, str(generation.get("plan32_stage")))
+            if plan32_geometry_mode and generation.get("plan32_stage") in PLAN32_GEOMETRY_SEEDS
+            else None
+        ),
+        "plan32_chase": (
+            plan32_chase_tracks(generation)
+            if plan32_geometry_mode and generation.get("plan32_stage") == "chase"
+            else None
         ),
         "creation_marker_count": creation_marker_count_value if creation_mode else None,
         "post_marker_hold_seconds": (
@@ -3465,10 +4713,11 @@ def verify(args: argparse.Namespace) -> None:
     chat_message_mode = generation["mode"] == CHAT_MESSAGE_MODE
     invalid_target_spell_cast_mode = generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE
     level_up_mode = generation["mode"] == LEVEL_UP_MODE
+    plan32_geometry_mode = generation["mode"] == PLAN32_GEOMETRY_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
         WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
+        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     rows = character_row_count(manifest, generation) if character_mode else None
@@ -3599,6 +4848,193 @@ def verify(args: argparse.Namespace) -> None:
                 and evidence["cast_failed_marker_count"] > 0
                 and evidence["target_targeted_spell_cast_sequence_count"] > 0
             )
+        if plan32_geometry_mode:
+            stage = generation.get("plan32_stage")
+            casts = evidence["plan32_casts"] or []
+            target = selections_target_fixture(casts)
+            first_selection = next(
+                (index for index, event in enumerate(casts)
+                 if event["opcode"] == "CMSG_SET_SELECTION"), None,
+            )
+            after_selection = casts[first_selection:] if first_selection is not None else []
+            sent = [event for event in after_selection if event["opcode"] == "CMSG_CAST_SPELL"]
+            fails = [event for event in after_selection if event["opcode"] == "SMSG_CAST_FAILED"]
+            goes = [
+                event for event in after_selection
+                if event["opcode"] == "SMSG_SPELL_GO" and event.get("spell") == PLAN32_GEOMETRY_SPELL_ID
+                and event.get("caster") == CHARACTER_GUID
+            ]
+            # Every request names Fireball at the selected fixture with the client's own
+            # counters, in order; the selection itself is pinned by name uniqueness (see
+            # verify_plan32_seeds) and the target-frame screenshot.
+            casts_ok = (
+                target is not None
+                and [event.get("count") for event in sent] == PLAN32_EXPECTED_COUNTS.get(str(stage))
+                and all(event.get("spell") == PLAN32_GEOMETRY_SPELL_ID for event in sent)
+                and all(event.get("target") == target for event in sent)
+            )
+            settle_z = evidence["plan32_settle_z"]
+            expected_z = PLAN32_GEOMETRY_SEEDS.get(str(stage), {}).get("character", (None, None, None))[2]
+            height_ok = (
+                settle_z is not None and expected_z is not None
+                and abs(float(settle_z) - expected_z) <= PLAN32_GEOMETRY_HEIGHT_TOLERANCE
+            )
+            # The fixture's identity as the server itself described it: a unit whose entry field,
+            # whose GUID bits and whose create position all agree with the pinned spawn.
+            fixture = evidence["plan32_fixture"] or {}
+            dummy_seed = PLAN32_GEOMETRY_SEEDS.get(str(stage), {}).get("dummy")
+            fixture_ok = (
+                dummy_seed is not None
+                and fixture.get("type_id") == TYPEID_UNIT
+                and fixture.get("entry") == PLAN32_GEOMETRY_DUMMY_ENTRY
+                and fixture.get("entry_from_guid") == PLAN32_GEOMETRY_DUMMY_ENTRY
+                and fixture.get("guid_high") == HIGHGUID_UNIT
+                and fixture.get("position") is not None
+                and math.hypot(
+                    fixture["position"][0] - dummy_seed[0], fixture["position"][1] - dummy_seed[1]
+                ) <= PLAN32_FIXTURE_POSITION_TOLERANCE
+                and abs(fixture["position"][2] - dummy_seed[2]) <= PLAN32_FIXTURE_POSITION_TOLERANCE
+            )
+            # The run had the staged geometry in play: hashes recorded, the server's own config
+            # keys set and its support line claiming line of sight.
+            facts = evidence["plan32_geometry_facts"] or {}
+            config = facts.get("config") or {}
+            support_line = str(facts.get("support_line") or "")
+            facts_ok = (
+                bool(facts.get("data_root"))
+                and facts.get("vmaps_hash") == generation["inputs"].get("data_vmaps_hash")
+                and facts.get("mmaps_hash") == generation["inputs"].get("data_mmaps_hash")
+                and all(
+                    str(config.get(key)).strip().lower() in {"1", "true", "yes", "on"}
+                    for key in ("MoveMaps.Enable", "vmap.enableLOS", "vmap.enableHeight")
+                )
+                and "VMap support included" in support_line and "LineOfSight:true" in support_line
+            )
+            # The rays the casts were made along, from the staged vmaps: the blocked stage's has to
+            # break on the pinned obstacle at both the eye point and a low point on the fixture; the
+            # clear and chase stages' has to be whole at both.
+            geometry = evidence["plan32_geometry"] or {}
+            expectation = PLAN32_STAGE_RAY_EXPECTATION.get(str(stage))
+            obstacle = geometry.get("obstacle")
+            rays_ok = (
+                "error" not in geometry
+                and bool(geometry.get("casts"))
+                and all(
+                    cast.get("eye_hits") is not None and cast.get("low_hits") is not None
+                    and (
+                        (expectation == "blocked"
+                         and cast["eye_hits"][:1] == [obstacle]
+                         and cast["low_hits"][:1] == [obstacle])
+                        or (expectation == "clear" and not cast["eye_hits"] and not cast["low_hits"])
+                    )
+                    for cast in geometry.get("casts", [])
+                )
+            )
+            pins_ok = True
+            if str(stage) in ("blocked", "clear"):
+                pins = geometry.get("pins") or {}
+                character_pin, dummy_pin = pins.get("character"), pins.get("dummy")
+                line_length = float((geometry.get("derived") or {}).get(str(stage), {}).get("length") or 0)
+                pins_ok = (
+                    character_pin is not None and dummy_pin is not None
+                    and character_pin["perpendicular"] <= PLAN32_PIN_TOLERANCE
+                    and abs(character_pin["along"]) <= PLAN32_PIN_TOLERANCE
+                    and abs(character_pin["endpoint_z_delta"]) <= PLAN32_PIN_TOLERANCE
+                    and dummy_pin["perpendicular"] <= PLAN32_PIN_TOLERANCE
+                    and 1.0 <= dummy_pin["along"] <= line_length - 1.0
+                )
+            correlation_ok = not plan32_correlation_problems(
+                str(stage), target if target is not None else 0, plan32_packet_events(generation)
+            )
+            if stage == "blocked":
+                stage_ok = (
+                    casts_ok
+                    and [
+                        (event.get("count"), event.get("spell"), event.get("result"))
+                        for event in fails
+                    ] == [(1, PLAN32_GEOMETRY_SPELL_ID, SPELL_FAILED_LINE_OF_SIGHT_RESULT),
+                          (2, PLAN32_GEOMETRY_SPELL_ID, SPELL_FAILED_LINE_OF_SIGHT_RESULT)]
+                    and not goes
+                )
+            elif stage == "clear":
+                stage_ok = casts_ok and len(goes) >= 1 and not fails
+            elif stage == "chase":
+                chase = evidence["plan32_chase"] or {}
+                samples = evidence["plan32_player_samples"] or []
+                ops = [str(sample["opcode"]) for sample in samples]
+                # The run leg as driven: forward tap, stop, strafe tap, strafe stop, in that
+                # order (a settle fall or extra heartbeats anywhere in between are fine).
+                run_leg = [
+                    "MSG_MOVE_START_FORWARD", "MSG_MOVE_STOP",
+                    "MSG_MOVE_START_STRAFE_RIGHT", "MSG_MOVE_STOP_STRAFE",
+                ]
+                remaining = list(ops)
+                leg_ok = True
+                for want in run_leg:
+                    if want in remaining:
+                        remaining = remaining[remaining.index(want) + 1:]
+                    else:
+                        leg_ok = False
+                        break
+                start_ok = bool(samples) and math.hypot(
+                    float(samples[0]["x"]) - PLAN32_GEOMETRY_SEEDS["chase"]["character"][0],
+                    float(samples[0]["y"]) - PLAN32_GEOMETRY_SEEDS["chase"]["character"][1],
+                ) <= PLAN32_CHASE_START_TOLERANCE
+                end_ok = bool(samples) and math.hypot(
+                    float(samples[-1]["x"]) - PLAN32_CHASE_P2[0],
+                    float(samples[-1]["y"]) - PLAN32_CHASE_P2[1],
+                ) <= PLAN32_CHASE_END_TOLERANCE
+                points = [
+                    point for move in chase.get("moves", [])
+                    for point in move["points"]
+                ]
+                if len(points) >= 2:
+                    length, straight, gap = plan32_path_metrics(points)
+                    detour_ok = (
+                        straight > 1.0
+                        and length / straight >= PLAN32_CHASE_DETOUR_RATIO
+                        and gap <= PLAN32_CHASE_MAX_SPLINE_GAP
+                    )
+                    arrival_ok = math.hypot(
+                        points[-1][0] - float(samples[-1]["x"]),
+                        points[-1][1] - float(samples[-1]["y"]),
+                    ) <= PLAN32_CHASE_ARRIVAL_DISTANCE if samples else False
+                else:
+                    detour_ok = False
+                    arrival_ok = False
+                engagement_ok = len(chase.get("swings", [])) >= 1
+                route = (geometry.get("chase") or {}).get("route") or {}
+                # The detour is a requirement of the staged mmap, not an accident: the fixture's
+                # straight line to the player's end point is broken by the pinned obstacle, the
+                # mmap routes around it, and that route is a real detour within reach in time.
+                chase_geometry_ok = (
+                    (geometry.get("chase") or {}).get("pull_hits") == []
+                    and ((geometry.get("chase") or {}).get("fixture_to_end_hits") or [])[:1] == [obstacle]
+                    and route.get("start_polygon") is not None
+                    and route.get("end_polygon") is not None
+                    and route.get("route") is not None
+                    and float(route["route"]) <= PLAN32_CHASE_ROUTE_MAX
+                    and float(route.get("ratio") or 0.0) >= PLAN32_CHASE_DETOUR_RATIO
+                )
+                stage_ok = (
+                    casts_ok and len(goes) >= 1 and not fails
+                    and leg_ok and start_ok and end_ok
+                    and detour_ok and arrival_ok and engagement_ok
+                    and chase_geometry_ok
+                )
+            else:
+                stage_ok = False
+            character_ok = character_ok and (
+                stage in PLAN32_GEOMETRY_SEEDS
+                and casts_ok
+                and stage_ok
+                and height_ok
+                and correlation_ok
+                and fixture_ok
+                and facts_ok
+                and rays_ok
+                and pins_ok
+            )
         if chat_message_mode:
             character_ok = character_ok and evidence["chat_message_marker_count"] > 0
         if invalid_target_spell_cast_mode:
@@ -3636,6 +5072,12 @@ def verify(args: argparse.Namespace) -> None:
                 else "invalid_target_spell_cast_pass" if invalid_target_spell_cast_mode
                 else "jump_fall_land_pass" if jump_fall_land_mode
                 else "walk_run_mode_switch_pass" if walk_run_mode_switch_mode
+                else "plan32_geometry_blocked_pass" if plan32_geometry_mode
+                and generation.get("plan32_stage") == "blocked"
+                else "plan32_geometry_clear_pass" if plan32_geometry_mode
+                and generation.get("plan32_stage") == "clear"
+                else "plan32_geometry_chase_pass" if plan32_geometry_mode
+                and generation.get("plan32_stage") == "chase"
                 else "ground_movement_pass" if ground_movement_mode
                 else "basic_movement_pass" if basic_movement_mode
                 else "in_world_control_bootstrap_pass" if in_world_control_mode
@@ -4415,6 +5857,240 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert exported_inputs(True)["geometry"] is True
     assert exported_inputs(False) != exported_inputs(True)
     assert exported_inputs(True)["vmaps_tree_sha256"] == "e" * 64
+
+    # Plan 32 geometry mode: wire correlation against a synthetic capture
+    assert PLAN32_GEOMETRY_MODE in POPULATED_CHARACTER_MODES
+    assert PLAN32_GEOMETRY_MODE in POST_MARKER_MODES
+    assert plan_number(PLAN32_GEOMETRY_MODE) == "32"
+    # Server-assigned runtime lows come from the map's own sequence generator (grid loading
+    # creates units with GenerateLowGuid, keeping the DB guid only as spawnId), so no formula can
+    # predict the fixture's wire GUID. The synthetic value below only exercises the parser and the
+    # selection-anchored correlation shape.
+    fixture = 0xF13000016900064A
+    assert set(PLAN32_GEOMETRY_SEEDS) == set(PLAN32_GEOMETRY_STAGES) == {"blocked", "clear", "chase"}
+    assert "-8854.766" in plan32_world_seed_sql("blocked") and "80.422" in plan32_world_seed_sql("blocked")
+    assert ",361,0,12,12," in plan32_world_seed_sql("blocked")
+    assert ",2809," not in plan32_world_seed_sql("blocked")
+    assert PLAN32_GEOMETRY_TARGET_KEYS[0] == "Return" and "slash" in PLAN32_GEOMETRY_TARGET_KEYS
+    assert tuple(PLAN32_GEOMETRY_DUMMY_NAME) == PLAN32_GEOMETRY_TARGET_KEYS[
+        PLAN32_GEOMETRY_TARGET_KEYS.index("space") + 1:
+    ][:len(PLAN32_GEOMETRY_DUMMY_NAME)]
+    assert "-8798.946" in plan32_world_seed_sql("clear") and "82.845" in plan32_world_seed_sql("clear")
+    assert f"VALUES ({CHARACTER_GUID},0,0,{PLAN32_GEOMETRY_SPELL_ID},0)" in plan32_spell_seed_sql()
+
+    def pack_guid(value: int) -> bytes:
+        mask = 0
+        body = b""
+        for index in range(8):
+            byte = (value >> (index * 8)) & 0xFF
+            if byte:
+                mask |= 1 << index
+                body += bytes([byte])
+        return bytes([mask]) + body
+
+    def pkt(direction: int, opcode: int, payload: bytes) -> bytes:
+        return (
+            struct.pack("<IIIII", direction, 0, 0, 20, len(payload) + 4)
+            + bytes(20) + struct.pack("<I", opcode) + payload
+        )
+
+    C2S, S2C = 0x47534D43, 0x47534D53
+    player = pack_guid(CHARACTER_GUID)
+    fixture_packed = pack_guid(fixture)
+    fixture_full = struct.pack("<Q", fixture)
+    # CMSG_CAST_SPELL as the client writes it: count, spell, misc, castFlags, then the target mask
+    # and the packed GUID. The castFlags byte is easy to drop and silently moves the mask, which is
+    # why the decoded target is asserted below.
+    synthetic = (
+        b"PKT" + bytes(63)
+        + pkt(C2S, CMSG_SET_SELECTION_OPCODE, fixture_full)
+        + pkt(C2S, CMSG_CAST_SPELL_OPCODE,
+              bytes([1]) + struct.pack("<I", 133) + bytes(4) + bytes([0])
+              + struct.pack("<I", 2) + fixture_packed)
+        + pkt(S2C, SMSG_CAST_FAILED_OPCODE, bytes([1]) + struct.pack("<I", 133) + bytes([49]))
+        + pkt(C2S, CMSG_CAST_SPELL_OPCODE,
+              bytes([2]) + struct.pack("<I", 133) + bytes(4) + bytes([0])
+              + struct.pack("<I", 2) + fixture_packed)
+        + pkt(S2C, SMSG_CAST_FAILED_OPCODE, bytes([2]) + struct.pack("<I", 133) + bytes([49]))
+        + pkt(S2C, SMSG_SPELL_GO_OPCODE, player + player + bytes([3]) + struct.pack("<I", 133))
+        + pkt(C2S, CMSG_CANCEL_CAST_OPCODE, bytes([0]) + struct.pack("<I", 133))
+        # A real single-block SMSG_UPDATE_OBJECT from the accepted generation 6 capture (a unit
+        # create with its movement block): the witness's block walk is pinned against the server's
+        # own writer instead of against a hand-built block that could share a misreading.
+        + pkt(S2C, SMSG_UPDATE_OBJECT_OPCODE, bytes.fromhex(
+            "00000100000001db8c05010130f1030100000002c91e80000000904000002040e4b7a5421f2f09c6c3f54840008d711c"
+            "9740be5fe1c2f004000020407eb70300e00f4940310000e0403012b840d6ffbf400000904005730000060100c77b0026"
+            "000000000000008000008c050001010030f109000000010100000000803f000100004700000047000000030000001900"
+            "0000ffc400000008000000004000d0070000d0070000d34d423f0000b83ffb080000fb080000000000000000803f0000"
+            "00000000803f"
+        ))
+    )
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary) / "logs"
+        logs.mkdir()
+        (logs / "packets.pkt").write_bytes(synthetic)
+        probe_generation: Generation = {"paths": {"logs": str(logs)}}
+        events = plan32_packet_events(probe_generation)
+        creates = plan32_object_creates(probe_generation)
+        real_guid = 0xF13000010100058C
+        witness = plan32_fixture_witness(probe_generation, real_guid)
+        absent_witness = plan32_fixture_witness(probe_generation, 0xF1300001010005D5)
+    assert [event["opcode"] for event in events] == [
+        "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED",
+        "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO", "CMSG_CANCEL_CAST",
+    ]
+    assert events[0]["target"] == fixture
+    cast_requests = [
+        (e.get("count"), e.get("spell")) for e in events if e["opcode"] == "CMSG_CAST_SPELL"
+    ]
+    assert cast_requests == [(1, 133), (2, 133)]
+    # The castFlags byte sits between misc and the mask at offset 10: the target has to come back.
+    assert all(event.get("target") == fixture for event in events
+               if event["opcode"] == "CMSG_CAST_SPELL")
+    failed = [
+        (e.get("count"), e.get("spell"), e.get("result"))
+        for e in events if e["opcode"] == "SMSG_CAST_FAILED"
+    ]
+    assert failed == [(1, 133, 49), (2, 133, 49)]
+    assert events[5]["caster"] == CHARACTER_GUID and events[5]["spell"] == 133
+    assert selections_target_fixture(events) == fixture
+    assert selections_target_fixture([
+        {"opcode": "CMSG_SET_SELECTION", "target": CHARACTER_GUID},
+        {"opcode": "CMSG_SET_SELECTION", "target": fixture},
+    ]) is None
+    assert selections_target_fixture([]) is None
+    # The update-object walk reproduces the real block's own numbers, and an unselected GUID has no
+    # witness at all.
+    assert any(block["guid"] == real_guid for block in creates)
+    assert witness == {
+        "guid": real_guid, "type_id": TYPEID_UNIT, "entry": 257, "entry_from_guid": 257,
+        "guid_high": HIGHGUID_UNIT,
+        "position": [-8779.7802734375, -112.68699645996094, 82.85916137695312],
+        "orientation": 5.752220153808594,
+    }
+    assert absent_witness is None
+    # Counter correlation: the synthetic capture's two answered casts are clean, a cancelled cast
+    # and a mismatched answer are each reported, and an unanswered request is reported too.
+    synthetic_events = events[:-1]
+    assert plan32_correlation_problems("blocked", fixture, synthetic_events) == []
+    assert plan32_correlation_problems("blocked", fixture, synthetic_events + [
+        {"opcode": "CMSG_CANCEL_CAST", "side": "c2s", "index": 99},
+    ]) == []
+    cancelled = events[:2] + [{"opcode": "CMSG_CANCEL_CAST", "side": "c2s", "index": 2}] + events[2:]
+    assert plan32_correlation_problems("blocked", fixture, cancelled) == [
+        "cast 1 was cancelled before its answer",
+    ]
+    assert plan32_correlation_problems("blocked", fixture, synthetic_events[:-2] + [
+        {"opcode": "SMSG_CAST_FAILED", "count": 7, "spell": 133, "result": 49},
+    ]) == ["cast 2 was answered with counter 7"]
+    assert plan32_correlation_problems("blocked", fixture, synthetic_events[:-2]) == [
+        "cast 2 had no answer",
+    ]
+    assert plan32_correlation_problems("chase", fixture, synthetic_events) == [
+        "cast counters [1, 2] are not the expected [1]",
+    ]
+    # Derived-line pins: a seed sitting on the line's first endpoint and one sitting along it are
+    # both described, and the eye-height lift is compared against the seed's own z.
+    line = {"first": [0.0, 0.0, 10.0], "second": [30.0, 0.0, 9.0], "length": 30.0}
+    first_pin = plan32_line_pin(line, [-0.1, 0.0, 10.0 - 2.03128], 2.03128)
+    assert first_pin["along"] == -0.1 and first_pin["perpendicular"] == 0.0
+    assert abs(first_pin["endpoint_z_delta"]) < 1e-12
+    along_pin = plan32_line_pin(line, [12.0, 0.2, 7.0], 2.03128)
+    assert abs(along_pin["along"] - 12.0) < 1e-9 and abs(along_pin["perpendicular"] - 0.2) < 1e-9
+    # Geometry facts: key parsing, artifact identity and the support line.
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        (root / "logs").mkdir()
+        (root / "worldserver.conf").write_text("MoveMaps.Enable = 1\nvmap.enableLOS = true\n")
+        (root / "logs" / "worldserver.stdout.log").write_text(
+            "WORLD: VMap support included. LineOfSight:true, getHeight:true\n"
+        )
+        facts_generation: Generation = {
+            "inputs": {"data_root": "/data", "data_vmaps_hash": "v", "data_mmaps_hash": "m"},
+            "paths": {"world_config": str(root / "worldserver.conf"), "logs": str(root / "logs")},
+        }
+        facts = plan32_geometry_facts(facts_generation)
+    assert facts["config"] == {
+        "MoveMaps.Enable": "1", "vmap.enableLOS": "true", "vmap.enableHeight": None,
+    }
+    assert facts["vmaps_hash"] == "v" and facts["mmaps_hash"] == "m"
+    assert "LineOfSight:true" in str(facts["support_line"])
+    # Chase pieces: monster-move bodies (compressed and uncompressed), attackerstate, metrics.
+    assert PLAN32_EXPECTED_COUNTS == {"blocked": [1, 2], "clear": [1, 2], "chase": [1]}
+    assert PLAN32_GEOMETRY_SEEDS["chase"]["character"] == (-8876.0, -208.0, 81.313, math.pi / 2)
+    assert PLAN32_GEOMETRY_SEEDS["chase"]["dummy"] == (-8876.0, -196.0, 80.221)
+    assert PLAN32_CHASE_P2 == (-8870, -202)
+    mover_packed = pack_guid(fixture)
+
+    def move_pkt(extra: bytes, flags: int = 0) -> bytes:
+        # mover, exit byte, real position, spline id, facing normal, flags, duration
+        return (mover_packed + bytes([0]) + struct.pack("<fff", 0.0, 0.0, 0.0)
+                + struct.pack("<I", 7) + bytes([0]) + struct.pack("<I", flags)
+                + struct.pack("<i", 1000) + extra)
+
+    def pack_xyz(x: float, y: float, z: float) -> bytes:
+        packed = (int(x / 0.25) & 0x7FF) | ((int(y / 0.25) & 0x7FF) << 11) | ((int(z / 0.25) & 0x3FF) << 22)
+        return struct.pack("<I", packed)
+
+    def midpoint(start: tuple, end: tuple) -> tuple:
+        return tuple((a + b) / 2.0 for a, b in zip(start, end))
+
+    # 11-bit x/y and 10-bit z at 0.25 steps, sign-extended: maxima are 1023 and 511 steps.
+    assert unpack_pack_xyz(0x3FF | (0x3FF << 11) | (0x1FF << 22)) == (255.75, 255.75, 127.75)
+    assert unpack_pack_xyz(0) == (0.0, 0.0, 0.0)
+    assert unpack_pack_xyz(struct.unpack("<I", pack_xyz(-2.5, -1.0, -0.5))[0]) == (-2.5, -1.0, -0.5)
+    # L-shaped detour: (0,0) -> (0,10) -> (10,10): length 20, straight ~14.14, ratio ~1.41.
+    assert plan32_path_metrics([(0.0, 0.0, 0.0), (0.0, 10.0, 0.0), (10.0, 10.0, 0.0)])[0:2] == (
+        20.0, 14.142135623730951,
+    )
+    uncompressed = move_pkt(
+        struct.pack("<I", 2) + struct.pack("<ffffff", 0, 10, 0, 10, 10, 0),
+        SPLINE_FLAG_UNCOMPRESSED_PATH,
+    )
+    dest, off1, off2 = (10.0, 0.0, 0.0), (2.5, 0.0, 0.0), (7.5, 0.0, 0.0)
+    middle = midpoint((0.0, 0.0, 0.0), dest)
+    stored1 = tuple(middle[i] - off1[i] for i in range(3))
+    stored2 = tuple(middle[i] - off2[i] for i in range(3))
+    compressed = move_pkt(
+        struct.pack("<I", 3) + struct.pack("<fff", *dest)
+        + pack_xyz(*stored1) + pack_xyz(*stored2)
+    )
+    swing = (struct.pack("<I", 0) + pack_guid(fixture) + pack_guid(CHARACTER_GUID)
+             + struct.pack("<I", 5))
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary) / "logs"
+        logs.mkdir()
+        (logs / "packets.pkt").write_bytes(
+            b"PKT" + bytes(63)
+            + pkt(C2S, CMSG_SET_SELECTION_OPCODE, struct.pack("<Q", fixture))
+            + pkt(C2S, SMSG_ON_MONSTER_MOVE_OPCODE, uncompressed)
+            + pkt(C2S, SMSG_ON_MONSTER_MOVE_OPCODE, compressed)
+            + pkt(S2C, SMSG_ATTACKERSTATEUPDATE_OPCODE, swing)
+        )
+
+        def chase_log(stop: tuple[float, float]) -> None:
+            (logs / "WorldServer.log").write_text(
+                "Finished object update bootstrap after adding to map\n" + IN_WORLD_CONTROL_MARKER
+                + "\nAccepted Cataclysm ground movement [MSG_MOVE_STOP 0x320A (12810)] after "
+                + f"movement validation: x={stop[0]}, y={stop[1]}, z=0.0, o=0.0\n"
+            )
+
+        chase_generation: Generation = {"paths": {"logs": str(logs), "raw_evidence": str(logs)}}
+        chase_moves = plan32_monster_moves(chase_generation)
+        chase_swings = plan32_attackerstate(chase_generation)
+        chase_log((10.0, 10.0))
+        first_leg: dict[str, object] = plan32_chase_tracks(chase_generation)
+        chase_log((10.0, 0.0))
+        whole_chase: dict[str, object] = plan32_chase_tracks(chase_generation)
+    assert len(chase_moves) == 2 and all(m["mover"] == fixture for m in chase_moves)
+    assert [len(m["points"]) for m in chase_moves] == [3, 4]
+    assert chase_moves[1]["points"][-1] == (10.0, 0.0, 0.0)
+    assert len(chase_swings) == 1 and chase_swings[0]["damage"] == 5
+    assert chase_swings[0]["attacker"] == fixture and chase_swings[0]["victim"] == CHARACTER_GUID
+    # The chase path stops at the first move that reaches the player, so an evading fixture's
+    # walk home is never folded into it.
+    assert first_leg["target"] == fixture and len(first_leg["moves"]) == 1
+    assert len(first_leg["swings"]) == 1 and len(whole_chase["moves"]) == 2
     print("Real-client runner self-check passed")
 
 
@@ -4457,7 +6133,7 @@ def parser() -> argparse.ArgumentParser:
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,
             RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE,
             BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-            INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE,
+            INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
         ), default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)

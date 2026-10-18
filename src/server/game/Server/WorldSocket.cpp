@@ -177,7 +177,12 @@ void EncryptableAndCompressiblePacket::Compress(void* dst, uint32 *dst_size, voi
 
 WorldSocket::WorldSocket(IoContextTcpSocket&& socket)
     : Socket(std::move(socket)), _OverSpeedPings(0), _worldSession(nullptr), _authed(false),
-      _compressionStream(nullptr), _sendBufferSize(4096), _loggingPackets(false)
+      // Sessions created while PacketLogFile is configured log their packets. The file alone used
+      // to do nothing until a GM command flipped the per-session flag; that command lives in the
+      // Commands scripts, so harness runs (SCRIPTS=none) could never capture payloads. Empty by
+      // default, so behavior is unchanged unless the key is set.
+      _compressionStream(nullptr), _sendBufferSize(4096),
+      _loggingPackets(!sConfigMgr->GetOption<std::string>("PacketLogFile", "").empty())
 {
     Acore::Crypto::GetRandomBytes(_authSeed);
     _headerBuffer.Resize(/*sizeof(ClientPktHeader)*/ 2);
