@@ -602,15 +602,21 @@ itself showed only where it actually executed it: from the client's own `MSG_MOV
 (run leg) onward, each spline cut at the tick the next packet for that mover arrived (a repath
 supersedes the old forecast) and at the capture's end, so a repeated straight replan cannot
 manufacture a detour and an advertised destination nobody reached cannot stand in for arrival.
-The player's own `MSG_MOVE_STOP_STRAFE` is where the run leg ends, so until that tick nothing can
-be called the arrival — an approach spline overlapping the run and ending near the player's end
-point is not the chase reaching it — and from that tick the path is cut where the mover first
-enters arrival range of that end point, solved on the segment it is walking rather than sampled at
-the vertices, so neither the walk home after the victim drops is measured as the chase nor an
-in-range swing is discarded for landing before the next vertex. A spline resuming more than 2 m
-from where the previous one was cut is a discontinuity, recorded and failed rather than smoothed
-over as long as the trimmed observation still contains it, and a swing proves melee range only
-when it lands after both the arrival and the player's stop.
+What survives is a timeline in packet order: a walk leg per straight segment and a hold wherever
+no spline runs — to the next packet for the mover, and to the capture's end after the last. The
+player's own `MSG_MOVE_STOP_STRAFE` is where the run leg ends, so until that tick nothing can be
+called the arrival — an approach spline overlapping the run and ending near the player's end point
+is not the chase reaching it — and from that tick the arrival is the first moment the timeline
+stands within range of that end point, solved on the walk leg that enters the range (a pass that
+only grazes it counts, dated where it touches) or read off the hold it stood on, so neither the
+walk home after the victim drops is measured as the chase nor an in-range swing is discarded for
+landing before the next vertex. A hold lasts only to the next packet for the mover: where that
+packet puts the mover somewhere else, one later in the same millisecond has already moved it, and
+only the capture's packet order says whether a stop at that tick still caught the old position
+rather than an arrival the run never made. A spline resuming more than 2 m from where the previous
+one was cut is a discontinuity, recorded and failed rather than smoothed over as long as the
+trimmed observation still contains it, and a swing proves melee range only when it lands after
+both the arrival and the player's stop.
 Two facts this mode depends on: grid loading creates units with server-assigned map-local lows
 (keeping the DB guid only as spawnId), so identity binds to the agreed selection plus a
 seed-uniqueness gate rather than a precomputed GUID; and `WorldSocket` enables per-session packet
