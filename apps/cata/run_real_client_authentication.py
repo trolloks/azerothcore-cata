@@ -3895,6 +3895,44 @@ def plan32_polyline_span_shares(points: list[object],
     return [(share, point) for share, point in span if point is not None]
 
 
+def plan32_segment_entry(first: list[float], second: list[float], first_ticks: int, second_ticks: int,
+                         target: tuple[float, float], radius: float,
+                         floor: int) -> dict[str, object] | None:
+    """The first moment at or after ``floor`` at which a constant-speed walk from ``first``
+    (reached at ``first_ticks``) to ``second`` (reached at ``second_ticks``) stands within
+    ``radius`` of ``target`` in the ground plane, and where it stood, or None when it never does.
+    A walk can enter the radius part-way, so the crossing is solved on the segment instead of
+    sampled at the two ends; the point returned sits just inside the radius so that the arrival
+    reads as reached instead of as a floating-point coin flip on the boundary."""
+    start = max(first_ticks, floor)
+    if second_ticks < start:
+        return None
+    span = second_ticks - first_ticks
+    offset = (first[0] - target[0], first[1] - target[1])
+    move = (second[0] - first[0], second[1] - first[1])
+    quadratic = move[0] * move[0] + move[1] * move[1]
+    linear = 2.0 * (offset[0] * move[0] + offset[1] * move[1])
+    constant = offset[0] * offset[0] + offset[1] * offset[1] - radius * radius
+    if quadratic == 0.0:
+        if constant > 0.0:
+            return None
+        entry, leaving = 0.0, 1.0
+    else:
+        discriminant = linear * linear - 4.0 * quadratic * constant
+        if discriminant < 0.0:
+            return None
+        root = math.sqrt(discriminant)
+        entry = (-linear - root) / (2.0 * quadratic)
+        leaving = (-linear + root) / (2.0 * quadratic)
+    share = max(entry + 1e-6, (start - first_ticks) / span if span else 0.0, 0.0)
+    if share > 1.0 or share > leaving:
+        return None
+    return {
+        "ticks": max(first_ticks + int(round(share * span)), start),
+        "point": [first[axis] + share * (second[axis] - first[axis]) for axis in range(3)],
+    }
+
+
 def plan32_fixture_position_at(moves: list[dict[str, object]], position: list[float],
                                at_ticks: int) -> list[float]:
     """Where the fixture was at a server tick. Its create position stands before any spline and a
@@ -4279,14 +4317,19 @@ def plan32_chase_tracks(generation: Generation) -> dict[str, object]:
     Arrival is the run's own end: the player's strafe stop is the last tap of the run leg, and
     until it lands the player is still on the way to the end point, so no distance to that point
     can end the observation - an approach spline overlapping the tap is not the chase reaching it.
-    From the stop onward the path is cut at the first executed point that reaches the player's
-    final position, the arrival the run waits for: a fixture whose victim drops walks home, and
-    that return walk must not be folded into the path this mode calls the chase. ``arrival_ticks``
-    records when that happened, and a swing only counts as engagement at or after it and after the
-    player's stop: the pull's own melee hit, or a hit landed while the fixture was still on its
-    way, proves nothing about the chase reaching melee range. Cutting and stopping early can only
-    shorten the measured path, never lengthen it, so the detour ratio stays a floor rather than an
-    artefact."""
+    From the stop onward the path is cut where the mover first stands within arrival range of the
+    player's final position, the arrival the run waits for. Inside a spline it walks at a constant
+    speed, so that entry is solved on the segment: a walk enters the range part-way and the vertex
+    after it is not the arrival, while a short step inside a spline is still a step rather than the
+    mover standing there. Between two spans, and at the path's own end, it does stand still, so
+    that occupancy runs to the next packet. A fixture whose victim drops then walks home, and that
+    return walk must not be folded into the path this mode calls the chase - nor may the jump that
+    starts it fail the stage, which is why only the joins the retained path still contains count.
+    ``arrival_ticks`` records when the arrival happened, and a swing only counts as engagement at
+    or after it and after the player's stop: the pull's own melee hit, or a hit landed while the
+    fixture was still on its way, proves nothing about the chase reaching melee range. Cutting at
+    the arrival can only shorten the measured path, never lengthen it, so the detour ratio stays a
+    floor rather than an artefact."""
     events = [
         event for event in plan32_packet_events(generation)
         if event["opcode"] in {
@@ -4304,6 +4347,7 @@ def plan32_chase_tracks(generation: Generation) -> dict[str, object]:
     end_ticks = bounds["end_ticks"]
     executed: list[list[float]] = []
     walked_ticks: list[int] = []
+    walked_spans: list[int] = []
     joins: list[dict[str, object]] = []
     arrival_ticks: int | None = None
     if target is not None and run_ticks is not None and end_ticks is not None:
@@ -4338,28 +4382,44 @@ def plan32_chase_tracks(generation: Generation) -> dict[str, object]:
                     joins.append({"ticks": first_ticks, "gap": round(join, 3)})
             executed.extend(span)
             walked_ticks.extend(records_ticks)
-        # The arrival: the path reaching the player's final position once the player's own stop
-        # has landed. Before the stop the fixture is only moving toward where the player will be,
-        # so it cannot end the observation - an approach spline ending in range is not the chase
-        # reaching it. A point the mover walked through only counts once its own tick has passed
-        # the stop; a point it stood on (the path's end, or one the next spline resumes from)
-        # counts from the stop, because it was still standing there.
+            walked_spans.extend([index] * len(span))
+        # The arrival: where the executed path first stands within arrival range of the player's
+        # final position at or after the player's own stop. Before the stop the fixture is only
+        # moving toward where the player will be, so it cannot end the observation - an approach
+        # spline ending in range is not the chase reaching it. Inside a spline the mover walks, so
+        # the entry is solved on the segment; only between two spans (the next packet for the
+        # mover resumes from this point) and at the path's own end does it stand still, and then
+        # that occupancy runs to that next packet or to the capture's end.
         if arrival is not None:
             floor = final_stop_ticks if final_stop_ticks is not None else 0
             for index, point in enumerate(executed):
-                last = index + 1 == len(executed)
-                standing = last or math.dist(
-                    point, executed[index + 1],
-                ) <= PLAN32_CHASE_JOIN_TOLERANCE
-                standing_until = int(end_ticks) if last else walked_ticks[index + 1]
-                if walked_ticks[index] < floor and not (standing and standing_until >= floor):
-                    continue
-                if math.hypot(
-                    point[0] - arrival[0], point[1] - arrival[1],
-                ) <= PLAN32_CHASE_ARRIVAL_DISTANCE:
-                    executed, walked_ticks = executed[:index + 1], walked_ticks[:index + 1]
-                    arrival_ticks = max(walked_ticks[-1], floor)
-                    break
+                if index + 1 < len(executed) and walked_spans[index + 1] == walked_spans[index]:
+                    hit = plan32_segment_entry(
+                        point, executed[index + 1], walked_ticks[index], walked_ticks[index + 1],
+                        arrival, PLAN32_CHASE_ARRIVAL_DISTANCE, floor,
+                    )
+                    if hit is None:
+                        continue
+                    executed = executed[:index + 1] + [hit["point"]]
+                    walked_ticks = walked_ticks[:index + 1] + [int(hit["ticks"])]
+                    walked_spans = walked_spans[:index + 1] + [walked_spans[index]]
+                else:
+                    standing_until = (
+                        walked_ticks[index + 1] if index + 1 < len(executed) else int(end_ticks)
+                    )
+                    if standing_until < max(walked_ticks[index], floor) or math.hypot(
+                        point[0] - arrival[0], point[1] - arrival[1],
+                    ) > PLAN32_CHASE_ARRIVAL_DISTANCE:
+                        continue
+                    executed = executed[:index + 1]
+                    walked_ticks = walked_ticks[:index + 1]
+                    walked_spans = walked_spans[:index + 1]
+                arrival_ticks = max(walked_ticks[-1], floor)
+                break
+        # A jump the retained path no longer contains is outside the observation: the return walk
+        # that follows the arrival is not part of the chase, so it must not fail the stage either.
+        if walked_ticks:
+            joins = [join for join in joins if int(join["ticks"]) <= walked_ticks[-1]]
     if arrival_ticks is None and walked_ticks:
         arrival_ticks = walked_ticks[-1]
     engagement_ticks = max(final_stop_ticks or 0, arrival_ticks or 0)
@@ -5281,7 +5341,8 @@ def verify(args: argparse.Namespace) -> None:
                 # nothing (plan32_chase_tracks bounds the swings to both ticks).
                 engagement_ok = len(chase.get("swings", [])) >= 1
                 # A spline that resumes anywhere but where the cut left the mover is a
-                # discontinuity, not a repath: the collector records it and the stage rejects it.
+                # discontinuity, not a repath: the collector records it if the retained
+                # observation still contains it, and the stage rejects it.
                 join_ok = not chase.get("joins")
                 route = (geometry.get("chase") or {}).get("route") or {}
                 # The detour is a requirement of the staged mmap, not an accident: the fixture's
@@ -6375,6 +6436,21 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert plan32_polyline_span_shares([(0.0, 0.0, 0.0), (3.0, 4.0, 0.0)], 0.0, 0.5) == [
         (0.0, [0.0, 0.0, 0.0]), (0.5, [1.5, 2.0, 0.0]),
     ]
+    # The arrival is solved on the segment the walk is on: a leg enters the radius part-way, the
+    # floor moves the entry later when the stop lands inside the leg, and a leg that has already
+    # left the radius never reports an entry.
+    assert plan32_segment_entry(
+        [0.0, -10.0, 0.0], [0.0, 10.0, 0.0], 0, 1000, (0.0, 0.0), 6.0, 0,
+    )["ticks"] == 200
+    assert plan32_segment_entry(
+        [0.0, -10.0, 0.0], [0.0, 10.0, 0.0], 0, 1000, (0.0, 0.0), 6.0, 500,
+    )["ticks"] == 500
+    assert plan32_segment_entry(
+        [0.0, -10.0, 0.0], [0.0, 10.0, 0.0], 0, 1000, (0.0, 0.0), 6.0, 900,
+    ) is None
+    assert plan32_segment_entry(
+        [0.0, -10.0, 0.0], [0.0, 10.0, 0.0], 0, 1000, (0.0, 0.0), 1.0, 0,
+    )["ticks"] == 450
     # Chase pieces: monster-move bodies (compressed and uncompressed, stop form included),
     # attackerstate, metrics.
     assert PLAN32_EXPECTED_COUNTS == {"blocked": [1, 2], "clear": [1, 2], "chase": [1]}
@@ -6631,6 +6707,104 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert plan32_path_metrics(
         [tuple(point) for point in discontinuous["executed"]]
     )[2] > PLAN32_CHASE_MAX_SPLINE_GAP
+    # Arrival is dated where the walk entered the radius, not at the vertex after it: this leg
+    # reaches the 6 m radius at 9200 ms, so the sole swing at 10000 counts even though the
+    # spline's own last vertex - and its tick - come later.
+    slow = move_pkt(
+        struct.pack("<I", 3) + struct.pack("<fffffffff", 0, 10, 0, 10, 10, 0, 10, 0, 0),
+        SPLINE_FLAG_UNCOMPRESSED_PATH, duration=10000,
+    )
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary) / "logs"
+        logs.mkdir()
+        (logs / "WorldServer.log").write_text(chase_log((10.0, 0.0)))
+        (logs / "packets.pkt").write_bytes(
+            b"PKT" + bytes(63)
+            + pkt(C2S, CMSG_SET_SELECTION_OPCODE, struct.pack("<Q", fixture))
+            + pkt(C2S, MSG_MOVE_START_FORWARD_OPCODE, b"", ticks=1000)
+            + pkt(S2C, SMSG_ON_MONSTER_MOVE_OPCODE, slow, ticks=1200)
+            + pkt(C2S, MSG_MOVE_STOP_STRAFE_OPCODE, b"", ticks=3000)
+            + pkt(S2C, SMSG_ATTACKERSTATEUPDATE_OPCODE, swing, ticks=10000)
+            + pkt(S2C, 0x3914, b"", ticks=12000)
+        )
+        walking_generation: Generation = {"paths": {"logs": str(logs), "raw_evidence": str(logs)}}
+        walking = plan32_chase_tracks(walking_generation)
+    assert walking["arrival_ticks"] == 9200
+    assert len(walking["swings"]) == 1 and walking["swings"][0]["ticks"] == 10000
+    assert math.dist(walking["executed"][-1], [10.0, 0.0, 0.0]) <= PLAN32_CHASE_ARRIVAL_DISTANCE
+    # A short step inside a spline is still a step, not the mover standing there: this walk is
+    # 7.3 m from the player when they stop and carries on to 7.4 m, so no arrival may be
+    # fabricated out of the 1.9 m last leg - the chase has not reached them.
+    stray = move_pkt(
+        struct.pack("<I", 4)
+        + struct.pack("<ffffffffffff", 0, 10, 0, 10, 10, 0, 10, 5.5, 0, 10, 7.4, 0),
+        SPLINE_FLAG_UNCOMPRESSED_PATH, duration=26400,
+    )
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary) / "logs"
+        logs.mkdir()
+        (logs / "WorldServer.log").write_text(chase_log((10.0, 0.0)))
+        (logs / "packets.pkt").write_bytes(
+            b"PKT" + bytes(63)
+            + pkt(C2S, CMSG_SET_SELECTION_OPCODE, struct.pack("<Q", fixture))
+            + pkt(C2S, MSG_MOVE_START_FORWARD_OPCODE, b"", ticks=1000)
+            + pkt(S2C, SMSG_ON_MONSTER_MOVE_OPCODE, stray, ticks=1200)
+            + pkt(C2S, MSG_MOVE_STOP_STRAFE_OPCODE, b"", ticks=27500)
+            + pkt(S2C, SMSG_ATTACKERSTATEUPDATE_OPCODE, swing, ticks=27600)
+            + pkt(S2C, 0x3914, b"", ticks=30000)
+        )
+        stray_generation: Generation = {"paths": {"logs": str(logs), "raw_evidence": str(logs)}}
+        strayed = plan32_chase_tracks(stray_generation)
+    assert math.dist(strayed["executed"][-1], [10.0, 7.4, 0.0]) < 0.001
+    assert math.dist(strayed["executed"][-1], [10.0, 0.0, 0.0]) > PLAN32_CHASE_ARRIVAL_DISTANCE
+    # A jump the trimmed path no longer contains is outside the observation - the fixture's
+    # return walk after the arrival must not fail the stage - while the same jump inside the
+    # retained path still does.
+    returned_reset = move_pkt(straight((110.0, 0.0, 0.0), (100.0, 0.0, 0.0)), duration=500,
+                              start=(100.0, 0.0, 0.0))
+    fast = move_pkt(
+        struct.pack("<I", 3) + struct.pack("<fffffffff", 0, 10, 0, 10, 10, 0, 10, 0, 0),
+        SPLINE_FLAG_UNCOMPRESSED_PATH, duration=900,
+    )
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary) / "logs"
+        logs.mkdir()
+        (logs / "WorldServer.log").write_text(chase_log((10.0, 0.0)))
+        (logs / "packets.pkt").write_bytes(
+            b"PKT" + bytes(63)
+            + pkt(C2S, CMSG_SET_SELECTION_OPCODE, struct.pack("<Q", fixture))
+            + pkt(C2S, MSG_MOVE_START_FORWARD_OPCODE, b"", ticks=1000)
+            + pkt(S2C, SMSG_ON_MONSTER_MOVE_OPCODE, fast, ticks=1200)
+            + pkt(C2S, MSG_MOVE_STOP_STRAFE_OPCODE, b"", ticks=2000)
+            + pkt(S2C, SMSG_ATTACKERSTATEUPDATE_OPCODE, swing, ticks=2200)
+            + pkt(S2C, SMSG_ON_MONSTER_MOVE_OPCODE, returned_reset, ticks=3000)
+            + pkt(S2C, 0x3914, b"", ticks=6000)
+        )
+        returned_generation: Generation = {"paths": {"logs": str(logs), "raw_evidence": str(logs)}}
+        returned = plan32_chase_tracks(returned_generation)
+    assert returned["joins"] == [] and returned["arrival_ticks"] == 2000
+    assert len(returned["swings"]) == 1 and returned["swings"][0]["ticks"] == 2200
+    assert math.dist(returned["executed"][-1], [10.0, 0.0, 0.0]) <= PLAN32_CHASE_ARRIVAL_DISTANCE
+    inside_jump = move_pkt(straight((10.0, 0.0, 0.0)), duration=300, start=(10.0, 20.0, 0.0))
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary) / "logs"
+        logs.mkdir()
+        (logs / "WorldServer.log").write_text(chase_log((10.0, 0.0)))
+        (logs / "packets.pkt").write_bytes(
+            b"PKT" + bytes(63)
+            + pkt(C2S, CMSG_SET_SELECTION_OPCODE, struct.pack("<Q", fixture))
+            + pkt(C2S, MSG_MOVE_START_FORWARD_OPCODE, b"", ticks=1000)
+            + pkt(S2C, SMSG_ON_MONSTER_MOVE_OPCODE, move_pkt(straight((0.0, 10.0, 0.0))),
+                  ticks=1200)
+            + pkt(S2C, SMSG_ON_MONSTER_MOVE_OPCODE, inside_jump, ticks=1800)
+            + pkt(C2S, MSG_MOVE_STOP_STRAFE_OPCODE, b"", ticks=2000)
+            + pkt(S2C, SMSG_ATTACKERSTATEUPDATE_OPCODE, swing, ticks=2200)
+            + pkt(S2C, 0x3914, b"", ticks=6000)
+        )
+        inside_generation: Generation = {"paths": {"logs": str(logs), "raw_evidence": str(logs)}}
+        jumped = plan32_chase_tracks(inside_generation)
+    assert len(jumped["joins"]) == 1 and jumped["joins"][0]["ticks"] == 1800
+    assert math.dist(jumped["executed"][-1], [10.0, 0.0, 0.0]) <= PLAN32_CHASE_ARRIVAL_DISTANCE
     # An advertised detour the capture never saw completed cannot stand in for arrival: a spline
     # captured 200 ms into an 800 ms walk is only a quarter of the way in (7.5 m), outside
     # arrival range, and the sole swing before the run leg proves the pull, not the chase.

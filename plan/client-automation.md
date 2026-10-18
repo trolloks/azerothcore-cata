@@ -604,10 +604,12 @@ supersedes the old forecast) and at the capture's end, so a repeated straight re
 manufacture a detour and an advertised destination nobody reached cannot stand in for arrival.
 The player's own `MSG_MOVE_STOP_STRAFE` is where the run leg ends, so until that tick nothing can
 be called the arrival — an approach spline overlapping the run and ending near the player's end
-point is not the chase reaching it — and from that tick the path is cut at the first executed
-point that reaches the player's end, so the walk home after the victim drops is not measured as
-the chase either. A spline resuming more than 2 m from where the previous one was cut is a
-discontinuity, recorded and failed rather than smoothed over, and a swing proves melee range only
+point is not the chase reaching it — and from that tick the path is cut where the mover first
+enters arrival range of that end point, solved on the segment it is walking rather than sampled at
+the vertices, so neither the walk home after the victim drops is measured as the chase nor an
+in-range swing is discarded for landing before the next vertex. A spline resuming more than 2 m
+from where the previous one was cut is a discontinuity, recorded and failed rather than smoothed
+over as long as the trimmed observation still contains it, and a swing proves melee range only
 when it lands after both the arrival and the player's stop.
 Two facts this mode depends on: grid loading creates units with server-assigned map-local lows
 (keeping the DB guid only as spawnId), so identity binds to the agreed selection plus a
