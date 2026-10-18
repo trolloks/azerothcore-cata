@@ -601,9 +601,14 @@ player's end point with a real detour around that obstacle, and reads the detour
 itself showed only where it actually executed it: from the client's own `MSG_MOVE_START_FORWARD`
 (run leg) onward, each spline cut at the tick the next packet for that mover arrived (a repath
 supersedes the old forecast) and at the capture's end, so a repeated straight replan cannot
-manufacture a detour and an advertised destination nobody reached cannot stand in for arrival,
-which is the last executed point reaching the player's end. A swing proves melee range only when
-it lands after that run leg.
+manufacture a detour and an advertised destination nobody reached cannot stand in for arrival.
+The player's own `MSG_MOVE_STOP_STRAFE` is where the run leg ends, so until that tick nothing can
+be called the arrival — an approach spline overlapping the run and ending near the player's end
+point is not the chase reaching it — and from that tick the path is cut at the first executed
+point that reaches the player's end, so the walk home after the victim drops is not measured as
+the chase either. A spline resuming more than 2 m from where the previous one was cut is a
+discontinuity, recorded and failed rather than smoothed over, and a swing proves melee range only
+when it lands after both the arrival and the player's stop.
 Two facts this mode depends on: grid loading creates units with server-assigned map-local lows
 (keeping the DB guid only as spawnId), so identity binds to the agreed selection plus a
 seed-uniqueness gate rather than a precomputed GUID; and `WorldSocket` enables per-session packet
