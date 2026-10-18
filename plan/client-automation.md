@@ -572,13 +572,16 @@ requires the exact 12-opcode list, all six directional pairs and the post-stop s
 landing anywhere else stays a failure. The raw sequence remains in the evidence unchanged.
 
 `--mode plan32-geometry` carries the Plan 32 pinned stages, one stage per generation selected by
-`PLAN32_STAGE` (`blocked`, `clear` or `chase`; prepare validates it, freezes it into the
+`PLAN32_STAGE` (`blocked`, `clear`, `chase` or `relog`; prepare validates it, freezes it into the
 generation's `inputs` together with that stage's seeds, and run reads the frozen value and refuses
 a conflicting environment — a retry also re-seeds the character row, so it restarts from the
-pinned point). Every stage seeds the fixture at artifact-derived coordinates and targets it once
-by its unique name through the client-local `/target` macro. The LOS stages cast Fireball twice
-uncancelled; the chase stage casts once to aggro, then runs a pinned two-leg corner while the
-followed fixture must path around the same wall to melee range. Verify reads the packet capture
+pinned point). Every casting stage seeds the fixture at artifact-derived coordinates and targets it
+once by its unique name through the client-local `/target` macro. The LOS stages cast Fireball
+twice uncancelled; the chase stage casts once to aggro, then runs a pinned two-leg corner while the
+followed fixture must path around the same wall to melee range; the relog stage casts nothing — an
+engaged fixture would hold the character in combat and the client refuses to log out in combat — so
+it walks the clear stage's pinned route, stops, types `/logout` and enters the world again from the
+character screen. Verify reads the packet capture
 (`packets.pkt`, staged for this mode's generations) instead of opcode names: every cast must name
 spell 133 at the agreed selection with the stage's own counters, each request's client counter
 must come back on its own outcome (the wire carries `CMSG_CANCEL_CAST`, so a cancel between the
@@ -617,6 +620,16 @@ rather than an arrival the run never made. A spline resuming more than 2 m from 
 one was cut is a discontinuity, recorded and failed rather than smoothed over as long as the
 trimmed observation still contains it, and a swing proves melee range only when it lands after
 both the arrival and the player's stop.
+The
+relog stage's own requirement is persistence, and it reads the run's log in order: the walk must
+have ended in an accepted stop before the server completed the logout, the client must have sent its
+second login, and the first accepted movement after that login must be a world-entry landing
+agreeing with the stop within 0.5 m while both stay at least 1 m from the seeded login point — so
+the position the client arrived at is the row the server saved at logout, and a landing inside the
+first session can never stand in for it. Exactly one `SMSG_LOGOUT_COMPLETE` and two
+`CMSG_PLAYER_LOGIN` requests are required. The server's time-sync liveness line is deliberately not
+used for this: `MovementHandler` logs it only while a session's clock-delta queue is empty, so the
+second login of an already-in-world character need not produce one.
 Two facts this mode depends on: grid loading creates units with server-assigned map-local lows
 (keeping the DB guid only as spawnId), so identity binds to the agreed selection plus a
 seed-uniqueness gate rather than a precomputed GUID; and `WorldSocket` enables per-session packet

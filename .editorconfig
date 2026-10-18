@@ -20,3 +20,7 @@ tab_width = 2
 insert_final_newline = true
 trim_trailing_whitespace = true
 max_line_length = 120
+
+# Tabular records are one line per row by definition, so the 120-column rule cannot wrap them.
+[*.{tsv,csv}]
+max_line_length = off

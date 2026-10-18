@@ -196,7 +196,7 @@ PLAN32_GEOMETRY_MODE = "plan32-geometry"
 # One acceptance mode carries the remaining Plan 32 stages; each generation runs one stage from a
 # pinned seed, so no travel between pinned points is needed. Stages arrive in this order; only the
 # implemented ones are accepted by prepare/run/verify.
-PLAN32_GEOMETRY_STAGES = ("blocked", "clear", "chase")
+PLAN32_GEOMETRY_STAGES = ("blocked", "clear", "chase", "relog")
 # The fixture is an entry with no static spawns anywhere near the seeds and a name no other nearby
 # unit shares: Tab-nearest is not deterministic in the abbey (ambient hostiles wander through Tab
 # range), so targeting goes through the client-local "/target <name>" macro instead (the level-up
@@ -227,6 +227,10 @@ PLAN32_GEOMETRY_SEEDS = {
         "dummy": (-8876.0, -196.0, 80.221),
     },
 }
+# Relog walks the clear stage's route and seeds and then drops the session instead of casting: an
+# engaged fixture would hold the character in combat, and the client refuses to log out in combat,
+# so this stage seeds the same pair but never targets or casts at it.
+PLAN32_GEOMETRY_SEEDS["relog"] = PLAN32_GEOMETRY_SEEDS["clear"]
 # Chase observation contract, all pinned before the run. The follower path must be decisively
 # longer than its straight line (a clipper walks ratio ~1.0), must end at melee range, must be
 # continuous (no teleports), and must include a melee engagement; any of those missing fails the
@@ -239,7 +243,9 @@ PLAN32_CHASE_ARRIVAL_DISTANCE = 6.0
 # The arrival distance is inclusive - the contract is "within 6 m", and a grazing pass sits exactly
 # on that boundary - but six-figure world coordinates cannot promise an exact comparison. This
 # margin is far below any ground measurement; it keeps a grazing pass an arrival instead of a
-# rounding-error miss, and keeps the verdict the same either way.
+# rounding-error miss, and keeps the verdict the same either way. It replaces the tighter 3 m
+# arrival window: the arrival is solved on the walked path and never dated before the player's own
+# stop, so a move that ends at the corner the player turned cannot close the window early.
 PLAN32_CHASE_ARRIVAL_EPSILON = 0.001
 PLAN32_CHASE_MAX_SPLINE_GAP = 10.0
 # A spline is only executed up to the next packet for its mover, and that next spline starts where
@@ -248,11 +254,18 @@ PLAN32_CHASE_MAX_SPLINE_GAP = 10.0
 # rather than being silently dropped as if the mover had been continuous.
 PLAN32_CHASE_JOIN_TOLERANCE = 2.0
 # Aggro casts per stage: the LOS stages cast twice (Codex requires both attempts uncancelled);
-# the chase needs one aggro cast before the run leg.
-PLAN32_EXPECTED_COUNTS = {"blocked": [1, 2], "clear": [1, 2], "chase": [1]}
+# the chase needs one aggro cast before the run leg; the relog stage casts nothing.
+PLAN32_EXPECTED_COUNTS = {"blocked": [1, 2], "clear": [1, 2], "chase": [1], "relog": []}
 # What the staged vmaps must say about each stage's own cast ray: the blocked stage's line has to
 # be broken by the pinned obstacle, the clear and chase stages' has to be whole.
 PLAN32_STAGE_RAY_EXPECTATION = {"blocked": "blocked", "clear": "clear", "chase": "clear"}
+# Relog contract: the walk ran along the pinned clear line, so the stop it reached and the
+# position the next login arrives at agree to this, and both are at least this far from the
+# seeded login point — the server only holds that position from the row it saved at logout.
+PLAN32_RELOG_TOLERANCE = 0.5
+PLAN32_RELOG_MIN_TRAVEL = 1.0
+# The server's own completion of the drop-out, exactly as the phase-restoration relogin reads it.
+LOGOUT_COMPLETE_PATTERN = re.compile(r"S->C:.*\[SMSG_LOGOUT_COMPLETE\b")
 # The chase's route through the staged mmap must exist, detour and still be short enough for the
 # arrival window; the tool's own route cost is an upper bound (polygon centres), so 45 m is room.
 PLAN32_CHASE_ROUTE_MAX = 45.0
@@ -2317,11 +2330,22 @@ def automate_plan32_chase(generation: Generation) -> None:
     # 6 m, then east 6 m along the seeded cardinal facing (pi/2), so each tap is an exact axis
     # move. The fixture (1.2 m west of that wall) cannot follow straight and must walk the
     # pinned route around it. No Escape anywhere.
+    #
+    # The macro runs until the server logs the selection it produces: this automation types before
+    # its first movement, so the initial keypresses can be lost to the window-focus handover (the
+    # walk-first LOS stages never see this, their walk tap absorbs it) and a lost Return/slash
+    # turns the macro into an ordinary chat message that selects nothing.
     capture_desktop_screenshot(generation, "desktop-before-target.png")
-    automate_key_sequence(
-        generation, PLAN32_GEOMETRY_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05,
-    )
-    time.sleep(1.0)  # let the client resolve the name and register the target
+    selections = plan32_selection_count(generation)
+    for _ in range(3):
+        automate_key_sequence(
+            generation, PLAN32_GEOMETRY_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05,
+        )
+        time.sleep(1.0)  # let the client resolve the name and register the target
+        if plan32_selection_count(generation) > selections:
+            break
+    else:
+        raise RuntimeError("plan32 chase target macro did not select the fixture")
     capture_desktop_screenshot(generation, "desktop-after-target.png")
     automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
     time.sleep(7.0)  # let the cast resolve; a hit aggros the fixture
@@ -2332,6 +2356,66 @@ def automate_plan32_chase(generation: Generation) -> None:
     capture_desktop_screenshot(generation, "desktop-after-leg.png")
     time.sleep(40.0)  # arrival window for the detour
     capture_desktop_screenshot(generation, "desktop-after-wait.png")
+
+
+def plan32_tapped_stop(generation: Generation) -> bool:
+    """Whether a movement tap has been accepted to its stop since the in-world marker: the live
+    signal a walk tap produced, checked because the first keypresses after the client comes up can
+    be lost to the window-focus handover (see the chase's macro retry)."""
+    return any(
+        str(sample["opcode"]) == "MSG_MOVE_STOP" for sample in ground_movement_samples(generation)
+    )
+
+
+def plan32_landing_count(generation: Generation) -> int:
+    """How many world-entry landings the client's accepted movement produced: one per session.
+
+    The server's time-sync liveness line is not a per-session signal — it is logged only while a
+    session has no clock delta yet, so an already-in-world character's second login does not add
+    one — while the client lands once every time it enters the world."""
+    return sum(
+        1 for sample in ground_movement_samples(generation)
+        if str(sample["opcode"]) == "MSG_MOVE_FALL_LAND"
+    )
+
+
+def automate_plan32_relog(generation: Generation) -> None:
+    # Walk the pinned route, stop, then drop the session and take it up again: the position the
+    # walk stopped at has to be the one the next login arrives at. No cast here — an engaged
+    # fixture holds the character in combat, and the client refuses to log out in combat.
+    capture_desktop_screenshot(generation, "desktop-before-walk.png")
+    for _ in range(3):
+        automate_key_sequence(generation, ("w",), hold_seconds=0.6, gap_seconds=0.4)
+        time.sleep(1.0)  # let the stop land
+        if plan32_tapped_stop(generation):
+            break
+    else:
+        raise RuntimeError("plan32 relog walk did not reach its stop")
+    capture_desktop_screenshot(generation, "desktop-after-walk.png")
+    deadline = time.monotonic() + 60.0
+    completed = len(LOGOUT_COMPLETE_PATTERN.findall(world_log_text(generation)))
+    automate_key_sequence(
+        generation, ("Return", "slash", *"logout", "Return"), hold_seconds=0.05, gap_seconds=0.05,
+    )
+    while time.monotonic() < deadline:
+        if len(LOGOUT_COMPLETE_PATTERN.findall(world_log_text(generation))) > completed:
+            break
+        time.sleep(0.2)
+    else:
+        raise RuntimeError("plan32 relog logout did not complete")
+    capture_desktop_screenshot(generation, "desktop-after-logout.png")
+    # The character screen's own default action is Enter World; press it until the client has
+    # landed in the world again (a second world-entry landing), which is what a session produces.
+    landings = plan32_landing_count(generation)
+    for _ in range(6):
+        automate_character_selection(generation)
+        time.sleep(3.0)
+        if plan32_landing_count(generation) > landings:
+            break
+    else:
+        raise RuntimeError("plan32 relog login did not complete")
+    time.sleep(3.0)  # let the landing sample land
+    capture_desktop_screenshot(generation, "desktop-after-relog.png")
 
 
 def automate_issue97_phases(generation: Generation, deadline: float) -> None:
@@ -2913,6 +2997,8 @@ def run_client(args: argparse.Namespace) -> None:
                 ):
                     if generation.get("plan32_stage") == "chase":
                         automate_plan32_chase(generation)
+                    elif generation.get("plan32_stage") == "relog":
+                        automate_plan32_relog(generation)
                     else:
                         automate_plan32_geometry(generation)
                     plan32_geometry_sent = True
@@ -3199,13 +3285,100 @@ def chat_message_marker_count(generation: Generation) -> int:
     return len(CHAT_MESSAGE_PACKET.findall(after_sync))
 
 
+def movement_samples_in(text: str) -> list[dict[str, str | float]]:
+    return [
+        {"opcode": opcode, "x": float(x), "y": float(y), "z": float(z), "o": float(o)}
+        for opcode, x, y, z, o in GROUND_MOVEMENT_SAMPLE_PATTERN.findall(text)
+    ]
+
+
 def ground_movement_samples(generation: Generation) -> list[dict[str, str | float]]:
     after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
     after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
-    return [
-        {"opcode": opcode, "x": float(x), "y": float(y), "z": float(z), "o": float(o)}
-        for opcode, x, y, z, o in GROUND_MOVEMENT_SAMPLE_PATTERN.findall(after_sync)
-    ]
+    return movement_samples_in(after_sync)
+
+
+PLAN32_LOGIN_RECEIVED_PATTERN = re.compile(r"Received CMSG_PLAYER_LOGIN for account \d+\.")
+
+
+def plan32_relog_timeline(generation: Generation) -> dict[str, object]:
+    """The relog run's movement samples, cut at the session boundaries the server logged itself.
+
+    A landing alone is not enough: a session that falls twice would let a landing that happened
+    before the logout stand in for the position the next login arrives at. So the log is read in
+    order — the walk under test is what came before the server completed the logout, and the
+    returned samples are those after a CMSG_PLAYER_LOGIN that followed it — and neither a landing
+    outside the second login's interval nor a login that preceded the logout can satisfy the
+    sequence this stage claims."""
+    walk: list[dict[str, str | float]] = []
+    returned: list[dict[str, str | float]] = []
+    logouts = 0
+    logins = 0
+    logins_after_logout = 0
+    for line in world_log_text(generation).splitlines():
+        if LOGOUT_COMPLETE_PATTERN.search(line):
+            logouts += 1
+            continue
+        if PLAN32_LOGIN_RECEIVED_PATTERN.search(line):
+            logins += 1
+            if logouts:
+                logins_after_logout += 1
+            continue
+        samples = movement_samples_in(line)
+        if not samples:
+            continue
+        if logouts == 0:
+            walk.append(samples[0])
+        elif logins_after_logout:
+            returned.append(samples[0])
+    return {
+        "walk": walk,
+        "returned": returned,
+        "logout_completes": logouts,
+        "login_requests": logins,
+        "logins_after_logout": logins_after_logout,
+    }
+
+
+def plan32_relog_problems(generation: Generation) -> list[str]:
+    """The relog stage's own predicate, as what is wrong with it (empty when it holds).
+
+    The walk must have stopped before the session ended, exactly one logout must have completed,
+    the client must have logged in again after that logout, and the first accepted movement after
+    that login must be a landing agreeing with the stop: the position the server saved at logout —
+    not a re-seed and not another landing inside the session that walked."""
+    timeline = plan32_relog_timeline(generation)
+    walked, returned = timeline["walk"], timeline["returned"]
+    stop = walked[-1] if walked else None
+    relogin = returned[0] if returned else None
+    seed = PLAN32_GEOMETRY_SEEDS["relog"]["character"]
+    problems: list[str] = []
+    if timeline["logout_completes"] != 1:
+        problems.append(f"expected one SMSG_LOGOUT_COMPLETE, saw {timeline['logout_completes']}")
+    if timeline["login_requests"] != 2:
+        problems.append(f"expected two CMSG_PLAYER_LOGIN requests, saw {timeline['login_requests']}")
+    if timeline["logins_after_logout"] != 1:
+        problems.append("no CMSG_PLAYER_LOGIN followed the completed logout")
+    if plan32_landing_count(generation) != 2:
+        problems.append(
+            f"expected two world-entry landings, saw {plan32_landing_count(generation)}"
+        )
+    if stop is None or str(stop["opcode"]) != "MSG_MOVE_STOP":
+        problems.append("the walk did not end in an accepted stop before the logout")
+    if relogin is None or str(relogin["opcode"]) != "MSG_MOVE_FALL_LAND":
+        problems.append("the session after the logout produced no world-entry landing")
+    if stop is not None and relogin is not None:
+        if math.hypot(float(relogin["x"]) - float(stop["x"]),
+                      float(relogin["y"]) - float(stop["y"])) > PLAN32_RELOG_TOLERANCE:
+            problems.append("the landing does not agree with the walked stop")
+        if abs(float(relogin["z"]) - float(stop["z"])) > PLAN32_RELOG_TOLERANCE:
+            problems.append("the landing's height does not agree with the walked stop")
+    for name, sample in (("stop", stop), ("landing", relogin)):
+        if sample is not None and math.hypot(
+            float(sample["x"]) - seed[0], float(sample["y"]) - seed[1]
+        ) < PLAN32_RELOG_MIN_TRAVEL:
+            problems.append(f"the {name} sits on the seeded login point")
+    return problems
 
 
 def ground_movement_sequence(generation: Generation) -> list[str]:
@@ -4103,13 +4276,11 @@ def plan32_line_pin(line: dict[str, object], seed: list[float], eye: float) -> d
     }
 
 
-def plan32_route_facts(data_root: Path, start: list[float], end: list[float],
-                       end_z: float) -> dict[str, object]:
+def plan32_route_facts(data_root: Path, start: list[float], end: list[float]) -> dict[str, object]:
     """The staged mmap's own answer for a walk between two pinned points: the polygon under each and
     the route through the tile's links, costed at the polygon centres (an upper bound, as the tool's
-    own route check says). Used for the chase, where rounding the obstacle is the expectation. The
-    goal is a ground pair with its z passed separately, so it is completed into the 3D point the
-    query's own frame reads (nav_coord indexes all three axes)."""
+    own route check says). Used for the chase, where rounding the obstacle is the expectation. Both
+    ends are full 3D points: the query's own frame reads all three axes (``nav_coord`` indexes z)."""
     module = plan32_geometry_module()
     gx, gy = module.grid_coord(start[0], start[1])
     mmap = module.MmapFiles(data_root / "mmaps" / f"{CHARACTER_MAP:03d}.mmap",
@@ -4119,7 +4290,7 @@ def plan32_route_facts(data_root: Path, start: list[float], end: list[float],
         raise RuntimeError(f"plan32 mmap tile did not parse: {problems}")
     _, graph = module.creature_graph(polygons, adjacency, module.NAV_GROUND)
     first = module.navmesh_polygon(verts, polygons, module.nav_coord(start), start[2])
-    second = module.navmesh_polygon(verts, polygons, module.nav_coord([end[0], end[1], end_z]), end_z)
+    second = module.navmesh_polygon(verts, polygons, module.nav_coord(end), end[2])
     path, cost = module.navmesh_route(verts, polygons, graph, first, second)
     straight = math.hypot(end[0] - start[0], end[1] - start[1])
     return {
@@ -4170,7 +4341,10 @@ def plan32_stage_geometry(generation: Generation, stage: str) -> dict[str, objec
                 "opcode": sample["opcode"],
                 "delta": None if height is None else round(float(sample["z"]) - height, 4),
             })
-        player = plan32_player_cast_point(stage, samples)
+        # A relog run's flat sample list carries two sessions: the cast point is the last sample of
+        # the one that did the walking, not the position the next login landed on.
+        cast_samples = plan32_relog_timeline(generation)["walk"] if stage == "relog" else samples
+        player = plan32_player_cast_point(stage, cast_samples)
         target = selections_target_fixture(plan32_packet_events(generation))
         fixture_positions = {
             int(item["count"]): [float(c) for c in item["position"]]
@@ -4213,8 +4387,8 @@ def plan32_stage_geometry(generation: Generation, stage: str) -> dict[str, objec
             "casts": casts,
             "terrain": {"tolerance": PLAN32_STAGE_TERRAIN_TOLERANCE, "samples": terrain_heights},
         }
-        if stage in ("blocked", "clear"):
-            line = lines[stage]
+        if stage in ("blocked", "clear", "relog"):
+            line = lines["clear" if stage == "relog" else stage]
             report["pins"] = {
                 "character": plan32_line_pin(line, list(seeds["character"]), eye),
                 "dummy": plan32_line_pin(line, list(seeds["dummy"]), eye),
@@ -4237,11 +4411,11 @@ def plan32_stage_geometry(generation: Generation, stage: str) -> dict[str, objec
                                  [spawn[0], spawn[1], float(seeds["dummy"][2]) + eye]),
                 "fixture_to_end_hits": fixture_hits,
                 "route": plan32_route_facts(
-                    data_root, [spawn[0], spawn[1], float(seeds["dummy"][2])], [end[0], end[1]], end_z,
+                    data_root, [spawn[0], spawn[1], float(seeds["dummy"][2])], [end[0], end[1], end_z],
                 ),
             }
         return report
-    except (RuntimeError, ValueError, KeyError, OSError) as error:
+    except (RuntimeError, ValueError, KeyError, IndexError, OSError) as error:
         return {"error": f"{type(error).__name__}: {error}"}
 
 
@@ -4315,7 +4489,6 @@ def plan32_packet_log_bounds(generation: Generation) -> dict[str, object]:
     return {"end_ticks": end_ticks, "forward_ticks": forward_ticks, "stop_ticks": stop_ticks,
             "stop_packets": stop_packets}
 
-
 def plan32_chase_tracks(generation: Generation) -> dict[str, object]:
     """The chase observation, keyed to the agreed selection: the fixture's spline packets reduced
     to the path they actually executed, and its melee swings at the player. Reparsing the capture
@@ -4337,20 +4510,20 @@ def plan32_chase_tracks(generation: Generation) -> dict[str, object]:
     Arrival is the run's own end: the player's strafe stop is the last tap of the run leg, and
     until it lands the player is still on the way to the end point, so no distance to that point
     can end the observation - an approach spline overlapping the tap is not the chase reaching it.
-    From the stop onward the path is cut where the mover first stands within arrival range of the
+    From the stop onward the path is cut at the first moment it is within arrival range of the
     player's final position, the arrival the run waits for: solved on the walk leg that enters the
-    range, because a walk enters it part-way and the vertex after it is not the arrival, or read
-    off the hold leg it stands on. A hold only lasts to the next packet for the mover: where that
-    packet places it somewhere else, a later packet in the same millisecond has already moved it,
-    and only the capture's packet order can say whether an arrival at the hold's last tick was
-    still the mover's own. A fixture whose victim drops then walks home, and that return walk must
-    not be folded into the path this mode calls the chase - nor may the jump that starts it fail
-    the stage, which is why only the joins the retained path still contains count. ``arrival_ticks``
-    records when the arrival happened, and a swing only counts as engagement at or after it and
-    after the player's stop: the pull's own melee hit, or a hit landed while the fixture was still
-    on its way, proves nothing about the chase reaching melee range. Cutting at the arrival can
-    only shorten the measured path, never lengthen it, so the detour ratio stays a floor rather
-    than an artefact."""
+    range - a pass that only grazes it counts, the boundary is inclusive - because a walk enters
+    it part-way and the vertex after it is not the arrival, or read off the hold leg it stands on.
+    A hold only lasts to the next packet for the mover: where that packet places it somewhere
+    else, a later packet in the same millisecond has already moved it, and only the capture's
+    packet order can say whether an arrival at the hold's last tick was still the mover's own. A
+    fixture whose victim drops then walks home, and that return walk must not be folded into the
+    path this mode calls the chase - nor may the jump that starts it fail the stage, which is why
+    only the joins the retained path still contains count. ``arrival_ticks`` records when the
+    arrival happened, and a swing only counts as engagement at or after it and after the player's
+    stop: the pull's own melee hit, or a hit landed while the fixture was still on its way, proves
+    nothing about the chase reaching melee range. Cutting at the arrival can only shorten the
+    measured path, never lengthen it, so the detour ratio stays a floor rather than an artefact."""
     events = [
         event for event in plan32_packet_events(generation)
         if event["opcode"] in {
@@ -4655,6 +4828,25 @@ def plan32_cast_marker_count(generation: Generation) -> int:
     return len(PLAN32_CAST_PACKET.findall(after_sync))
 
 
+def plan32_selection_count(generation: Generation) -> int:
+    """How many selections the server has logged since the in-world marker: the live signal the
+    chase's name macro produced, which the run can wait on (the first keypresses after the client
+    comes up can be lost to the window-focus handover)."""
+    after_map = world_log_text(generation).partition("Finished object update bootstrap after adding to map")[2]
+    after_sync = after_map.partition(IN_WORLD_CONTROL_MARKER)[2]
+    return len(re.findall(r"\bC->S:\s+.*?\bCMSG_SET_SELECTION\b", after_sync))
+
+
+def plan32_progress_marker_count(generation: Generation) -> int:
+    """What tells the run the mode's own actions have begun, which starts its stability hold: the
+    casts of the casting stages. The relog stage casts nothing — its walk is the action under test
+    — so its own accepted movement samples are the signal, and the hold then covers the logout and
+    the return the automation drives."""
+    if generation.get("plan32_stage") == "relog":
+        return len(ground_movement_samples(generation))
+    return plan32_cast_marker_count(generation)
+
+
 def plan32_settle_z(generation: Generation) -> float | None:
     """The z of the first post-marker movement sample: the walk tap's START carries the spawn
     position (after any world-entry settle), so this is the runtime height at the pinned point
@@ -4752,7 +4944,7 @@ POST_MARKER_COUNTERS = {
     CHAT_MESSAGE_MODE: chat_message_marker_count,
     INVALID_TARGET_SPELL_CAST_MODE: invalid_target_spell_cast_marker_count,
     LEVEL_UP_MODE: level_up_settle_signal,
-    PLAN32_GEOMETRY_MODE: plan32_cast_marker_count,
+    PLAN32_GEOMETRY_MODE: plan32_progress_marker_count,
 }
 
 
@@ -4771,13 +4963,13 @@ def player_login_diagnostic(generation: Generation) -> str:
 
 def selection_proof_is_complete(
     selection: dict[str, object] | None, transcript: list[dict[str, str]],
-    enum_events: list[dict[str, int]],
+    enum_events: list[dict[str, int]], logins: int = 1,
 ) -> bool:
     expected_enum = {
         "account_id": ACCOUNT_ID, "guid_low": CHARACTER_GUID, "list_position": CHARACTER_LIST_POSITION,
     }
     return (
-        enum_events == [expected_enum]
+        enum_events == [expected_enum] * logins
         and selection == {
             "action": "enter",
             "seeded_guid_low": CHARACTER_GUID,
@@ -4786,7 +4978,7 @@ def selection_proof_is_complete(
             "callback_guid_low": CHARACTER_GUID,
             "legit_characters_admission": True,
         }
-        and sum(item == {"direction": "c2s", "opcode": "CMSG_PLAYER_LOGIN"} for item in transcript) == 1
+        and sum(item == {"direction": "c2s", "opcode": "CMSG_PLAYER_LOGIN"} for item in transcript) == logins
     )
 
 
@@ -5019,6 +5211,11 @@ def sanitized_evidence(
             if plan32_geometry_mode and generation.get("plan32_stage") == "chase"
             else None
         ),
+        "plan32_relog_problems": (
+            plan32_relog_problems(generation)
+            if plan32_geometry_mode and generation.get("plan32_stage") == "relog"
+            else None
+        ),
         "creation_marker_count": creation_marker_count_value if creation_mode else None,
         "post_marker_hold_seconds": (
             generation.get("post_marker_hold_seconds", 0) if generation["mode"] in POST_MARKER_MODES else None
@@ -5085,6 +5282,9 @@ def verify(args: argparse.Namespace) -> None:
         INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
+    # The relog stage drives the whole login twice, so the login-shaped evidence below expects two
+    # complete sessions that both name the same seeded character.
+    expected_logins = 2 if plan32_geometry_mode and generation.get("plan32_stage") == "relog" else 1
     rows = character_row_count(manifest, generation) if character_mode else None
     realm_count = realm_character_count(manifest, generation) if populated_mode else None
     seed = (
@@ -5100,10 +5300,17 @@ def verify(args: argparse.Namespace) -> None:
     selection = {
         "action": generation.get("selection_action"),
         "seeded_guid_low": seed["guid_low"] if seed is not None else None,
-        "enumerated_guid_low": enum_events[0]["guid_low"] if len(enum_events) == 1 else None,
-        "request_guid_low": requests[0] if len(requests) == 1 else None,
-        "callback_guid_low": callbacks[0] if len(callbacks) == 1 else None,
-        "legit_characters_admission": len(callbacks) == 1,
+        "enumerated_guid_low": enum_events[0]["guid_low"] if enum_events and len(set(
+            event["guid_low"] for event in enum_events)) == 1 else None,
+        "request_guid_low": (
+            requests[0] if len(requests) == expected_logins and len(set(requests)) == 1 else None
+        ),
+        "callback_guid_low": (
+            callbacks[0] if len(callbacks) == expected_logins and len(set(callbacks)) == 1 else None
+        ),
+        "legit_characters_admission": (
+            len(callbacks) == expected_logins and len(set(callbacks)) == 1
+        ),
     } if login_mode else None
     evidence = sanitized_evidence(
         generation, milestones, transcript, character_rows=rows, realm_count=realm_count, enumerated=enumerated,
@@ -5147,7 +5354,7 @@ def verify(args: argparse.Namespace) -> None:
             character_ok = character_ok and realm_count == 1 and enum_events == [{
                 "account_id": ACCOUNT_ID, "guid_low": CHARACTER_GUID,
                 "list_position": CHARACTER_LIST_POSITION,
-            }]
+            }] * expected_logins
         if selection_mode:
             character_ok = character_ok and selection_proof_is_complete(selection, transcript, enum_events)
         if initial_packets_mode:
@@ -5166,8 +5373,19 @@ def verify(args: argparse.Namespace) -> None:
                 and evidence["post_marker_snapshots"] == 2
             )
         if in_world_control_mode:
-            character_ok = character_ok and selection_proof_is_complete(selection, transcript, enum_events) and (
-                evidence["in_world_control_marker_count"] == 1
+            # The marker is the server's time-sync liveness line, logged once while a session has
+            # no clock delta yet: a relog's second session (an already-in-world character) does not
+            # add another, so that stage only requires the first one and proves its two sessions
+            # through the second enumeration, login request, callback and world-entry landing.
+            marker_ok = (
+                evidence["in_world_control_marker_count"] >= 1
+                if plan32_geometry_mode and generation.get("plan32_stage") == "relog"
+                else evidence["in_world_control_marker_count"] == expected_logins
+            )
+            character_ok = character_ok and selection_proof_is_complete(
+                selection, transcript, enum_events, expected_logins
+            ) and (
+                marker_ok
                 and bool(evidence["in_world_control_packet_prefix"])
                 and "C->S:CMSG_TIME_SYNC_RESP" in evidence["in_world_control_packet_prefix"]
                 and evidence["post_marker_hold_seconds"] >= 5
@@ -5312,10 +5530,11 @@ def verify(args: argparse.Namespace) -> None:
                 )
             )
             pins_ok = True
-            if str(stage) in ("blocked", "clear"):
+            if str(stage) in ("blocked", "clear", "relog"):
+                line_key = "clear" if str(stage) == "relog" else str(stage)
                 pins = geometry.get("pins") or {}
                 character_pin, dummy_pin = pins.get("character"), pins.get("dummy")
-                line_length = float((geometry.get("derived") or {}).get(str(stage), {}).get("length") or 0)
+                line_length = float((geometry.get("derived") or {}).get(line_key, {}).get("length") or 0)
                 pins_ok = (
                     character_pin is not None and dummy_pin is not None
                     and character_pin["perpendicular"] <= PLAN32_PIN_TOLERANCE
@@ -5339,6 +5558,12 @@ def verify(args: argparse.Namespace) -> None:
                 )
             elif stage == "clear":
                 stage_ok = casts_ok and len(goes) >= 1 and not fails
+            elif stage == "relog":
+                # No cast here: the walk is the action under test, and its predicate lives in
+                # plan32_relog_problems so the synthetic check can exercise the same code. It reads
+                # the log in order — walk before the completed logout, landing after the second
+                # login — so a landing inside the first session cannot stand in for the return.
+                stage_ok = not plan32_relog_problems(generation)
             elif stage == "chase":
                 chase = evidence["plan32_chase"] or {}
                 samples = evidence["plan32_player_samples"] or []
@@ -5416,18 +5641,25 @@ def verify(args: argparse.Namespace) -> None:
                 )
             else:
                 stage_ok = False
-            character_ok = character_ok and (
-                stage in PLAN32_GEOMETRY_SEEDS
-                and casts_ok
-                and stage_ok
-                and height_ok
-                and terrain_ok
-                and correlation_ok
-                and fixture_ok
-                and facts_ok
-                and rays_ok
-                and pins_ok
-            )
+            if stage == "relog":
+                # This stage carries no cast and no fixture claim: the walk, the drop-out and the
+                # return are the whole of it, on top of the loaded geometry and the pinned seeds.
+                character_ok = character_ok and (
+                    stage_ok and height_ok and terrain_ok and facts_ok and pins_ok
+                )
+            else:
+                character_ok = character_ok and (
+                    stage in PLAN32_GEOMETRY_SEEDS
+                    and casts_ok
+                    and stage_ok
+                    and height_ok
+                    and terrain_ok
+                    and correlation_ok
+                    and fixture_ok
+                    and facts_ok
+                    and rays_ok
+                    and pins_ok
+                )
         if chat_message_mode:
             character_ok = character_ok and evidence["chat_message_marker_count"] > 0
         if invalid_target_spell_cast_mode:
@@ -5471,6 +5703,8 @@ def verify(args: argparse.Namespace) -> None:
                 and generation.get("plan32_stage") == "clear"
                 else "plan32_geometry_chase_pass" if plan32_geometry_mode
                 and generation.get("plan32_stage") == "chase"
+                else "plan32_geometry_relog_pass" if plan32_geometry_mode
+                and generation.get("plan32_stage") == "relog"
                 else "ground_movement_pass" if ground_movement_mode
                 else "basic_movement_pass" if basic_movement_mode
                 else "in_world_control_bootstrap_pass" if in_world_control_mode
@@ -6260,7 +6494,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     # predict the fixture's wire GUID. The synthetic value below only exercises the parser and the
     # selection-anchored correlation shape.
     fixture = 0xF13000016900064A
-    assert set(PLAN32_GEOMETRY_SEEDS) == set(PLAN32_GEOMETRY_STAGES) == {"blocked", "clear", "chase"}
+    assert set(PLAN32_GEOMETRY_SEEDS) == set(PLAN32_GEOMETRY_STAGES) == {"blocked", "clear", "chase", "relog"}
     assert "-8854.766" in plan32_world_seed_sql("blocked") and "80.422" in plan32_world_seed_sql("blocked")
     assert ",361,0,12,12," in plan32_world_seed_sql("blocked")
     assert ",2809," not in plan32_world_seed_sql("blocked")
@@ -6454,8 +6688,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     ]}) == ["MSG_MOVE_STOP has no staged terrain height under it"]
     # The staged mmap route the chase's detour requirement rests on: a three-polygon L of rooms on
     # disk (mmaps/000.mmap plus the grid tile) routes around the corner, longer than the straight
-    # line between its ends, and the goal is handed in as the ground pair plus its z that the chase
-    # call site passes, not as a ready-made 3D point. The query's frame is dtPoint = (world y,
+    # line between its ends, and both ends are handed in as full 3D points, the chase call site
+    # included. The query's frame is dtPoint = (world y,
     # world z, world x), so the rooms are written in it (nav0 = world y, nav1 = world z,
     # nav2 = world x): A at y 31..32, B at y 32..33 x 31..32, C at y 32..33 x 32..33.
     mesh = [(31.0, 40.0, 31.0), (32.0, 40.0, 31.0), (32.0, 40.0, 32.0), (31.0, 40.0, 32.0),
@@ -6474,7 +6708,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             module.build_mmtile(0, 0, (-200.0, 0.0, -200.0), (200.0, 200.0, 200.0),
                                 arrays=(mesh, room))
         )
-        route = plan32_route_facts(root, route_start, [route_end[0], route_end[1]], route_end[2])
+        route = plan32_route_facts(root, route_start, route_end)
     assert route["start_polygon"] == 0 and route["end_polygon"] == 2, route
     assert route["route"] is not None and route["hops"] == 3, route
     assert route["ratio"] is not None and route["ratio"] > 1.0, route
@@ -6520,7 +6754,9 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert graze is not None and graze["ticks"] == 7200 and graze["point"] == [10.0, 10.0, 0.0]
     # Chase pieces: monster-move bodies (compressed and uncompressed, stop form included),
     # attackerstate, metrics.
-    assert PLAN32_EXPECTED_COUNTS == {"blocked": [1, 2], "clear": [1, 2], "chase": [1]}
+    assert PLAN32_EXPECTED_COUNTS == {
+        "blocked": [1, 2], "clear": [1, 2], "chase": [1], "relog": [],
+    }
     assert PLAN32_GEOMETRY_SEEDS["chase"]["character"] == (-8876.0, -208.0, 81.313, math.pi / 2)
     assert PLAN32_GEOMETRY_SEEDS["chase"]["dummy"] == (-8876.0, -196.0, 80.221)
     assert PLAN32_CHASE_P2 == (-8870, -202)
@@ -6967,6 +7203,59 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         PLAN32_CHASE_ARRIVAL_DISTANCE
     )
     assert unfinished["swings"] == []
+    # Relog: the walk under test sits before the server's completed logout, and the landing after
+    # the login that follows it carries the position that came back. The predicate reads the log in
+    # order, so the two decoys a global count cannot catch - a second landing placed before the
+    # logout, and both logins before the logout - must both be reported.
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary) / "logs"
+        logs.mkdir()
+
+        def relog_log(order: str) -> None:
+            def landing() -> str:
+                return (
+                    "Accepted Cataclysm ground movement [MSG_MOVE_FALL_LAND 0x380A (14346)] after "
+                    "movement validation: x=-8779.03, y=-219.41, z=85.01, o=2.766"
+                )
+
+            lines = [
+                "Finished object update bootstrap after adding to map",
+                IN_WORLD_CONTROL_MARKER,
+                "2026-10-18 19:36:20 Received CMSG_PLAYER_LOGIN for account 900000.",
+                "Accepted Cataclysm ground movement [MSG_MOVE_FALL_LAND 0x380A (14346)] after movement "
+                "validation: x=-8775.13, y=-220.95, z=85.254, o=2.766",
+                "Accepted Cataclysm ground movement [MSG_MOVE_START_FORWARD 0x7814 (30740)] after "
+                "movement validation: x=-8775.13, y=-220.95, z=85.254, o=2.766",
+                "Accepted Cataclysm ground movement [MSG_MOVE_STOP 0x320A (12810)] after movement "
+                "validation: x=-8779.03, y=-219.41, z=85.01, o=2.766",
+            ]
+            if order == "landing_before_logout":
+                lines.append(landing())
+            if order == "login_before_logout":
+                lines.append("2026-10-18 19:36:51 Received CMSG_PLAYER_LOGIN for account 900000.")
+            lines.append("2026-10-18 19:36:52 S->C: 127.0.0.1 [SMSG_LOGOUT_COMPLETE 0x2137 (8503)]")
+            if order == "ordered":
+                lines.append("2026-10-18 19:36:53 Received CMSG_PLAYER_LOGIN for account 900000.")
+                lines.append(landing())
+            (logs / "WorldServer.log").write_text("\n".join(lines) + "\n")
+
+        relog_log("ordered")
+        relog_generation: Generation = {"paths": {"logs": str(logs), "raw_evidence": str(logs)}}
+        relog_timeline = plan32_relog_timeline(relog_generation)
+        ordered_problems = plan32_relog_problems(relog_generation)
+        relog_log("landing_before_logout")
+        early_landing_problems = plan32_relog_problems(relog_generation)
+        relog_log("login_before_logout")
+        early_login_problems = plan32_relog_problems(relog_generation)
+    assert len(relog_timeline["walk"]) == 3 and len(relog_timeline["returned"]) == 1
+    assert relog_timeline["logout_completes"] == 1 and relog_timeline["login_requests"] == 2
+    assert relog_timeline["logins_after_logout"] == 1
+    assert str(relog_timeline["walk"][-1]["opcode"]) == "MSG_MOVE_STOP"
+    assert relog_timeline["returned"][0]["x"] == relog_timeline["walk"][-1]["x"]
+    assert relog_timeline["returned"][0]["y"] == relog_timeline["walk"][-1]["y"]
+    assert ordered_problems == []
+    assert early_landing_problems, "a landing before the logout must not pass as the return"
+    assert early_login_problems, "a login before the logout must not pass as the return"
     print("Real-client runner self-check passed")
 
 
