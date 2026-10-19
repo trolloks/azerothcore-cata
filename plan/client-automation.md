@@ -641,26 +641,34 @@ setting rather than the config manager on every connection).
 
 One generation drives the whole native vendor surface through the real client's own UI: name-target
 Godric Rothgar (entry 1213, spawn guid 79952, `vendor|repair`), interact through a `/script
-SetBinding("G","INTERACTTARGET")` keybind, click the gossip option, buy his MuID 8 row (Small Shield
-17184), right-click a seeded bracer (2384) in the backpack to sell it, buy it back from the merchant
-frame's buyback tab, repair a seeded equipped vest (2379, seeded at 5/55 durability) through the
-frame's repair button, then `/logout` so the character row is saved before the harness stops the
-servers. `prepare` seeds 5 gold and both items (`vendor_trade_seed_sql`) and places the fixture 2.8 yd
-from the NPC.
+SetBinding("G","INTERACTTARGET")` keybind, take whichever of the gossip frame or the vendor window the
+interaction produces (the gossip option is clicked only when the vendor did not open directly), buy
+his MuID 8 row (Small Shield 17184), right-click a seeded bracer (2384) in the backpack to sell it,
+buy it back from the merchant frame's buyback page, repair a seeded equipped vest (2379, seeded at
+5/55 durability) through the frame's repair-all anvil, then `/logout` so the character row is saved
+before the harness stops the servers. `prepare` seeds 5 gold and both items
+(`vendor_trade_seed_sql`) and places the fixture 2.8 yd from the NPC.
 
-Every step waits for the opcode the server logs for that action (`SMSG_GOSSIP_MESSAGE`,
-`SMSG_VENDOR_INVENTORY`, `SMSG_BUY_ITEM`, `CMSG_SELL_ITEM`, `CMSG_BUYBACK_ITEM`,
-`CMSG_REPAIR_ITEM`, `SMSG_LOGOUT_COMPLETE`), so a missed click fails in the automation with the
-screenshot taken just before it as calibration evidence: `vendor-before-target.png`,
-`vendor-after-target.png`, `vendor-gossip.png`, `vendor-open.png`, `vendor-after-buy.png`,
-`vendor-backpack.png`, `vendor-after-sell.png`, `vendor-buyback-tab.png`,
-`vendor-after-buyback.png`, `vendor-after-repair.png`, `vendor-after-logout.png`.
+Every step waits for the opcode the server logs for that action (`SMSG_GOSSIP_MESSAGE` or
+`SMSG_VENDOR_INVENTORY`, `SMSG_BUY_ITEM`, `CMSG_SELL_ITEM`, `CMSG_BUYBACK_ITEM`, `CMSG_REPAIR_ITEM`,
+`SMSG_LOGOUT_COMPLETE`), so a missed click fails in the automation with the screenshot taken just
+before it as calibration evidence: `vendor-before-target.png`, `vendor-after-target.png`,
+`vendor-gossip.png`, `vendor-open.png`, `vendor-after-buy.png`, `vendor-backpack.png`,
+`vendor-after-sell.png`, `vendor-buyback-tab.png`, `vendor-after-buyback.png`,
+`vendor-after-repair.png`, `vendor-after-logout.png`.
 
-The click positions (`VENDOR_TRADE_GOSSIP_OPTION`, `VENDOR_TRADE_ITEM_ROW_ORIGIN`/`_HEIGHT`,
-`VENDOR_TRADE_FIRST_BAG_SLOT`, `VENDOR_TRADE_BUYBACK_TAB`, `VENDOR_TRADE_REPAIR_BUTTON`) are window
-fractions calibrated on the 1800x1042 reference window: `shortcut: default UI layout and camera;
-recalibrate them from those screenshots after changing either.` Right-click buys/sells because that
-is the UI path a player uses, not a scripted request.
+The click positions are window fractions derived from the 4.3.4 `MerchantFrame.xml` and calibrated on
+the 1800x1042 reference window. The frame anchors at `UIParent`'s top-left minus 104 y; its item grid
+is **two columns of six** cells, 165x52 design px each, filled left to right and top to bottom, so
+MuID 8 sits in the right column's fourth row (`VENDOR_TRADE_ITEM_GRID_ORIGIN`/`_COLUMN_WIDTH`/
+`_HEIGHT`; a single-column model buys the wrong item). The buyback page shows the most recent sale in
+one slot below `MerchantItem10` and its button buys back on any click (`VENDOR_TRADE_BUYBACK_ITEM`),
+the buyback page itself is tab 2 at the frame's bottom-left (`VENDOR_TRADE_BUYBACK_TAB`), and
+repair-all is the anvil button at the frame's bottom-left (`VENDOR_TRADE_REPAIR_BUTTON`). The gossip
+option's row is DB-defined (`VENDOR_TRADE_GOSSIP_OPTION_ORIGIN`/`_HEIGHT`/`_ROW`). All of these are
+`shortcut: default UI scale and layout; recalibrate them from the run's own screenshots after
+changing either.` Right-click buys and sells because that is the UI path a player uses, not a
+scripted request.
 
 Verification (`verify`) requires the six request/result markers above, no `SMSG_BUY_FAILED`, and the
 character row after the logout to show the bought shield owned, the sold bracer back in a backpack

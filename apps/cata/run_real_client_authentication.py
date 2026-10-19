@@ -368,15 +368,22 @@ VENDOR_TRADE_TARGET_KEYS = (
 )
 VENDOR_TRADE_INTERACT_KEYS = ("g",)
 VENDOR_TRADE_BACKPACK_KEYS = ("b",)
-# Click positions as fractions of the owned window's current geometry, calibrated on the 1800x1042
-# reference window. shortcut: default UI layout and camera; the screenshots named in
-# automate_vendor_trade are the calibration evidence, recalibrate these after changing either.
-VENDOR_TRADE_GOSSIP_OPTION = (0.775, 0.596)
-VENDOR_TRADE_ITEM_ROW_ORIGIN = (0.322, 0.398)
-VENDOR_TRADE_ITEM_ROW_HEIGHT = 0.0218
+# Click positions as fractions of the owned window's current geometry, derived from the 4.3.4
+# MerchantFrame.xml (the frame anchors at UIParent's TOPLEFT -104 y; its item grid is two columns of
+# six cells, 165x52 design px each; the buyback page shows one item below MerchantItem10; the repair
+# buttons sit at the frame's bottom-left) and calibrated on the 1800x1042 reference window.
+# shortcut: default UI scale/layout and camera; the screenshots named in automate_vendor_trade are
+# the calibration evidence, recalibrate these after changing either.
+VENDOR_TRADE_ITEM_GRID_ORIGIN = (0.032, 0.264)   # item 1's item-button centre
+VENDOR_TRADE_ITEM_COLUMN_WIDTH = 0.124
+VENDOR_TRADE_ITEM_ROW_HEIGHT = 0.068
+VENDOR_TRADE_GOSSIP_OPTION_ORIGIN = (0.775, 0.596)
+VENDOR_TRADE_GOSSIP_OPTION_HEIGHT = 0.0218
+VENDOR_TRADE_GOSSIP_OPTION_ROW = 1
 VENDOR_TRADE_FIRST_BAG_SLOT = (0.901, 0.660)
-VENDOR_TRADE_BUYBACK_TAB = (0.352, 0.760)
-VENDOR_TRADE_REPAIR_BUTTON = (0.663, 0.760)
+VENDOR_TRADE_BUYBACK_TAB = (0.112, 0.742)
+VENDOR_TRADE_BUYBACK_ITEM = (0.156, 0.797)
+VENDOR_TRADE_REPAIR_BUTTON = (0.116, 0.660)
 
 
 POPULATED_CHARACTER_MODES = frozenset({
@@ -418,11 +425,22 @@ def apply_vendor_trade_seed(mode: str) -> None:
     CHARACTER_ORIENTATION = VENDOR_TRADE_CHARACTER_ORIENTATION
 
 
+def vendor_trade_gossip_option(row: int = VENDOR_TRADE_GOSSIP_OPTION_ROW) -> tuple[float, float]:
+    """Where the gossip frame draws option `row` (1-based): the first row plus one row height."""
+    fx, fy = VENDOR_TRADE_GOSSIP_OPTION_ORIGIN
+    return fx, fy + (row - 1) * VENDOR_TRADE_GOSSIP_OPTION_HEIGHT
+
+
 def vendor_trade_item_row(muid: int) -> tuple[float, float]:
-    """Where the merchant frame draws row `muid` (1-based, the same numbering SMSG_VENDOR_INVENTORY
-    sends): the first row's position plus one row height per row."""
-    fx, fy = VENDOR_TRADE_ITEM_ROW_ORIGIN
-    return fx, fy + (muid - 1) * VENDOR_TRADE_ITEM_ROW_HEIGHT
+    """Where the merchant frame draws `muid` (1-based, the numbering SMSG_VENDOR_INVENTORY sends).
+
+    MerchantFrame.xml anchors MerchantItem1..12 as two columns of six filled left to right, top to
+    bottom: item 2 is right of item 1, item 3 below it, and the eighth item sits in the right
+    column's fourth row. A single-column model would buy the wrong item.
+    """
+    row, column = divmod(max(muid, 1) - 1, 2)
+    fx, fy = VENDOR_TRADE_ITEM_GRID_ORIGIN
+    return fx + column * VENDOR_TRADE_ITEM_COLUMN_WIDTH, fy + row * VENDOR_TRADE_ITEM_ROW_HEIGHT
 
 
 def vendor_trade_seed_sql() -> str:
@@ -2929,6 +2947,21 @@ def vendor_trade_wait(
     raise RuntimeError(f"the vendor round trip did not reach the {description} ({direction} {opcode})")
 
 
+def vendor_trade_wait_any(generation: Generation, opcodes: tuple[str, ...], description: str) -> None:
+    """Wait until any of these server-to-client opcodes has been logged at least once.
+
+    Neither can appear before the interaction in this mode, so presence (not an increment) is the
+    right signal: a vendor without gossip options can open straight from the interaction.
+    """
+    deadline = time.monotonic() + VENDOR_TRADE_TIMEOUT
+    while time.monotonic() < deadline:
+        if any(vendor_trade_marker_count(generation, "s2c", opcode) for opcode in opcodes):
+            return
+        time.sleep(0.2)
+    raise RuntimeError(
+        f"the vendor round trip did not reach the {description} ({' / '.join(opcodes)})")
+
+
 def automate_vendor_trade(generation: Generation) -> None:
     """Drive the Plan 33 round trip through the real client's own UI: target Godric Rothgar by name,
     interact through the bound key, open the vendor from the gossip option, buy, sell, buy back and
@@ -2951,11 +2984,16 @@ def automate_vendor_trade(generation: Generation) -> None:
     capture_desktop_screenshot(generation, "vendor-after-target.png")
 
     automate_key_sequence(generation, VENDOR_TRADE_INTERACT_KEYS, hold_seconds=0.05, gap_seconds=0.05)
-    vendor_trade_wait(generation, "s2c", "SMSG_GOSSIP_MESSAGE", "gossip frame")
+    vendor_trade_wait_any(
+        generation, ("SMSG_GOSSIP_MESSAGE", "SMSG_VENDOR_INVENTORY"), "gossip frame or vendor window",
+    )
     capture_desktop_screenshot(generation, "vendor-gossip.png")
 
-    click_owned_window(generation, *VENDOR_TRADE_GOSSIP_OPTION)
-    vendor_trade_wait(generation, "s2c", "SMSG_VENDOR_INVENTORY", "vendor inventory", at_least=1)
+    if not vendor_trade_marker_count(generation, "s2c", "SMSG_VENDOR_INVENTORY"):
+        # The gossip menu carries the vendor option at its DB-defined row, so the row is a
+        # calibration constant rather than always the first one.
+        click_owned_window(generation, *vendor_trade_gossip_option())
+        vendor_trade_wait(generation, "s2c", "SMSG_VENDOR_INVENTORY", "vendor inventory", at_least=1)
     capture_desktop_screenshot(generation, "vendor-open.png")
 
     # Buy: right-clicking a vendor row buys one item of that row.
@@ -2972,11 +3010,12 @@ def automate_vendor_trade(generation: Generation) -> None:
     automate_key_sequence(generation, VENDOR_TRADE_BACKPACK_KEYS, hold_seconds=0.05, gap_seconds=0.05)
     capture_desktop_screenshot(generation, "vendor-after-sell.png")
 
-    # Buyback: the sold bracer is the first row of the merchant frame's buyback tab.
+    # Buyback: the buyback page shows the most recent sale in a single slot whose button buys it
+    # back on any click (MerchantFrame.xml's MerchantBuyBackItem).
     click_owned_window(generation, *VENDOR_TRADE_BUYBACK_TAB)
     time.sleep(0.5)
     capture_desktop_screenshot(generation, "vendor-buyback-tab.png")
-    click_owned_window(generation, *vendor_trade_item_row(1), button=3)
+    click_owned_window(generation, *VENDOR_TRADE_BUYBACK_ITEM)
     vendor_trade_wait(generation, "c2s", "CMSG_BUYBACK_ITEM", "buyback request")
     capture_desktop_screenshot(generation, "vendor-after-buyback.png")
 
