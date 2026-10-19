@@ -701,10 +701,12 @@ another case.
 | `full-bags` | money 50000, all 16 backpack slots filled | buy MuID 8 | nothing granted or charged, money stays 50000 |
 | `repeat-buy` | money 50000 | buy MuID 8 twice | two charges/grants: two `SMSG_BUY_ITEM`, money 49932 |
 
-Both layers may reject, and that is recorded rather than hidden: the client can refuse an unaffordable or
-unstoreable purchase locally (no `CMSG_BUY_ITEM` at all), otherwise the server answers `SMSG_BUY_FAILED` or
-`SMSG_INVENTORY_CHANGE_FAILURE`. The verification always requires that nothing was granted or charged and
-notes which layer answered through `vendor_buy_requests`/`vendor_buy_failures`/`vendor_inventory_failures`.
+Both layers may reject, and that is recorded rather than hidden: in the accepted runs this client sent
+`CMSG_BUY_ITEM` even when it could not afford the item or store it, so the server's `SMSG_BUY_FAILED`
+(`no-money`) and `SMSG_INVENTORY_CHANGE_FAILURE` (`full-bags`) are what the checks saw. The no-request branch
+stays as the tolerated alternative for a client build that refuses locally. The verification always requires
+that nothing was granted or charged and records the layer through
+`vendor_buy_requests`/`vendor_buy_failures`/`vendor_inventory_failures`.
 The automation logs out at the end so the saved character row can be checked, which also produces the second
 character enumeration vendor modes already allow. Screenshots: `negative-<case>-after-buy.png` and
 `negative-<case>-after-logout.png`; run with `--stability-seconds 8 --timeout 180`.
