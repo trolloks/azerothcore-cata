@@ -6175,6 +6175,7 @@ def verify(args: argparse.Namespace) -> None:
                 and generation.get("plan32_stage") == "chase"
                 else "plan32_geometry_relog_pass" if plan32_geometry_mode
                 and generation.get("plan32_stage") == "relog"
+                else "vendor_trade_pass" if vendor_trade_mode
                 else "ground_movement_pass" if ground_movement_mode
                 else "basic_movement_pass" if basic_movement_mode
                 else "in_world_control_bootstrap_pass" if in_world_control_mode
