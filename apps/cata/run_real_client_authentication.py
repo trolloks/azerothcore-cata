@@ -5725,7 +5725,7 @@ def sanitized_evidence(
     # Parsed once: the cast correlation, the fixture witness and the geometry report all read the
     # same capture, and the evidence records what they read.
     plan32_events = plan32_packet_events(generation) if plan32_geometry_mode else []
-    vendor_events = vendor_trade_packet_events(generation) if vendor_trade_mode else []
+    vendor_events = vendor_trade_packet_events(generation) if vendor_marker_mode else []
     vendor_sells = [event for event in vendor_events if event["opcode"] == "CMSG_SELL_ITEM"]
     vendor_buybacks = [event for event in vendor_events if event["opcode"] == "CMSG_BUYBACK_ITEM"]
     plan32_target = selections_target_fixture(plan32_events) if plan32_geometry_mode else None
