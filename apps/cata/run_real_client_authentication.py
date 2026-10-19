@@ -394,16 +394,17 @@ VENDOR_TRADE_BACKPACK_KEYS = ("b",)
 # buttons sit at the frame's bottom-left) and calibrated on the 1800x1042 reference window.
 # shortcut: default UI scale/layout and camera; the screenshots named in automate_vendor_trade are
 # the calibration evidence, recalibrate these after changing either.
-VENDOR_TRADE_ITEM_GRID_ORIGIN = (0.032, 0.264)   # item 1's item-button centre
-VENDOR_TRADE_ITEM_COLUMN_WIDTH = 0.124
-VENDOR_TRADE_ITEM_ROW_HEIGHT = 0.068
+VENDOR_TRADE_ITEM_GRID_ORIGIN = (0.0405, 0.2255)  # item 1's item-button centre
+VENDOR_TRADE_ITEM_COLUMN_WIDTH = 0.0804
+VENDOR_TRADE_ITEM_ROW_HEIGHT = 0.0531
 VENDOR_TRADE_GOSSIP_OPTION_ORIGIN = (0.775, 0.596)
 VENDOR_TRADE_GOSSIP_OPTION_HEIGHT = 0.0218
 VENDOR_TRADE_GOSSIP_OPTION_ROW = 1
-VENDOR_TRADE_FIRST_BAG_SLOT = (0.901, 0.660)
-VENDOR_TRADE_PURCHASE_TAB = (0.045, 0.742)
-VENDOR_TRADE_BUYBACK_TAB = (0.112, 0.742)
-VENDOR_TRADE_REPAIR_BUTTON = (0.116, 0.660)
+VENDOR_TRADE_FIRST_BAG_SLOT = (0.926, 0.775)
+VENDOR_TRADE_PURCHASE_TAB = (0.0405, 0.609)
+VENDOR_TRADE_BUYBACK_TAB = (0.078, 0.609)
+# The right-hand of the two anvil buttons is repair-all; the left one enters single-item repair mode.
+VENDOR_TRADE_REPAIR_BUTTON = (0.085, 0.518)
 
 
 POPULATED_CHARACTER_MODES = frozenset({
@@ -2969,6 +2970,18 @@ def vendor_trade_wait(
     raise RuntimeError(f"the vendor round trip did not reach the {description} ({direction} {opcode})")
 
 
+def vendor_trade_wait_optional(
+    generation: Generation, direction: str, opcode: str, target: int, timeout: float,
+) -> bool:
+    """Wait for a packet without failing: the caller retries with a different client state."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if vendor_trade_marker_count(generation, direction, opcode) >= target:
+            return True
+        time.sleep(0.2)
+    return False
+
+
 def vendor_trade_wait_any(generation: Generation, opcodes: tuple[str, ...], description: str) -> None:
     """Wait until any of these server-to-client opcodes has been logged at least once.
 
@@ -3055,14 +3068,20 @@ def automate_vendor_trade(generation: Generation) -> None:
     vendor_trade_wait(generation, "s2c", "SMSG_BUY_ITEM", "purchase result", purchases)
     capture_desktop_screenshot(generation, "vendor-after-buy.png")
 
-    # Sell: with the merchant frame open, right-clicking an item in the backpack sells it.
-    automate_key_sequence(generation, VENDOR_TRADE_BACKPACK_KEYS, hold_seconds=0.05, gap_seconds=0.05)
-    time.sleep(0.5)
+    # Sell: with the merchant frame open, right-clicking an item in the backpack sells it. The bag
+    # may already be open (the first-run bag tutorial opens it), so the click is tried as-is and then
+    # once more after toggling the bag with B, which covers both starting states.
     capture_desktop_screenshot(generation, "vendor-backpack.png")
-    sales = vendor_trade_marker_count(generation, "c2s", "CMSG_SELL_ITEM") + 1
-    click_owned_window(generation, *VENDOR_TRADE_FIRST_BAG_SLOT, button=3)
-    vendor_trade_wait(generation, "c2s", "CMSG_SELL_ITEM", "sell request", sales)
-    automate_key_sequence(generation, VENDOR_TRADE_BACKPACK_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+    for attempt in range(2):
+        sales = vendor_trade_marker_count(generation, "c2s", "CMSG_SELL_ITEM") + 1
+        click_owned_window(generation, *VENDOR_TRADE_FIRST_BAG_SLOT, button=3)
+        if vendor_trade_wait_optional(generation, "c2s", "CMSG_SELL_ITEM", sales, 6.0):
+            break
+        automate_key_sequence(generation, VENDOR_TRADE_BACKPACK_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+        time.sleep(1.0)  # let the bag frame draw before clicking its first slot
+        capture_desktop_screenshot(generation, f"vendor-backpack-{attempt}.png")
+    else:
+        raise RuntimeError("the vendor round trip did not reach the sell request (c2s CMSG_SELL_ITEM)")
     capture_desktop_screenshot(generation, "vendor-after-sell.png")
 
     # Buyback: the buyback page fills the same twelve grid cells with the recent sales and hides the
