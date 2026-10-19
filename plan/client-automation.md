@@ -588,16 +588,39 @@ must come back on its own outcome (the wire carries `CMSG_CANCEL_CAST`, so a can
 two fails the run), blocked requires two `SMSG_CAST_FAILED` with result 49 and no `SPELL_GO`,
 clear and chase require a player-cast `SPELL_GO` and no failure. Identity binds to the agreed
 selection plus the fixture's own create block: its entry field, its `HIGHGUID_UNIT` bits and its
-position must agree with the seeded spawn, the position advanced by the fixture's own spline
-packets at each cast (a fixture that never moved, as in the blocked stage, keeps its spawn). Two
-further conditions the mode rests on: the run must have used the artifacts the seeds were derived
-from (recorded vmap/mmap hashes, the server config's `MoveMaps.Enable`, `vmap.enableLOS` and
-`vmap.enableHeight`, and its `VMap support included. LineOfSight:true` startup line), and every
-cast's ray, re-derived from those vmaps between the two units' cast-time positions at eye height
-and again at a low point on the fixture, must break on the pinned obstacle for the blocked stage
-and be whole for the clear and chase stages. The chase stage additionally requires the staged
-mmap to route the fixture from its spawn to the player's end point with a real detour around that
-obstacle, so the detour it shows on the wire is what the data demands rather than an accident. The
+position must agree with the seeded spawn, the position read along the fixture's own spline
+packets at each cast's arrival tick (a fixture walking when the cast lands sits between the
+start and the advertised destination, and a fixture that never moved, as in the blocked stage,
+keeps its spawn). Two further conditions the mode rests on: the run must have used the copies
+staged for it (`paths.data`, the trees `prepare` hash-verified and pointed the server's `DataDir`
+at — their hashes are recomputed when the verdict is computed, the config must still point there,
+`MoveMaps.Enable`, `vmap.enableLOS` and `vmap.enableHeight` must be set, and its `VMap support
+included. LineOfSight:true` startup line must be present, as must a terrain height under every
+accepted movement sample within 2 m), and every cast's ray, re-derived from those vmaps between
+the two units' cast-time positions at eye height and again at a low point on the fixture, must
+break on the pinned obstacle for the blocked stage and be whole for the clear and chase stages.
+The chase stage additionally requires the staged mmap to route the fixture from its spawn to the
+player's end point with a real detour around that obstacle, and reads the detour the fixture
+itself showed only where it actually executed it: from the client's own `MSG_MOVE_START_FORWARD`
+(run leg) onward, each spline cut at the tick the next packet for that mover arrived (a repath
+supersedes the old forecast) and at the capture's end, so a repeated straight replan cannot
+manufacture a detour and an advertised destination nobody reached cannot stand in for arrival.
+What survives is a timeline in packet order: a walk leg per straight segment and a hold wherever
+no spline runs — to the next packet for the mover, and to the capture's end after the last. The
+player's own `MSG_MOVE_STOP_STRAFE` is where the run leg ends, so until that tick nothing can be
+called the arrival — an approach spline overlapping the run and ending near the player's end point
+is not the chase reaching it — and from that tick the arrival is the first moment the timeline
+stands within range of that end point, solved on the walk leg that enters the range (a pass that
+only grazes it counts, dated where it touches) or read off the hold it stood on, so neither the
+walk home after the victim drops is measured as the chase nor an in-range swing is discarded for
+landing before the next vertex. A hold lasts only to the next packet for the mover: where that
+packet puts the mover somewhere else, one later in the same millisecond has already moved it, and
+only the capture's packet order says whether a stop at that tick still caught the old position
+rather than an arrival the run never made. A spline resuming more than 2 m from where the previous
+one was cut is a discontinuity, recorded and failed rather than smoothed over as long as the
+trimmed observation still contains it, and a swing proves melee range only when it lands after
+both the arrival and the player's stop.
+The
 relog stage's own requirement is persistence, and it reads the run's log in order: the walk must
 have ended in an accepted stop before the server completed the logout, the client must have sent its
 second login, and the first accepted movement after that login must be a world-entry landing
@@ -611,7 +634,8 @@ Two facts this mode depends on: grid loading creates units with server-assigned 
 (keeping the DB guid only as spawnId), so identity binds to the agreed selection plus a
 seed-uniqueness gate rather than a precomputed GUID; and `WorldSocket` enables per-session packet
 logging whenever `PacketLogFile` is configured (previously a dead key without a GM command this
-`SCRIPTS=none` build does not have; empty by default).
+`SCRIPTS=none` build does not have; empty by default, and read from the packet log's own cached
+setting rather than the config manager on every connection).
 
 ## Building before a run
 
