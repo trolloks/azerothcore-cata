@@ -11054,16 +11054,14 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
             return false;
         }
 
-        // the reference compares required < guild level, so it lets a guild below the requirement through and
-        // refuses one above it; a requirement is met when the level is at least the required one
+        // AC has no guild level (guilds gain levels in 4.x, which this core does not model), so a row
+        // that requires one is refused instead of granting the item without it
         if (iece->reqguildlevel)
         {
-            Guild* guild = GetGuild();
-            if (!guild || guild->GetLevel() < iece->reqguildlevel)
-            {
-                SendEquipError(EQUIP_ERR_VENDOR_MISSING_TURNINS, nullptr, nullptr);
-                return false;
-            }
+            LOG_ERROR("entities.player", "Item {} extended cost {} requires guild level {}, which this core does not track",
+                pProto->ItemId, crItem->ExtendedCost, iece->reqguildlevel);
+            SendEquipError(EQUIP_ERR_VENDOR_MISSING_TURNINS, nullptr, nullptr);
+            return false;
         }
 
         if (iece->reqachievement && !HasAchieved(iece->reqachievement))
