@@ -1516,7 +1516,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         "Logger.network": (
             "5,Server" if ISSUE97 or generation["mode"] in {
                 BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
-                WALK_RUN_MODE_SWITCH_MODE, PLAN32_GEOMETRY_MODE,
+                WALK_RUN_MODE_SWITCH_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
             }
             else "4,Server"
         ),
@@ -2975,18 +2975,25 @@ def automate_vendor_trade(generation: Generation) -> None:
     with the screenshots as calibration evidence instead of producing a silently empty run.
     """
     capture_desktop_screenshot(generation, "vendor-before-target.png")
-    automate_key_sequence(generation, VENDOR_TRADE_BIND_KEYS, hold_seconds=0.05, gap_seconds=0.05)
-    time.sleep(0.5)  # let the client save the binding before pressing it
+    # The in-world marker is the server's time-sync line, which can arrive while the client is still
+    # drawing its loading screen; key input sent then is lost to the loading/focus handover, the same
+    # behaviour the Plan 32 chase macro retries around. Let the world draw first, then use the name
+    # macro itself as the input probe: once the client reports a selection, keys reach it, so the
+    # interaction keybind can be set afterwards instead of before.
+    time.sleep(4.0)
     selections = vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION")
-    for _ in range(3):
+    for _ in range(5):
         automate_key_sequence(generation, VENDOR_TRADE_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05)
-        time.sleep(1.0)  # let the client resolve the name and register the target
+        time.sleep(1.5)  # let the client resolve the name and register the target
         if vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION") > selections:
             break
     else:
         capture_desktop_screenshot(generation, "vendor-after-target.png")
         raise RuntimeError("vendor target macro did not select Godric Rothgar")
     capture_desktop_screenshot(generation, "vendor-after-target.png")
+
+    automate_key_sequence(generation, VENDOR_TRADE_BIND_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(0.5)  # let the client save the binding before pressing it
 
     automate_key_sequence(generation, VENDOR_TRADE_INTERACT_KEYS, hold_seconds=0.05, gap_seconds=0.05)
     vendor_trade_wait_any(
