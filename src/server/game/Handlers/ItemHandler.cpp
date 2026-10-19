@@ -829,10 +829,20 @@ void WorldSession::HandleBuyItemInSlotOpcode(WorldPackets::Item::BuyItemInSlot& 
         return;
 
     // CMSG_BUY_ITEM_IN_SLOT counts stacks (WotLK client; the 4.3.4 client never sends the opcode), while
-    // BuyItemFromVendorSlot counts the items themselves; multiply by the vendor stack
+    // BuyItemFromVendorSlot counts the items themselves; multiply by the vendor stack, where a zero count
+    // meant one bundle, and refuse a product a handcrafted packet would overflow
     uint32 count = packet.Count;
     if (ItemTemplate const* itemTemplate = sObjectMgr->GetItemTemplate(packet.Item))
-        count *= itemTemplate->BuyCount;
+    {
+        uint32 stacks = packet.Count ? packet.Count : 1;
+        if (stacks > 0xFFFFFFFF / itemTemplate->BuyCount)
+        {
+            GetPlayer()->SendEquipError(EQUIP_ERR_CANT_BUY_QUANTITY, nullptr, nullptr);
+            return;
+        }
+
+        count = stacks * itemTemplate->BuyCount;
+    }
 
     GetPlayer()->BuyItemFromVendorSlot(packet.VendorGuid, packet.Slot, packet.Item, count, bag, packet.BagSlot);
 }

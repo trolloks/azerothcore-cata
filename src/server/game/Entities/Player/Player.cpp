@@ -10954,6 +10954,26 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
         return false;
     }
 
+    // The price and the money cap are resolved before the extended-cost checks: the reference clamps the
+    // request after them, so a clamped count can stop being a full stack and then pay for fewer stacks than
+    // it grants. Clamping first keeps every later step on the same number.
+    uint32 price = 0;
+    if (crItem->IsGoldRequired(pProto) && pProto->BuyPrice > 0) //Assume price cannot be negative (do not know why it is int32)
+    {
+        double buyPricePerItem = double(pProto->BuyPrice) / pProto->BuyCount;
+        uint64 maxCount = uint64(MAX_MONEY_AMOUNT / buyPricePerItem);
+        if (uint64(count) > maxCount)
+        {
+            LOG_ERROR("entities.player", "Player {} tried to buy {} item id {}, causing overflow", GetName(), count, pProto->ItemId);
+            count = uint32(maxCount);
+        }
+
+        price = uint32(buyPricePerItem * count); //it should not exceed MAX_MONEY_AMOUNT
+
+        // reputation discount
+        price = uint32(std::floor(price * GetReputationPriceDiscount(creature)));
+    }
+
     if (crItem->ExtendedCost)
     {
         // Can only buy full stacks for extended cost
@@ -10971,15 +10991,17 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
             return false;
         }
 
+        // every requirement total is validated in 64 bits: the reference multiplies in 32 bits, where a
+        // large stack count wraps the total and a wrapped total is a requirement that costs nothing
         // honor points price
-        if (GetHonorPoints() < (iece->reqhonorpoints * stacks))
+        if (uint64(GetHonorPoints()) < uint64(iece->reqhonorpoints) * stacks)
         {
             SendEquipError(EQUIP_ERR_NOT_ENOUGH_HONOR_POINTS, nullptr, nullptr);
             return false;
         }
 
         // arena points price
-        if (GetArenaPoints() < (iece->reqarenapoints * stacks))
+        if (uint64(GetArenaPoints()) < uint64(iece->reqarenapoints) * stacks)
         {
             SendEquipError(EQUIP_ERR_NOT_ENOUGH_ARENA_POINTS, nullptr, nullptr);
             return false;
@@ -10988,7 +11010,7 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
         // item base price
         for (uint8 i = 0; i < MAX_ITEM_EXTENDED_COST_REQUIREMENTS; ++i)
         {
-            if (iece->reqitem[i] && !HasItemCount(iece->reqitem[i], (iece->reqitemcount[i] * stacks)))
+            if (iece->reqitem[i] && uint64(GetItemCount(iece->reqitem[i])) < uint64(iece->reqitemcount[i]) * stacks)
             {
                 SendEquipError(EQUIP_ERR_VENDOR_MISSING_TURNINS, nullptr, nullptr);
                 return false;
@@ -11028,8 +11050,8 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
             return false;
         }
 
-        // the reference tests the guild level in the other direction, which would refuse every guild that
-        // meets the requirement; a requirement is met when the level is at least the required one
+        // the reference compares required < guild level, so it lets a guild below the requirement through and
+        // refuses one above it; a requirement is met when the level is at least the required one
         if (iece->reqguildlevel)
         {
             Guild* guild = GetGuild();
@@ -11047,26 +11069,10 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
         }
     }
 
-    uint32 price = 0;
-    if (crItem->IsGoldRequired(pProto) && pProto->BuyPrice > 0) //Assume price cannot be negative (do not know why it is int32)
+    if (price && !HasEnoughMoney(price))
     {
-        double buyPricePerItem = double(pProto->BuyPrice) / pProto->BuyCount;
-        uint32 maxCount = MAX_MONEY_AMOUNT / buyPricePerItem;
-        if (count > maxCount)
-        {
-            LOG_ERROR("entities.player", "Player {} tried to buy {} item id {}, causing overflow", GetName(), count, pProto->ItemId);
-            count = maxCount;
-        }
-        price = uint32(buyPricePerItem * count); //it should not exceed MAX_MONEY_AMOUNT
-
-        // reputation discount
-        price = uint32(std::floor(price * GetReputationPriceDiscount(creature)));
-
-        if (!HasEnoughMoney(price))
-        {
-            SendBuyError(BUY_ERR_NOT_ENOUGHT_MONEY, creature, item, 0);
-            return false;
-        }
+        SendBuyError(BUY_ERR_NOT_ENOUGHT_MONEY, creature, item, 0);
+        return false;
     }
 
     if ((bag == NULL_BAG && slot == NULL_SLOT) || IsInventoryPos(bag, slot))

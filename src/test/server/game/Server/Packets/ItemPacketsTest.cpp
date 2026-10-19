@@ -71,7 +71,7 @@ TEST(ItemPacketsTest, BuyItemReadsCataDestinationBagGuidAndWideCount)
 {
     WorldPacket raw(CMSG_BUY_ITEM, 30);
     raw << uint64(10);                              // vendorguid: Cata client packets carry it unpacked
-    raw << uint8(ITEM_VENDOR_TYPE_CURRENCY);        // parsed verbatim, the handler refuses it later
+    raw << uint8(2);                                // ItemVendorType::Currency on the wire, parsed verbatim
     raw << uint32(0x0000ABCD);
     raw << uint32(3);
     raw << uint32(1000);                            // Cata count is a uint32 item count, not a stack count
@@ -80,7 +80,8 @@ TEST(ItemPacketsTest, BuyItemReadsCataDestinationBagGuidAndWideCount)
     WorldPackets::Item::BuyItem packet(std::move(raw));
     packet.Read();
     EXPECT_EQ(packet.VendorGuid.GetCounter(), 10u);
-    EXPECT_EQ(packet.ItemType, uint8(ITEM_VENDOR_TYPE_CURRENCY));
+    EXPECT_EQ(uint8(ITEM_VENDOR_TYPE_CURRENCY), 2); // the wire value the parse test writes
+    EXPECT_EQ(uint8(ITEM_VENDOR_TYPE_ITEM), 1);
     EXPECT_EQ(packet.Item, 0x0000ABCDu);
     EXPECT_EQ(packet.Slot, 3u);
     EXPECT_EQ(packet.Count, 1000u);
