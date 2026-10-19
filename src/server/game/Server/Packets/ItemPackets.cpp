@@ -91,10 +91,12 @@ void WorldPackets::Item::BuyItemInSlot::Read()
 void WorldPackets::Item::BuyItem::Read()
 {
     _worldPacket >> VendorGuid;
+    _worldPacket >> ItemType;
     _worldPacket >> Item;
     _worldPacket >> Slot;
     _worldPacket >> Count;
-    _worldPacket >> Unk;
+    _worldPacket >> BagGuid;
+    _worldPacket >> BagSlot;
 }
 
 void WorldPackets::Item::ListInventory::Read()

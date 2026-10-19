@@ -949,7 +949,7 @@ enum OpcodeServer : uint16
     SMSG_QUESTUPDATE_ADD_KILL                       = 0x199,
     SMSG_QUESTUPDATE_ADD_ITEM                       = 0x0000,
     SMSG_QUEST_CONFIRM_ACCEPT                       = 0x6F07,
-    SMSG_LIST_INVENTORY                             = 0x19F,
+    SMSG_VENDOR_INVENTORY                           = 0x7CB0,
     SMSG_SELL_ITEM                                  = 0x6105,
     SMSG_BUY_ITEM                                   = 0x0F26,
     SMSG_BUY_FAILED                                 = 0x6435,
