@@ -535,23 +535,32 @@ def vendor_negative_seed_sql(case: str) -> str:
     return sql
 
 
-def vendor_negative_db_evidence(manifest: Manifest, generation: Generation) -> dict[str, int]:
-    """What the rejection case left behind: the purchased item's count and the money."""
+def vendor_negative_db_evidence(manifest: Manifest, generation: Generation) -> dict[str, object]:
+    """The saved inventory and money after the case.
+
+    The whole owned inventory is read, not just the purchased entry: a rejection must leave the seeded
+    items exactly as they were, and a purchase must add exactly what it charged for.
+    """
     schema = generation["schemas"]["characters"]
-
-    def scalar(sql: str) -> int:
-        output = mysql(manifest, generation, sql, schema)
-        try:
-            return int(output)
-        except ValueError as error:
-            raise RuntimeError(f"owned character database returned a non-numeric value: {output!r}") from error
-
-    return {
-        "bought_item_count": scalar(
-            f"SELECT COUNT(*) FROM `item_instance` WHERE `owner_guid`={CHARACTER_GUID} "
-            f"AND `itemEntry`={VENDOR_TRADE_BUY_ENTRY};"),
-        "money": scalar(f"SELECT `money` FROM `characters` WHERE `guid`={CHARACTER_GUID};"),
-    }
+    rows = mysql(
+        manifest, generation,
+        "SELECT ii.`itemEntry`, ii.`count`, ic.`bag`, ic.`slot` FROM `item_instance` ii "
+        "JOIN `character_inventory` ic ON ic.`item` = ii.`guid` "
+        f"WHERE ii.`owner_guid`={CHARACTER_GUID} ORDER BY ic.`bag`, ic.`slot`;",
+        schema,
+    )
+    items: list[dict[str, int]] = []
+    for line in rows.splitlines():
+        if not line.strip():
+            continue
+        entry, count, bag, slot = (int(value) for value in line.split("\t"))
+        items.append({"entry": entry, "count": count, "bag": bag, "slot": slot})
+    output = mysql(manifest, generation, f"SELECT `money` FROM `characters` WHERE `guid`={CHARACTER_GUID};", schema)
+    try:
+        money = int(output)
+    except ValueError as error:
+        raise RuntimeError(f"owned character database returned a non-numeric value: {output!r}") from error
+    return {"items": items, "money": money}
 
 
 def vendor_trade_db_evidence(manifest: Manifest, generation: Generation) -> dict[str, int]:
@@ -3255,7 +3264,16 @@ def vendor_trade_packet_events(generation: Generation) -> list[dict[str, object]
             raise RuntimeError(f"vendor packet log desynchronised at byte {offset}")
         opcode = struct.unpack_from("<I", data, offset + 40)[0]
         payload = data[offset + 44:offset + 40 + length]
-        if direction == 0x47534D43 and opcode == CMSG_SELL_ITEM_OPCODE and len(payload) >= 16:
+        if direction != 0x47534D43 and opcode == SMSG_BUY_FAILED_OPCODE and len(payload) >= 13:
+            # SendBuyError writes guid, uint32 item, optional uint32 param, then the result byte last.
+            events.append({
+                "opcode": "SMSG_BUY_FAILED", "result": payload[-1], "ticks": ticks,
+                "item": struct.unpack_from("<I", payload, 8)[0],
+            })
+        elif direction != 0x47534D43 and opcode == SMSG_INVENTORY_CHANGE_FAILURE_OPCODE and payload:
+            # SendEquipError starts with the result byte.
+            events.append({"opcode": "SMSG_INVENTORY_CHANGE_FAILURE", "result": payload[0], "ticks": ticks})
+        elif direction == 0x47534D43 and opcode == CMSG_SELL_ITEM_OPCODE and len(payload) >= 16:
             item = struct.unpack_from("<Q", payload, 8)[0]
             events.append({"opcode": "CMSG_SELL_ITEM", "item_counter": item & 0xFFFFFFFF, "ticks": ticks})
         elif direction == 0x47534D43 and opcode == CMSG_BUYBACK_ITEM_OPCODE and len(payload) >= 12:
@@ -3948,6 +3966,12 @@ PKT_PACKET_HEADER_SIZE = 44
 CMSG_SET_SELECTION_OPCODE = 0x506
 CMSG_SELL_ITEM_OPCODE = 0x4E15
 CMSG_BUYBACK_ITEM_OPCODE = 0x6C17
+SMSG_BUY_FAILED_OPCODE = 0x6435
+SMSG_INVENTORY_CHANGE_FAILURE_OPCODE = 0x2236
+# BuyResult/EQUIP_ERR values the rejection cases expect (Item.h: BUY_ERR_NOT_ENOUGHT_MONEY,
+# EQUIP_ERR_INVENTORY_FULL). Decoding the reason stops an unrelated refusal from passing.
+VENDOR_NEGATIVE_BUY_ERR_NOT_ENOUGHT_MONEY = 2
+VENDOR_NEGATIVE_EQUIP_ERR_INVENTORY_FULL = 50
 CMSG_CAST_SPELL_OPCODE = 0x4C07
 SMSG_CAST_FAILED_OPCODE = 0x4D16
 SMSG_SPELL_GO_OPCODE = 0x6E16
@@ -5644,7 +5668,7 @@ def sanitized_evidence(
     in_world_control_prefix_value: list[str] | None = None, in_world_control_marker_count_value: int | None = None,
     movement_heartbeat_count_value: int | None = None, creation_marker_count_value: int | None = None,
     vendor_trade_evidence_value: dict[str, int] | None = None,
-    vendor_negative_evidence_value: dict[str, int] | None = None,
+    vendor_negative_evidence_value: dict[str, object] | None = None,
 ) -> dict[str, object]:
     auth_index = next(
         (index for index, item in enumerate(transcript) if item["opcode"] == "SMSG_AUTH_RESPONSE"), None,
@@ -5776,6 +5800,15 @@ def sanitized_evidence(
         "vendor_trade": vendor_trade_evidence_value if vendor_trade_mode else None,
         "vendor_inventory_failures": (
             vendor_trade_marker_count(generation, "s2c", "SMSG_INVENTORY_CHANGE_FAILURE")
+            if vendor_negative_mode else None
+        ),
+        "vendor_buy_failure_reasons": (
+            sorted({int(event["result"]) for event in vendor_events if event["opcode"] == "SMSG_BUY_FAILED"})
+            if vendor_negative_mode else None
+        ),
+        "vendor_inventory_failure_reasons": (
+            sorted({int(event["result"]) for event in vendor_events
+                    if event["opcode"] == "SMSG_INVENTORY_CHANGE_FAILURE"})
             if vendor_negative_mode else None
         ),
         "vendor_case": generation.get("vendor_case") if vendor_negative_mode else None,
@@ -6090,24 +6123,40 @@ def verify(args: argparse.Namespace) -> None:
         if vendor_negative_mode:
             case = generation.get("vendor_case")
             vendor = evidence["vendor_negative"] or {}
+            items = vendor.get("items") or []
+            money = vendor.get("money", -1)
+            buy_reasons = evidence["vendor_buy_failure_reasons"] or []
+            inventory_reasons = evidence["vendor_inventory_failure_reasons"] or []
             if case == "repeat-buy":
                 case_ok = (
                     evidence["vendor_buy_requests"] == 2
                     and evidence["vendor_buy_results"] == 2
                     and evidence["vendor_buy_failures"] == 0
-                    and vendor.get("bought_item_count", 0) == 2
-                    and vendor.get("money", -1) == VENDOR_TRADE_MONEY - 2 * 34
+                    and items == [
+                        {"entry": VENDOR_TRADE_BUY_ENTRY, "count": 1, "bag": 0, "slot": 23},
+                        {"entry": VENDOR_TRADE_BUY_ENTRY, "count": 1, "bag": 0, "slot": 24},
+                    ]
+                    and money == VENDOR_TRADE_MONEY - 2 * 34
                 )
-            elif case in {"no-money", "full-bags"}:
+            elif case == "no-money":
                 case_ok = (
-                    evidence["vendor_buy_results"] == 0
-                    and vendor.get("bought_item_count", 0) == 0
-                    and vendor.get("money", -2) == VENDOR_NEGATIVE_MONEY[str(case)]
-                    and (
-                        evidence["vendor_buy_failures"] >= 1
-                        or evidence["vendor_inventory_failures"] >= 1
-                        or evidence["vendor_buy_requests"] == 0
-                    )
+                    evidence["vendor_buy_requests"] == 1
+                    and evidence["vendor_buy_results"] == 0
+                    and VENDOR_NEGATIVE_BUY_ERR_NOT_ENOUGHT_MONEY in buy_reasons
+                    and items == []
+                    and money == 0
+                )
+            elif case == "full-bags":
+                expected_items = [
+                    {"entry": VENDOR_NEGATIVE_FILL_ENTRY, "count": 1, "bag": 0, "slot": 23 + index}
+                    for index in range(16)
+                ]
+                case_ok = (
+                    evidence["vendor_buy_requests"] == 1
+                    and evidence["vendor_buy_results"] == 0
+                    and VENDOR_NEGATIVE_EQUIP_ERR_INVENTORY_FULL in inventory_reasons
+                    and items == expected_items
+                    and money == VENDOR_TRADE_MONEY
                 )
             else:
                 case_ok = False
