@@ -400,11 +400,11 @@ VENDOR_TRADE_ITEM_ROW_HEIGHT = 0.0531
 VENDOR_TRADE_GOSSIP_OPTION_ORIGIN = (0.775, 0.596)
 VENDOR_TRADE_GOSSIP_OPTION_HEIGHT = 0.0218
 VENDOR_TRADE_GOSSIP_OPTION_ROW = 1
-VENDOR_TRADE_FIRST_BAG_SLOT = (0.883, 0.741)
-VENDOR_TRADE_PURCHASE_TAB = (0.040, 0.583)
-VENDOR_TRADE_BUYBACK_TAB = (0.075, 0.583)
+VENDOR_TRADE_FIRST_BAG_SLOT = (0.959, 0.7745)
+VENDOR_TRADE_PURCHASE_TAB = (0.032, 0.611)
+VENDOR_TRADE_BUYBACK_TAB = (0.075, 0.611)
 # The right-hand of the two anvil buttons is repair-all; the left one enters single-item repair mode.
-VENDOR_TRADE_REPAIR_BUTTON = (0.082, 0.496)
+VENDOR_TRADE_REPAIR_BUTTON = (0.0844, 0.517)
 
 
 POPULATED_CHARACTER_MODES = frozenset({
@@ -3072,7 +3072,7 @@ def automate_vendor_trade(generation: Generation) -> None:
     # may already be open (the first-run bag tutorial opens it), so the click is tried as-is and then
     # once more after toggling the bag with B, which covers both starting states.
     capture_desktop_screenshot(generation, "vendor-backpack.png")
-    for attempt, offset_x in enumerate((0.0, 0.0, -0.008)):
+    for attempt, offset_x in enumerate((0.0, 0.0)):
         sales = vendor_trade_marker_count(generation, "c2s", "CMSG_SELL_ITEM") + 1
         click_owned_window(
             generation, VENDOR_TRADE_FIRST_BAG_SLOT[0] + offset_x, VENDOR_TRADE_FIRST_BAG_SLOT[1], button=3)
