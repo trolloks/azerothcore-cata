@@ -67,7 +67,6 @@
     "S->C:SMSG_AURA_UPDATE_ALL",
     "S->C:SMSG_AURA_UPDATE_ALL",
     "S->C:SMSG_AURA_UPDATE_ALL",
-    "S->C:SMSG_ON_MONSTER_MOVE",
     "C->S:CMSG_GAMEOBJECT_QUERY",
     "C->S:CMSG_GAMEOBJECT_QUERY",
     "C->S:CMSG_GAMEOBJECT_QUERY",
@@ -84,20 +83,23 @@
     "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
     "S->C:SMSG_PLAYED_TIME",
     "S->C:SMSG_NAME_QUERY_RESPONSE",
+    "S->C:SMSG_ON_MONSTER_MOVE",
     "C->S:CMSG_SET_ACTIVE_MOVER",
     "S->C:SMSG_ON_MONSTER_MOVE",
     "S->C:SMSG_ON_MONSTER_MOVE",
     "C->S:CMSG_SET_ACTIONBAR_TOGGLES",
     "C->S:CMSG_REQUEST_RAID_INFO",
+    "S->C:SMSG_INSTANCE_INFO",
     "C->S:CMSG_TUTORIAL_FLAG",
     "C->S:CMSG_GMTICKET_GETTICKET",
-    "C->S:CMSG_UNREGISTER_ALL_ADDON_PREFIXES",
-    "S->C:SMSG_INSTANCE_INFO",
+    "S->C:SMSG_ON_MONSTER_MOVE",
     "S->C:SMSG_QUERY_TIME_RESPONSE",
     "S->C:SMSG_GMTICKET_GETTICKET",
+    "C->S:CMSG_UNREGISTER_ALL_ADDON_PREFIXES",
     "C->S:CMSG_QUERY_TIME",
-    "S->C:SMSG_QUERY_TIME_RESPONSE",
     "C->S:MSG_QUERY_NEXT_MAIL_TIME",
+    "S->C:SMSG_QUERY_TIME_RESPONSE",
+    "S->C:MSG_QUERY_NEXT_MAIL_TIME",
     "C->S:CMSG_BATTLEFIELD_STATUS",
     "C->S:CMSG_QUERY_BATTLEFIELD_STATE",
     "C->S:CMSG_LFG_GET_STATUS",
@@ -105,8 +107,6 @@
     "C->S:CMSG_GUILD_BANK_REMAINING_WITHDRAW_MONEY_QUERY",
     "C->S:CMSG_CALENDAR_GET_NUM_PENDING",
     "C->S:CMSG_VOICE_SESSION_ENABLE",
-    "S->C:SMSG_ON_MONSTER_MOVE",
-    "S->C:MSG_QUERY_NEXT_MAIL_TIME",
     "S->C:SMSG_LFG_UPDATE_PLAYER",
     "S->C:SMSG_LFG_UPDATE_PARTY",
     "S->C:SMSG_LFG_PLAYER_INFO",
@@ -123,9 +123,23 @@
     "C->S:CMSG_GAMEOBJECT_QUERY",
     "C->S:CMSG_GAMEOBJECT_QUERY",
     "C->S:CMSG_GAMEOBJECT_QUERY",
+    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
     "C->S:CMSG_GAMEOBJECT_QUERY",
+    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
+    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
     "C->S:CMSG_GAMEOBJECT_QUERY",
+    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
     "C->S:CMSG_GAMEOBJECT_QUERY",
+    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
+    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
+    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
+    "C->S:CMSG_GAMEOBJECT_QUERY",
+    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
+    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
+    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
+    "C->S:CMSG_GAMEOBJECT_QUERY",
+    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
+    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
     "C->S:CMSG_GAMEOBJECT_QUERY",
     "C->S:CMSG_GAMEOBJECT_QUERY",
     "C->S:CMSG_GAMEOBJECT_QUERY",
@@ -149,38 +163,29 @@
     "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
     "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
     "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
-    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
-    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
     "C->S:CMSG_CREATURE_QUERY",
-    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
-    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
-    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
-    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
-    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
-    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
-    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
     "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
     "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
     "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
     "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
     "C->S:CMSG_QUESTGIVER_STATUS_QUERY",
-    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
-    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
-    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
-    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
     "C->S:CMSG_CREATURE_QUERY",
     "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
+    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
+    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
+    "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE",
+    "C->S:CMSG_QUESTGIVER_STATUS_QUERY",
     "S->C:SMSG_GAMEOBJECT_QUERY_RESPONSE"
   ],
   "inputs": {
-    "authserver_sha256": "4260a5665a490c558753e688b7769f02c90ce00ab2dae5cc8ae72d8a58c3fbcb",
+    "authserver_sha256": "63ab5e624a334a5148aa58844a71e08246c8592974a474bc692f82b11a697935",
     "client_sha256": "0ea9cc0458cb137f4e0767e8a1896e2042480a4a22397480d7ee64c2e696192a",
     "dbc_tree_sha256": "86bee8cd69fe0988b5e650b993390884594f45643fba60caf57d1ea852ca2475",
     "geometry": false,
     "maps_tree_sha256": "a8113db13679a3bb2a08b6e9f6a90c9b435eae43af3a4de413dd0ab56a8d0645",
     "mmaps_tree_sha256": "",
     "vmaps_tree_sha256": "",
-    "worldserver_sha256": "8e475b8bbaf19c11d7dde7466b97475d2ea141280b3a429f2e92693aa6517900"
+    "worldserver_sha256": "7595e8982d8504cfa1038bbac63ded244f749d732dbe8c981996a475893e0c26"
   },
   "invalid_target_spell_cast_sequence_count": null,
   "jump_fall_land_sequence": null,
@@ -271,6 +276,7 @@
   "spell_cast_marker_count": null,
   "stability_seconds": 8,
   "target_targeted_spell_cast_sequence_count": null,
+  "vendor_buy_failure_reasons": [],
   "vendor_buy_failures": 0,
   "vendor_buy_requests": 1,
   "vendor_buy_results": 0,
@@ -278,9 +284,109 @@
   "vendor_buyback_slot": null,
   "vendor_case": "full-bags",
   "vendor_inventory_count": 1,
+  "vendor_inventory_failure_reasons": [
+    50
+  ],
   "vendor_inventory_failures": 1,
   "vendor_negative": {
-    "bought_item_count": 0,
+    "items": [
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 23
+      },
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 24
+      },
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 25
+      },
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 26
+      },
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 27
+      },
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 28
+      },
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 29
+      },
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 30
+      },
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 31
+      },
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 32
+      },
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 33
+      },
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 34
+      },
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 35
+      },
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 36
+      },
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 37
+      },
+      {
+        "bag": 0,
+        "count": 1,
+        "entry": 2384,
+        "slot": 38
+      }
+    ],
     "money": 50000
   },
   "vendor_repair_requests": 0,
