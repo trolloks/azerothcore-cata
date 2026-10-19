@@ -335,11 +335,55 @@ LEVEL_UP_GEAR = (
     (99000005, 6948, 0, 23, 0),     # Hearthstone     -> backpack
 )
 LEVEL_UP_MAINHAND_ENTRY = 49778  # Worn Greatsword
+VENDOR_TRADE_MODE = "vendor-trade"
+# Plan 33 acceptance: Godric Rothgar (creature entry 1213, spawn guid 79952, vendor|repair) in
+# Northshire. The fixture stands within interaction range, buys his cheapest row, sells a seeded
+# bracer, buys it back and repairs a seeded damaged vest: one native round trip per handler.
+VENDOR_TRADE_NPC_NAME = "Godric Rothgar"
+VENDOR_TRADE_ENTRY = 1213
+VENDOR_TRADE_CHARACTER_POSITION = (-8900.4, -121.6, 82.0)
+VENDOR_TRADE_CHARACTER_ORIENTATION = 0.68     # faces the NPC, so the screenshots show his frame
+VENDOR_TRADE_MONEY = 50000                    # 5 gold: a 36c shield, the repair and the 7c buyback
+VENDOR_TRADE_BUY_ENTRY = 17184                # Small Shield, the vendor's MuID 8 row
+VENDOR_TRADE_BUY_MUID = 8
+VENDOR_TRADE_SELL_ITEM_GUID = 99000301
+VENDOR_TRADE_SELL_ENTRY = 2384                # Tarnished Chain Bracers, SellPrice 7
+VENDOR_TRADE_SELL_SLOT = (0, 23)              # bag 0 (backpack), first backpack slot
+VENDOR_TRADE_SELL_DURABILITY = 18
+VENDOR_TRADE_DAMAGED_ITEM_GUID = 99000302
+VENDOR_TRADE_DAMAGED_ENTRY = 2379             # Tarnished Chain Vest, MaxDurability 55
+VENDOR_TRADE_DAMAGED_SLOT = (0, 4)            # equipped chest
+VENDOR_TRADE_DAMAGED_DURABILITY = 5
+VENDOR_TRADE_DAMAGED_MAX_DURABILITY = 55
+VENDOR_TRADE_TIMEOUT = 20                     # seconds to wait for each client-driven marker
+# The client has no default keybind for "interact with target"; SetBinding via /script is the
+# ordinary unprotected config setter the walk/run mode already relies on, and the harness then
+# presses the real key through the normal secure keybind path.
+VENDOR_TRADE_BIND_KEYS = (
+    "Return", "slash", *tuple("script"), "space",
+    *tuple('SetBinding("G","INTERACTTARGET")SaveBindings(GetCurrentBindingSet())'), "Return",
+)
+VENDOR_TRADE_TARGET_KEYS = (
+    "Return", "slash", *tuple("targetexact"), "space", *tuple(VENDOR_TRADE_NPC_NAME), "Return",
+)
+VENDOR_TRADE_INTERACT_KEYS = ("g",)
+VENDOR_TRADE_BACKPACK_KEYS = ("b",)
+# Click positions as fractions of the owned window's current geometry, calibrated on the 1800x1042
+# reference window. shortcut: default UI layout and camera; the screenshots named in
+# automate_vendor_trade are the calibration evidence, recalibrate these after changing either.
+VENDOR_TRADE_GOSSIP_OPTION = (0.775, 0.596)
+VENDOR_TRADE_ITEM_ROW_ORIGIN = (0.322, 0.398)
+VENDOR_TRADE_ITEM_ROW_HEIGHT = 0.0218
+VENDOR_TRADE_FIRST_BAG_SLOT = (0.901, 0.660)
+VENDOR_TRADE_BUYBACK_TAB = (0.352, 0.760)
+VENDOR_TRADE_REPAIR_BUTTON = (0.663, 0.760)
+
+
 POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
     IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
     WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-    INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
+    INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
 })
 CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
@@ -363,6 +407,81 @@ ISSUE97_GO_ENTRY, ISSUE97_PHASE_ID = 2843, 125
 # PLAN32_STAGE must not relocate another mode's character. prepare freezes the stage into the
 # generation inputs and run refuses an environment that names a different one, so the seeded
 # position, the fixture row and the stage label cannot drift apart.
+
+
+def apply_vendor_trade_seed(mode: str) -> None:
+    """Move the fixture next to Godric Rothgar (Plan 33 vendor mode only)."""
+    global CHARACTER_POSITION, CHARACTER_ORIENTATION
+    if mode != VENDOR_TRADE_MODE:
+        return
+    CHARACTER_POSITION = VENDOR_TRADE_CHARACTER_POSITION
+    CHARACTER_ORIENTATION = VENDOR_TRADE_CHARACTER_ORIENTATION
+
+
+def vendor_trade_item_row(muid: int) -> tuple[float, float]:
+    """Where the merchant frame draws row `muid` (1-based, the same numbering SMSG_VENDOR_INVENTORY
+    sends): the first row's position plus one row height per row."""
+    fx, fy = VENDOR_TRADE_ITEM_ROW_ORIGIN
+    return fx, fy + (muid - 1) * VENDOR_TRADE_ITEM_ROW_HEIGHT
+
+
+def vendor_trade_seed_sql() -> str:
+    """The fixture's money plus the two items the round trip needs: a damaged equipped vest for the
+    repair and a bracer in the first backpack slot for the sell and buyback."""
+    rows = ", ".join((
+        f"({VENDOR_TRADE_SELL_ITEM_GUID},{VENDOR_TRADE_SELL_ENTRY},{CHARACTER_GUID},1,"
+        f"{VENDOR_TRADE_SELL_DURABILITY},'0 0 0 0 0 ','{'0 ' * 36}')",
+        f"({VENDOR_TRADE_DAMAGED_ITEM_GUID},{VENDOR_TRADE_DAMAGED_ENTRY},{CHARACTER_GUID},1,"
+        f"{VENDOR_TRADE_DAMAGED_DURABILITY},'0 0 0 0 0 ','{'0 ' * 36}')",
+    ))
+    slots = ", ".join((
+        f"({CHARACTER_GUID},{VENDOR_TRADE_SELL_SLOT[0]},{VENDOR_TRADE_SELL_SLOT[1]},{VENDOR_TRADE_SELL_ITEM_GUID})",
+        f"({CHARACTER_GUID},{VENDOR_TRADE_DAMAGED_SLOT[0]},{VENDOR_TRADE_DAMAGED_SLOT[1]},"
+        f"{VENDOR_TRADE_DAMAGED_ITEM_GUID})",
+    ))
+    return (
+        populated_character_seed_sql()
+        + f"UPDATE `characters` SET `money`={VENDOR_TRADE_MONEY} WHERE `guid`={CHARACTER_GUID};"
+        f"DELETE FROM `character_inventory` WHERE `guid`={CHARACTER_GUID};"
+        f"DELETE FROM `item_instance` WHERE `owner_guid`={CHARACTER_GUID};"
+        "INSERT INTO `item_instance` "
+        "(`guid`,`itemEntry`,`owner_guid`,`count`,`durability`,`charges`,`enchantments`) "
+        f"VALUES {rows};"
+        "INSERT INTO `character_inventory` (`guid`,`bag`,`slot`,`item`) "
+        f"VALUES {slots};"
+    )
+
+
+def vendor_trade_db_evidence(manifest: Manifest, generation: Generation) -> dict[str, int]:
+    """Character-row state after the run's logout: what the round trip left behind.
+
+    The bought shield must be owned, the sold bracer must be back in a backpack slot (not merely
+    sitting in a buyback slot), the damaged vest must be repaired to its template maximum and the
+    money must have gone down without being wiped.
+    """
+    schema = generation["schemas"]["characters"]
+
+    def scalar(sql: str) -> int:
+        output = mysql(manifest, generation, sql, schema)
+        try:
+            return int(output)
+        except ValueError as error:
+            raise RuntimeError(f"owned character database returned a non-numeric value: {output!r}") from error
+
+    return {
+        "bought_item_count": scalar(
+            f"SELECT COUNT(*) FROM `item_instance` WHERE `owner_guid`={CHARACTER_GUID} "
+            f"AND `itemEntry`={VENDOR_TRADE_BUY_ENTRY};"),
+        "buyback_item_count": scalar(
+            "SELECT COUNT(*) FROM `character_inventory` ic JOIN `item_instance` ii ON ii.`guid`=ic.`item` "
+            f"WHERE ii.`owner_guid`={CHARACTER_GUID} AND ii.`itemEntry`={VENDOR_TRADE_SELL_ENTRY} "
+            "AND ic.`slot` BETWEEN 23 AND 38;"),
+        "repaired_durability": scalar(
+            f"SELECT `durability` FROM `item_instance` WHERE `guid`={VENDOR_TRADE_DAMAGED_ITEM_GUID};"),
+        "money": scalar(f"SELECT `money` FROM `characters` WHERE `guid`={CHARACTER_GUID};"),
+    }
+
+
 def apply_plan32_stage_seed(mode: str, stage: str) -> None:
     """Move the fixture character onto the stage's pinned point (Plan 32 geometry mode only)."""
     global CHARACTER_POSITION, CHARACTER_ORIENTATION
@@ -419,6 +538,8 @@ def plan_number(mode: str) -> str:
         return "23"
     if mode == PLAN32_GEOMETRY_MODE:
         return "32"
+    if mode == VENDOR_TRADE_MODE:
+        return "33"
     if mode == RUN_SPEED_MODE:
         return "16"
     if mode == BASIC_MOVEMENT_MODE:
@@ -1758,6 +1879,7 @@ def prepare(args: argparse.Namespace) -> None:
         stage = plan32_stage_or_fail()
         apply_plan32_stage_seed(args.mode, stage)
         inputs["plan32_stage"] = stage
+    apply_vendor_trade_seed(args.mode)
     print(f"prepare preflight: {time.monotonic() - started:.1f}s", flush=True)
     manifest_path = args.manifest.resolve()
     if manifest_path.exists():
@@ -2500,9 +2622,13 @@ def automate_phase_relogin(generation: Generation, deadline: float) -> None:
     raise RuntimeError("phase restoration login did not send membership")
 
 
-def automate_phase_chest_click(generation: Generation) -> None:
-    from Xlib import X, display
-    from Xlib.ext import xtest
+def click_owned_window(generation: Generation, fx: float, fy: float, button: int = 1) -> None:
+    """Click a fraction of the owned window's current geometry, after verifying it still has focus."""
+    try:
+        from Xlib import X, display
+        from Xlib.ext import xtest
+    except ImportError as error:
+        raise RuntimeError("window clicks require the installed python3-xlib package") from error
 
     window_id, x, y, width, height = focus_owned_window(generation)
     connection = display.Display(str(generation["inputs"]["display"]))
@@ -2511,14 +2637,18 @@ def automate_phase_chest_click(generation: Generation) -> None:
             connection.intern_atom("_NET_ACTIVE_WINDOW"), X.AnyPropertyType,
         )
         if active is None or not len(active.value) or int(active.value[0]) != int(window_id, 16):
-            raise RuntimeError("owned WoW window lost focus before chest interaction")
-        # shortcut: click is calibrated for this fixture and camera; recalibrate after changing either.
-        xtest.fake_input(connection, X.MotionNotify, x=x + int(width * 0.74), y=y + int(height * 0.40))
-        xtest.fake_input(connection, X.ButtonPress, 3)
-        xtest.fake_input(connection, X.ButtonRelease, 3)
+            raise RuntimeError("owned WoW window lost focus before a click")
+        xtest.fake_input(connection, X.MotionNotify, x=x + int(width * fx), y=y + int(height * fy))
+        xtest.fake_input(connection, X.ButtonPress, button)
+        xtest.fake_input(connection, X.ButtonRelease, button)
         connection.sync()
     finally:
         connection.close()
+
+
+def automate_phase_chest_click(generation: Generation) -> None:
+    # shortcut: click is calibrated for this fixture and camera; recalibrate after changing either.
+    click_owned_window(generation, 0.74, 0.40, button=3)
 
 
 def automate_jump_fall_land(generation: Generation) -> None:
@@ -2774,6 +2904,94 @@ def automate_character_creation(generation: Generation) -> None:
     connection.close()
 
 
+def vendor_trade_marker_count(generation: Generation, direction: str, opcode: str) -> int:
+    """Opcode occurrences after the in-world marker, in the requested direction."""
+    text = world_log_text(generation).partition(IN_WORLD_CONTROL_MARKER)[2]
+    side = "C->S" if direction == "c2s" else "S->C"
+    return len(re.findall(rf"\b{side}:\s+.*?\b{opcode}\b", text))
+
+
+def vendor_trade_wait(
+    generation: Generation, direction: str, opcode: str, description: str, *, at_least: int | None = None,
+) -> None:
+    """Wait until one more line (or `at_least` lines) names this opcode in this direction.
+
+    `at_least` covers a response the client can produce before the click that was meant to
+    trigger it, e.g. a gossip frame that offers nothing but the vendor option.
+    """
+    before = vendor_trade_marker_count(generation, direction, opcode)
+    target = at_least if at_least is not None else before + 1
+    deadline = time.monotonic() + VENDOR_TRADE_TIMEOUT
+    while time.monotonic() < deadline:
+        if vendor_trade_marker_count(generation, direction, opcode) >= target:
+            return
+        time.sleep(0.2)
+    raise RuntimeError(f"the vendor round trip did not reach the {description} ({direction} {opcode})")
+
+
+def automate_vendor_trade(generation: Generation) -> None:
+    """Drive the Plan 33 round trip through the real client's own UI: target Godric Rothgar by name,
+    interact through the bound key, open the vendor from the gossip option, buy, sell, buy back and
+    repair, then log out so the character row the verification reads back is saved.
+
+    Every step waits for the opcode the server logs for that action, so a missed click fails here
+    with the screenshots as calibration evidence instead of producing a silently empty run.
+    """
+    capture_desktop_screenshot(generation, "vendor-before-target.png")
+    automate_key_sequence(generation, VENDOR_TRADE_BIND_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(0.5)  # let the client save the binding before pressing it
+    selections = vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION")
+    for _ in range(3):
+        automate_key_sequence(generation, VENDOR_TRADE_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+        time.sleep(1.0)  # let the client resolve the name and register the target
+        if vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION") > selections:
+            break
+    else:
+        raise RuntimeError("vendor target macro did not select Godric Rothgar")
+    capture_desktop_screenshot(generation, "vendor-after-target.png")
+
+    automate_key_sequence(generation, VENDOR_TRADE_INTERACT_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+    vendor_trade_wait(generation, "s2c", "SMSG_GOSSIP_MESSAGE", "gossip frame")
+    capture_desktop_screenshot(generation, "vendor-gossip.png")
+
+    click_owned_window(generation, *VENDOR_TRADE_GOSSIP_OPTION)
+    vendor_trade_wait(generation, "s2c", "SMSG_VENDOR_INVENTORY", "vendor inventory", at_least=1)
+    capture_desktop_screenshot(generation, "vendor-open.png")
+
+    # Buy: right-clicking a vendor row buys one item of that row.
+    click_owned_window(generation, *vendor_trade_item_row(VENDOR_TRADE_BUY_MUID), button=3)
+    vendor_trade_wait(generation, "s2c", "SMSG_BUY_ITEM", "purchase result")
+    capture_desktop_screenshot(generation, "vendor-after-buy.png")
+
+    # Sell: with the merchant frame open, right-clicking an item in the backpack sells it.
+    automate_key_sequence(generation, VENDOR_TRADE_BACKPACK_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(0.5)
+    capture_desktop_screenshot(generation, "vendor-backpack.png")
+    click_owned_window(generation, *VENDOR_TRADE_FIRST_BAG_SLOT, button=3)
+    vendor_trade_wait(generation, "c2s", "CMSG_SELL_ITEM", "sell request")
+    automate_key_sequence(generation, VENDOR_TRADE_BACKPACK_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+    capture_desktop_screenshot(generation, "vendor-after-sell.png")
+
+    # Buyback: the sold bracer is the first row of the merchant frame's buyback tab.
+    click_owned_window(generation, *VENDOR_TRADE_BUYBACK_TAB)
+    time.sleep(0.5)
+    capture_desktop_screenshot(generation, "vendor-buyback-tab.png")
+    click_owned_window(generation, *vendor_trade_item_row(1), button=3)
+    vendor_trade_wait(generation, "c2s", "CMSG_BUYBACK_ITEM", "buyback request")
+    capture_desktop_screenshot(generation, "vendor-after-buyback.png")
+
+    # Repair: the merchant frame's repair button repairs every damaged equipped item.
+    click_owned_window(generation, *VENDOR_TRADE_REPAIR_BUTTON)
+    vendor_trade_wait(generation, "c2s", "CMSG_REPAIR_ITEM", "repair request")
+    capture_desktop_screenshot(generation, "vendor-after-repair.png")
+
+    automate_key_sequence(
+        generation, ("Return", "slash", *tuple("logout"), "Return"), hold_seconds=0.05, gap_seconds=0.05,
+    )
+    vendor_trade_wait(generation, "s2c", "SMSG_LOGOUT_COMPLETE", "logout")
+    capture_desktop_screenshot(generation, "vendor-after-logout.png")
+
+
 def character_row_count(manifest: Manifest, generation: Generation) -> int:
     output = mysql(
         manifest, generation,
@@ -2859,6 +3077,9 @@ def run_client(args: argparse.Namespace) -> None:
         verify_plan32_seeds(manifest, generation)
     if generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE:
         mysql(manifest, generation, target_targeted_spell_cast_seed_sql(), generation["schemas"]["characters"])
+    if generation["mode"] == VENDOR_TRADE_MODE:
+        apply_vendor_trade_seed(generation["mode"])
+        mysql(manifest, generation, vendor_trade_seed_sql(), generation["schemas"]["characters"])
     if generation["mode"] == LEVEL_UP_MODE:
         mysql(manifest, generation, level_up_action_seed_sql(), generation["schemas"]["characters"])
         mysql(manifest, generation, level_up_gear_seed_sql(), generation["schemas"]["characters"])
@@ -2923,6 +3144,7 @@ def run_client(args: argparse.Namespace) -> None:
         chat_message_sent = False
         invalid_target_spell_cast_sent = False
         level_up_sent = False
+        vendor_trade_sent = False
         post_marker_hold_started: float | None = None
         milestone_definition = CHARACTER_MILESTONES if generation["mode"] in CHARACTER_MODES else CLIENT_MILESTONES
         while time.monotonic() < deadline:
@@ -3014,6 +3236,12 @@ def run_client(args: argparse.Namespace) -> None:
                 ):
                     automate_invalid_target_spell_cast(generation)
                     invalid_target_spell_cast_sent = True
+                if (
+                    generation["mode"] == VENDOR_TRADE_MODE and selection_sent
+                    and not vendor_trade_sent and in_world_control_marker_count(generation) > 0
+                ):
+                    automate_vendor_trade(generation)
+                    vendor_trade_sent = True
                 if (
                     generation["mode"] == LEVEL_UP_MODE and selection_sent and not level_up_sent
                     and in_world_control_marker_count(generation) > 0
@@ -4943,7 +5171,7 @@ POST_MARKER_MODES = frozenset({
     INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
     GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE, CHARACTER_CREATION_MODE,
     BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
-    LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
+    LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -4958,6 +5186,8 @@ POST_MARKER_COUNTERS = {
     BASIC_SPELL_CAST_MODE: spell_cast_marker_count,
     TARGET_TARGETED_SPELL_CAST_MODE: target_targeted_spell_cast_marker_count,
     CHAT_MESSAGE_MODE: chat_message_marker_count,
+    VENDOR_TRADE_MODE: lambda generation: vendor_trade_marker_count(
+        generation, "s2c", "SMSG_VENDOR_INVENTORY"),
     INVALID_TARGET_SPELL_CAST_MODE: invalid_target_spell_cast_marker_count,
     LEVEL_UP_MODE: level_up_settle_signal,
     PLAN32_GEOMETRY_MODE: plan32_progress_marker_count,
@@ -5076,6 +5306,7 @@ def sanitized_evidence(
     map_insertion_prefix_value: list[str] | None = None, map_insertion_marker_count_value: int | None = None,
     in_world_control_prefix_value: list[str] | None = None, in_world_control_marker_count_value: int | None = None,
     movement_heartbeat_count_value: int | None = None, creation_marker_count_value: int | None = None,
+    vendor_trade_evidence_value: dict[str, int] | None = None,
 ) -> dict[str, object]:
     auth_index = next(
         (index for index, item in enumerate(transcript) if item["opcode"] == "SMSG_AUTH_RESPONSE"), None,
@@ -5109,10 +5340,11 @@ def sanitized_evidence(
     invalid_target_spell_cast_mode = generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE
     level_up_mode = generation["mode"] == LEVEL_UP_MODE
     plan32_geometry_mode = generation["mode"] == PLAN32_GEOMETRY_MODE
+    vendor_trade_mode = generation["mode"] == VENDOR_TRADE_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
         WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
+        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
@@ -5146,6 +5378,7 @@ def sanitized_evidence(
             and "characters_completed" in milestones
             else "jump_fall_land_pass_candidate" if jump_fall_land_mode and "characters_completed" in milestones
             else "ground_movement_pass_candidate" if ground_movement_mode and "characters_completed" in milestones
+            else "vendor_trade_pass_candidate" if vendor_trade_mode and "characters_completed" in milestones
             else "plan32_geometry_pass_candidate" if plan32_geometry_mode and "characters_completed" in milestones
             else "basic_movement_pass_candidate" if basic_movement_mode and "characters_completed" in milestones
             else "in_world_control_bootstrap_candidate" if in_world_control_mode and "characters_completed" in milestones
@@ -5174,6 +5407,28 @@ def sanitized_evidence(
         "in_world_control_packet_prefix": in_world_control_prefix_value if in_world_control_mode else None,
         "in_world_control_marker_count": in_world_control_marker_count_value if in_world_control_mode else None,
         "movement_heartbeat_count": movement_heartbeat_count_value if basic_movement_mode else None,
+        "vendor_inventory_count": (
+            vendor_trade_marker_count(generation, "s2c", "SMSG_VENDOR_INVENTORY") if vendor_trade_mode else None
+        ),
+        "vendor_buy_requests": (
+            vendor_trade_marker_count(generation, "c2s", "CMSG_BUY_ITEM") if vendor_trade_mode else None
+        ),
+        "vendor_buy_results": (
+            vendor_trade_marker_count(generation, "s2c", "SMSG_BUY_ITEM") if vendor_trade_mode else None
+        ),
+        "vendor_buy_failures": (
+            vendor_trade_marker_count(generation, "s2c", "SMSG_BUY_FAILED") if vendor_trade_mode else None
+        ),
+        "vendor_sell_requests": (
+            vendor_trade_marker_count(generation, "c2s", "CMSG_SELL_ITEM") if vendor_trade_mode else None
+        ),
+        "vendor_buyback_requests": (
+            vendor_trade_marker_count(generation, "c2s", "CMSG_BUYBACK_ITEM") if vendor_trade_mode else None
+        ),
+        "vendor_repair_requests": (
+            vendor_trade_marker_count(generation, "c2s", "CMSG_REPAIR_ITEM") if vendor_trade_mode else None
+        ),
+        "vendor_trade": vendor_trade_evidence_value if vendor_trade_mode else None,
         "run_speed_acknowledgements": run_speed_acknowledgements(generation) if run_speed_mode else None,
         "ground_movement_sequence": ground_movement_sequence(generation) if ground_movement_mode else None,
         "jump_fall_land_sequence": ground_movement_sequence(generation) if jump_fall_land_mode else None,
@@ -5292,10 +5547,11 @@ def verify(args: argparse.Namespace) -> None:
     invalid_target_spell_cast_mode = generation["mode"] == INVALID_TARGET_SPELL_CAST_MODE
     level_up_mode = generation["mode"] == LEVEL_UP_MODE
     plan32_geometry_mode = generation["mode"] == PLAN32_GEOMETRY_MODE
+    vendor_trade_mode = generation["mode"] == VENDOR_TRADE_MODE
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
         WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
+        INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     # The relog stage drives the whole login twice, so the login-shaped evidence below expects two
@@ -5344,6 +5600,7 @@ def verify(args: argparse.Namespace) -> None:
         ),
         movement_heartbeat_count_value=movement_heartbeat_count(generation) if basic_movement_mode else None,
         creation_marker_count_value=character_creation_marker_count(generation) if creation_mode else None,
+        vendor_trade_evidence_value=vendor_trade_db_evidence(manifest, generation) if vendor_trade_mode else None,
     )
     unchanged = protected_inputs_unchanged(manifest, generation)
     generation["isolation_unchanged"] = unchanged
@@ -5446,6 +5703,21 @@ def verify(args: argparse.Namespace) -> None:
                 evidence["spell_cast_marker_count"] > 0
                 and evidence["cast_failed_marker_count"] > 0
                 and evidence["target_targeted_spell_cast_sequence_count"] > 0
+            )
+        if vendor_trade_mode:
+            vendor = evidence["vendor_trade"] or {}
+            character_ok = character_ok and (
+                evidence["vendor_inventory_count"] >= 1
+                and evidence["vendor_buy_requests"] >= 1
+                and evidence["vendor_buy_results"] >= 1
+                and evidence["vendor_buy_failures"] == 0
+                and evidence["vendor_sell_requests"] >= 1
+                and evidence["vendor_buyback_requests"] >= 1
+                and evidence["vendor_repair_requests"] >= 1
+                and vendor.get("bought_item_count", 0) >= 1
+                and vendor.get("buyback_item_count", 0) >= 1
+                and vendor.get("repaired_durability", 0) == VENDOR_TRADE_DAMAGED_MAX_DURABILITY
+                and 0 < vendor.get("money", 0) < VENDOR_TRADE_MONEY
             )
         if plan32_geometry_mode:
             stage = generation.get("plan32_stage")
@@ -7498,7 +7770,7 @@ def parser() -> argparse.ArgumentParser:
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,
             RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE,
             BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-            INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE,
+            INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
         ), default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)
