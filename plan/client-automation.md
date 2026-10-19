@@ -646,8 +646,9 @@ interaction produces (the gossip option is clicked only when the vendor did not 
 his MuID 8 row (Small Shield 17184), right-click a seeded bracer (2384) in the backpack to sell it,
 buy it back from the merchant frame's buyback page, repair a seeded equipped vest (2379, seeded at
 5/55 durability) through the frame's repair-all anvil, then `/logout` so the character row is saved
-before the harness stops the servers. `prepare` seeds 5 gold and both items
-(`vendor_trade_seed_sql`) and places the fixture 2.8 yd from the NPC.
+before the harness stops the servers. `prepare` places the fixture 2.8 yd from the NPC; `run`
+seeds 5 gold and both items (`vendor_trade_seed_sql`) before every attempt, so a retry starts from
+the intended state.
 
 Every step waits for the opcode the server logs for that action (`SMSG_GOSSIP_MESSAGE` or
 `SMSG_VENDOR_INVENTORY`, `SMSG_BUY_ITEM`, `CMSG_SELL_ITEM`, `CMSG_BUYBACK_ITEM`, `CMSG_REPAIR_ITEM`,
@@ -655,7 +656,10 @@ Every step waits for the opcode the server logs for that action (`SMSG_GOSSIP_ME
 before it as calibration evidence: `vendor-before-target.png`, `vendor-after-target.png`,
 `vendor-gossip.png`, `vendor-open.png`, `vendor-after-buy.png`, `vendor-backpack.png`,
 `vendor-after-sell.png`, `vendor-buyback-tab.png`, `vendor-after-buyback.png`,
-`vendor-after-repair.png`, `vendor-after-logout.png`.
+`vendor-purchase-tab.png`, `vendor-after-repair.png`, `vendor-after-logout.png`.
+Each wait's packet target is captured *before* the input is sent, so a response that arrives
+before the input helper returns still counts; logout gets its own 45 s deadline because an
+ordinary fixture outside a resting area waits the full logout timer.
 
 The click positions are window fractions derived from the 4.3.4 `MerchantFrame.xml` and calibrated on
 the 1800x1042 reference window. The frame anchors at `UIParent`'s top-left minus 104 y; its item grid
@@ -663,8 +667,10 @@ is **two columns of six** cells, 165x52 design px each, filled left to right and
 MuID 8 sits in the right column's fourth row (`VENDOR_TRADE_ITEM_GRID_ORIGIN`/`_COLUMN_WIDTH`/
 `_HEIGHT`; a single-column model buys the wrong item). The buyback page shows the most recent sale in
 one slot below `MerchantItem10` and its button buys back on any click (`VENDOR_TRADE_BUYBACK_ITEM`),
-the buyback page itself is tab 2 at the frame's bottom-left (`VENDOR_TRADE_BUYBACK_TAB`), and
-repair-all is the anvil button at the frame's bottom-left (`VENDOR_TRADE_REPAIR_BUTTON`). The gossip
+the buyback page itself is tab 2 at the frame's bottom-left (`VENDOR_TRADE_BUYBACK_TAB`), the
+purchase tab is tab 1 beside it (`VENDOR_TRADE_PURCHASE_TAB`, reselected after the buyback because
+`MerchantFrame_UpdateBuybackInfo` hides both repair buttons), and repair-all is the anvil button at
+the frame's bottom-left (`VENDOR_TRADE_REPAIR_BUTTON`). The gossip
 option's row is DB-defined (`VENDOR_TRADE_GOSSIP_OPTION_ORIGIN`/`_HEIGHT`/`_ROW`). All of these are
 `shortcut: default UI scale and layout; recalibrate them from the run's own screenshots after
 changing either.` Right-click buys and sells because that is the UI path a player uses, not a
@@ -673,7 +679,10 @@ scripted request.
 Verification (`verify`) requires the six request/result markers above, no `SMSG_BUY_FAILED`, and the
 character row after the logout to show the bought shield owned, the sold bracer back in a backpack
 slot (23-38, not a buyback slot), the vest repaired to its 55 durability, and money above zero but
-below the seeded 5 gold. Run with `--stability-seconds 8 --timeout 180` (the round trip itself takes
+below the seeded 5 gold. Because opcode names cannot identify an item, the mode also enables
+`PacketLogFile` and reads the requests' payloads: the sale's item counter must be the seeded
+bracer's GUID and the buyback's slot must be 74 (`BUYBACK_SLOT_START`, where the first sale lands),
+so an untouched bracer sitting in its seeded slot cannot stand in for the round trip. Run with `--stability-seconds 8 --timeout 180` (the round trip itself takes
 about 30 s after the in-world marker).
 
 ## Building before a run

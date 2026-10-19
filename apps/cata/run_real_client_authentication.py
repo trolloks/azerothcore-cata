@@ -345,6 +345,7 @@ VENDOR_TRADE_CHARACTER_POSITION = (-8900.4, -121.6, 82.0)
 VENDOR_TRADE_CHARACTER_ORIENTATION = 0.68     # faces the NPC, so the screenshots show his frame
 VENDOR_TRADE_MONEY = 50000                    # 5 gold: a 36c shield, the repair and the 7c buyback
 VENDOR_TRADE_BUY_ENTRY = 17184                # Small Shield, the vendor's MuID 8 row
+VENDOR_TRADE_BUYBACK_SLOT_START = 74          # BUYBACK_SLOT_START: the first sale lands here
 VENDOR_TRADE_BUY_MUID = 8
 VENDOR_TRADE_SELL_ITEM_GUID = 99000301
 VENDOR_TRADE_SELL_ENTRY = 2384                # Tarnished Chain Bracers, SellPrice 7
@@ -356,6 +357,7 @@ VENDOR_TRADE_DAMAGED_SLOT = (0, 4)            # equipped chest
 VENDOR_TRADE_DAMAGED_DURABILITY = 5
 VENDOR_TRADE_DAMAGED_MAX_DURABILITY = 55
 VENDOR_TRADE_TIMEOUT = 20                     # seconds to wait for each client-driven marker
+VENDOR_TRADE_LOGOUT_TIMEOUT = 45               # the normal logout timer (20 game seconds) plus the save
 # The client has no default keybind for "interact with target"; SetBinding via /script is the
 # ordinary unprotected config setter the walk/run mode already relies on, and the harness then
 # presses the real key through the normal secure keybind path.
@@ -381,6 +383,7 @@ VENDOR_TRADE_GOSSIP_OPTION_ORIGIN = (0.775, 0.596)
 VENDOR_TRADE_GOSSIP_OPTION_HEIGHT = 0.0218
 VENDOR_TRADE_GOSSIP_OPTION_ROW = 1
 VENDOR_TRADE_FIRST_BAG_SLOT = (0.901, 0.660)
+VENDOR_TRADE_PURCHASE_TAB = (0.045, 0.742)
 VENDOR_TRADE_BUYBACK_TAB = (0.112, 0.742)
 VENDOR_TRADE_BUYBACK_ITEM = (0.156, 0.797)
 VENDOR_TRADE_REPAIR_BUTTON = (0.116, 0.660)
@@ -1507,7 +1510,9 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         # reason byte), so its generations always capture them. Filenames are relative to LogsDir;
         # empty everywhere else, which leaves packet logging off (sessions also need the flag the
         # socket reads from this same key).
-        "PacketLogFile": '"packets.pkt"' if generation["mode"] == PLAN32_GEOMETRY_MODE else '""',
+        "PacketLogFile": (
+            '"packets.pkt"' if generation["mode"] in (PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE) else '""'
+        ),
         "Appender.Server": '2,5,1,WorldServer.log,w',
         "Logger.network": (
             "5,Server" if ISSUE97 or generation["mode"] in {
@@ -2930,16 +2935,16 @@ def vendor_trade_marker_count(generation: Generation, direction: str, opcode: st
 
 
 def vendor_trade_wait(
-    generation: Generation, direction: str, opcode: str, description: str, *, at_least: int | None = None,
+    generation: Generation, direction: str, opcode: str, description: str, target: int,
+    timeout: float = VENDOR_TRADE_TIMEOUT,
 ) -> None:
-    """Wait until one more line (or `at_least` lines) names this opcode in this direction.
+    """Wait until at least `target` lines name this opcode in this direction.
 
-    `at_least` covers a response the client can produce before the click that was meant to
-    trigger it, e.g. a gossip frame that offers nothing but the vendor option.
+    The caller captures `target` *before* sending the input: sampling the count afterwards would
+    wait for a second response to an action that already succeeded, and on loopback the response
+    usually arrives before the input helper returns.
     """
-    before = vendor_trade_marker_count(generation, direction, opcode)
-    target = at_least if at_least is not None else before + 1
-    deadline = time.monotonic() + VENDOR_TRADE_TIMEOUT
+    deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if vendor_trade_marker_count(generation, direction, opcode) >= target:
             return
@@ -2980,6 +2985,7 @@ def automate_vendor_trade(generation: Generation) -> None:
         if vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION") > selections:
             break
     else:
+        capture_desktop_screenshot(generation, "vendor-after-target.png")
         raise RuntimeError("vendor target macro did not select Godric Rothgar")
     capture_desktop_screenshot(generation, "vendor-after-target.png")
 
@@ -2992,43 +2998,88 @@ def automate_vendor_trade(generation: Generation) -> None:
     if not vendor_trade_marker_count(generation, "s2c", "SMSG_VENDOR_INVENTORY"):
         # The gossip menu carries the vendor option at its DB-defined row, so the row is a
         # calibration constant rather than always the first one.
+        inventory = vendor_trade_marker_count(generation, "s2c", "SMSG_VENDOR_INVENTORY") + 1
         click_owned_window(generation, *vendor_trade_gossip_option())
-        vendor_trade_wait(generation, "s2c", "SMSG_VENDOR_INVENTORY", "vendor inventory", at_least=1)
+        vendor_trade_wait(generation, "s2c", "SMSG_VENDOR_INVENTORY", "vendor inventory", inventory)
     capture_desktop_screenshot(generation, "vendor-open.png")
 
     # Buy: right-clicking a vendor row buys one item of that row.
+    purchases = vendor_trade_marker_count(generation, "s2c", "SMSG_BUY_ITEM") + 1
     click_owned_window(generation, *vendor_trade_item_row(VENDOR_TRADE_BUY_MUID), button=3)
-    vendor_trade_wait(generation, "s2c", "SMSG_BUY_ITEM", "purchase result")
+    vendor_trade_wait(generation, "s2c", "SMSG_BUY_ITEM", "purchase result", purchases)
     capture_desktop_screenshot(generation, "vendor-after-buy.png")
 
     # Sell: with the merchant frame open, right-clicking an item in the backpack sells it.
     automate_key_sequence(generation, VENDOR_TRADE_BACKPACK_KEYS, hold_seconds=0.05, gap_seconds=0.05)
     time.sleep(0.5)
     capture_desktop_screenshot(generation, "vendor-backpack.png")
+    sales = vendor_trade_marker_count(generation, "c2s", "CMSG_SELL_ITEM") + 1
     click_owned_window(generation, *VENDOR_TRADE_FIRST_BAG_SLOT, button=3)
-    vendor_trade_wait(generation, "c2s", "CMSG_SELL_ITEM", "sell request")
+    vendor_trade_wait(generation, "c2s", "CMSG_SELL_ITEM", "sell request", sales)
     automate_key_sequence(generation, VENDOR_TRADE_BACKPACK_KEYS, hold_seconds=0.05, gap_seconds=0.05)
     capture_desktop_screenshot(generation, "vendor-after-sell.png")
 
-    # Buyback: the buyback page shows the most recent sale in a single slot whose button buys it
-    # back on any click (MerchantFrame.xml's MerchantBuyBackItem).
+    # Buyback: the page shows the most recent sale in a single slot whose button buys it back on any
+    # click (MerchantFrame.xml's MerchantBuyBackItem).
     click_owned_window(generation, *VENDOR_TRADE_BUYBACK_TAB)
     time.sleep(0.5)
     capture_desktop_screenshot(generation, "vendor-buyback-tab.png")
+    buybacks = vendor_trade_marker_count(generation, "c2s", "CMSG_BUYBACK_ITEM") + 1
     click_owned_window(generation, *VENDOR_TRADE_BUYBACK_ITEM)
-    vendor_trade_wait(generation, "c2s", "CMSG_BUYBACK_ITEM", "buyback request")
+    vendor_trade_wait(generation, "c2s", "CMSG_BUYBACK_ITEM", "buyback request", buybacks)
     capture_desktop_screenshot(generation, "vendor-after-buyback.png")
 
-    # Repair: the merchant frame's repair button repairs every damaged equipped item.
+    # MerchantFrame_UpdateBuybackInfo hides both repair buttons, so the purchase tab is selected
+    # again (and given a moment to redraw) before repair-all is clicked.
+    click_owned_window(generation, *VENDOR_TRADE_PURCHASE_TAB)
+    time.sleep(0.5)
+    capture_desktop_screenshot(generation, "vendor-purchase-tab.png")
+
+    # Repair: repair-all (the anvil button) repairs every damaged equipped item.
+    repairs = vendor_trade_marker_count(generation, "c2s", "CMSG_REPAIR_ITEM") + 1
     click_owned_window(generation, *VENDOR_TRADE_REPAIR_BUTTON)
-    vendor_trade_wait(generation, "c2s", "CMSG_REPAIR_ITEM", "repair request")
+    vendor_trade_wait(generation, "c2s", "CMSG_REPAIR_ITEM", "repair request", repairs)
     capture_desktop_screenshot(generation, "vendor-after-repair.png")
 
+    # Log out so the server saves the character row the verification reads back. An ordinary
+    # fixture outside a resting area waits the full logout timer, so this gets its own deadline.
+    completed = vendor_trade_marker_count(generation, "s2c", "SMSG_LOGOUT_COMPLETE") + 1
     automate_key_sequence(
         generation, ("Return", "slash", *tuple("logout"), "Return"), hold_seconds=0.05, gap_seconds=0.05,
     )
-    vendor_trade_wait(generation, "s2c", "SMSG_LOGOUT_COMPLETE", "logout")
+    vendor_trade_wait(
+        generation, "s2c", "SMSG_LOGOUT_COMPLETE", "logout", completed, VENDOR_TRADE_LOGOUT_TIMEOUT,
+    )
     capture_desktop_screenshot(generation, "vendor-after-logout.png")
+
+
+def vendor_trade_packet_events(generation: Generation) -> list[dict[str, object]]:
+    """The sale and buyback requests from this run's packet capture, in arrival order.
+
+    Opcode names alone cannot prove which item moved: CMSG_SELL_ITEM carries the item GUID and
+    CMSG_BUYBACK_ITEM the buyback slot, so both payloads are read here to bind them to the seeded
+    bracer (AC reads both fields as full uint64/uint32, not packed GUIDs).
+    """
+    path = Path(generation["paths"]["logs"]) / "packets.pkt"
+    if not path.is_file():
+        return []
+    data = path.read_bytes()
+    events: list[dict[str, object]] = []
+    offset = PKT_LOG_HEADER_SIZE
+    while offset + PKT_PACKET_HEADER_SIZE <= len(data):
+        direction, _, ticks, optional_size, length = struct.unpack_from("<IIIII", data, offset)
+        if optional_size != 20 or length > 65535 or length < 4:
+            raise RuntimeError(f"vendor packet log desynchronised at byte {offset}")
+        opcode = struct.unpack_from("<I", data, offset + 40)[0]
+        payload = data[offset + 44:offset + 40 + length]
+        if direction == 0x47534D43 and opcode == CMSG_SELL_ITEM_OPCODE and len(payload) >= 16:
+            item = struct.unpack_from("<Q", payload, 8)[0]
+            events.append({"opcode": "CMSG_SELL_ITEM", "item_counter": item & 0xFFFFFFFF, "ticks": ticks})
+        elif direction == 0x47534D43 and opcode == CMSG_BUYBACK_ITEM_OPCODE and len(payload) >= 12:
+            slot = struct.unpack_from("<I", payload, 8)[0]
+            events.append({"opcode": "CMSG_BUYBACK_ITEM", "slot": slot, "ticks": ticks})
+        offset += PKT_PACKET_HEADER_SIZE + (length - 4)
+    return events
 
 
 def character_row_count(manifest: Manifest, generation: Generation) -> int:
@@ -3658,6 +3709,8 @@ def ground_movement_sequence(generation: Generation) -> list[str]:
 PKT_LOG_HEADER_SIZE = 66
 PKT_PACKET_HEADER_SIZE = 44
 CMSG_SET_SELECTION_OPCODE = 0x506
+CMSG_SELL_ITEM_OPCODE = 0x4E15
+CMSG_BUYBACK_ITEM_OPCODE = 0x6C17
 CMSG_CAST_SPELL_OPCODE = 0x4C07
 SMSG_CAST_FAILED_OPCODE = 0x4D16
 SMSG_SPELL_GO_OPCODE = 0x6E16
@@ -5399,6 +5452,9 @@ def sanitized_evidence(
     # Parsed once: the cast correlation, the fixture witness and the geometry report all read the
     # same capture, and the evidence records what they read.
     plan32_events = plan32_packet_events(generation) if plan32_geometry_mode else []
+    vendor_events = vendor_trade_packet_events(generation) if vendor_trade_mode else []
+    vendor_sells = [event for event in vendor_events if event["opcode"] == "CMSG_SELL_ITEM"]
+    vendor_buybacks = [event for event in vendor_events if event["opcode"] == "CMSG_BUYBACK_ITEM"]
     plan32_target = selections_target_fixture(plan32_events) if plan32_geometry_mode else None
     return {
         "schema": 1,
@@ -5468,6 +5524,8 @@ def sanitized_evidence(
             vendor_trade_marker_count(generation, "c2s", "CMSG_REPAIR_ITEM") if vendor_trade_mode else None
         ),
         "vendor_trade": vendor_trade_evidence_value if vendor_trade_mode else None,
+        "vendor_sell_item_counter": vendor_sells[0]["item_counter"] if vendor_sells else None,
+        "vendor_buyback_slot": vendor_buybacks[0]["slot"] if vendor_buybacks else None,
         "run_speed_acknowledgements": run_speed_acknowledgements(generation) if run_speed_mode else None,
         "ground_movement_sequence": ground_movement_sequence(generation) if ground_movement_mode else None,
         "jump_fall_land_sequence": ground_movement_sequence(generation) if jump_fall_land_mode else None,
@@ -5663,10 +5721,14 @@ def verify(args: argparse.Namespace) -> None:
             and unchanged
         )
         if populated_mode:
+            # Returning to the character screen after /logout makes the client ask for its character
+            # list again (CharacterSelect_OnShow calls GetCharacterListUpdate), so vendor mode sees
+            # one enumeration per session plus that closing one, while still logging in once.
+            expected_enumerations = 2 if vendor_trade_mode else expected_logins
             character_ok = character_ok and realm_count == 1 and enum_events == [{
                 "account_id": ACCOUNT_ID, "guid_low": CHARACTER_GUID,
                 "list_position": CHARACTER_LIST_POSITION,
-            }] * expected_logins
+            }] * expected_enumerations
         if selection_mode:
             character_ok = character_ok and selection_proof_is_complete(selection, transcript, enum_events)
         if initial_packets_mode:
@@ -5753,6 +5815,8 @@ def verify(args: argparse.Namespace) -> None:
                 and evidence["vendor_sell_requests"] >= 1
                 and evidence["vendor_buyback_requests"] >= 1
                 and evidence["vendor_repair_requests"] >= 1
+                and evidence["vendor_sell_item_counter"] == VENDOR_TRADE_SELL_ITEM_GUID
+                and evidence["vendor_buyback_slot"] == VENDOR_TRADE_BUYBACK_SLOT_START
                 and vendor.get("bought_item_count", 0) >= 1
                 and vendor.get("buyback_item_count", 0) >= 1
                 and vendor.get("repaired_durability", 0) == VENDOR_TRADE_DAMAGED_MAX_DURABILITY
