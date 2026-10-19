@@ -385,7 +385,6 @@ VENDOR_TRADE_GOSSIP_OPTION_ROW = 1
 VENDOR_TRADE_FIRST_BAG_SLOT = (0.901, 0.660)
 VENDOR_TRADE_PURCHASE_TAB = (0.045, 0.742)
 VENDOR_TRADE_BUYBACK_TAB = (0.112, 0.742)
-VENDOR_TRADE_BUYBACK_ITEM = (0.156, 0.797)
 VENDOR_TRADE_REPAIR_BUTTON = (0.116, 0.660)
 
 
@@ -3019,13 +3018,14 @@ def automate_vendor_trade(generation: Generation) -> None:
     automate_key_sequence(generation, VENDOR_TRADE_BACKPACK_KEYS, hold_seconds=0.05, gap_seconds=0.05)
     capture_desktop_screenshot(generation, "vendor-after-sell.png")
 
-    # Buyback: the page shows the most recent sale in a single slot whose button buys it back on any
-    # click (MerchantFrame.xml's MerchantBuyBackItem).
+    # Buyback: the buyback page fills the same twelve grid cells with the recent sales and hides the
+    # single recent-sale control (MerchantFrame_UpdateBuybackInfo), so the newest sale is grid cell 1
+    # and any click on that cell calls BuybackItem.
     click_owned_window(generation, *VENDOR_TRADE_BUYBACK_TAB)
     time.sleep(0.5)
     capture_desktop_screenshot(generation, "vendor-buyback-tab.png")
     buybacks = vendor_trade_marker_count(generation, "c2s", "CMSG_BUYBACK_ITEM") + 1
-    click_owned_window(generation, *VENDOR_TRADE_BUYBACK_ITEM)
+    click_owned_window(generation, *vendor_trade_item_row(1))
     vendor_trade_wait(generation, "c2s", "CMSG_BUYBACK_ITEM", "buyback request", buybacks)
     capture_desktop_screenshot(generation, "vendor-after-buyback.png")
 
@@ -5301,13 +5301,19 @@ def player_login_diagnostic(generation: Generation) -> str:
 
 def selection_proof_is_complete(
     selection: dict[str, object] | None, transcript: list[dict[str, str]],
-    enum_events: list[dict[str, int]], logins: int = 1,
+    enum_events: list[dict[str, int]], logins: int = 1, enumerations: int | None = None,
 ) -> bool:
+    """The selections, enumerations and logins the fixture character has to produce.
+
+    `enumerations` defaults to `logins`; vendor mode logs in once and then returns to the character
+    screen, whose own list refresh adds one more enumeration.
+    """
+    expected_enumerations = logins if enumerations is None else enumerations
     expected_enum = {
         "account_id": ACCOUNT_ID, "guid_low": CHARACTER_GUID, "list_position": CHARACTER_LIST_POSITION,
     }
     return (
-        enum_events == [expected_enum] * logins
+        enum_events == [expected_enum] * expected_enumerations
         and selection == {
             "action": "enter",
             "seeded_guid_low": CHARACTER_GUID,
@@ -5654,6 +5660,10 @@ def verify(args: argparse.Namespace) -> None:
     # The relog stage drives the whole login twice, so the login-shaped evidence below expects two
     # complete sessions that both name the same seeded character.
     expected_logins = 2 if plan32_geometry_mode and generation.get("plan32_stage") == "relog" else 1
+    # Returning to the character screen after /logout makes the client ask for its character list
+    # again (CharacterSelect_OnShow calls GetCharacterListUpdate), so vendor mode sees one
+    # enumeration per session plus that closing one while still logging in exactly once.
+    expected_enumerations = 2 if vendor_trade_mode else expected_logins
     rows = character_row_count(manifest, generation) if character_mode else None
     realm_count = realm_character_count(manifest, generation) if populated_mode else None
     seed = (
@@ -5721,25 +5731,24 @@ def verify(args: argparse.Namespace) -> None:
             and unchanged
         )
         if populated_mode:
-            # Returning to the character screen after /logout makes the client ask for its character
-            # list again (CharacterSelect_OnShow calls GetCharacterListUpdate), so vendor mode sees
-            # one enumeration per session plus that closing one, while still logging in once.
-            expected_enumerations = 2 if vendor_trade_mode else expected_logins
             character_ok = character_ok and realm_count == 1 and enum_events == [{
                 "account_id": ACCOUNT_ID, "guid_low": CHARACTER_GUID,
                 "list_position": CHARACTER_LIST_POSITION,
             }] * expected_enumerations
         if selection_mode:
-            character_ok = character_ok and selection_proof_is_complete(selection, transcript, enum_events)
+            character_ok = character_ok and selection_proof_is_complete(
+                selection, transcript, enum_events, expected_logins, expected_enumerations)
         if initial_packets_mode:
-            character_ok = character_ok and selection_proof_is_complete(selection, transcript, enum_events) and (
+            character_ok = character_ok and selection_proof_is_complete(
+                selection, transcript, enum_events, expected_logins, expected_enumerations) and (
                 evidence["pre_map_marker_count"] == 1
                 and bool(evidence["pre_map_packet_prefix"])
                 and evidence["post_marker_hold_seconds"] >= 5
                 and evidence["post_marker_snapshots"] == 2
             )
         if map_insertion_mode:
-            character_ok = character_ok and selection_proof_is_complete(selection, transcript, enum_events) and (
+            character_ok = character_ok and selection_proof_is_complete(
+                selection, transcript, enum_events, expected_logins, expected_enumerations) and (
                 evidence["map_insertion_marker_count"] == 1
                 and bool(evidence["map_insertion_packet_prefix"])
                 and "SMSG_LOGIN_VERIFY_WORLD" in evidence["map_insertion_packet_prefix"]
@@ -5757,7 +5766,7 @@ def verify(args: argparse.Namespace) -> None:
                 else evidence["in_world_control_marker_count"] == expected_logins
             )
             character_ok = character_ok and selection_proof_is_complete(
-                selection, transcript, enum_events, expected_logins
+                selection, transcript, enum_events, expected_logins, expected_enumerations
             ) and (
                 marker_ok
                 and bool(evidence["in_world_control_packet_prefix"])

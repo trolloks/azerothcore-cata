@@ -665,12 +665,13 @@ The click positions are window fractions derived from the 4.3.4 `MerchantFrame.x
 the 1800x1042 reference window. The frame anchors at `UIParent`'s top-left minus 104 y; its item grid
 is **two columns of six** cells, 165x52 design px each, filled left to right and top to bottom, so
 MuID 8 sits in the right column's fourth row (`VENDOR_TRADE_ITEM_GRID_ORIGIN`/`_COLUMN_WIDTH`/
-`_HEIGHT`; a single-column model buys the wrong item). The buyback page shows the most recent sale in
-one slot below `MerchantItem10` and its button buys back on any click (`VENDOR_TRADE_BUYBACK_ITEM`),
-the buyback page itself is tab 2 at the frame's bottom-left (`VENDOR_TRADE_BUYBACK_TAB`), the
-purchase tab is tab 1 beside it (`VENDOR_TRADE_PURCHASE_TAB`, reselected after the buyback because
-`MerchantFrame_UpdateBuybackInfo` hides both repair buttons), and repair-all is the anvil button at
-the frame's bottom-left (`VENDOR_TRADE_REPAIR_BUTTON`). The gossip
+`_HEIGHT`; a single-column model buys the wrong item). The buyback page fills the same twelve grid
+cells with the recent sales and hides the single recent-sale control
+(`MerchantFrame_UpdateBuybackInfo`), so the newest sale is grid cell 1 and any click on that cell
+calls `BuybackItem`; the buyback page itself is tab 2 at the frame's bottom-left
+(`VENDOR_TRADE_BUYBACK_TAB`), the purchase tab is tab 1 beside it (`VENDOR_TRADE_PURCHASE_TAB`,
+reselected after the buyback because the buyback page hides both repair buttons), and repair-all is
+the anvil button at the frame's bottom-left (`VENDOR_TRADE_REPAIR_BUTTON`). The gossip
 option's row is DB-defined (`VENDOR_TRADE_GOSSIP_OPTION_ORIGIN`/`_HEIGHT`/`_ROW`). All of these are
 `shortcut: default UI scale and layout; recalibrate them from the run's own screenshots after
 changing either.` Right-click buys and sells because that is the UI path a player uses, not a
