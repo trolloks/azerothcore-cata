@@ -712,10 +712,12 @@ The automation logs out at the end so the saved character row can be checked, wh
 character enumeration vendor modes already allow. Screenshots: `negative-<case>-after-buy.png` and
 `negative-<case>-after-logout.png`; run with `--stability-seconds 8 --timeout 180`.
 
-The cases a native client cannot send are out of scope here and stay parse/unit-level: invalid vendor/slot/
-type/count fields, a foreign-owned item, a dead or out-of-range vendor and a non-empty bag. Exhausted stock
-and an extended-cost row with a currency requirement are the next candidates (they need the vendor-list
-payload decoded and an `ItemExtendedCost.dbc` row with a currency).
+Pending native attempts (player actions or state, not forged packets): a dead or out-of-range vendor, and
+selling a non-empty bag (the AC handler guards that path at `ItemHandler.cpp:618`); the refusing layer is to
+be established the same way it was for the buy cases. Parse/unit-level only, because the native client cannot
+encode them: invalid vendor/slot/type/count fields and a foreign-owned item — these are not faked by injecting
+packets. Exhausted stock and an extended-cost row with a currency requirement are the next native candidates
+(they need the vendor-list payload decoded and an `ItemExtendedCost.dbc` row with a currency).
 
 ## Building before a run
 

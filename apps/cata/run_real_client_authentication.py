@@ -538,29 +538,46 @@ def vendor_negative_seed_sql(case: str) -> str:
 def vendor_negative_db_evidence(manifest: Manifest, generation: Generation) -> dict[str, object]:
     """The saved inventory and money after the case.
 
-    The whole owned inventory is read, not just the purchased entry: a rejection must leave the seeded
-    items exactly as they were, and a purchase must add exactly what it charged for.
+    Owned item instances are read without an inner join so an owned-but-unlinked row (an orphan) cannot
+    hide, and every link carries its owner guid so a link pointing at somebody else's item is visible.
+    The inventory links are read by the character's own guid, not by the item's owner.
     """
     schema = generation["schemas"]["characters"]
-    rows = mysql(
+    owned_text = mysql(
         manifest, generation,
-        "SELECT ii.`itemEntry`, ii.`count`, ic.`bag`, ic.`slot` FROM `item_instance` ii "
-        "JOIN `character_inventory` ic ON ic.`item` = ii.`guid` "
-        f"WHERE ii.`owner_guid`={CHARACTER_GUID} ORDER BY ic.`bag`, ic.`slot`;",
+        f"SELECT `guid`, `itemEntry`, `count` FROM `item_instance` WHERE `owner_guid`={CHARACTER_GUID} "
+        "ORDER BY `guid`;",
         schema,
     )
-    items: list[dict[str, int]] = []
-    for line in rows.splitlines():
-        if not line.strip():
-            continue
-        entry, count, bag, slot = (int(value) for value in line.split("\t"))
-        items.append({"entry": entry, "count": count, "bag": bag, "slot": slot})
+    links_text = mysql(
+        manifest, generation,
+        "SELECT ic.`bag`, ic.`slot`, ii.`guid`, ii.`itemEntry`, ii.`count`, ii.`owner_guid` "
+        "FROM `character_inventory` ic LEFT JOIN `item_instance` ii ON ii.`guid` = ic.`item` "
+        f"WHERE ic.`guid`={CHARACTER_GUID} ORDER BY ic.`bag`, ic.`slot`;",
+        schema,
+    )
+
+    def rows(text: str, fields: tuple[str, ...]) -> list[dict[str, int | None]]:
+        parsed: list[dict[str, int | None]] = []
+        for line in text.splitlines():
+            if not line.strip():
+                continue
+            values = line.split("\t")
+            parsed.append({
+                name: (int(value) if value != "NULL" else None) for name, value in zip(fields, values)
+            })
+        return parsed
+
     output = mysql(manifest, generation, f"SELECT `money` FROM `characters` WHERE `guid`={CHARACTER_GUID};", schema)
     try:
         money = int(output)
     except ValueError as error:
         raise RuntimeError(f"owned character database returned a non-numeric value: {output!r}") from error
-    return {"items": items, "money": money}
+    return {
+        "owned_items": rows(owned_text, ("guid", "entry", "count")),
+        "links": rows(links_text, ("bag", "slot", "item_guid", "entry", "count", "owner_guid")),
+        "money": money,
+    }
 
 
 def vendor_trade_db_evidence(manifest: Manifest, generation: Generation) -> dict[str, int]:
@@ -3264,7 +3281,18 @@ def vendor_trade_packet_events(generation: Generation) -> list[dict[str, object]
             raise RuntimeError(f"vendor packet log desynchronised at byte {offset}")
         opcode = struct.unpack_from("<I", data, offset + 40)[0]
         payload = data[offset + 44:offset + 40 + length]
-        if direction != 0x47534D43 and opcode == SMSG_BUY_FAILED_OPCODE and len(payload) >= 13:
+        if direction == 0x47534D43 and opcode == CMSG_BUY_ITEM_OPCODE and len(payload) >= 30:
+            # BuyItem::Read: guid, uint8 type, uint32 item, uint32 slot (the 1-based MuID), uint32 count,
+            # then the destination bag guid and slot.
+            events.append({
+                "opcode": "CMSG_BUY_ITEM",
+                "item_type": payload[8],
+                "item": struct.unpack_from("<I", payload, 9)[0],
+                "slot": struct.unpack_from("<I", payload, 13)[0],
+                "count": struct.unpack_from("<I", payload, 17)[0],
+                "ticks": ticks,
+            })
+        elif direction != 0x47534D43 and opcode == SMSG_BUY_FAILED_OPCODE and len(payload) >= 13:
             # SendBuyError writes guid, uint32 item, optional uint32 param, then the result byte last.
             events.append({
                 "opcode": "SMSG_BUY_FAILED", "result": payload[-1], "ticks": ticks,
@@ -3966,6 +3994,7 @@ PKT_PACKET_HEADER_SIZE = 44
 CMSG_SET_SELECTION_OPCODE = 0x506
 CMSG_SELL_ITEM_OPCODE = 0x4E15
 CMSG_BUYBACK_ITEM_OPCODE = 0x6C17
+CMSG_BUY_ITEM_OPCODE = 0x0736
 SMSG_BUY_FAILED_OPCODE = 0x6435
 SMSG_INVENTORY_CHANGE_FAILURE_OPCODE = 0x2236
 # BuyResult/EQUIP_ERR values the rejection cases expect (Item.h: BUY_ERR_NOT_ENOUGHT_MONEY,
@@ -5802,6 +5831,15 @@ def sanitized_evidence(
             vendor_trade_marker_count(generation, "s2c", "SMSG_INVENTORY_CHANGE_FAILURE")
             if vendor_negative_mode else None
         ),
+        "vendor_buy_requests_detail": (
+            [{"item": int(event["item"]), "slot": int(event["slot"]), "count": int(event["count"])}
+             for event in vendor_events if event["opcode"] == "CMSG_BUY_ITEM"]
+            if vendor_negative_mode else None
+        ),
+        "vendor_buy_failed_items": (
+            [int(event["item"]) for event in vendor_events if event["opcode"] == "SMSG_BUY_FAILED"]
+            if vendor_negative_mode else None
+        ),
         "vendor_buy_failure_reasons": (
             sorted({int(event["result"]) for event in vendor_events if event["opcode"] == "SMSG_BUY_FAILED"})
             if vendor_negative_mode else None
@@ -6123,39 +6161,63 @@ def verify(args: argparse.Namespace) -> None:
         if vendor_negative_mode:
             case = generation.get("vendor_case")
             vendor = evidence["vendor_negative"] or {}
-            items = vendor.get("items") or []
+            owned = vendor.get("owned_items") or []
+            links = vendor.get("links") or []
             money = vendor.get("money", -1)
-            buy_reasons = evidence["vendor_buy_failure_reasons"] or []
-            inventory_reasons = evidence["vendor_inventory_failure_reasons"] or []
+            requests = evidence["vendor_buy_requests_detail"] or []
+            failed_items = evidence["vendor_buy_failed_items"] or []
+            expected_request = {"item": VENDOR_TRADE_BUY_ENTRY, "slot": VENDOR_TRADE_BUY_MUID, "count": 1}
+            owned_guids = sorted(str(row.get("guid")) for row in owned)
+            linked_guids = sorted(str(link.get("item_guid")) for link in links)
+            link_shape = [
+                {
+                    "bag": link.get("bag"), "slot": link.get("slot"), "entry": link.get("entry"),
+                    "count": link.get("count"), "owner_guid": link.get("owner_guid"),
+                }
+                for link in links
+            ]
             if case == "repeat-buy":
                 case_ok = (
-                    evidence["vendor_buy_requests"] == 2
+                    requests == [expected_request, expected_request]
                     and evidence["vendor_buy_results"] == 2
                     and evidence["vendor_buy_failures"] == 0
-                    and items == [
-                        {"entry": VENDOR_TRADE_BUY_ENTRY, "count": 1, "bag": 0, "slot": 23},
-                        {"entry": VENDOR_TRADE_BUY_ENTRY, "count": 1, "bag": 0, "slot": 24},
+                    and sorted((row.get("entry"), row.get("count")) for row in owned)
+                    == [(VENDOR_TRADE_BUY_ENTRY, 1), (VENDOR_TRADE_BUY_ENTRY, 1)]
+                    and link_shape == [
+                        {"bag": 0, "slot": 23, "entry": VENDOR_TRADE_BUY_ENTRY, "count": 1,
+                         "owner_guid": CHARACTER_GUID},
+                        {"bag": 0, "slot": 24, "entry": VENDOR_TRADE_BUY_ENTRY, "count": 1,
+                         "owner_guid": CHARACTER_GUID},
                     ]
+                    and linked_guids == owned_guids
                     and money == VENDOR_TRADE_MONEY - 2 * 34
                 )
             elif case == "no-money":
                 case_ok = (
-                    evidence["vendor_buy_requests"] == 1
+                    requests == [expected_request]
                     and evidence["vendor_buy_results"] == 0
-                    and VENDOR_NEGATIVE_BUY_ERR_NOT_ENOUGHT_MONEY in buy_reasons
-                    and items == []
+                    and failed_items == [VENDOR_TRADE_BUY_ENTRY]
+                    and VENDOR_NEGATIVE_BUY_ERR_NOT_ENOUGHT_MONEY in (evidence["vendor_buy_failure_reasons"] or [])
+                    and owned == []
+                    and links == []
                     and money == 0
                 )
             elif case == "full-bags":
-                expected_items = [
-                    {"entry": VENDOR_NEGATIVE_FILL_ENTRY, "count": 1, "bag": 0, "slot": 23 + index}
-                    for index in range(16)
-                ]
                 case_ok = (
-                    evidence["vendor_buy_requests"] == 1
+                    requests == [expected_request]
                     and evidence["vendor_buy_results"] == 0
-                    and VENDOR_NEGATIVE_EQUIP_ERR_INVENTORY_FULL in inventory_reasons
-                    and items == expected_items
+                    and VENDOR_NEGATIVE_EQUIP_ERR_INVENTORY_FULL
+                    in (evidence["vendor_inventory_failure_reasons"] or [])
+                    and owned == [
+                        {"guid": 99000400 + index, "entry": VENDOR_NEGATIVE_FILL_ENTRY, "count": 1}
+                        for index in range(16)
+                    ]
+                    and link_shape == [
+                        {"bag": 0, "slot": 23 + index, "entry": VENDOR_NEGATIVE_FILL_ENTRY, "count": 1,
+                         "owner_guid": CHARACTER_GUID}
+                        for index in range(16)
+                    ]
+                    and linked_guids == owned_guids
                     and money == VENDOR_TRADE_MONEY
                 )
             else:
