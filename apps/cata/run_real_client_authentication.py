@@ -365,9 +365,27 @@ VENDOR_TRADE_BIND_KEYS = (
     "Return", "slash", *tuple("script"), "space",
     *tuple('SetBinding("G","INTERACTTARGET")SaveBindings(GetCurrentBindingSet())'), "Return",
 )
+def vendor_trade_name_keys(name: str) -> tuple[str, ...]:
+    """A name as keystrokes: its words separated by the client's own "space" keysym name.
+
+    A literal ' ' is not a keysym name, so passing the name as one character tuple types the words
+    together ("GodricRothgar") and the target macro silently matches nothing. The phase and walk/run
+    modes type their names word by word with "space" for the same reason.
+    """
+    keys: list[str] = []
+    for index, word in enumerate(name.split()):
+        if index:
+            keys.append("space")
+        keys.extend(word)
+    return tuple(keys)
+
+
 VENDOR_TRADE_TARGET_KEYS = (
-    "Return", "slash", *tuple("targetexact"), "space", *tuple(VENDOR_TRADE_NPC_NAME), "Return",
+    "Return", "slash", *tuple("targetexact"), "space", *vendor_trade_name_keys(VENDOR_TRADE_NPC_NAME),
+    "Return",
 )
+VENDOR_TRADE_PROBE_KEYS = ("Return", *tuple("chatcheck"), "Return")
+VENDOR_TRADE_PROBE_TIMEOUT = 20
 VENDOR_TRADE_INTERACT_KEYS = ("g",)
 VENDOR_TRADE_BACKPACK_KEYS = ("b",)
 # Click positions as fractions of the owned window's current geometry, derived from the 4.3.4
@@ -2966,6 +2984,27 @@ def vendor_trade_wait_any(generation: Generation, opcodes: tuple[str, ...], desc
         f"the vendor round trip did not reach the {description} ({' / '.join(opcodes)})")
 
 
+def vendor_trade_probe_input(generation: Generation) -> None:
+    """Type a plain chat message until the server echoes it.
+
+    The loading screen's dismissal and the window-focus handover can swallow whole key bursts, and a
+    swallowed macro only shows up as a missing selection minutes later. A plain message produces
+    `SMSG_MESSAGECHAT`, so this fails early and names the real problem when the client is not taking
+    input yet.
+    """
+    before = vendor_trade_marker_count(generation, "s2c", "SMSG_MESSAGECHAT")
+    deadline = time.monotonic() + VENDOR_TRADE_PROBE_TIMEOUT
+    while time.monotonic() < deadline:
+        automate_key_sequence(generation, VENDOR_TRADE_PROBE_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+        until = time.monotonic() + 4.0
+        while time.monotonic() < until:
+            if vendor_trade_marker_count(generation, "s2c", "SMSG_MESSAGECHAT") > before:
+                return
+            time.sleep(0.2)
+    capture_desktop_screenshot(generation, "vendor-input-probe.png")
+    raise RuntimeError("the client did not accept a chat probe; keyboard input is not reaching it")
+
+
 def automate_vendor_trade(generation: Generation) -> None:
     """Drive the Plan 33 round trip through the real client's own UI: target Godric Rothgar by name,
     interact through the bound key, open the vendor from the gossip option, buy, sell, buy back and
@@ -2981,6 +3020,7 @@ def automate_vendor_trade(generation: Generation) -> None:
     # macro itself as the input probe: once the client reports a selection, keys reach it, so the
     # interaction keybind can be set afterwards instead of before.
     time.sleep(4.0)
+    vendor_trade_probe_input(generation)
     selections = vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION")
     for _ in range(5):
         automate_key_sequence(generation, VENDOR_TRADE_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05)
