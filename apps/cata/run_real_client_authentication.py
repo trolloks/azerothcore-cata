@@ -389,9 +389,9 @@ VENDOR_TRADE_PROBE_TIMEOUT = 20
 VENDOR_TRADE_INTERACT_KEYS = ("g",)
 VENDOR_TRADE_BACKPACK_KEYS = ("b",)
 # Click positions as fractions of the owned window's current geometry, derived from the 4.3.4
-# MerchantFrame.xml (the frame anchors at UIParent's TOPLEFT -104 y; its item grid is two columns of
-# six cells, 165x52 design px each; the buyback page shows one item below MerchantItem10; the repair
-# buttons sit at the frame's bottom-left) and calibrated on the 1800x1042 reference window.
+# MerchantFrame.xml (the frame anchors at UIParent's TOPLEFT -104 y; its purchase grid is two columns
+# of six cells, 165x52 design px each; the repair buttons sit at the frame's bottom-left) and
+# calibrated on the 1800x1042 reference window.
 # shortcut: default UI scale/layout and camera; the screenshots named in automate_vendor_trade are
 # the calibration evidence, recalibrate these after changing either.
 VENDOR_TRADE_ITEM_GRID_ORIGIN = (0.0405, 0.2255)  # item 1's item-button centre
@@ -403,8 +403,9 @@ VENDOR_TRADE_GOSSIP_OPTION_ROW = 1
 VENDOR_TRADE_FIRST_BAG_SLOT = (0.9094, 0.7476)
 VENDOR_TRADE_PURCHASE_TAB = (0.0361, 0.5806)
 VENDOR_TRADE_BUYBACK_TAB = (0.0761, 0.5806)
-# The buyback page re-anchors the same buttons into a four-column grid, so its first cell is not the
-# purchase page's first cell: measured on the run's vendor-buyback-tab.png.
+# The buyback page re-anchors the same twelve buttons into the buyback frame's own two-column grid
+# (wider cells) and hides the recent-sale control, so its first cell is not the purchase page's first
+# cell: measured on the run's vendor-buyback-tab.png.
 VENDOR_TRADE_BUYBACK_ITEM = (0.0306, 0.2111)
 # The right-hand of the two anvil buttons is repair-all; the left one enters single-item repair mode.
 VENDOR_TRADE_REPAIR_BUTTON = (0.0872, 0.5154)

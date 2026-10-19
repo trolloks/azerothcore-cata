@@ -683,8 +683,11 @@ slot (23-38, not a buyback slot), the vest repaired to its 55 durability, and mo
 below the seeded 5 gold. Because opcode names cannot identify an item, the mode also enables
 `PacketLogFile` and reads the requests' payloads: the sale's item counter must be the seeded
 bracer's GUID and the buyback's slot must be 74 (`BUYBACK_SLOT_START`, where the first sale lands),
-so an untouched bracer sitting in its seeded slot cannot stand in for the round trip. Run with `--stability-seconds 8 --timeout 180` (the round trip itself takes
-about 30 s after the in-world marker).
+so an untouched bracer sitting in its seeded slot cannot stand in for the round trip.
+
+Run with `--stability-seconds 8 --timeout 180`; the round trip takes about 90 s after the in-world
+marker (the accepted run logged the marker at 12:59:23, the purchase at 12:59:59, the repair at
+13:00:23 and the logout at 13:00:49).
 
 ## Building before a run
 

@@ -10,7 +10,7 @@ sanitized verdict.
 - Client: build **15595** (unchanged Cata client, launched through GE-Proton wine).
 - Reference: TrinityCore `c699217775d90794158422387b07a917e161b582`.
 - Branch `plan/33-native-vendor-buy-sell-buyback-and-repair`, harness at `11d50c672`.
-- Server binaries report `b9fcf1fff7f1`; the C++ source is unchanged since `2e62b063b` (every later
+- Server binaries report `3ec5ea395851` (generation 2); the C++ source is unchanged since `2e62b063b` (every later
   commit on the branch is Python harness or Markdown), so the accepted binary contains exactly the
   reviewed C++.
 - Data: `--data-root` = the pinned TrinityCore extraction root; `--server-dbc-root` = this
@@ -78,8 +78,8 @@ back in slot 1 next to the shield, the repair-all charge (→ 4g 99s 28c), and t
 ## UI facts this pins
 
 - The merchant grid is two columns of six filled left to right (MuID 8 = right column, row 4).
-- The buyback page re-anchors the same twelve buttons into a four-column grid and hides the
-  single recent-sale control; the newest sale is its first cell.
+- The buyback page re-anchors the same twelve buttons into its own two-column grid (wide cells) and
+  hides the single recent-sale control; the newest sale is its first cell.
 - The repair-all anvil sits at the merchant frame's bottom-left; both repair buttons are hidden while
   the buyback page is selected, so the purchase tab is reselected before repairing.
 - Returning to the character screen after `/logout` makes the client request its character list
