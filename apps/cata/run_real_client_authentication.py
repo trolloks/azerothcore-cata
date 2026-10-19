@@ -403,6 +403,9 @@ VENDOR_TRADE_GOSSIP_OPTION_ROW = 1
 VENDOR_TRADE_FIRST_BAG_SLOT = (0.9094, 0.7476)
 VENDOR_TRADE_PURCHASE_TAB = (0.0361, 0.5806)
 VENDOR_TRADE_BUYBACK_TAB = (0.0761, 0.5806)
+# The buyback page re-anchors the same buttons into a four-column grid, so its first cell is not the
+# purchase page's first cell: measured on the run's vendor-buyback-tab.png.
+VENDOR_TRADE_BUYBACK_ITEM = (0.0306, 0.2111)
 # The right-hand of the two anvil buttons is repair-all; the left one enters single-item repair mode.
 VENDOR_TRADE_REPAIR_BUTTON = (0.0872, 0.5154)
 
@@ -3092,7 +3095,7 @@ def automate_vendor_trade(generation: Generation) -> None:
     time.sleep(0.5)
     capture_desktop_screenshot(generation, "vendor-buyback-tab.png")
     buybacks = vendor_trade_marker_count(generation, "c2s", "CMSG_BUYBACK_ITEM") + 1
-    click_owned_window(generation, *vendor_trade_item_row(1))
+    click_owned_window(generation, *VENDOR_TRADE_BUYBACK_ITEM)
     vendor_trade_wait(generation, "c2s", "CMSG_BUYBACK_ITEM", "buyback request", buybacks)
     capture_desktop_screenshot(generation, "vendor-after-buyback.png")
 
