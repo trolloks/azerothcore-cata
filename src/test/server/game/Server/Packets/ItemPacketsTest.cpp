@@ -44,6 +44,78 @@ TEST(ItemPacketsTest, DestroyRejectsTruncatedCataCount)
     EXPECT_THROW(packet.Read(), ByteBufferException);
 }
 
+TEST(ItemPacketsTest, BuyItemReadsCataItemTypeAndDestinationBag)
+{
+    EXPECT_EQ(uint16(CMSG_BUY_ITEM), 0x0736);
+    WorldPacket raw(CMSG_BUY_ITEM, 30);
+    raw << uint64(10);                              // vendorguid: Cata client packets carry it unpacked
+    raw << uint8(ITEM_VENDOR_TYPE_ITEM);
+    raw << uint32(0x0000ABCD);
+    raw << uint32(3);
+    raw << uint32(2);
+    raw << uint64(0);                               // empty destination bag guid
+    raw << uint8(42);                               // destination bag slot
+    WorldPackets::Item::BuyItem packet(std::move(raw));
+    packet.Read();
+    EXPECT_EQ(packet.VendorGuid.GetCounter(), 10u);
+    EXPECT_EQ(packet.ItemType, uint8(ITEM_VENDOR_TYPE_ITEM));
+    EXPECT_EQ(packet.Item, 0x0000ABCDu);
+    EXPECT_EQ(packet.Slot, 3u);
+    EXPECT_EQ(packet.Count, 2u);
+    EXPECT_TRUE(packet.BagGuid.IsEmpty());
+    EXPECT_EQ(packet.BagSlot, 42);
+    EXPECT_EQ(packet.GetRawPacket()->rpos(), packet.GetSize());
+}
+
+TEST(ItemPacketsTest, BuyItemReadsCataDestinationBagGuidAndWideCount)
+{
+    WorldPacket raw(CMSG_BUY_ITEM, 30);
+    raw << uint64(10);                              // vendorguid: Cata client packets carry it unpacked
+    raw << uint8(2);                                // ItemVendorType::Currency on the wire, parsed verbatim
+    raw << uint32(0x0000ABCD);
+    raw << uint32(3);
+    raw << uint32(1000);                            // Cata count is a uint32 item count, not a stack count
+    raw << uint64(0x0000000100000002ULL);           // destination bag guid
+    raw << uint8(7);                                // destination bag slot
+    WorldPackets::Item::BuyItem packet(std::move(raw));
+    packet.Read();
+    EXPECT_EQ(packet.VendorGuid.GetCounter(), 10u);
+    EXPECT_EQ(uint8(ITEM_VENDOR_TYPE_CURRENCY), 2); // the wire value the parse test writes
+    EXPECT_EQ(uint8(ITEM_VENDOR_TYPE_ITEM), 1);
+    EXPECT_EQ(packet.ItemType, 2);                  // the decoded value, which the handler dispatches on
+    EXPECT_EQ(packet.Item, 0x0000ABCDu);
+    EXPECT_EQ(packet.Slot, 3u);
+    EXPECT_EQ(packet.Count, 1000u);
+    EXPECT_EQ(packet.BagGuid.GetRawValue(), 0x0000000100000002ULL);
+    EXPECT_EQ(packet.BagSlot, 7);
+    EXPECT_EQ(packet.GetRawPacket()->rpos(), packet.GetSize());
+}
+
+TEST(ItemPacketsTest, BuyItemRejectsTruncatedCataDestinationBag)
+{
+    WorldPacket raw(CMSG_BUY_ITEM, 20);
+    raw << uint64(10);
+    raw << uint8(ITEM_VENDOR_TYPE_ITEM);
+    raw << uint32(0x0000ABCD);
+    raw << uint32(3);
+    raw << uint32(2);
+    WorldPackets::Item::BuyItem packet(std::move(raw));
+    EXPECT_THROW(packet.Read(), ByteBufferException);
+}
+
+TEST(ItemPacketsTest, BuyItemRejectsMissingCataDestinationBagSlot)
+{
+    WorldPacket raw(CMSG_BUY_ITEM, 30);
+    raw << uint64(10);
+    raw << uint8(ITEM_VENDOR_TYPE_ITEM);
+    raw << uint32(0x0000ABCD);
+    raw << uint32(3);
+    raw << uint32(2);
+    raw << uint64(0x0000000100000002ULL);           // destination bag guid, final bag slot byte missing
+    WorldPackets::Item::BuyItem packet(std::move(raw));
+    EXPECT_THROW(packet.Read(), ByteBufferException);
+}
+
 class ItemInventoryTest : public IntegrationTestFixture
 {
 protected:

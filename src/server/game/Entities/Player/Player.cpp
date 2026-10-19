@@ -4839,6 +4839,9 @@ void Player::DurabilityPointLossForEquipSlot(EquipmentSlots slot)
 
 uint32 Player::DurabilityRepairAll(bool cost, float discountMod, bool guildBank)
 {
+    // AC repairs and pays each item in turn; the 4.3.4 reference collects every cost first, refuses the whole
+    // repair when the money is short and withdraws once. The difference and the guild-funded branch (sorted
+    // cheapest-first there, out of plan 33's scope) are recorded in the plan 33 notes.
     uint32 TotalCost = 0;
     // equipped, backpack, bags itself
     for (uint8 i = EQUIPMENT_SLOT_START; i < INVENTORY_SLOT_ITEM_END; i++)
@@ -4890,7 +4893,8 @@ uint32 Player::DurabilityRepair(uint16 pos, bool cost, float discountMod, bool g
             }
 
             uint32 dmultiplier = dcost->multiplier[ItemSubClassToDurabilityMultiplierId(ditemProto->Class, ditemProto->SubClass)];
-            uint32 costs = uint32(LostDurability * dmultiplier * double(dQualitymodEntry->quality_mod));
+            // the 4.3.4 reference rounds this product, truncation would charge up to a copper less
+            uint32 costs = uint32(std::round(LostDurability * dmultiplier * double(dQualitymodEntry->quality_mod)));
 
             costs = uint32(costs * discountMod * sWorld->getRate(RATE_REPAIRCOST));
 
@@ -10794,12 +10798,13 @@ void Player::InitDisplayIds()
     }
 }
 
-inline bool Player::_StoreOrEquipNewItem(uint32 vendorslot, uint32 item, uint8 count, uint8 bag, uint8 slot, int32 price, ItemTemplate const* pProto, Creature* pVendor, VendorItem const* crItem, bool bStore)
+inline bool Player::_StoreOrEquipNewItem(uint32 vendorslot, uint32 item, uint32 count, uint8 bag, uint8 slot, int32 price, ItemTemplate const* pProto, Creature* pVendor, VendorItem const* crItem, bool bStore)
 {
+    uint32 stacks = count / pProto->BuyCount;
     ItemPosCountVec vDest;
     uint16 uiDest = 0;
     InventoryResult msg = bStore ?
-                          CanStoreNewItem(bag, slot, vDest, item, pProto->BuyCount * count) :
+                          CanStoreNewItem(bag, slot, vDest, item, count) :
                           CanEquipNewItem(slot, uiDest, item, false);
     if (msg != EQUIP_ERR_OK)
     {
@@ -10813,15 +10818,15 @@ inline bool Player::_StoreOrEquipNewItem(uint32 vendorslot, uint32 item, uint8 c
     {
         ItemExtendedCostEntry const* iece = sItemExtendedCostStore.LookupEntry(crItem->ExtendedCost);
         if (iece->reqhonorpoints)
-            ModifyHonorPoints(- int32(iece->reqhonorpoints * count));
+            ModifyHonorPoints(- int32(iece->reqhonorpoints * stacks));
 
         if (iece->reqarenapoints)
-            ModifyArenaPoints(- int32(iece->reqarenapoints * count));
+            ModifyArenaPoints(- int32(iece->reqarenapoints * stacks));
 
         for (uint8 i = 0; i < MAX_ITEM_EXTENDED_COST_REQUIREMENTS; ++i)
         {
             if (iece->reqitem[i])
-                DestroyItemCount(iece->reqitem[i], (iece->reqitemcount[i] * count), true);
+                DestroyItemCount(iece->reqitem[i], (iece->reqitemcount[i] * stacks), true);
         }
     }
 
@@ -10830,7 +10835,7 @@ inline bool Player::_StoreOrEquipNewItem(uint32 vendorslot, uint32 item, uint8 c
     Item* it = bStore ? StoreNewItem(vDest, item, true) : EquipNewItem(uiDest, item, true);
     if (it)
     {
-        uint32 new_count = pVendor->UpdateVendorItemCurrentCount(crItem, pProto->BuyCount * count);
+        uint32 new_count = pVendor->UpdateVendorItemCurrentCount(crItem, count);
 
         WorldPacket data(SMSG_BUY_ITEM, (8 + 4 + 4 + 4));
         data << pVendor->GetGUID();
@@ -10838,7 +10843,7 @@ inline bool Player::_StoreOrEquipNewItem(uint32 vendorslot, uint32 item, uint8 c
         data << int32(crItem->maxcount > 0 ? new_count : 0xFFFFFFFF);
         data << uint32(count);
         SendDirectMessage(&data);
-        SendNewItem(it, pProto->BuyCount * count, true, false, false);
+        SendNewItem(it, count, true, false, false);
 
         if (!bStore)
             AutoUnequipOffhandIfNeed();
@@ -10860,7 +10865,7 @@ inline bool Player::_StoreOrEquipNewItem(uint32 vendorslot, uint32 item, uint8 c
 }
 
 // Return true is the bought item has a max count to force refresh of window by caller
-bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uint32 item, uint8 count, uint8 bag, uint8 slot)
+bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uint32 item, uint32 count, uint8 bag, uint8 slot)
 {
     sScriptMgr->OnPlayerBeforeBuyItemFromVendor(this, vendorguid, vendorslot, item, count, bag, slot);
 
@@ -10936,7 +10941,7 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
     // check current item amount if it limited
     if (crItem->maxcount != 0)
     {
-        if (creature->GetVendorItemCurrentCount(crItem) < pProto->BuyCount * count)
+        if (creature->GetVendorItemCurrentCount(crItem) < count)
         {
             SendBuyError(BUY_ERR_ITEM_ALREADY_SOLD, creature, item, 0);
             return false;
@@ -10949,8 +10954,36 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
         return false;
     }
 
+    // The price and the money cap are resolved before the extended-cost checks: the reference clamps the
+    // request after them, so a clamped count can stop being a full stack and then pay for fewer stacks than
+    // it grants. Clamping first keeps every later step on the same number.
+    uint32 price = 0;
+    if (crItem->IsGoldRequired(pProto) && pProto->BuyPrice > 0) //Assume price cannot be negative (do not know why it is int32)
+    {
+        double buyPricePerItem = double(pProto->BuyPrice) / pProto->BuyCount;
+        uint64 maxCount = uint64(MAX_MONEY_AMOUNT / buyPricePerItem);
+        if (uint64(count) > maxCount)
+        {
+            LOG_ERROR("entities.player", "Player {} tried to buy {} item id {}, causing overflow", GetName(), count, pProto->ItemId);
+            count = uint32(maxCount);
+        }
+
+        price = uint32(buyPricePerItem * count); //it should not exceed MAX_MONEY_AMOUNT
+
+        // reputation discount
+        price = uint32(std::floor(price * GetReputationPriceDiscount(creature)));
+    }
+
     if (crItem->ExtendedCost)
     {
+        // Can only buy full stacks for extended cost
+        if (count % pProto->BuyCount)
+        {
+            SendEquipError(EQUIP_ERR_CANT_BUY_QUANTITY, nullptr, nullptr);
+            return false;
+        }
+
+        uint32 stacks = count / pProto->BuyCount;
         ItemExtendedCostEntry const* iece = sItemExtendedCostStore.LookupEntry(crItem->ExtendedCost);
         if (!iece)
         {
@@ -10958,15 +10991,17 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
             return false;
         }
 
+        // every requirement total is validated in 64 bits: the reference multiplies in 32 bits, where a
+        // large stack count wraps the total and a wrapped total is a requirement that costs nothing
         // honor points price
-        if (GetHonorPoints() < (iece->reqhonorpoints * count))
+        if (uint64(GetHonorPoints()) < uint64(iece->reqhonorpoints) * stacks)
         {
             SendEquipError(EQUIP_ERR_NOT_ENOUGH_HONOR_POINTS, nullptr, nullptr);
             return false;
         }
 
         // arena points price
-        if (GetArenaPoints() < (iece->reqarenapoints * count))
+        if (uint64(GetArenaPoints()) < uint64(iece->reqarenapoints) * stacks)
         {
             SendEquipError(EQUIP_ERR_NOT_ENOUGH_ARENA_POINTS, nullptr, nullptr);
             return false;
@@ -10975,8 +11010,25 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
         // item base price
         for (uint8 i = 0; i < MAX_ITEM_EXTENDED_COST_REQUIREMENTS; ++i)
         {
-            if (iece->reqitem[i] && !HasItemCount(iece->reqitem[i], (iece->reqitemcount[i] * count)))
+            if (!iece->reqitem[i])
+                continue;
+
+            uint64 const total = uint64(iece->reqitemcount[i]) * stacks;
+            if (total > std::numeric_limits<uint32>::max() || !HasItemCount(iece->reqitem[i], uint32(total)))
             {
+                SendEquipError(EQUIP_ERR_VENDOR_MISSING_TURNINS, nullptr, nullptr);
+                return false;
+            }
+        }
+
+        // 4.x extended costs can also charge currencies, which AC has no storage to spend from yet, so such
+        // a row is refused instead of granting the item for free
+        for (uint8 i = 0; i < MAX_ITEM_EXTENDED_COST_CURRENCIES; ++i)
+        {
+            if (iece->reqcurrency[i])
+            {
+                LOG_ERROR("entities.player", "Item {} extended cost {} requires currency {}, which is not supported",
+                    pProto->ItemId, crItem->ExtendedCost, iece->reqcurrency[i]);
                 SendEquipError(EQUIP_ERR_VENDOR_MISSING_TURNINS, nullptr, nullptr);
                 return false;
             }
@@ -10989,27 +11041,40 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
             SendEquipError(EQUIP_ERR_CANT_EQUIP_RANK, nullptr, nullptr);
             return false;
         }
-    }
 
-    uint32 price = 0;
-    if (crItem->IsGoldRequired(pProto) && pProto->BuyPrice > 0) //Assume price cannot be negative (do not know why it is int32)
-    {
-        uint32 maxCount = MAX_MONEY_AMOUNT / pProto->BuyPrice;
-        if ((uint32)count > maxCount)
+        if (iece->reqfactionid && uint32(GetReputationRank(iece->reqfactionid)) < iece->reqfactionstanding)
         {
-            LOG_ERROR("entities.player", "Player {} tried to buy {} item id {}, causing overflow", GetName(), (uint32)count, pProto->ItemId);
-            count = (uint8)maxCount;
-        }
-        price = pProto->BuyPrice * count; //it should not exceed MAX_MONEY_AMOUNT
-
-        // reputation discount
-        price = uint32(std::floor(price * GetReputationPriceDiscount(creature)));
-
-        if (!HasEnoughMoney(price))
-        {
-            SendBuyError(BUY_ERR_NOT_ENOUGHT_MONEY, creature, item, 0);
+            SendBuyError(BUY_ERR_REPUTATION_REQUIRE, creature, item, 0);
             return false;
         }
+
+        if (iece->requirementflags & ITEM_EXT_COST_FLAG_REQUIRE_GUILD && !GetGuildId())
+        {
+            SendEquipError(EQUIP_ERR_VENDOR_MISSING_TURNINS, nullptr, nullptr);
+            return false;
+        }
+
+        // AC has no guild level (guilds gain levels in 4.x, which this core does not model), so a row
+        // that requires one is refused instead of granting the item without it
+        if (iece->reqguildlevel)
+        {
+            LOG_ERROR("entities.player", "Item {} extended cost {} requires guild level {}, which this core does not track",
+                pProto->ItemId, crItem->ExtendedCost, iece->reqguildlevel);
+            SendEquipError(EQUIP_ERR_VENDOR_MISSING_TURNINS, nullptr, nullptr);
+            return false;
+        }
+
+        if (iece->reqachievement && !HasAchieved(iece->reqachievement))
+        {
+            SendEquipError(EQUIP_ERR_VENDOR_MISSING_TURNINS, nullptr, nullptr);
+            return false;
+        }
+    }
+
+    if (price && !HasEnoughMoney(price))
+    {
+        SendBuyError(BUY_ERR_NOT_ENOUGHT_MONEY, creature, item, 0);
+        return false;
     }
 
     if ((bag == NULL_BAG && slot == NULL_SLOT) || IsInventoryPos(bag, slot))
@@ -11019,7 +11084,7 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
     }
     else if (IsEquipmentPos(bag, slot))
     {
-        if (pProto->BuyCount * count != 1)
+        if (count != 1)
         {
             SendEquipError(EQUIP_ERR_ITEM_CANT_BE_EQUIPPED, nullptr, nullptr);
             return false;

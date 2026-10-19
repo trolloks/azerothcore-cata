@@ -132,7 +132,8 @@ enum InventoryResult : uint8
     EQUIP_ERR_SCALING_STAT_ITEM_LEVEL_EXCEEDED           = 86,
     EQUIP_ERR_PURCHASE_LEVEL_TOO_LOW                     = 87,
     EQUIP_ERR_CANT_EQUIP_NEED_TALENT                     = 88,
-    EQUIP_ERR_ITEM_MAX_LIMIT_CATEGORY_EQUIPPED_EXCEEDED  = 89
+    EQUIP_ERR_ITEM_MAX_LIMIT_CATEGORY_EQUIPPED_EXCEEDED  = 89,
+    EQUIP_ERR_CANT_BUY_QUANTITY                          = 93, // You can't buy the specified quantity of that item.
 };
 
 // EnumUtils: DESCRIBE THIS

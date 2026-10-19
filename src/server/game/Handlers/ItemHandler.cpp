@@ -30,6 +30,7 @@
 #include <cmath>
 
 #include "ItemPackets.h"
+#include "NPCPackets.h"
 
 void WorldSession::HandleSplitItemOpcode(WorldPackets::Item::SplitItem& packet)
 {
@@ -827,7 +828,23 @@ void WorldSession::HandleBuyItemInSlotOpcode(WorldPackets::Item::BuyItemInSlot& 
     if (bag == NULL_BAG)
         return;
 
-    GetPlayer()->BuyItemFromVendorSlot(packet.VendorGuid, packet.Slot, packet.Item, packet.Count, bag, packet.BagSlot);
+    // CMSG_BUY_ITEM_IN_SLOT counts stacks (WotLK client; the 4.3.4 client never sends the opcode), while
+    // BuyItemFromVendorSlot counts the items themselves; multiply by the vendor stack, where a zero count
+    // meant one bundle, and refuse a product a handcrafted packet would overflow
+    uint32 count = packet.Count;
+    if (ItemTemplate const* itemTemplate = sObjectMgr->GetItemTemplate(packet.Item))
+    {
+        uint32 stacks = packet.Count ? packet.Count : 1;
+        if (stacks > 0xFFFFFFFF / itemTemplate->BuyCount)
+        {
+            GetPlayer()->SendEquipError(EQUIP_ERR_CANT_BUY_QUANTITY, nullptr, nullptr);
+            return;
+        }
+
+        count = stacks * itemTemplate->BuyCount;
+    }
+
+    GetPlayer()->BuyItemFromVendorSlot(packet.VendorGuid, packet.Slot, packet.Item, count, bag, packet.BagSlot);
 }
 
 void WorldSession::HandleBuyItemOpcode(WorldPackets::Item::BuyItem& packet)
@@ -838,7 +855,27 @@ void WorldSession::HandleBuyItemOpcode(WorldPackets::Item::BuyItem& packet)
     else
         return; // cheating
 
-    GetPlayer()->BuyItemFromVendorSlot(packet.VendorGuid, packet.Slot, packet.Item, packet.Count, NULL_BAG, NULL_SLOT);
+    if (packet.ItemType == ITEM_VENDOR_TYPE_CURRENCY)
+    {
+        // Cata currency purchases need the currency storage AC has no counterpart for yet
+        LOG_DEBUG("network", "WORLD: HandleBuyItemOpcode - currency {} is not a supported vendor item", packet.Item);
+        return;
+    }
+
+    if (packet.ItemType != ITEM_VENDOR_TYPE_ITEM)
+    {
+        LOG_DEBUG("network", "WORLD: HandleBuyItemOpcode - wrong itemType {} in CMSG_BUY_ITEM", uint32(packet.ItemType));
+        return;
+    }
+
+    uint8 bag = NULL_BAG;
+    Item* bagItem = _player->GetItemByGuid(packet.BagGuid);
+    if (bagItem && bagItem->IsBag())
+        bag = bagItem->GetSlot();
+    else if (packet.BagGuid == _player->GetGUID()) // The client sends the player guid when storing an item in the default backpack
+        bag = INVENTORY_SLOT_BAG_0;
+
+    GetPlayer()->BuyItemFromVendorSlot(packet.VendorGuid, packet.Slot, packet.Item, packet.Count, bag, packet.BagSlot);
 }
 
 void WorldSession::HandleListInventoryOpcode(WorldPackets::Item::ListInventory& packet)
@@ -853,7 +890,7 @@ void WorldSession::HandleListInventoryOpcode(WorldPackets::Item::ListInventory& 
 
 void WorldSession::SendListInventory(ObjectGuid vendorGuid, uint32 vendorEntry)
 {
-    LOG_DEBUG("network", "WORLD: Sent SMSG_LIST_INVENTORY");
+    LOG_DEBUG("network", "WORLD: Sent SMSG_VENDOR_INVENTORY");
 
     sScriptMgr->OnPlayerSendListInventory(GetPlayer(), vendorGuid, vendorEntry);
 
@@ -883,26 +920,22 @@ void WorldSession::SendListInventory(ObjectGuid vendorGuid, uint32 vendorEntry)
     VendorItemData const* items = vendorEntry ? sObjectMgr->GetNpcVendorItemList(vendorEntry) : vendor->GetVendorItems();
     if (!items)
     {
-        WorldPacket data(SMSG_LIST_INVENTORY, 8 + 1 + 1);
-        data << vendorGuid;
-        data << uint8(0);                                   // count == 0, next will be error code
-        data << uint8(0);                                   // "Vendor has no inventory"
-        SendPacket(&data);
+        WorldPackets::NPC::VendorInventory packet;
+        packet.Vendor = vendorGuid;
+        packet.Reason = VENDOR_INVENTORY_REASON_INVENTORY_EMPTY;
+        SendPacket(packet.Write());
         return;
     }
 
-    uint8 itemCount = items->GetItemCount();
-    uint8 count = 0;
+    uint32 itemCount = items->GetItemCount();
+    uint32 count = 0;
 
-    WorldPacket data(SMSG_LIST_INVENTORY, 8 + 1 + itemCount * 8 * 4);
-    data << vendorGuid;
-
-    std::size_t countPos = data.wpos();
-    data << uint8(count);
+    WorldPackets::NPC::VendorInventory packet;
+    packet.Vendor = vendorGuid;
 
     float discountMod = _player->GetReputationPriceDiscount(vendor);
 
-    for (uint8 slot = 0; slot < itemCount; ++slot)
+    for (uint32 slot = 0; slot < itemCount; ++slot)
     {
         if (VendorItem const* item = items->GetItem(slot))
         {
@@ -936,14 +969,20 @@ void WorldSession::SendListInventory(ObjectGuid vendorGuid, uint32 vendorEntry)
                 // reputation discount
                 int32 price = item->IsGoldRequired(itemTemplate) ? uint32(std::floor(itemTemplate->BuyPrice * discountMod)) : 0;
 
-                data << uint32(slot + 1);       // client expects counting to start at 1
-                data << uint32(item->item);
-                data << uint32(itemTemplate->DisplayInfoID);
-                data << int32(leftInStock);
-                data << uint32(price);
-                data << uint32(itemTemplate->MaxDurability);
-                data << uint32(itemTemplate->BuyCount);
-                data << uint32(item->ExtendedCost);
+                WorldPackets::NPC::VendorItem vendorItem;
+                vendorItem.MuID = slot + 1;     // client expects counting to start at 1
+                vendorItem.Durability = itemTemplate->MaxDurability;
+                if (item->ExtendedCost)
+                    vendorItem.ExtendedCostID = item->ExtendedCost;
+                // shortcut: npc_vendor has no type column in AC, so every row is a gold-priced item; add the
+                // column together with the currency store when currency vendors are converted
+                vendorItem.Type = ITEM_VENDOR_TYPE_ITEM;
+                vendorItem.Quantity = static_cast<int32>(leftInStock);
+                vendorItem.StackCount = itemTemplate->BuyCount;
+                vendorItem.Price = price;
+                vendorItem.ItemID = item->item;
+                vendorItem.ItemDisplayInfoID = itemTemplate->DisplayInfoID;
+                packet.Items.push_back(vendorItem);
 
                 if (++count >= MAX_VENDOR_ITEMS)
                 {
@@ -953,15 +992,10 @@ void WorldSession::SendListInventory(ObjectGuid vendorGuid, uint32 vendorEntry)
         }
     }
 
-    if (count == 0)
-    {
-        data << uint8(0);
-        SendPacket(&data);
-        return;
-    }
+    if (!count)
+        packet.Reason = VENDOR_INVENTORY_REASON_INVENTORY_EMPTY;
 
-    data.put<uint8>(countPos, count);
-    SendPacket(&data);
+    SendPacket(packet.Write());
 }
 
 void WorldSession::HandleAutoStoreBagItemOpcode(WorldPackets::Item::AutoStoreBagItem& packet)

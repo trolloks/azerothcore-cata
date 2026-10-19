@@ -155,10 +155,12 @@ namespace WorldPackets
             void Read() override;
 
             ObjectGuid VendorGuid;
+            uint8 ItemType = 0;
             uint32 Item = 0;
             uint32 Slot = 0;
             uint32 Count = 0;
-            uint8 Unk = 0;
+            ObjectGuid BagGuid;
+            uint8 BagSlot = 0;
         };
 
         class ListInventory final : public ClientPacket

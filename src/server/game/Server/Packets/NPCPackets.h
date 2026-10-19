@@ -21,6 +21,7 @@
 #include "Packet.h"
 #include "ObjectGuid.h"
 #include <array>
+#include <optional>
 
 namespace WorldPackets::NPC
 {
@@ -97,6 +98,33 @@ namespace WorldPackets::NPC
 
         ObjectGuid TrainerGUID;
         int32 SpellID = 0;
+    };
+
+    struct VendorItem
+    {
+        int32 MuID              = 0;
+        int32 Type              = 0;
+        int32 ItemID            = 0;
+        int32 ItemDisplayInfoID = 0;
+        int32 Quantity          = -1;
+        uint32 Price            = 0;
+        int32 Durability        = 0;
+        int32 StackCount        = 0;
+        std::optional<uint32> ExtendedCostID;
+        // AC has no PlayerCondition.dbc store, so the Cata field stays absent until that store exists
+        std::optional<int32> PlayerConditionFailed;
+    };
+
+    class VendorInventory final : public ServerPacket
+    {
+    public:
+        VendorInventory() : ServerPacket(SMSG_VENDOR_INVENTORY, 600) { }
+
+        WorldPacket const* Write() override;
+
+        uint8 Reason = 0;
+        std::vector<VendorItem> Items;
+        ObjectGuid Vendor;
     };
 }
 

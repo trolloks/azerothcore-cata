@@ -634,7 +634,7 @@ void OpcodeTable::Initialize()
     /*0x6F07*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_QUEST_CONFIRM_ACCEPT,                               STATUS_NEVER);
     /*0x4B14*/ DEFINE_HANDLER(CMSG_PUSHQUESTTOPARTY,                                                 STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandlePushQuestToParty                   );
     /*0x2806*/ DEFINE_HANDLER(CMSG_LIST_INVENTORY,                                                   STATUS_LOGGEDIN,   PROCESS_INPLACE,        &WorldSession::HandleListInventoryOpcode                );
-    /*0x019F*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_LIST_INVENTORY,                                     STATUS_NEVER);
+    /*0x7CB0*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_VENDOR_INVENTORY,                                   STATUS_NEVER);
     /*0x4E15*/ DEFINE_HANDLER(CMSG_SELL_ITEM,                                                        STATUS_LOGGEDIN,   PROCESS_INPLACE,        &WorldSession::HandleSellItemOpcode                     );
     /*0x6105*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_SELL_ITEM,                                          STATUS_NEVER);
     /*0x0736*/ DEFINE_HANDLER(CMSG_BUY_ITEM,                                                         STATUS_LOGGEDIN,   PROCESS_INPLACE,        &WorldSession::HandleBuyItemOpcode                      );

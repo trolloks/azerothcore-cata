@@ -221,6 +221,12 @@ enum ItemFlagsCustom : uint32
     ITEM_FLAGS_CU_FOLLOW_LOOT_RULES     = 0x0004,   // Item will always follow group/master/need before greed looting rules
 };
 
+enum ItemVendorType
+{
+    ITEM_VENDOR_TYPE_ITEM     = 1,
+    ITEM_VENDOR_TYPE_CURRENCY = 2,
+};
+
 enum BAG_FAMILY_MASK
 {
     BAG_FAMILY_MASK_NONE                      = 0x00000000,
