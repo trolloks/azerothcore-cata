@@ -11010,7 +11010,11 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
         // item base price
         for (uint8 i = 0; i < MAX_ITEM_EXTENDED_COST_REQUIREMENTS; ++i)
         {
-            if (iece->reqitem[i] && uint64(GetItemCount(iece->reqitem[i])) < uint64(iece->reqitemcount[i]) * stacks)
+            if (!iece->reqitem[i])
+                continue;
+
+            uint64 const total = uint64(iece->reqitemcount[i]) * stacks;
+            if (total > std::numeric_limits<uint32>::max() || !HasItemCount(iece->reqitem[i], uint32(total)))
             {
                 SendEquipError(EQUIP_ERR_VENDOR_MISSING_TURNINS, nullptr, nullptr);
                 return false;
