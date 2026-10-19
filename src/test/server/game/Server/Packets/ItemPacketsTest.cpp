@@ -82,6 +82,7 @@ TEST(ItemPacketsTest, BuyItemReadsCataDestinationBagGuidAndWideCount)
     EXPECT_EQ(packet.VendorGuid.GetCounter(), 10u);
     EXPECT_EQ(uint8(ITEM_VENDOR_TYPE_CURRENCY), 2); // the wire value the parse test writes
     EXPECT_EQ(uint8(ITEM_VENDOR_TYPE_ITEM), 1);
+    EXPECT_EQ(packet.ItemType, 2);                  // the decoded value, which the handler dispatches on
     EXPECT_EQ(packet.Item, 0x0000ABCDu);
     EXPECT_EQ(packet.Slot, 3u);
     EXPECT_EQ(packet.Count, 1000u);

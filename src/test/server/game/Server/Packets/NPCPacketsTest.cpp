@@ -39,7 +39,8 @@ TEST(NPCPacketsTest, VendorInventoryWritesCataLayout)
 
     WorldPacket const* written = packet.Write();
     // Bits: vendor bytes 1, 0, the 21-bit item count, vendor bytes 3, 6, 5, 2, 7, then per item the
-    // absent-bit of ExtendedCostID and PlayerConditionFailed, then vendor byte 4, flushed to one byte.
+    // absent-bit of ExtendedCostID and PlayerConditionFailed, then vendor byte 4; the bits run on across the
+    // header bytes and FlushBits pads the last partial one, so the header is four bytes here.
     uint8 const expected[] = {
         0x40, 0x00, 0x02, 0x0C,
         0x01, 0x00, 0x00, 0x00,                 // MuID
@@ -126,9 +127,9 @@ TEST(NPCPacketsTest, VendorInventoryWritesMultipleRowsAndCreatureGuid)
 
     WorldPacket const* written = packet.Write();
     // Header: the vendor bytes 1 and 0, the 21-bit item count, the vendor bytes 3, 6, 5, 2 and 7 (each as
-    // "the byte is non-zero", so 5 falls out), one absent bit per optional field per item, then vendor byte
-    // 4, flushed to 5 bytes. Body: both item bodies in row order, the five vendor byte sequences in the
-    // order 5,4,1,0,6 with the zero byte 5 dropped, the reason byte, then 2,3,7.
+    // "the byte is non-zero", so byte 5's bit is 0), one absent bit per optional field per item, then vendor
+    // byte 4, flushed to 5 bytes. Body: both item bodies in row order, the vendor byte sequences in the order
+    // 5,4,1,0,6 with the zero byte 5 dropped entirely, the reason byte, then 2,3,7.
     uint8 const expected[] = {
         0xC0, 0x00, 0x05, 0xB7, 0x80,
         0x01, 0x00, 0x00, 0x00,                 // MuID 1
