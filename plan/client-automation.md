@@ -689,6 +689,31 @@ Run with `--stability-seconds 8 --timeout 180`; the round trip takes about 90 s 
 marker (the accepted run logged the marker at 12:59:23, the purchase at 12:59:59, the repair at
 13:00:23 and the logout at 13:00:49).
 
+## Plan 33 rejection cases (`--mode vendor-negative`)
+
+One generation per case, selected by `VENDOR_CASE` at prepare and frozen into the generation inputs (the
+Plan 32 `PLAN32_STAGE` pattern): a retry re-seeds that case's state and `run` refuses an environment naming
+another case.
+
+| case | seed | action | pass condition |
+| --- | --- | --- | --- |
+| `no-money` | money 0 | buy MuID 8 | nothing granted or charged, money stays 0 |
+| `full-bags` | money 50000, all 16 backpack slots filled | buy MuID 8 | nothing granted or charged, money stays 50000 |
+| `repeat-buy` | money 50000 | buy MuID 8 twice | two charges/grants: two `SMSG_BUY_ITEM`, money 49932 |
+
+Both layers may reject, and that is recorded rather than hidden: the client can refuse an unaffordable or
+unstoreable purchase locally (no `CMSG_BUY_ITEM` at all), otherwise the server answers `SMSG_BUY_FAILED` or
+`SMSG_INVENTORY_CHANGE_FAILURE`. The verification always requires that nothing was granted or charged and
+notes which layer answered through `vendor_buy_requests`/`vendor_buy_failures`/`vendor_inventory_failures`.
+The automation logs out at the end so the saved character row can be checked, which also produces the second
+character enumeration vendor modes already allow. Screenshots: `negative-<case>-after-buy.png` and
+`negative-<case>-after-logout.png`; run with `--stability-seconds 8 --timeout 180`.
+
+The cases a native client cannot send are out of scope here and stay parse/unit-level: invalid vendor/slot/
+type/count fields, a foreign-owned item, a dead or out-of-range vendor and a non-empty bag. Exhausted stock
+and an extended-cost row with a currency requirement are the next candidates (they need the vendor-list
+payload decoded and an `ItemExtendedCost.dbc` row with a currency).
+
 ## Building before a run
 
 `prepare` refuses binaries whose `--version` does not report the current HEAD, so a build is
