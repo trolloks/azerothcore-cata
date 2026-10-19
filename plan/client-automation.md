@@ -689,6 +689,36 @@ Run with `--stability-seconds 8 --timeout 180`; the round trip takes about 90 s 
 marker (the accepted run logged the marker at 12:59:23, the purchase at 12:59:59, the repair at
 13:00:23 and the logout at 13:00:49).
 
+## Plan 33 rejection cases (`--mode vendor-negative`)
+
+One generation per case, selected by `VENDOR_CASE` at prepare and frozen into the generation inputs (the
+Plan 32 `PLAN32_STAGE` pattern): a retry re-seeds that case's state and `run` refuses an environment naming
+another case.
+
+| case | seed | action | pass condition |
+| --- | --- | --- | --- |
+| `no-money` | money 0 | buy MuID 8 | nothing granted or charged, money stays 0 |
+| `full-bags` | money 50000, all 16 backpack slots filled | buy MuID 8 | nothing granted or charged, money stays 50000 |
+| `repeat-buy` | money 50000 | buy MuID 8 twice | two charges/grants: two `SMSG_BUY_ITEM`, money 49932 |
+
+In the accepted runs this client sent `CMSG_BUY_ITEM` even when it could not afford the item or store it, so
+the server's refusals are what the checks saw, and the verifier requires them: exactly one request plus the
+case's own result code — `SMSG_BUY_FAILED` reason 2 (`BUY_ERR_NOT_ENOUGHT_MONEY`) for `no-money`, or
+`SMSG_INVENTORY_CHANGE_FAILURE` reason 50 (`EQUIP_ERR_INVENTORY_FULL`) for `full-bags` — with the complete
+saved inventory compared against the seed (so a missed click, an unrelated refusal or a lost filler item
+cannot pass). `repeat-buy` requires two requests, two results, and exactly two shields in slots 23-24 with
+money 49932.
+The automation logs out at the end so the saved character row can be checked, which also produces the second
+character enumeration vendor modes already allow. Screenshots: `negative-<case>-after-buy.png` and
+`negative-<case>-after-logout.png`; run with `--stability-seconds 8 --timeout 180`.
+
+Pending native attempts (player actions or state, not forged packets): a dead or out-of-range vendor, and
+selling a non-empty bag (the AC handler guards that path at `ItemHandler.cpp:618`); the refusing layer is to
+be established the same way it was for the buy cases. Parse/unit-level only, because the native client cannot
+encode them: invalid vendor/slot/type/count fields and a foreign-owned item — these are not faked by injecting
+packets. Exhausted stock and an extended-cost row with a currency requirement are the next native candidates
+(they need the vendor-list payload decoded and an `ItemExtendedCost.dbc` row with a currency).
+
 ## Building before a run
 
 `prepare` refuses binaries whose `--version` does not report the current HEAD, so a build is
