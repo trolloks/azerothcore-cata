@@ -462,12 +462,12 @@ void ScriptMgr::OnPlayerBeforeLoadPetFromDB(Player* player, uint32& petentry, ui
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_BEFORE_LOAD_PET_FROM_DB, script->OnPlayerBeforeLoadPetFromDB(player, petentry, petnumber, current, forceLoadFromDB));
 }
 
-void ScriptMgr::OnPlayerBeforeBuyItemFromVendor(Player* player, ObjectGuid vendorguid, uint32 vendorslot, uint32& item, uint8 count, uint8 bag, uint8 slot)
+void ScriptMgr::OnPlayerBeforeBuyItemFromVendor(Player* player, ObjectGuid vendorguid, uint32 vendorslot, uint32& item, uint32 count, uint8 bag, uint8 slot)
 {
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_BEFORE_BUY_ITEM_FROM_VENDOR, script->OnPlayerBeforeBuyItemFromVendor(player, vendorguid, vendorslot, item, count, bag, slot));
 }
 
-void ScriptMgr::OnPlayerAfterStoreOrEquipNewItem(Player* player, uint32 vendorslot, Item* item, uint8 count, uint8 bag, uint8 slot, ItemTemplate const* pProto, Creature* pVendor, VendorItem const* crItem, bool bStore)
+void ScriptMgr::OnPlayerAfterStoreOrEquipNewItem(Player* player, uint32 vendorslot, Item* item, uint32 count, uint8 bag, uint8 slot, ItemTemplate const* pProto, Creature* pVendor, VendorItem const* crItem, bool bStore)
 {
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_AFTER_STORE_OR_EQUIP_NEW_ITEM, script->OnPlayerAfterStoreOrEquipNewItem(player, vendorslot, item, count, bag, slot, pProto, pVendor, crItem, bStore));
 }
@@ -507,7 +507,7 @@ void ScriptMgr::OnPlayerQuestComputeXP(Player* player, Quest const* quest, uint3
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_QUEST_COMPUTE_EXP, script->OnPlayerQuestComputeXP(player, quest, xpValue));
 }
 
-void ScriptMgr::OnPlayerBeforeStoreOrEquipNewItem(Player* player, uint32 vendorslot, uint32& item, uint8 count, uint8 bag, uint8 slot, ItemTemplate const* pProto, Creature* pVendor, VendorItem const* crItem, bool bStore)
+void ScriptMgr::OnPlayerBeforeStoreOrEquipNewItem(Player* player, uint32 vendorslot, uint32& item, uint32 count, uint8 bag, uint8 slot, ItemTemplate const* pProto, Creature* pVendor, VendorItem const* crItem, bool bStore)
 {
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_BEFORE_STORE_OR_EQUIP_NEW_ITEM, script->OnPlayerBeforeStoreOrEquipNewItem(player, vendorslot, item, count, bag, slot, pProto, pVendor, crItem, bStore));
 }

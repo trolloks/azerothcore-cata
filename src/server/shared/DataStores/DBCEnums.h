@@ -388,6 +388,12 @@ enum ItemEnchantmentType
     ITEM_ENCHANTMENT_TYPE_PRISMATIC_SOCKET = 8
 };
 
+enum ItemExtendedCostFlags
+{
+    ITEM_EXT_COST_FLAG_REQUIRE_GUILD = 0x01,
+    // the season-earned currency flags (0x02-0x20) are unused until AC has a currency store
+};
+
 enum ItemLimitCategoryMode
 {
     ITEM_LIMIT_CATEGORY_MODE_HAVE  = 0,                      // limit applied to amount items in inventory/bank

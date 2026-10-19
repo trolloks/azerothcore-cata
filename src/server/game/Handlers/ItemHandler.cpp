@@ -828,7 +828,13 @@ void WorldSession::HandleBuyItemInSlotOpcode(WorldPackets::Item::BuyItemInSlot& 
     if (bag == NULL_BAG)
         return;
 
-    GetPlayer()->BuyItemFromVendorSlot(packet.VendorGuid, packet.Slot, packet.Item, packet.Count, bag, packet.BagSlot);
+    // CMSG_BUY_ITEM_IN_SLOT counts stacks (WotLK client; the 4.3.4 client never sends the opcode), while
+    // BuyItemFromVendorSlot counts the items themselves; multiply by the vendor stack
+    uint32 count = packet.Count;
+    if (ItemTemplate const* itemTemplate = sObjectMgr->GetItemTemplate(packet.Item))
+        count *= itemTemplate->BuyCount;
+
+    GetPlayer()->BuyItemFromVendorSlot(packet.VendorGuid, packet.Slot, packet.Item, count, bag, packet.BagSlot);
 }
 
 void WorldSession::HandleBuyItemOpcode(WorldPackets::Item::BuyItem& packet)
@@ -911,15 +917,15 @@ void WorldSession::SendListInventory(ObjectGuid vendorGuid, uint32 vendorEntry)
         return;
     }
 
-    uint8 itemCount = items->GetItemCount();
-    uint8 count = 0;
+    uint32 itemCount = items->GetItemCount();
+    uint32 count = 0;
 
     WorldPackets::NPC::VendorInventory packet;
     packet.Vendor = vendorGuid;
 
     float discountMod = _player->GetReputationPriceDiscount(vendor);
 
-    for (uint8 slot = 0; slot < itemCount; ++slot)
+    for (uint32 slot = 0; slot < itemCount; ++slot)
     {
         if (VendorItem const* item = items->GetItem(slot))
         {

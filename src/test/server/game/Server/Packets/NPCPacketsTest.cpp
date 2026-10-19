@@ -95,6 +95,67 @@ TEST(NPCPacketsTest, VendorInventoryWritesExtendedCostAndEmptyReason)
         EXPECT_EQ(written->contents()[index], expected[index]) << index;
 }
 
+TEST(NPCPacketsTest, VendorInventoryWritesMultipleRowsAndCreatureGuid)
+{
+    WorldPackets::NPC::VendorInventory packet;
+    // Godric Rothgar's spawn, the vendor the plan 33 acceptance uses; the guid bytes 0, 1, 4 and 6 are
+    // non-zero and distinct, byte 5 is dropped by the byte-sequence writer like any zero byte
+    packet.Vendor = ObjectGuid::Create<HighGuid::Unit>(1213, 79952);
+
+    WorldPackets::NPC::VendorItem first;
+    first.MuID = 1;
+    first.Durability = 55;
+    first.ExtendedCostID = 2686;
+    first.ItemID = 0xABCD;
+    first.Type = ITEM_VENDOR_TYPE_ITEM;
+    first.Price = 250;
+    first.ItemDisplayInfoID = 7;
+    first.Quantity = 3;         // finite stock
+    first.StackCount = 2;
+    packet.Items.push_back(first);
+
+    WorldPackets::NPC::VendorItem second;
+    second.MuID = 2;
+    second.ItemID = 0x1234;
+    second.Type = ITEM_VENDOR_TYPE_ITEM;
+    second.Price = 0;
+    second.ItemDisplayInfoID = 9;
+    second.Quantity = -1;       // unlimited stock
+    second.StackCount = 1;
+    packet.Items.push_back(second);
+
+    WorldPacket const* written = packet.Write();
+    // Header: 8 vendor bits, the 21-bit count, 4 vendor bits and one absent bit per optional field per
+    // item, then vendor byte 4, flushed to 5 bytes. Body: both item bodies in row order, the five vendor
+    // byte sequences in the order 5,4,1,0,6 with the zero byte 5 dropped, the reason byte, then 2,3,7.
+    uint8 const expected[] = {
+        0x00, 0x00, 0x05, 0x37, 0x00,
+        0x01, 0x00, 0x00, 0x00,                 // MuID 1
+        0x37, 0x00, 0x00, 0x00,                 // Durability 55
+        0x7E, 0x0A, 0x00, 0x00,                 // ExtendedCostID 2686
+        0xCD, 0xAB, 0x00, 0x00,                 // ItemID 0xABCD
+        0x01, 0x00, 0x00, 0x00,                 // Type
+        0xFA, 0x00, 0x00, 0x00,                 // Price 250
+        0x07, 0x00, 0x00, 0x00,                 // ItemDisplayInfoID 7
+        0x03, 0x00, 0x00, 0x00,                 // Quantity 3
+        0x02, 0x00, 0x00, 0x00,                 // StackCount 2
+        0x02, 0x00, 0x00, 0x00,                 // MuID 2
+        0x00, 0x00, 0x00, 0x00,                 // Durability 0
+        0x34, 0x12, 0x00, 0x00,                 // ItemID 0x1234, no extended cost field
+        0x01, 0x00, 0x00, 0x00,                 // Type
+        0x00, 0x00, 0x00, 0x00,                 // Price 0
+        0x09, 0x00, 0x00, 0x00,                 // ItemDisplayInfoID 9
+        0xFF, 0xFF, 0xFF, 0xFF,                 // Quantity == -1, unlimited stock
+        0x01, 0x00, 0x00, 0x00,                 // StackCount 1
+        0x05, 0x39, 0x51, 0x31,                 // vendor bytes 4, 1, 0, 6 (byte 5 is zero, dropped)
+        0x00,                                   // reason, no inventory-empty flag
+        0x00, 0xBC, 0xF0                        // vendor bytes 2, 3, 7
+    };
+    ASSERT_EQ(written->size(), sizeof(expected));
+    for (std::size_t index = 0; index < sizeof(expected); ++index)
+        EXPECT_EQ(written->contents()[index], expected[index]) << index;
+}
+
 TEST(NPCPacketsTest, VendorInventoryWritesEmptyInventoryReason)
 {
     WorldPackets::NPC::VendorInventory packet;
