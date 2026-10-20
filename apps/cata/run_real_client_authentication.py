@@ -3589,6 +3589,54 @@ def automate_trainer_learn(generation: Generation) -> None:
     capture_desktop_screenshot(generation, "trainer-after-logout.png")
 
 
+def combat_packet_events(generation: Generation) -> list[dict[str, object]]:
+    """Spell damage logs and power updates from this run's capture, in arrival order.
+
+    Plan 35 checks mana and damage from the wire, not from a UI reading. The layouts are identical in AC
+    and the 4.x pin: the damage log is packed target guid, packed attacker guid, uint32 spell, uint32 damage,
+    uint32 overkill, uint8 school, then the absorb/resist/periodic/unused/blocked/hit-info tail; the power
+    update is packed guid, uint32 count, then uint8 power type + int32 value per entry.
+    """
+    path = Path(generation["paths"]["logs"]) / "packets.pkt"
+    if not path.is_file():
+        return []
+    data = path.read_bytes()
+    events: list[dict[str, object]] = []
+    offset = PKT_LOG_HEADER_SIZE
+    packet = 0
+    while offset + PKT_PACKET_HEADER_SIZE <= len(data):
+        direction, _, ticks, optional_size, length = struct.unpack_from("<IIIII", data, offset)
+        if optional_size != 20 or length > 65535 or length < 4:
+            raise RuntimeError(f"combat packet log desynchronised at byte {offset}")
+        opcode = struct.unpack_from("<I", data, offset + 40)[0]
+        payload = data[offset + 44:offset + 40 + length]
+        if direction != 0x47534D43 and opcode == SMSG_SPELLNONMELEEDAMAGELOG_OPCODE and len(payload) >= 24:
+            target, cursor = read_packed_guid(payload, 0)
+            attacker, cursor = read_packed_guid(payload, cursor)
+            spell, damage, overkill = struct.unpack_from("<III", payload, cursor)
+            events.append({
+                "opcode": "SMSG_SPELLNONMELEEDAMAGELOG", "target": target, "attacker": attacker,
+                "spell": spell, "damage": damage, "overkill": overkill, "school": payload[cursor + 12],
+                "ticks": ticks, "index": packet,
+            })
+        elif direction != 0x47534D43 and opcode == SMSG_POWER_UPDATE_OPCODE and len(payload) >= 8:
+            guid, cursor = read_packed_guid(payload, 0)
+            count = struct.unpack_from("<I", payload, cursor)[0]
+            cursor += 4
+            powers: list[list[int]] = []
+            for _ in range(min(count, 10)):
+                if cursor + 5 > len(payload):
+                    break
+                powers.append([payload[cursor], struct.unpack_from("<i", payload, cursor + 1)[0]])
+                cursor += 5
+            events.append({
+                "opcode": "SMSG_POWER_UPDATE", "guid": guid, "powers": powers, "ticks": ticks, "index": packet,
+            })
+        offset += PKT_PACKET_HEADER_SIZE + (length - 4)
+        packet += 1
+    return events
+
+
 def character_row_count(manifest: Manifest, generation: Generation) -> int:
     output = mysql(
         manifest, generation,
@@ -4245,6 +4293,8 @@ CMSG_BUYBACK_ITEM_OPCODE = 0x6C17
 CMSG_BUY_ITEM_OPCODE = 0x0736
 CMSG_TRAINER_BUY_SPELL_OPCODE = 0x4415
 SMSG_TRAINER_LIST_OPCODE = 0x4414
+SMSG_SPELLNONMELEEDAMAGELOG_OPCODE = 0x4315
+SMSG_POWER_UPDATE_OPCODE = 0x4A07
 SMSG_TRAINER_BUY_SUCCEEDED_OPCODE = 0x6A05
 SMSG_LEARNED_SPELL_OPCODE = 0x58A2
 SMSG_BUY_FAILED_OPCODE = 0x6435
@@ -8020,6 +8070,26 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert abs(halfway[0] - (create_position[0] + 50.0)) < 0.01
     assert abs(halfway[1] - create_position[1]) < 0.01 and halfway[2] == create_position[2]
     assert abs(frozen[0] - (create_position[0] + 60.0)) < 0.01
+    # Plan 35: the spell-damage-log and power-update decoders (identical layouts in AC and the pin).
+    damage_log = (
+        pack_guid(CHARACTER_GUID) + pack_guid(real_guid)
+        + struct.pack("<III", 133, 17, 0) + bytes([4]) + bytes(4 + 4 + 1 + 1 + 4 + 4 + 1)
+    )
+    power_log = pack_guid(CHARACTER_GUID) + struct.pack("<I", 1) + bytes([0]) + struct.pack("<i", 83)
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary) / "logs"
+        logs.mkdir()
+        (logs / "packets.pkt").write_bytes(
+            b"PKT" + bytes(63)
+            + pkt(S2C, SMSG_SPELLNONMELEEDAMAGELOG_OPCODE, damage_log, ticks=10)
+            + pkt(S2C, SMSG_POWER_UPDATE_OPCODE, power_log, ticks=11)
+        )
+        combat_events = combat_packet_events({"paths": {"logs": str(logs)}})
+    assert [event["opcode"] for event in combat_events] == [
+        "SMSG_SPELLNONMELEEDAMAGELOG", "SMSG_POWER_UPDATE"], combat_events
+    assert combat_events[0]["attacker"] == real_guid and combat_events[0]["damage"] == 17
+    assert combat_events[0]["spell"] == 133 and combat_events[0]["overkill"] == 0
+    assert combat_events[1]["guid"] == CHARACTER_GUID and combat_events[1]["powers"] == [[0, 83]]
     # The chase window starts at the run leg: an approach spline ending within arrival range of
     # the player's final position is not the chase, so the executed path is the chase spline's
     # own L-shaped detour (30 m against a 10 m straight line). A swing only counts once the path
