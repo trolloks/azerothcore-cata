@@ -3112,8 +3112,9 @@ MAGE_COMBAT_SPELL_ID = 133
 MAGE_COMBAT_ACTION_BUTTON = 0
 MAGE_COMBAT_TARGET_GUID = 9990003
 MAGE_COMBAT_TARGET_ENTRY = 361
-# Four yards along the creation facing (orientation 0 is +y): a target behind the mage is refused
-# with SPELL_FAILED_UNIT_NOT_INFRONT.
+# Four yards from the mage start on the side the cast accepts: a seed on the far side of the mage was
+# refused with SPELL_FAILED_UNIT_NOT_INFRONT (136). The arc test also admits targets whose radius
+# reaches the boundary, so this is evidence of acceptance, not of the exact facing axis.
 MAGE_COMBAT_TARGET_POSITION = (-8949.95, -128.5, 83.5312)
 MAGE_COMBAT_TARGET_KEYS = (
     "Return", "slash", *tuple("targetexact"), "space", *vendor_trade_name_keys("Saytr"), "Return",
@@ -3151,9 +3152,13 @@ def mage_combat_world_seed_sql() -> str:
 
 
 def mage_combat_character_reset_sql() -> str:
-    """Drops the mage this mode creates, so a retry starts from the creation screen again."""
-    return (f"DELETE FROM `characters` WHERE `account`={ACCOUNT_ID} "
-            f"AND `name`='{CHARACTER_NAME}';")
+    """Retires the mage this mode creates, so a retry can create it again.
+
+    The row keeps its guid: character tables do not cascade, so deleting it would let the replacement
+    reuse the guid and inherit stale action/spell rows, and with them the saved-action witness.
+    """
+    return (f"UPDATE `characters` SET `name`=CONCAT('Old', `guid`), `deleteDate`=NOW() "
+            f"WHERE `account`={ACCOUNT_ID} AND `name`='{CHARACTER_NAME}' AND `deleteDate` IS NULL;")
 
 
 def mage_combat_db_evidence(manifest: Manifest, generation: Generation) -> dict[str, int]:
@@ -6383,6 +6388,63 @@ def sanitized_evidence(
     }
 
 
+def mage_combat_accepted(evidence: dict[str, object]) -> bool:
+    """The cast chain: request -> mana drop -> spell go -> fire damage, bound to the created mage."""
+    mage = evidence["mage_combat"] or {}
+    player_guid = int(mage.get("guid", 0))
+    combat = evidence["combat_events"] or []
+    casts = evidence["plan32_casts"] or []
+    requests = [
+        event for event in casts
+        if event.get("opcode") == "CMSG_CAST_SPELL"
+        and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
+    ]
+    request = requests[-1] if requests else None
+    request_index = int(request["index"]) if request else -1
+    request_target = int(request.get("target", 0)) if request else 0
+    spell_goes = [
+        event for event in casts
+        if event.get("opcode") == "SMSG_SPELL_GO"
+        and int(event.get("caster", 0)) == player_guid
+        and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
+        and int(event.get("index", 0)) > request_index
+    ]
+    go_index = int(spell_goes[0]["index"]) if spell_goes else -1
+    damage = [
+        event for event in combat
+        if event["opcode"] == "SMSG_SPELLNONMELEEDAMAGELOG"
+        and int(event["attacker"]) == player_guid
+        and int(event["spell"]) == MAGE_COMBAT_SPELL_ID
+        and int(event["target"]) == request_target
+        and int(event["damage"]) >= 1
+        and int(event["school"]) == 4
+        and int(event["index"]) > go_index
+    ]
+    mana = [
+        (int(event["index"]), int(power[1])) for event in combat
+        if event["opcode"] == "SMSG_POWER_UPDATE" and int(event["guid"]) == player_guid
+        for power in event["powers"] if int(power[0]) == 0
+    ]
+    # the cast must cost mana: compare the last value before the request with the first one the
+    # cast produces (before the damage log). Login/creation initialization is excluded.
+    mana_before = [value for index, value in mana if index < request_index]
+    damage_index = int(damage[0]["index"]) if damage else -1
+    mana_after = [value for index, value in mana if request_index < index < damage_index]
+    return (
+        player_guid != 0
+        and int(mage.get("class", 0)) == CREATION_CLASSES["mage"][1]
+        and int(mage.get("race", 0)) == CHARACTER_RACE
+        and int(mage.get("action_count", 0)) == 1
+        and request is not None
+        and request_target != 0
+        and ((request_target >> 24) & 0xFFFFFF) == MAGE_COMBAT_TARGET_ENTRY
+        and bool(spell_goes)
+        and bool(damage)
+        and bool(mana_before)
+        and bool(mana_after)
+        and mana_after[0] < mana_before[-1]
+    )
+
 def verify(args: argparse.Namespace) -> None:
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
@@ -6606,38 +6668,7 @@ def verify(args: argparse.Namespace) -> None:
                 and 0 < vendor.get("money", 0) < VENDOR_TRADE_MONEY
             )
         if mage_combat_mode:
-            mage = evidence["mage_combat"] or {}
-            player_guid = int(mage.get("guid", 0))
-            combat = evidence["combat_events"] or []
-            damage = [
-                event for event in combat
-                if event["opcode"] == "SMSG_SPELLNONMELEEDAMAGELOG"
-                and int(event["attacker"]) == player_guid
-                and int(event["spell"]) == MAGE_COMBAT_SPELL_ID
-                and int(event["damage"]) >= 1
-                and ((int(event["target"]) >> 24) & 0xFFFFFF) == MAGE_COMBAT_TARGET_ENTRY
-            ]
-            mana_values = [
-                int(power[1]) for event in combat
-                if event["opcode"] == "SMSG_POWER_UPDATE" and int(event["guid"]) == player_guid
-                for power in event["powers"] if int(power[0]) == 0
-            ]
-            spell_goes = [
-                event for event in (evidence["plan32_casts"] or [])
-                if event.get("opcode") == "SMSG_SPELL_GO"
-                and int(event.get("caster", 0)) == player_guid
-                and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
-            ]
-            character_ok = character_ok and (
-                player_guid != 0
-                and int(mage.get("class", 0)) == CREATION_CLASSES["mage"][1]
-                and int(mage.get("race", 0)) == CHARACTER_RACE
-                and int(mage.get("action_count", 0)) == 1
-                and bool(damage)
-                and bool(spell_goes)
-                and len(mana_values) >= 2
-                and any(later < earlier for earlier, later in zip(mana_values, mana_values[1:]))
-            )
+            character_ok = character_ok and mage_combat_accepted(evidence)
         if trainer_mode:
             trainer = evidence["trainer"] or {}
             trainer_list = evidence["trainer_list"] or {}
@@ -7374,6 +7405,39 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         creation_generation, [name for name, _ in CHARACTER_MILESTONES],
         [{"direction": "c2s", "opcode": "CMSG_CHAR_DELETE"}],
     )["forbidden_opcodes"]
+    # Plan 35: the cast chain must hang together — the request names the victim, the cast costs mana,
+    # the spell go belongs to the mage and the damage is fire on that same victim.
+    target_guid = (MAGE_COMBAT_TARGET_ENTRY << 24) | 42
+
+    def mage_chain(request=True, spell_go=True, caster=7, damage_target=target_guid, school=4,
+                   cast_mana=True):
+        casts = []
+        if request:
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 10, "spell": MAGE_COMBAT_SPELL_ID,
+                          "target": target_guid})
+        if spell_go:
+            casts.append({"opcode": "SMSG_SPELL_GO", "index": 12, "spell": MAGE_COMBAT_SPELL_ID,
+                          "caster": caster})
+        events = [
+            {"opcode": "SMSG_POWER_UPDATE", "index": 5, "guid": 7, "powers": [[0, 100]]},
+            {"opcode": "SMSG_SPELLNONMELEEDAMAGELOG", "index": 13, "attacker": 7,
+             "spell": MAGE_COMBAT_SPELL_ID, "target": damage_target, "damage": 3, "school": school},
+        ]
+        if cast_mana:
+            events.append({"opcode": "SMSG_POWER_UPDATE", "index": 11, "guid": 7, "powers": [[0, 96]]})
+        return {
+            "mage_combat": {"guid": 7, "class": 8, "race": 1, "action_count": 1},
+            "plan32_casts": casts,
+            "combat_events": events,
+        }
+
+    assert mage_combat_accepted(mage_chain())
+    assert not mage_combat_accepted(mage_chain(request=False))
+    assert not mage_combat_accepted(mage_chain(spell_go=False))
+    assert not mage_combat_accepted(mage_chain(caster=8))
+    assert not mage_combat_accepted(mage_chain(cast_mana=False))
+    assert not mage_combat_accepted(mage_chain(damage_target=target_guid + 1))
+    assert not mage_combat_accepted(mage_chain(school=2))
     assert plan_number(CHARACTER_CREATION_MODE) == "22"
     populated_generation = dict(character_generation)
     populated_generation["mode"] = POPULATED_MODE
