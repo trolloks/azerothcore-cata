@@ -6933,6 +6933,17 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     attempts = {str(item["scenario"]): item for item in (evidence.get("mage_negative_attempts") or [])}
     if set(attempts) != {"invalid", "gcd", "out_of_range", "dead", "insufficient"}:
         return False
+
+    def attempt_bounds(name: str) -> tuple[int, int] | None:
+        item = attempts[name]
+        start, end = item.get("start"), item.get("end")
+        if type(start) is not int or type(end) is not int or start < 0 or start > end:
+            return None
+        return start, end
+
+    bounds = {name: attempt_bounds(name) for name in attempts}
+    if any(value is None for value in bounds.values()):
+        return False
     fireball_requests = [
         event for event in casts
         if event.get("opcode") == "CMSG_CAST_SPELL"
@@ -7026,10 +7037,12 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
             return None
         before = mana_at(index(request))
         values = [value for at, value in mana if index(request) < at <= index(go)]
-        # The spell cost is the lowest reading in the request->completion interval; a regeneration
-        # tick on either side of the cost update only lifts the other reading. Regeneration is
-        # disabled for this mode, so this is exactly the 9-mana Fireball cost.
-        if before is None or not values or min(values) != before - MAGE_NEGATIVE_SPELL_COST:
+        # The cost is both the lowest and the settled reading: a temporary debit followed by a
+        # refund fails the settled check. Regeneration is disabled for this mode, so no tick can
+        # lift the last reading.
+        if (before is None or not values
+                or min(values) != before - MAGE_NEGATIVE_SPELL_COST
+                or values[-1] != before - MAGE_NEGATIVE_SPELL_COST):
             return None
         return before
 
@@ -7042,8 +7055,10 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     if not self_selections or not near_selections:
         return False
     invalid_end = next((at for at in any_selections if at > self_selections[0]), None)
-    if invalid_end is None or not refused(
-            self_selections[0], invalid_end, MAGE_NEGATIVE_BAD_TARGETS_RESULT):
+    invalid = bounds["invalid"]
+    if (invalid_end is None
+            or not (self_selections[0] <= invalid[0] <= invalid[1] <= invalid_end)
+            or not refused(self_selections[0], invalid_end, MAGE_NEGATIVE_BAD_TARGETS_RESULT)):
         return False
 
     # Interrupted: request -> cancel -> INTERRUPTED with no completion and no mana drop.
@@ -7068,7 +7083,8 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     # The cancellation is only settled when the server's failure arrives; a power drop between the
     # outgoing cancel and the recovery request would be the interrupted cast's cost.
     recovery_request = request_for(recovery)
-    if recovery_request is None or dropped(index(interrupt), index(recovery_request)):
+    if (recovery_request is None or index(failure) >= index(recovery_request)
+            or dropped(index(interrupt), index(recovery_request))):
         return False
 
     # GCD: the starter's completion precedes the window; Fireball inside it neither completes nor
@@ -7078,8 +7094,7 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
          if event.get("opcode") == "SMSG_SPELL_GO"
          and int(event.get("caster", 0)) == player_guid
          and int(event.get("spell", 0)) == MAGE_NEGATIVE_GCD_SPELL_ID), None)
-    gcd = attempts["gcd"]
-    gcd_start, gcd_end = int(gcd.get("start", -1)), int(gcd.get("end", -2))
+    gcd_start, gcd_end = bounds["gcd"]
     if gcd_starter_go is None or gcd_start < index(gcd_starter_go):
         return False
     gcd_window = fireball_events(gcd_start, gcd_end)
@@ -7109,8 +7124,9 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     if not far_selections:
         return False
     far_end = next((at for at in any_selections if at > far_selections[0]), None)
-    if far_end is None or not refused(
-            far_selections[0], far_end, MAGE_NEGATIVE_OUT_OF_RANGE_RESULT):
+    far = bounds["out_of_range"]
+    if (far_end is None or not (far_selections[0] <= far[0] <= far[1] <= far_end)
+            or not refused(far_selections[0], far_end, MAGE_NEGATIVE_OUT_OF_RANGE_RESULT)):
         return False
 
     # Dead: the killing blow on the selected Adder, then no accepted cast on its corpse.
@@ -7134,9 +7150,7 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     # The corpse-clear selection is not the end of the attempt: bind the check to the dead press's
     # own window and keep it open until the next selection (the drain target), so a cast after the
     # clear cannot hide inside it.
-    dead = attempts["dead"]
-    dead_start = int(dead.get("start", -1))
-    dead_end = int(dead.get("end", -2))
+    dead_start, dead_end = bounds["dead"]
     dead_end = next((at for at in any_selections if at > max(dead_start, dead_end)), None)
     if dead_end is None or dead_end <= index(kill) or not refused(
             index(kill), dead_end, MAGE_NEGATIVE_TARGETS_DEAD_RESULT):
@@ -7144,9 +7158,7 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
 
     # Insufficient mana: the attempt is on the sub-cost side of the boundary, after a drain cast
     # that started in the last full-cost band.
-    insufficient = attempts["insufficient"]
-    insufficient_start = int(insufficient.get("start", -1))
-    insufficient_end = int(insufficient.get("end", -2))
+    insufficient_start, insufficient_end = bounds["insufficient"]
     if (not refused(insufficient_start, insufficient_end, MAGE_NEGATIVE_NO_POWER_RESULT)
             or (mana_at(insufficient_start) or 0) >= MAGE_NEGATIVE_SPELL_COST):
         return False
@@ -8348,7 +8360,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             return counter - 1
 
         attempts = [
-            {"scenario": "invalid", "start": 1, "end": 2},
+            {"scenario": "invalid", "start": 1, "end": 1},
             {"scenario": "out_of_range", "start": 1, "end": 2},
             {"scenario": "dead", "start": 1, "end": 2},
         ]
@@ -8371,7 +8383,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         if interrupt_cost:
             add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 156]])
         add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=2)
-        add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 156]])
+        add(combat, opcode="SMSG_POWER_UPDATE", guid=guid,
+            powers=[[0, 147 if interrupt_cost else 156]])
         add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=2)
 
         if gcd_starter:
@@ -8404,7 +8417,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=5)
 
         far_index = add(casts, opcode="CMSG_SET_SELECTION", target=far)
-        attempts[1]["start"] = far_index + 1
+        attempts[1]["start"] = far_index
         if far_go:
             add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=6)
         if far_cost:
@@ -8424,7 +8437,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             add(combat, opcode="SMSG_SPELLNONMELEEDAMAGELOG", attacker=guid, target=adder,
                 spell=MAGE_COMBAT_SPELL_ID, damage=15, overkill=overkill, school=4)
         dead_start = counter
-        counter += 1
+        add(casts, opcode="CMSG_SET_SELECTION", target=0)  # the client clears the dead target
         attempts[2]["start"] = dead_start
         if dead_go:
             add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=8)
