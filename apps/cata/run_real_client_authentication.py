@@ -6970,7 +6970,7 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
         and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
     ]
     mana = [
-        (int(event["index"]), int(power[1])) for event in combat
+        (int(event["index"]), int(event.get("ticks", -1)), int(power[1])) for event in combat
         if event.get("opcode") == "SMSG_POWER_UPDATE"
         and int(event.get("guid", 0)) == player_guid
         for power in (event.get("powers") or []) if int(power[0]) == 0
@@ -7000,14 +7000,21 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
         ]
 
     def mana_at(position: int) -> int | None:
-        values = [value for at, value in mana if at < position]
+        values = [value for at, _, value in mana if at < position]
         return values[-1] if values else None
 
     def dropped(start: int, end: int) -> bool:
         before = mana_at(start)
         if before is None:
             return True
-        return any(value < before for at, value in mana if start < at <= end)
+        return any(value < before for at, _, value in mana if start < at <= end)
+
+    def dropped_ticks(start_tick: int, end_tick: int, before_index: int) -> bool:
+        before = mana_at(before_index)
+        if before is None:
+            return True
+        return any(ticks > start_tick and ticks <= end_tick and value < before
+                   for _, ticks, value in mana)
 
     def fireball_events(start: int, end: int) -> list[dict[str, object]]:
         return [
@@ -7055,7 +7062,7 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
             (event for event in casts
              if event.get("opcode") == "CMSG_CAST_SPELL" and index(event) > index(go)), None)
         settle_end = index(next_request) if next_request is not None else capture_end + 1
-        values = [value for at, value in mana if index(request) < at < settle_end]
+        values = [value for at, _, value in mana if index(request) < at < settle_end]
         # Regeneration is disabled for this mode, so any increase is a refund. The cost is both the
         # lowest and the settled reading: a refund before or after the completion fails.
         series = [before, *values] if before is not None else values
@@ -7128,14 +7135,12 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
         if type(event.get("ticks")) is int
         and int(event["ticks"]) > int(starter_ticks)
         and int(event["ticks"]) <= cooldown_end
-        and index(event) <= gcd_end
         and event.get("opcode") in {"CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO"}
         and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
     ]
     if any(event["opcode"] == "SMSG_SPELL_GO" for event in gcd_window):
         return False
-    window_end = max((index(event) for event in gcd_window), default=index(gcd_starter_go))
-    if dropped(index(gcd_starter_go), window_end):
+    if dropped_ticks(int(starter_ticks), cooldown_end, index(gcd_starter_go)):
         return False
     for request in (event for event in gcd_window if event["opcode"] == "CMSG_CAST_SPELL"):
         if any(event["opcode"] == "SMSG_CAST_FAILED"
@@ -8394,7 +8399,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
 
         def add(bucket: list[dict[str, object]], **fields: object) -> int:
             nonlocal counter
-            bucket.append({"index": counter, "ticks": counter * 100, **fields})
+            bucket.append({"index": counter, "ticks": counter * 1000, **fields})
             counter += 1
             return counter - 1
 
@@ -8449,16 +8454,26 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         attempts[-1]["end"] = counter - 1
         if gcd_narrow:
             attempts[-1]["end"] = attempts[-1]["start"]
+        queue_tick = None
         if gcd_queue:
+            queue_tick = (gcd_starter_index * 1000 + MAGE_NEGATIVE_GCD_MS + 100
+                          if gcd_starter_index is not None else counter * 1000)
             if gcd_queue_cost:
-                add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 121]])
+                add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 121]],
+                    ticks=queue_tick)
             add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=4,
-                ticks=(gcd_starter_index * 100 + MAGE_NEGATIVE_GCD_MS + 100
-                       if gcd_starter_index is not None else counter * 100))
-        add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=5)
+                ticks=queue_tick)
+        recovery_tick = (
+            queue_tick + 100 if queue_tick is not None
+            else gcd_starter_index * 1000 + MAGE_NEGATIVE_GCD_MS + 200
+            if gcd_starter_index is not None else counter * 100
+        )
+        add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=5,
+            ticks=recovery_tick)
         add(combat, opcode="SMSG_POWER_UPDATE", guid=guid,
-            powers=[[0, 112 if gcd_queue else 121]])
-        add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=5)
+            powers=[[0, 112 if gcd_queue else 121]], ticks=recovery_tick)
+        add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=5,
+            ticks=recovery_tick)
         if failure_after_go:
             add(casts, opcode="SMSG_CAST_FAILED", spell=MAGE_COMBAT_SPELL_ID, count=5, result=69)
         if duplicate_go:
