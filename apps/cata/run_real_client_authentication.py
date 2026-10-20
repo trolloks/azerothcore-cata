@@ -1755,7 +1755,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
             '"packets.pkt"'
             if generation["mode"] in (
                 PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE, TRAINER_MODE,
-                MAGE_COMBAT_MODE,
+                MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE,
             )
             else '""'
         ),
@@ -1764,7 +1764,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
             "5,Server" if ISSUE97 or generation["mode"] in {
                 BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
                 WALK_RUN_MODE_SWITCH_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE,
-                TRAINER_MODE, MAGE_COMBAT_MODE,
+                TRAINER_MODE, MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE,
             }
             else "4,Server"
         ),
