@@ -719,6 +719,34 @@ encode them: invalid vendor/slot/type/count fields and a foreign-owned item — 
 packets. Exhausted stock and an extended-cost row with a currency requirement are the next native candidates
 (they need the vendor-list payload decoded and an `ItemExtendedCost.dbc` row with a currency).
 
+## Plan 34 trainer learning (`--mode trainer-learn`)
+
+Opens **Llane Beshere** (creature 911, spawn guid 79964, trainer table id **2**, Class/Warrior) in
+Northshire, clicks his gossip option "I require warrior training." (he gives no quests, so it is the first
+row), buys **Battle Shout** (spell 6673; 10 copper base in `trainer_spell`, 9 after the reputation
+discount) from the trainer frame, opens the spellbook, casts
+it by name and logs out. The seed is 5 gold with `character_spell`/`character_action` cleared, so a retry
+starts unknown and cannot pass as "already learned".
+
+Every step waits for the opcode the server logs for it (`SMSG_GOSSIP_MESSAGE` or `SMSG_TRAINER_LIST`,
+`SMSG_TRAINER_BUY_SUCCEEDED`, `CMSG_CAST_SPELL` + `SMSG_SPELL_GO`, `SMSG_LOGOUT_COMPLETE`). Verification
+decodes the run's own packet capture: the list, the buy and the success must name the same runtime NPC
+(creature entry 911) and trainer id 2, the list must carry Battle Shout as available (state 1) at the pinned
+9-copper discounted price with at least one unavailable row, `SMSG_LEARNED_SPELL` must name 6673 exactly once,
+the cast must be the fixture player's own counter matched by a `SMSG_SPELL_GO` with no matching
+`SMSG_CAST_FAILED`, and the saved row must show the spell learned with money reduced by exactly that price
+(the fixture's 10-copper base cost and the reputation discount produce 9, so a free-training regression
+fails).
+Screenshots: `trainer-before-target.png`, `trainer-after-target.png`, `trainer-gossip.png`, `trainer-open.png`,
+`trainer-after-buy.png`, `trainer-spellbook.png`, `trainer-after-cast.png`, `trainer-after-logout.png`. Click
+fractions are calibration constants, like the vendor mode's, evidenced by those screenshots.
+
+Not yet covered here: an in-run relog (persistence is checked from the stored row after logout), action-bar
+placement (casting by name proves the learned spell is usable), and the negative cases (mismatched trainer id,
+spell not offered, insufficient money, unmet level/skill, repeat purchase). The parse-level boundary case is
+`NPCPacketsTest.TrainerBuySpellRejectsMissingTrainerId`; the server-side refusals that a native client can
+reach are a follow-up batch.
+
 ## Building before a run
 
 `prepare` refuses binaries whose `--version` does not report the current HEAD, so a build is
