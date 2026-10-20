@@ -3310,10 +3310,13 @@ def automate_mage_followup(generation: Generation) -> None:
         generation, ("Return", "slash", *tuple("logout"), "Return"), hold_seconds=0.05, gap_seconds=0.05)
     vendor_trade_wait(generation, "s2c", "SMSG_LOGOUT_COMPLETE", "logout", completed,
                       MAGE_FOLLOWUP_LOGOUT_TIMEOUT)
-    automate_character_selection(generation)
+    # The character screen needs a moment to rebuild after the logout, and its Enter press is the only
+    # way back in; repeat it until the world reports the second login instead of firing once into a
+    # screen that is not ready.
     deadline = time.monotonic() + MAGE_FOLLOWUP_RELOGIN_TIMEOUT
     while time.monotonic() < deadline and len(player_login_callbacks(generation)) < 2:
-        time.sleep(0.5)
+        automate_character_selection(generation)
+        time.sleep(5.0)
     if len(player_login_callbacks(generation)) < 2:
         capture_desktop_screenshot(generation, "mage-followup-relogin.png")
         raise RuntimeError("the client did not re-enter the world after the logout")
