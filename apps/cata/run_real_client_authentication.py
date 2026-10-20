@@ -3191,6 +3191,8 @@ def automate_character_creation(generation: Generation) -> None:
     click(points["race_human"])
     click(points["gender_male"])
     click(points[CREATION_CLASS_POINT])
+    time.sleep(0.6)  # let the class panel redraw
+    capture_desktop_screenshot(generation, "creation-class.png")
     click(points["name_field"])
     enter(CHARACTER_NAME)
     # Give the client a moment to render the committed name before Accept, matching the
