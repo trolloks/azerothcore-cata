@@ -6636,8 +6636,11 @@ def mage_followup_accepted(evidence: dict[str, object]) -> bool:
                    for event in casts)
 
     def other_cast_between(request: dict, go: dict) -> bool:
-        return any(event.get("opcode") == "CMSG_CAST_SPELL"
-                   and int(request["index"]) < int(event["index"]) < int(go["index"])
+        # A request or another spell's completion inside the interval could carry its power cost.
+        return any(int(request["index"]) < int(event["index"]) < int(go["index"])
+                   and (event.get("opcode") == "CMSG_CAST_SPELL"
+                        or (event.get("opcode") == "SMSG_SPELL_GO"
+                            and int(event.get("spell", 0)) != MAGE_COMBAT_SPELL_ID))
                    for event in casts)
 
     first, second = request_for(before_logout[0]), request_for(after_logout[0])
@@ -7694,7 +7697,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
                        logout_index=25, extra_request=False, duplicate_failure=False,
                        failed_first=False, failed_second=False, reused_counter=False,
                        late_drop=False, late_first_cost=False, unrelated_first=False,
-                       unrelated_second=False, second_go_count=2):
+                       unrelated_second=False, overlapping_first=False, overlapping_second=False,
+                       second_go_count=2):
         casts = [
             {"opcode": "CMSG_CAST_SPELL", "index": 10, "spell": MAGE_COMBAT_SPELL_ID, "target": 5,
              "count": 1},
@@ -7732,6 +7736,12 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         if unrelated_second:
             casts.append({"opcode": "CMSG_CAST_SPELL", "index": 38, "spell": 1459, "target": 5, "count": 5})
             casts.append({"opcode": "SMSG_SPELL_GO", "index": 39, "spell": 1459, "caster": 7, "count": 5})
+        if overlapping_first:
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 9, "spell": 1459, "target": 5, "count": 5})
+            casts.append({"opcode": "SMSG_SPELL_GO", "index": 12, "spell": 1459, "caster": 7, "count": 5})
+        if overlapping_second:
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 29, "spell": 1459, "target": 5, "count": 5})
+            casts.append({"opcode": "SMSG_SPELL_GO", "index": 39, "spell": 1459, "caster": 7, "count": 5})
         return {
             "mage_followup": {"guid": 7, "class": 8, "race": 1, "action_count": 1, "spell_count": 0},
             "plan32_casts": casts,
@@ -7764,6 +7774,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_followup_accepted(followup_chain(late_first_cost=True))  # nor the first cost
     assert not mage_followup_accepted(followup_chain(unrelated_first=True))  # another spell in the interval
     assert not mage_followup_accepted(followup_chain(unrelated_second=True))  # and for the second cast
+    assert not mage_followup_accepted(followup_chain(overlapping_first=True))  # an earlier cast completing inside
+    assert not mage_followup_accepted(followup_chain(overlapping_second=True))
     assert mage_followup_accepted(followup_chain(duplicate_failure=True))  # duplicates do not invalidate
     assert mage_followup_accepted(followup_chain(extra_request=True))      # nor does an extra request
     # Decode a synthetic capture and sanitize it through the production path: dropping the logout
