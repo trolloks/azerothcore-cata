@@ -191,7 +191,7 @@ TARGET_TARGETED_SPELL_CAST_ACTION_BUTTON = 0
 # inserted fresh near CHARACTER_POSITION instead, rather than reusing a creature already spawned
 # nearby - the only ones near this fixture's spawn point are friendly NPCs and non-hostile critters
 # (see above).
-TARGET_TARGETED_SPELL_CAST_DUMMY_GUID = 99990001
+TARGET_TARGETED_SPELL_CAST_DUMMY_GUID = 9990001
 TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY = 2809
 PLAN32_GEOMETRY_MODE = "plan32-geometry"
 # One acceptance mode carries the remaining Plan 32 stages; each generation runs one stage from a
@@ -310,7 +310,7 @@ CHAT_MESSAGE_TEXT = "chatcheck"
 # killed with the main-hand attack, which routes XP through KillRewarder -> Player::GiveXP.
 # No GM level command and no character-row edit (see .agents/docs/cataclysm-conversion-goal.md).
 LEVEL_UP_MODE = "level-up-progression"
-LEVEL_UP_XP_TARGET_GUID = 0x0A0B0C0D
+LEVEL_UP_XP_TARGET_GUID = 9991001
 # Entry 2809 "Boar": faction 14 (hostile to all), no ScriptName/special AI, so it neither dies on
 # its own nor needs a lifespan limit. Same creature the targeted-spell-cast modes already seed.
 # Overridable because the fixture character is level 1 and the target's level comes from
@@ -3106,9 +3106,10 @@ def automate_invalid_target_spell_cast(generation: Generation) -> None:
 CREATION_CLASSES = {"warrior": ("class_warrior", 1), "mage": ("class_mage", 8)}
 # Plan 35: a natively created level-1 Human Mage casts Fireball (133) from action button 0 at a pinned
 # Saytr (361: hostile level 1 with no static spawns anywhere, so /targetexact resolves only ours).
+# Creature guids must stay below 0xFFFFFF: the spawn-id allocator starts at MAX(guid) + 1.
 MAGE_COMBAT_SPELL_ID = 133
 MAGE_COMBAT_ACTION_BUTTON = 0
-MAGE_COMBAT_TARGET_GUID = 99990003
+MAGE_COMBAT_TARGET_GUID = 9990003
 MAGE_COMBAT_TARGET_ENTRY = 361
 MAGE_COMBAT_TARGET_POSITION = (-8954.0, -138.0, 83.5312)
 MAGE_COMBAT_TARGET_KEYS = (
