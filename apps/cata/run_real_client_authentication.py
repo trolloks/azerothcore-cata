@@ -7058,13 +7058,17 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
          and int(event.get("count", -1)) == int(interrupt.get("count", -2))), None)
     if (cancel is None or failure is None or len(cancels) != 1
             or int(failure.get("result", -1)) != MAGE_NEGATIVE_INTERRUPTED_RESULT
-            or not index(interrupt) < cancel < index(failure)
-            or dropped(index(interrupt), cancel)):
+            or not index(interrupt) < cancel < index(failure)):
         return False
     if any(int(go.get("count", -1)) == int(interrupt.get("count", -2)) for go in goes):
         return False
     recovery = next((go for go in goes if index(go) > index(failure)), None)
     if recovery is None or cost_at(recovery) is None:
+        return False
+    # The cancellation is only settled when the server's failure arrives; a power drop between the
+    # outgoing cancel and the recovery request would be the interrupted cast's cost.
+    recovery_request = request_for(recovery)
+    if recovery_request is None or dropped(index(interrupt), index(recovery_request)):
         return False
 
     # GCD: the starter's completion precedes the window; Fireball inside it neither completes nor
@@ -7127,7 +7131,13 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     kill_go = next((go for go in reversed(goes) if index(go) < index(kill)), None)
     if kill_go is None or cost_at(kill_go) is None:
         return False
-    dead_end = next((at for at in any_selections if at > index(adder_selections[0])), None)
+    # The corpse-clear selection is not the end of the attempt: bind the check to the dead press's
+    # own window and keep it open until the next selection (the drain target), so a cast after the
+    # clear cannot hide inside it.
+    dead = attempts["dead"]
+    dead_start = int(dead.get("start", -1))
+    dead_end = int(dead.get("end", -2))
+    dead_end = next((at for at in any_selections if at > max(dead_start, dead_end)), None)
     if dead_end is None or dead_end <= index(kill) or not refused(
             index(kill), dead_end, MAGE_NEGATIVE_TARGETS_DEAD_RESULT):
         return False
@@ -8317,7 +8327,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         gcd_starter=True, gcd_queue=True, gcd_queue_cost=True,
         gcd_go=False, gcd_cost=False, gcd_result=None,
         far_go=False, far_cost=False, far_result=None,
-        kill=True, overkill=14, dead_go=False, dead_cost=False, dead_result=None,
+        kill=True, overkill=14, dead_go=False, dead_cost=False, dead_result=None, dead_extra=False,
         drain_casts=11, cost=9, insufficient_go=False, insufficient_cost=False,
         insufficient_result=None,
     ):
@@ -8425,6 +8435,10 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             add(casts, opcode="SMSG_CAST_FAILED", spell=MAGE_COMBAT_SPELL_ID, count=8,
                 result=dead_result)
         attempts[2]["end"] = counter - 1
+        if dead_extra:
+            add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=adder, count=8)
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, kill_power - 9]])
+            add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=8)
 
         add(casts, opcode="CMSG_SET_SELECTION", target=near)
         value, count = kill_power, 9
@@ -8484,6 +8498,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_negative_accepted(negative_chain(dead_go=True))
     assert not mage_negative_accepted(negative_chain(dead_cost=True))
     assert not mage_negative_accepted(negative_chain(dead_result=42))
+    assert not mage_negative_accepted(negative_chain(dead_extra=True))
     assert not mage_negative_accepted(negative_chain(drain_casts=9))
     assert not mage_negative_accepted(negative_chain(cost=8))
     assert not mage_negative_accepted(negative_chain(insufficient_go=True))
