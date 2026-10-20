@@ -6989,6 +6989,14 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     def index(event: dict[str, object]) -> int:
         return int(event["index"])
 
+    # Regeneration is disabled for this mode: after the first Fireball request the pool may only
+    # fall. This catches a refund hidden behind a non-Fireball completion or a target clear.
+    if fireball_requests:
+        first_request_index = index(fireball_requests[0])
+        after_first = [value for at, _, value in mana if at > first_request_index]
+        if any(after_first[i] > after_first[i - 1] for i in range(1, len(after_first))):
+            return False
+
     capture_end = max(
         [index(event) for event in casts] + [index(event) for event in combat], default=-1,
     )
@@ -8421,7 +8429,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         dead_bounds=False, cost_refund=False, duplicate_go=False,
         gcd_narrow=False, failure_after_go=False,
         far_refund=False, dead_refund=False, unanswered_refund=False, unanswered_reuse=False,
-        failed_arcane_completion=False,
+        failed_arcane_completion=False, non_fireball_refund=False,
         drain_casts=11, cost=9, insufficient_go=False, insufficient_cost=False,
         insufficient_result=None, insufficient_refund=False, arcane_refund=False,
     ):
@@ -8616,6 +8624,12 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_NEGATIVE_GCD_SPELL_ID,
                 count=count)
             add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 165]])
+        if non_fireball_refund:
+            add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_NEGATIVE_GCD_SPELL_ID,
+                target=guid, count=count)
+            add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_NEGATIVE_GCD_SPELL_ID,
+                count=count)
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 165]])
         attempts.append({
             "scenario": "insufficient", "start": insufficient_start, "end": counter - 1,
         })
@@ -8645,6 +8659,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_negative_accepted(negative_chain(unanswered_refund=True))
     assert not mage_negative_accepted(negative_chain(unanswered_reuse=True))
     assert not mage_negative_accepted(negative_chain(failed_arcane_completion=True))
+    assert not mage_negative_accepted(negative_chain(non_fireball_refund=True))
     assert not mage_negative_accepted(negative_chain(cancel=False))
     assert not mage_negative_accepted(negative_chain(interrupt_result=69))
     assert not mage_negative_accepted(negative_chain(interrupt_go=True))
