@@ -7028,6 +7028,7 @@ def verify(args: argparse.Namespace) -> None:
         if character_ok:
             evidence["outcome"] = (
                 "level_up_progression_pass" if level_up_mode
+                else "mage_combat_pass" if mage_combat_mode
                 else "character_creation_pass" if creation_mode
                 else "run_speed_change_pass" if run_speed_mode
                 else "basic_spell_cast_pass" if basic_spell_cast_mode
@@ -7047,7 +7048,6 @@ def verify(args: argparse.Namespace) -> None:
                 else "vendor_trade_pass" if vendor_trade_mode
                 else "vendor_negative_pass" if vendor_negative_mode
                 else "trainer_learn_pass" if trainer_mode
-                else "mage_combat_pass" if mage_combat_mode
                 else "ground_movement_pass" if ground_movement_mode
                 else "basic_movement_pass" if basic_movement_mode
                 else "in_world_control_bootstrap_pass" if in_world_control_mode
