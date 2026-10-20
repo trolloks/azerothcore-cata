@@ -7013,8 +7013,8 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
         before = mana_at(before_index)
         if before is None:
             return True
-        return any(ticks > start_tick and ticks <= end_tick and value < before
-                   for _, ticks, value in mana)
+        return any(ticks >= start_tick and at > before_index and ticks <= end_tick
+                   and value < before for at, ticks, value in mana)
 
     def fireball_events(start: int, end: int) -> list[dict[str, object]]:
         return [
@@ -7130,17 +7130,29 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     cooldown_end = int(starter_ticks) + MAGE_NEGATIVE_GCD_MS
     # The starter's actual cooldown, not the movable attempt bounds: a queued completion recorded
     # inside the 1.5 s window would complete the press, and moving the attempt bounds cannot hide it.
+    # A later packet sharing the starter's millisecond is still inside the cooldown; packet order
+    # distinguishes it from the starter's own cost.
     gcd_window = [
         event for event in casts
         if type(event.get("ticks")) is int
-        and int(event["ticks"]) > int(starter_ticks)
+        and int(event["ticks"]) >= int(starter_ticks)
         and int(event["ticks"]) <= cooldown_end
+        and index(event) > index(gcd_starter_go)
         and event.get("opcode") in {"CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO"}
         and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
     ]
     if any(event["opcode"] == "SMSG_SPELL_GO" for event in gcd_window):
         return False
     if dropped_ticks(int(starter_ticks), cooldown_end, index(gcd_starter_go)):
+        return False
+    # The press must be inside the starter's cooldown; moving the attempt bounds onto an
+    # after-cooldown completion cannot substitute an ordinary cast for the GCD refusal.
+    first_after_cooldown = next(
+        (index(event) for event in casts
+         if type(event.get("ticks")) is int
+         and int(event["ticks"]) > cooldown_end
+         and index(event) > index(gcd_starter_go)), None)
+    if first_after_cooldown is None or gcd_start >= first_after_cooldown:
         return False
     for request in (event for event in gcd_window if event["opcode"] == "CMSG_CAST_SPELL"):
         if any(event["opcode"] == "SMSG_CAST_FAILED"
@@ -8441,16 +8453,21 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         gcd_start = counter
         counter += 1
         attempts.append({"scenario": "gcd", "start": gcd_start, "end": 0})
+        gcd_inside_tick = (gcd_starter_index * 1000 + 1000
+                           if gcd_starter_index is not None else counter * 1000)
         if gcd_go:
-            add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=4)
+            add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=4,
+                ticks=gcd_inside_tick)
         if gcd_cost:
-            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 121]])
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 121]],
+                ticks=gcd_inside_tick)
         if gcd_result is not None:
             add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=4)
             add(casts, opcode="SMSG_CAST_FAILED", spell=MAGE_COMBAT_SPELL_ID, count=4,
                 result=gcd_result)
         if gcd_queue:
-            add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=4)
+            add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=4,
+                ticks=gcd_inside_tick)
         attempts[-1]["end"] = counter - 1
         if gcd_narrow:
             attempts[-1]["end"] = attempts[-1]["start"]
@@ -8571,6 +8588,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_negative_accepted(negative_chain(interrupt_cost=True))
     assert not mage_negative_accepted(negative_chain(invalid_request=True))  # unanswered request
     assert not mage_negative_accepted(negative_chain(gcd_starter=False))
+    assert mage_negative_accepted(negative_chain(gcd_narrow=True))
+    assert not mage_negative_accepted(negative_chain(gcd_narrow=True, gcd_go=True))
     assert not mage_negative_accepted(negative_chain(gcd_go=True))
     assert not mage_negative_accepted(negative_chain(gcd_cost=True))
     assert not mage_negative_accepted(negative_chain(gcd_result=87))
