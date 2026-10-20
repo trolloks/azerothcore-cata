@@ -46,11 +46,13 @@ namespace WorldPackets::NPC
         int32 SpellID          = 0;
         uint8 Usable           = 0;
         int32 MoneyCost        = 0;
-        std::array<int32, 2> PointCost = { }; // compared with PLAYER_CHARACTER_POINTS in Lua
+        // 4.x replaced the WotLK point-cost pair with the profession dialog/button hints
+        int32 ProfessionDialog = 0;
+        int32 ProfessionButton = 0;
         uint8 ReqLevel         = 0;
         int32 ReqSkillLine     = 0;
         int32 ReqSkillRank     = 0;
-        std::array<int32, 3> ReqAbility = { };
+        std::array<int32, 2> ReqAbility = { };
     };
 
     class TrainerList final : public ServerPacket
@@ -62,6 +64,7 @@ namespace WorldPackets::NPC
 
         ObjectGuid TrainerGUID;
         int32 TrainerType = 0;
+        int32 TrainerID = 0;    // 4.x: the trainer table id, echoed back by the buy request
         std::vector<TrainerListSpell> Spells;
         std::string Greeting;
     };
@@ -74,6 +77,7 @@ namespace WorldPackets::NPC
         void Read() override;
 
         ObjectGuid TrainerGUID;
+        int32 TrainerID = 0;
         int32 SpellID = 0;
     };
 

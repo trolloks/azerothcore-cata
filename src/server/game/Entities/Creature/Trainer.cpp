@@ -38,10 +38,13 @@ namespace Trainer
     void Trainer::SendSpells(Creature* npc, Player* player, LocaleConstant locale) const
     {
         float reputationDiscount = player->GetReputationPriceDiscount(npc);
+        // 4.x shows the profession dialog/button only for a primary profession's first rank
+        bool canLearnPrimaryProfession = player->GetFreePrimaryProfessionPoints() > 0;
 
         WorldPackets::NPC::TrainerList trainerList;
         trainerList.TrainerGUID = npc->GetGUID();
         trainerList.TrainerType = AsUnderlyingType(_type);
+        trainerList.TrainerID = _trainerId;
         trainerList.Greeting = GetGreeting(locale);
         trainerList.Spells.reserve(_spells.size());
         for (Spell const& trainerSpell : _spells)
@@ -65,14 +68,33 @@ namespace Trainer
             trainerList.Spells.emplace_back();
             WorldPackets::NPC::TrainerListSpell& trainerListSpell = trainerList.Spells.back();
             trainerListSpell.SpellID = trainerSpell.SpellId;
-            trainerListSpell.Usable = AsUnderlyingType(GetSpellState(player, &trainerSpell));
+            // 4.x remaps the state byte: Known = 0, Available = 1, Unavailable = 2 (AC keeps the
+            // WotLK order, where 0 meant available). Sending the old values makes the client treat a
+            // learnable spell as already known and hide it.
+            switch (GetSpellState(player, &trainerSpell))
+            {
+                case SpellState::Known:
+                    trainerListSpell.Usable = 0;
+                    break;
+                case SpellState::Available:
+                    trainerListSpell.Usable = 1;
+                    break;
+                case SpellState::Unavailable:
+                    trainerListSpell.Usable = 2;
+                    break;
+            }
             trainerListSpell.MoneyCost = int32(trainerSpell.MoneyCost * reputationDiscount);
-            trainerListSpell.PointCost[0] = 0; // spells don't cost talent points
-            trainerListSpell.PointCost[1] = (primaryProfessionFirstRank ? 1 : 0);
-            trainerListSpell.ReqLevel = trainerSpell.ReqLevel;
+            trainerListSpell.ProfessionDialog = primaryProfessionFirstRank ? 1 : 0;
+            trainerListSpell.ProfessionButton = (primaryProfessionFirstRank && canLearnPrimaryProfession) ? 1 : 0;
+            // the client only greys a class trainer's spell by level when the requirement is unmet
+            if (_type != Type::Class || player->GetLevel() < trainerSpell.ReqLevel)
+                trainerListSpell.ReqLevel = trainerSpell.ReqLevel;
             trainerListSpell.ReqSkillLine = trainerSpell.ReqSkillLine;
             trainerListSpell.ReqSkillRank = trainerSpell.ReqSkillRank;
-            std::copy(trainerSpell.ReqAbility.begin(), trainerSpell.ReqAbility.end(), trainerListSpell.ReqAbility.begin());
+            // the 4.x wire carries two required abilities; AC keeps a third DB column for its own
+            // eligibility checks, so only the destination's two elements are copied
+            std::copy_n(trainerSpell.ReqAbility.begin(), trainerListSpell.ReqAbility.size(),
+                trainerListSpell.ReqAbility.begin());
         }
 
         sScriptMgr->OnPlayerBeforeReceiveSpellListFromTrainer(player, npc, trainerList);

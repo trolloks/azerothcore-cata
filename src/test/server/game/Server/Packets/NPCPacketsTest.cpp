@@ -235,3 +235,77 @@ TEST(NPCPacketsTest, VendorInventoryWritesEmptyInventoryReason)
     for (std::size_t index = 0; index < sizeof(expected); ++index)
         EXPECT_EQ(written->contents()[index], expected[index]) << index;
 }
+
+TEST(NPCPacketsTest, TrainerListWritesCataLayout)
+{
+    EXPECT_EQ(uint16(SMSG_TRAINER_LIST), 0x4414);
+
+    WorldPackets::NPC::TrainerList packet;
+    packet.TrainerGUID = ObjectGuid::Create<HighGuid::Player>(1);
+    packet.TrainerType = 0;     // class trainer
+    packet.TrainerID = 2;       // the trainer table id, echoed back by the buy request
+    packet.Greeting = "Hello";
+
+    WorldPackets::NPC::TrainerListSpell spell;
+    spell.SpellID = 6673;       // Battle Shout
+    spell.Usable = 1;       // 4.x: Known = 0, Available = 1, Unavailable = 2
+    spell.MoneyCost = 1234;
+    spell.ReqLevel = 5;
+    spell.ReqSkillLine = 333;
+    spell.ReqSkillRank = 100;
+    spell.ReqAbility = { 78, 100 };
+    spell.ProfessionDialog = 1;
+    spell.ProfessionButton = 2;
+    packet.Spells.push_back(spell);
+
+    WorldPacket const* written = packet.Write();
+    // 4.x: trainer id after the type; per spell the level follows the cost, the WotLK point-cost pair
+    // is gone, two required abilities follow the skill fields, then the profession dialog/button hints
+    uint8 const expected[] = {
+        0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,     // trainer guid
+        0x00, 0x00, 0x00, 0x00,                             // trainer type: class
+        0x02, 0x00, 0x00, 0x00,                             // trainer id
+        0x01, 0x00, 0x00, 0x00,                             // one spell
+        0x11, 0x1A, 0x00, 0x00,                             // spell 6673
+        0x01,                                               // usable
+        0xD2, 0x04, 0x00, 0x00,                             // money cost 1234
+        0x05,                                               // required level 5
+        0x4D, 0x01, 0x00, 0x00,                             // required skill line 333
+        0x64, 0x00, 0x00, 0x00,                             // required skill rank 100
+        0x4E, 0x00, 0x00, 0x00,                             // required ability 1: 78
+        0x64, 0x00, 0x00, 0x00,                             // required ability 2: 100
+        0x01, 0x00, 0x00, 0x00,                             // profession dialog
+        0x02, 0x00, 0x00, 0x00,                             // profession button
+        0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x00,                 // greeting, null-terminated
+    };
+    ASSERT_EQ(written->size(), sizeof(expected));
+    for (std::size_t index = 0; index < sizeof(expected); ++index)
+        EXPECT_EQ(written->contents()[index], expected[index]) << index;
+}
+
+TEST(NPCPacketsTest, TrainerBuySpellReadsCataTrainerId)
+{
+    EXPECT_EQ(uint16(CMSG_TRAINER_BUY_SPELL), 0x4415);
+
+    WorldPacket raw(CMSG_TRAINER_BUY_SPELL, 16);
+    raw << ObjectGuid::Create<HighGuid::Unit>(911, 79964);  // unpacked in the Cata client packet
+    raw << int32(2);                                        // trainer id from the list
+    raw << int32(6673);                                     // spell
+    WorldPackets::NPC::TrainerBuySpell packet(std::move(raw));
+    packet.Read();
+    EXPECT_EQ(packet.TrainerGUID.GetEntry(), 911u);
+    EXPECT_EQ(packet.TrainerGUID.GetCounter(), 79964u);
+    EXPECT_EQ(packet.TrainerID, 2);
+    EXPECT_EQ(packet.SpellID, 6673);
+    EXPECT_EQ(packet.GetRawPacket()->rpos(), packet.GetSize());
+}
+
+TEST(NPCPacketsTest, TrainerBuySpellRejectsMissingTrainerId)
+{
+    // 4.x inserts the trainer id between the guid and the spell: a WotLK-shaped packet must not parse
+    WorldPacket raw(CMSG_TRAINER_BUY_SPELL, 12);
+    raw << ObjectGuid::Create<HighGuid::Player>(1);
+    raw << int32(6673);
+    WorldPackets::NPC::TrainerBuySpell packet(std::move(raw));
+    EXPECT_THROW(packet.Read(), ByteBufferException);
+}

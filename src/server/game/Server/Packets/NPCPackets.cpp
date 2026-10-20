@@ -25,19 +25,21 @@ void WorldPackets::NPC::Hello::Read()
 WorldPacket const* WorldPackets::NPC::TrainerList::Write()
 {
     _worldPacket << TrainerGUID;
-    _worldPacket << int32(TrainerType);
+    _worldPacket << uint32(TrainerType);
+    _worldPacket << uint32(TrainerID);
 
-    _worldPacket << int32(Spells.size());
+    _worldPacket << uint32(Spells.size());
     for (TrainerListSpell const& spell : Spells)
     {
-        _worldPacket << int32(spell.SpellID);
+        _worldPacket << uint32(spell.SpellID);
         _worldPacket << uint8(spell.Usable);
-        _worldPacket << int32(spell.MoneyCost);
-        _worldPacket.append(spell.PointCost.data(), spell.PointCost.size());
+        _worldPacket << uint32(spell.MoneyCost);
         _worldPacket << uint8(spell.ReqLevel);
-        _worldPacket << int32(spell.ReqSkillLine);
-        _worldPacket << int32(spell.ReqSkillRank);
+        _worldPacket << uint32(spell.ReqSkillLine);
+        _worldPacket << uint32(spell.ReqSkillRank);
         _worldPacket.append(spell.ReqAbility.data(), spell.ReqAbility.size());
+        _worldPacket << uint32(spell.ProfessionDialog);
+        _worldPacket << uint32(spell.ProfessionButton);
     }
 
     _worldPacket << Greeting;
@@ -48,6 +50,7 @@ WorldPacket const* WorldPackets::NPC::TrainerList::Write()
 void WorldPackets::NPC::TrainerBuySpell::Read()
 {
     _worldPacket >> TrainerGUID;
+    _worldPacket >> TrainerID;
     _worldPacket >> SpellID;
 }
 
