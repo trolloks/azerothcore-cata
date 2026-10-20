@@ -74,6 +74,7 @@ namespace Trainer
             void TeachSpell(Creature* npc, Player* player, uint32 spellId);
 
             [[nodiscard]] Type GetTrainerType() const { return _type; }
+            [[nodiscard]] uint32 GetTrainerId() const { return _trainerId; }
             [[nodiscard]] uint32 GetTrainerRequirement() const { return _requirement; }
             bool IsTrainerValidForPlayer(Player const* player) const;
 

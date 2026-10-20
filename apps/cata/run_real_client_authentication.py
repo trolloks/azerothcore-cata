@@ -422,13 +422,49 @@ VENDOR_NEGATIVE_MONEY = {
 VENDOR_NEGATIVE_FILL_ENTRY = VENDOR_TRADE_SELL_ENTRY     # Tarnished Chain Bracers, one per backpack slot
 VENDOR_NEGATIVE_FILL_GUIDS = tuple(99000400 + index for index in range(16))
 
+TRAINER_MODE = "trainer-learn"
+# Plan 34: Llane Beshere (creature 911, spawn 79964, trainer table id 2, Class/Warrior) in Northshire.
+# His only level-1 offer for the fixture is Battle Shout (6673): 10 copper listed, no prerequisites.
+TRAINER_NPC_NAME = "Llane Beshere"
+TRAINER_NPC_ENTRY = 911
+TRAINER_ID = 2
+TRAINER_SPELL_ID = 6673
+TRAINER_SPELL_NAME = "Battle Shout"
+TRAINER_MONEY = 50000
+TRAINER_SPELL_BASE_COST = 10      # trainer_spell.MoneyCost for 6673 in the fixture data
+TRAINER_SPELL_LISTED_PRICE = 9    # the discounted price the accepted run's list carried
+TRAINER_CHARACTER_POSITION = (-8920.6, -210.1, 82.3)
+TRAINER_CHARACTER_ORIENTATION = 0.85
+TRAINER_TIMEOUT = 20
+TRAINER_LOGOUT_TIMEOUT = 45
+TRAINER_TARGET_KEYS = (
+    "Return", "slash", *tuple("targetexact"), "space", *vendor_trade_name_keys(TRAINER_NPC_NAME), "Return",
+)
+# Gossip option that opens the trainer (Llane gives no quests, so "I require warrior training." is the
+# first row) and the trainer list's spell rows, both as window fractions; the run's own
+# trainer-gossip.png / trainer-open.png screenshots are the calibration evidence.
+TRAINER_GOSSIP_OPTION_ORIGIN = (0.775, 0.596)
+TRAINER_GOSSIP_OPTION_HEIGHT = 0.0218
+TRAINER_GOSSIP_OPTION_ROW = 1
+TRAINER_SPELL_ROW_ORIGIN = (0.0405, 0.2255)
+TRAINER_SPELL_ROW_HEIGHT = 0.0531
+TRAINER_SPELL_ROW = 1
+# The 4.x trainer frame selects a spell row first; the purchase itself is the "Train" button at the
+# frame's bottom bar (clicking the row alone only highlights it); measured from the run's own
+# trainer-selected.png in the screenshot's pixels.
+TRAINER_TRAIN_BUTTON = (0.170, 0.531)
+# 4.x trainer-list state byte: Known = 0, Available = 1, Unavailable = 2 (the WotLK order was the
+# other way round, which made the client hide a learnable spell).
+TRAINER_STATE_AVAILABLE = 1
+TRAINER_STATE_UNAVAILABLE = 2
+
 
 POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
     IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
     WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
     INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
-    VENDOR_NEGATIVE_MODE,
+    VENDOR_NEGATIVE_MODE, TRAINER_MODE,
 })
 CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
@@ -506,6 +542,60 @@ def vendor_trade_seed_sql() -> str:
         "INSERT INTO `character_inventory` (`guid`,`bag`,`slot`,`item`) "
         f"VALUES {slots};"
     )
+
+
+def trainer_seed_sql() -> str:
+    """The fixture's money, with any previously learned spell and action bar cleared for a retry."""
+    return (
+        populated_character_seed_sql()
+        + f"UPDATE `characters` SET `money`={TRAINER_MONEY} WHERE `guid`={CHARACTER_GUID};"
+        f"DELETE FROM `character_inventory` WHERE `guid`={CHARACTER_GUID};"
+        f"DELETE FROM `item_instance` WHERE `owner_guid`={CHARACTER_GUID};"
+        f"DELETE FROM `character_spell` WHERE `guid`={CHARACTER_GUID};"
+        f"DELETE FROM `character_action` WHERE `guid`={CHARACTER_GUID};"
+    )
+
+
+def trainer_db_evidence(manifest: Manifest, generation: Generation) -> dict[str, int]:
+    """The saved spellbook/action state and money after the run's logout."""
+    schema = generation["schemas"]["characters"]
+
+    def scalar(sql: str) -> int:
+        output = mysql(manifest, generation, sql, schema)
+        try:
+            return int(output)
+        except ValueError as error:
+            raise RuntimeError(f"owned character database returned a non-numeric value: {output!r}") from error
+
+    return {
+        "known_spell_count": scalar(
+            f"SELECT COUNT(*) FROM `character_spell` WHERE `guid`={CHARACTER_GUID} "
+            f"AND `spell`={TRAINER_SPELL_ID};"),
+        "action_count": scalar(
+            f"SELECT COUNT(*) FROM `character_action` WHERE `guid`={CHARACTER_GUID} "
+            f"AND `action`={TRAINER_SPELL_ID} AND `type`=0;"),
+        "money": scalar(f"SELECT `money` FROM `characters` WHERE `guid`={CHARACTER_GUID};"),
+    }
+
+
+def trainer_spell_row() -> tuple[float, float]:
+    """Where the trainer frame draws spell row `TRAINER_SPELL_ROW` (1-based)."""
+    fx, fy = TRAINER_SPELL_ROW_ORIGIN
+    return fx, fy + (TRAINER_SPELL_ROW - 1) * TRAINER_SPELL_ROW_HEIGHT
+
+
+def trainer_gossip_option() -> tuple[float, float]:
+    fx, fy = TRAINER_GOSSIP_OPTION_ORIGIN
+    return fx, fy + (TRAINER_GOSSIP_OPTION_ROW - 1) * TRAINER_GOSSIP_OPTION_HEIGHT
+
+
+def apply_trainer_seed(mode: str) -> None:
+    """Move the fixture next to Llane Beshere (trainer mode only)."""
+    global CHARACTER_POSITION, CHARACTER_ORIENTATION
+    if mode != TRAINER_MODE:
+        return
+    CHARACTER_POSITION = TRAINER_CHARACTER_POSITION
+    CHARACTER_ORIENTATION = TRAINER_CHARACTER_ORIENTATION
 
 
 def vendor_negative_seed_sql(case: str) -> str:
@@ -704,6 +794,8 @@ def plan_number(mode: str) -> str:
         return "33"
     if mode == VENDOR_NEGATIVE_MODE:
         return "33"
+    if mode == TRAINER_MODE:
+        return "34"
     if mode == RUN_SPEED_MODE:
         return "16"
     if mode == BASIC_MOVEMENT_MODE:
@@ -1655,7 +1747,9 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         # socket reads from this same key).
         "PacketLogFile": (
             '"packets.pkt"'
-            if generation["mode"] in (PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE)
+            if generation["mode"] in (
+                PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE, TRAINER_MODE,
+            )
             else '""'
         ),
         "Appender.Server": '2,5,1,WorldServer.log,w',
@@ -1663,6 +1757,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
             "5,Server" if ISSUE97 or generation["mode"] in {
                 BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
                 WALK_RUN_MODE_SWITCH_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE,
+                TRAINER_MODE,
             }
             else "4,Server"
         ),
@@ -2051,6 +2146,7 @@ def prepare(args: argparse.Namespace) -> None:
         inputs["vendor_case"] = vendor_negative_case_or_fail()
     apply_vendor_trade_seed(args.mode)
     apply_vendor_negative_seed(args.mode)
+    apply_trainer_seed(args.mode)
     print(f"prepare preflight: {time.monotonic() - started:.1f}s", flush=True)
     manifest_path = args.manifest.resolve()
     if manifest_path.exists():
@@ -3275,13 +3371,51 @@ def vendor_trade_packet_events(generation: Generation) -> list[dict[str, object]
     data = path.read_bytes()
     events: list[dict[str, object]] = []
     offset = PKT_LOG_HEADER_SIZE
+    packet = 0
     while offset + PKT_PACKET_HEADER_SIZE <= len(data):
         direction, _, ticks, optional_size, length = struct.unpack_from("<IIIII", data, offset)
         if optional_size != 20 or length > 65535 or length < 4:
             raise RuntimeError(f"vendor packet log desynchronised at byte {offset}")
         opcode = struct.unpack_from("<I", data, offset + 40)[0]
         payload = data[offset + 44:offset + 40 + length]
-        if direction == 0x47534D43 and opcode == CMSG_BUY_ITEM_OPCODE and len(payload) >= 30:
+        if direction == 0x47534D43 and opcode == CMSG_TRAINER_BUY_SPELL_OPCODE and len(payload) >= 16:
+            # TrainerBuySpell::Read: guid, uint32 trainer id, int32 spell
+            events.append({
+                "opcode": "CMSG_TRAINER_BUY_SPELL",
+                "trainer_guid": struct.unpack_from("<Q", payload, 0)[0],
+                "trainer_id": struct.unpack_from("<I", payload, 8)[0],
+                "spell": struct.unpack_from("<i", payload, 12)[0],
+                "ticks": ticks, "index": packet,
+            })
+        elif direction != 0x47534D43 and opcode == SMSG_TRAINER_LIST_OPCODE and len(payload) >= 20:
+            # guid, uint32 type, uint32 trainer id, uint32 count, then 34-byte spell records
+            trainer_id = struct.unpack_from("<I", payload, 12)[0]
+            count = struct.unpack_from("<I", payload, 16)[0]
+            spells: list[list[int]] = []
+            cursor = 20
+            for _ in range(min(count, 200)):
+                if cursor + 34 > len(payload):
+                    break
+                spells.append([struct.unpack_from("<i", payload, cursor)[0],
+                               struct.unpack_from("<I", payload, cursor + 5)[0],
+                               payload[cursor + 4]])
+                cursor += 34
+            events.append({
+                "opcode": "SMSG_TRAINER_LIST", "npc_guid": struct.unpack_from("<Q", payload, 0)[0],
+                "trainer_id": trainer_id, "count": count, "spells": spells, "ticks": ticks, "index": packet,
+            })
+        elif direction != 0x47534D43 and opcode == SMSG_TRAINER_BUY_SUCCEEDED_OPCODE and len(payload) >= 12:
+            events.append({
+                "opcode": "SMSG_TRAINER_BUY_SUCCEEDED",
+                "trainer_guid": struct.unpack_from("<Q", payload, 0)[0],
+                "spell": struct.unpack_from("<i", payload, 8)[0],
+                "ticks": ticks, "index": packet,
+            })
+        elif direction != 0x47534D43 and opcode == SMSG_LEARNED_SPELL_OPCODE and len(payload) >= 4:
+            events.append({
+                "opcode": "SMSG_LEARNED_SPELL", "spell": struct.unpack_from("<i", payload, 0)[0], "ticks": ticks, "index": packet,
+            })
+        elif direction == 0x47534D43 and opcode == CMSG_BUY_ITEM_OPCODE and len(payload) >= 30:
             # BuyItem::Read: guid, uint8 type, uint32 item, uint32 slot (the 1-based MuID), uint32 count,
             # then the destination bag guid and slot.
             events.append({
@@ -3290,24 +3424,25 @@ def vendor_trade_packet_events(generation: Generation) -> list[dict[str, object]
                 "item": struct.unpack_from("<I", payload, 9)[0],
                 "slot": struct.unpack_from("<I", payload, 13)[0],
                 "count": struct.unpack_from("<I", payload, 17)[0],
-                "ticks": ticks,
+                "ticks": ticks, "index": packet,
             })
         elif direction != 0x47534D43 and opcode == SMSG_BUY_FAILED_OPCODE and len(payload) >= 13:
             # SendBuyError writes guid, uint32 item, optional uint32 param, then the result byte last.
             events.append({
-                "opcode": "SMSG_BUY_FAILED", "result": payload[-1], "ticks": ticks,
+                "opcode": "SMSG_BUY_FAILED", "result": payload[-1], "ticks": ticks, "index": packet,
                 "item": struct.unpack_from("<I", payload, 8)[0],
             })
         elif direction != 0x47534D43 and opcode == SMSG_INVENTORY_CHANGE_FAILURE_OPCODE and payload:
             # SendEquipError starts with the result byte.
-            events.append({"opcode": "SMSG_INVENTORY_CHANGE_FAILURE", "result": payload[0], "ticks": ticks})
+            events.append({"opcode": "SMSG_INVENTORY_CHANGE_FAILURE", "result": payload[0], "ticks": ticks, "index": packet})
         elif direction == 0x47534D43 and opcode == CMSG_SELL_ITEM_OPCODE and len(payload) >= 16:
             item = struct.unpack_from("<Q", payload, 8)[0]
-            events.append({"opcode": "CMSG_SELL_ITEM", "item_counter": item & 0xFFFFFFFF, "ticks": ticks})
+            events.append({"opcode": "CMSG_SELL_ITEM", "item_counter": item & 0xFFFFFFFF, "ticks": ticks, "index": packet})
         elif direction == 0x47534D43 and opcode == CMSG_BUYBACK_ITEM_OPCODE and len(payload) >= 12:
             slot = struct.unpack_from("<I", payload, 8)[0]
-            events.append({"opcode": "CMSG_BUYBACK_ITEM", "slot": slot, "ticks": ticks})
+            events.append({"opcode": "CMSG_BUYBACK_ITEM", "slot": slot, "ticks": ticks, "index": packet})
         offset += PKT_PACKET_HEADER_SIZE + (length - 4)
+        packet += 1
     return events
 
 
@@ -3351,6 +3486,74 @@ def automate_vendor_negative(generation: Generation, case: str) -> None:
         generation, "s2c", "SMSG_LOGOUT_COMPLETE", "logout", completed, VENDOR_TRADE_LOGOUT_TIMEOUT,
     )
     capture_desktop_screenshot(generation, f"negative-{case}-after-logout.png")
+
+
+def trainer_open(generation: Generation) -> None:
+    """Probe input, select Llane Beshere, bind the interaction key and open his frame."""
+    capture_desktop_screenshot(generation, "trainer-before-target.png")
+    time.sleep(4.0)
+    vendor_trade_probe_input(generation)
+    selections = vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION")
+    for _ in range(5):
+        automate_key_sequence(generation, TRAINER_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+        time.sleep(1.5)  # let the client resolve the name and register the target
+        if vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION") > selections:
+            break
+    else:
+        capture_desktop_screenshot(generation, "trainer-after-target.png")
+        raise RuntimeError("trainer target macro did not select Llane Beshere")
+    capture_desktop_screenshot(generation, "trainer-after-target.png")
+
+    automate_key_sequence(generation, VENDOR_TRADE_BIND_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(0.5)  # let the client save the binding before pressing it
+    automate_key_sequence(generation, VENDOR_TRADE_INTERACT_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+    vendor_trade_wait_any(
+        generation, ("SMSG_GOSSIP_MESSAGE", "SMSG_TRAINER_LIST"), "gossip frame or trainer list")
+    capture_desktop_screenshot(generation, "trainer-gossip.png")
+    if not vendor_trade_marker_count(generation, "s2c", "SMSG_TRAINER_LIST"):
+        trainer_list = vendor_trade_marker_count(generation, "s2c", "SMSG_TRAINER_LIST") + 1
+        click_owned_window(generation, *trainer_gossip_option())
+        vendor_trade_wait(generation, "s2c", "SMSG_TRAINER_LIST", "trainer list", trainer_list)
+    capture_desktop_screenshot(generation, "trainer-open.png")
+
+
+def automate_trainer_learn(generation: Generation) -> None:
+    """Buy Battle Shout from Llane, prove it in the spellbook and by casting it, then log out."""
+    trainer_open(generation)
+    purchases = vendor_trade_marker_count(generation, "c2s", "CMSG_TRAINER_BUY_SPELL") + 1
+    click_owned_window(generation, *trainer_spell_row())
+    time.sleep(0.5)  # let the frame select the row before Train is pressed
+    capture_desktop_screenshot(generation, "trainer-selected.png")
+    click_owned_window(generation, *TRAINER_TRAIN_BUTTON)
+    vendor_trade_wait(generation, "s2c", "SMSG_TRAINER_BUY_SUCCEEDED", "trainer purchase", purchases)
+    capture_desktop_screenshot(generation, "trainer-after-buy.png")
+
+    automate_key_sequence(generation, ("p",), hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(0.5)  # let the spellbook draw
+    capture_desktop_screenshot(generation, "trainer-spellbook.png")
+    automate_key_sequence(generation, ("p",), hold_seconds=0.05, gap_seconds=0.05)
+
+    # Casting by name proves the learned spell is usable without an action-bar drag (the issue's
+    # "if applicable" branch); Battle Shout needs no target.
+    # Both baselines are captured before the cast is typed: sampling the spell-go count afterwards waits
+    # for a second cast that never comes (the response can arrive before the key helper returns).
+    casts = vendor_trade_marker_count(generation, "c2s", "CMSG_CAST_SPELL") + 1
+    spell_goes = vendor_trade_marker_count(generation, "s2c", "SMSG_SPELL_GO") + 1
+    automate_key_sequence(
+        generation,
+        ("Return", "slash", *tuple("cast"), "space", *vendor_trade_name_keys(TRAINER_SPELL_NAME), "Return"),
+        hold_seconds=0.05, gap_seconds=0.05,
+    )
+    vendor_trade_wait(generation, "c2s", "CMSG_CAST_SPELL", "cast request", casts)
+    vendor_trade_wait(generation, "s2c", "SMSG_SPELL_GO", "spell cast", spell_goes)
+    capture_desktop_screenshot(generation, "trainer-after-cast.png")
+
+    completed = vendor_trade_marker_count(generation, "s2c", "SMSG_LOGOUT_COMPLETE") + 1
+    automate_key_sequence(
+        generation, ("Return", "slash", *tuple("logout"), "Return"), hold_seconds=0.05, gap_seconds=0.05)
+    vendor_trade_wait(
+        generation, "s2c", "SMSG_LOGOUT_COMPLETE", "logout", completed, TRAINER_LOGOUT_TIMEOUT)
+    capture_desktop_screenshot(generation, "trainer-after-logout.png")
 
 
 def character_row_count(manifest: Manifest, generation: Generation) -> int:
@@ -3446,6 +3649,9 @@ def run_client(args: argparse.Namespace) -> None:
         generation["vendor_case"] = case
         apply_vendor_negative_seed(generation["mode"])
         mysql(manifest, generation, vendor_negative_seed_sql(case), generation["schemas"]["characters"])
+    if generation["mode"] == TRAINER_MODE:
+        apply_trainer_seed(generation["mode"])
+        mysql(manifest, generation, trainer_seed_sql(), generation["schemas"]["characters"])
     if generation["mode"] == LEVEL_UP_MODE:
         mysql(manifest, generation, level_up_action_seed_sql(), generation["schemas"]["characters"])
         mysql(manifest, generation, level_up_gear_seed_sql(), generation["schemas"]["characters"])
@@ -3512,6 +3718,7 @@ def run_client(args: argparse.Namespace) -> None:
         level_up_sent = False
         vendor_trade_sent = False
         vendor_negative_sent = False
+        trainer_learn_sent = False
         post_marker_hold_started: float | None = None
         milestone_definition = CHARACTER_MILESTONES if generation["mode"] in CHARACTER_MODES else CLIENT_MILESTONES
         while time.monotonic() < deadline:
@@ -3615,6 +3822,12 @@ def run_client(args: argparse.Namespace) -> None:
                 ):
                     automate_vendor_negative(generation, vendor_negative_frozen_case(generation))
                     vendor_negative_sent = True
+                if (
+                    generation["mode"] == TRAINER_MODE and selection_sent
+                    and not trainer_learn_sent and in_world_control_marker_count(generation) > 0
+                ):
+                    automate_trainer_learn(generation)
+                    trainer_learn_sent = True
                 if (
                     generation["mode"] == LEVEL_UP_MODE and selection_sent and not level_up_sent
                     and in_world_control_marker_count(generation) > 0
@@ -3995,6 +4208,10 @@ CMSG_SET_SELECTION_OPCODE = 0x506
 CMSG_SELL_ITEM_OPCODE = 0x4E15
 CMSG_BUYBACK_ITEM_OPCODE = 0x6C17
 CMSG_BUY_ITEM_OPCODE = 0x0736
+CMSG_TRAINER_BUY_SPELL_OPCODE = 0x4415
+SMSG_TRAINER_LIST_OPCODE = 0x4414
+SMSG_TRAINER_BUY_SUCCEEDED_OPCODE = 0x6A05
+SMSG_LEARNED_SPELL_OPCODE = 0x58A2
 SMSG_BUY_FAILED_OPCODE = 0x6435
 SMSG_INVENTORY_CHANGE_FAILURE_OPCODE = 0x2236
 # BuyResult/EQUIP_ERR values the rejection cases expect (Item.h: BUY_ERR_NOT_ENOUGHT_MONEY,
@@ -5553,7 +5770,7 @@ POST_MARKER_MODES = frozenset({
     INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE,
     GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE, CHARACTER_CREATION_MODE,
     BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
-    LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE,
+    LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE, TRAINER_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -5572,6 +5789,7 @@ POST_MARKER_COUNTERS = {
         generation, "s2c", "SMSG_VENDOR_INVENTORY"),
     VENDOR_NEGATIVE_MODE: lambda generation: vendor_trade_marker_count(
         generation, "s2c", "SMSG_VENDOR_INVENTORY"),
+    TRAINER_MODE: lambda generation: vendor_trade_marker_count(generation, "s2c", "SMSG_TRAINER_LIST"),
     INVALID_TARGET_SPELL_CAST_MODE: invalid_target_spell_cast_marker_count,
     LEVEL_UP_MODE: level_up_settle_signal,
     PLAN32_GEOMETRY_MODE: plan32_progress_marker_count,
@@ -5698,6 +5916,7 @@ def sanitized_evidence(
     movement_heartbeat_count_value: int | None = None, creation_marker_count_value: int | None = None,
     vendor_trade_evidence_value: dict[str, int] | None = None,
     vendor_negative_evidence_value: dict[str, object] | None = None,
+    trainer_evidence_value: dict[str, int] | None = None,
 ) -> dict[str, object]:
     auth_index = next(
         (index for index, item in enumerate(transcript) if item["opcode"] == "SMSG_AUTH_RESPONSE"), None,
@@ -5733,12 +5952,13 @@ def sanitized_evidence(
     plan32_geometry_mode = generation["mode"] == PLAN32_GEOMETRY_MODE
     vendor_trade_mode = generation["mode"] == VENDOR_TRADE_MODE
     vendor_negative_mode = generation["mode"] == VENDOR_NEGATIVE_MODE
-    vendor_marker_mode = vendor_trade_mode or vendor_negative_mode
+    trainer_mode = generation["mode"] == TRAINER_MODE
+    vendor_marker_mode = vendor_trade_mode or vendor_negative_mode or trainer_mode
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
         WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
         INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
-        VENDOR_NEGATIVE_MODE,
+        VENDOR_NEGATIVE_MODE, TRAINER_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     owned_window = owned_window_evidence(generation) if character_mode else (
@@ -5753,7 +5973,7 @@ def sanitized_evidence(
     forbidden = sorted({item["opcode"] for item in transcript if item["opcode"] in forbidden_opcodes})
     # Parsed once: the cast correlation, the fixture witness and the geometry report all read the
     # same capture, and the evidence records what they read.
-    plan32_events = plan32_packet_events(generation) if plan32_geometry_mode else []
+    plan32_events = plan32_packet_events(generation) if (plan32_geometry_mode or trainer_mode) else []
     vendor_events = vendor_trade_packet_events(generation) if vendor_marker_mode else []
     vendor_sells = [event for event in vendor_events if event["opcode"] == "CMSG_SELL_ITEM"]
     vendor_buybacks = [event for event in vendor_events if event["opcode"] == "CMSG_BUYBACK_ITEM"]
@@ -5777,6 +5997,7 @@ def sanitized_evidence(
             else "ground_movement_pass_candidate" if ground_movement_mode and "characters_completed" in milestones
             else "vendor_trade_pass_candidate" if vendor_trade_mode and "characters_completed" in milestones
             else "vendor_negative_pass_candidate" if vendor_negative_mode and "characters_completed" in milestones
+            else "trainer_learn_pass_candidate" if trainer_mode and "characters_completed" in milestones
             else "plan32_geometry_pass_candidate" if plan32_geometry_mode and "characters_completed" in milestones
             else "basic_movement_pass_candidate" if basic_movement_mode and "characters_completed" in milestones
             else "in_world_control_bootstrap_candidate" if in_world_control_mode and "characters_completed" in milestones
@@ -5850,6 +6071,36 @@ def sanitized_evidence(
             if vendor_negative_mode else None
         ),
         "vendor_case": generation.get("vendor_case") if vendor_negative_mode else None,
+        "trainer_list": (
+            next((event for event in vendor_events if event["opcode"] == "SMSG_TRAINER_LIST"), None)
+            if trainer_mode else None
+        ),
+        "trainer_buy_events": (
+            [{"trainer_guid": int(event["trainer_guid"]), "trainer_id": int(event["trainer_id"]),
+              "spell": int(event["spell"]), "index": int(event["index"])}
+             for event in vendor_events if event["opcode"] == "CMSG_TRAINER_BUY_SPELL"]
+            if trainer_mode else None
+        ),
+        "trainer_results": (
+            [{"trainer_guid": int(event["trainer_guid"]), "spell": int(event["spell"]),
+              "index": int(event["index"])}
+             for event in vendor_events if event["opcode"] == "SMSG_TRAINER_BUY_SUCCEEDED"]
+            if trainer_mode else None
+        ),
+        "trainer_learned_spells": (
+            [{"spell": int(event["spell"]), "index": int(event["index"])}
+             for event in vendor_events if event["opcode"] == "SMSG_LEARNED_SPELL"]
+            if trainer_mode else None
+        ),
+        "trainer_buy_results": (
+            vendor_trade_marker_count(generation, "s2c", "SMSG_TRAINER_BUY_SUCCEEDED")
+            if trainer_mode else None
+        ),
+        "trainer_buy_failures": (
+            vendor_trade_marker_count(generation, "s2c", "SMSG_TRAINER_BUY_FAILED")
+            if trainer_mode else None
+        ),
+        "trainer": trainer_evidence_value if trainer_mode else None,
         "vendor_negative": vendor_negative_evidence_value if vendor_negative_mode else None,
         "vendor_sell_item_counter": vendor_sells[0]["item_counter"] if vendor_sells else None,
         "vendor_buyback_slot": vendor_buybacks[0]["slot"] if vendor_buybacks else None,
@@ -5879,13 +6130,13 @@ def sanitized_evidence(
         "plan32_stage": generation.get("plan32_stage") if plan32_geometry_mode else None,
         "plan32_casts": (
             [
-                {key: event[key] for key in ("opcode", "side", "count", "spell", "target", "result", "caster")
+                {key: event[key] for key in ("opcode", "side", "count", "spell", "target", "result", "caster", "index")
                  if key in event}
                 for event in plan32_events
                 if event["opcode"] in {
                     "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO",
                 }
-            ] if plan32_geometry_mode else None
+            ] if (plan32_geometry_mode or trainer_mode) else None
         ),
         "plan32_settle_z": plan32_settle_z(generation) if plan32_geometry_mode else None,
         "plan32_player_samples": (
@@ -5973,12 +6224,13 @@ def verify(args: argparse.Namespace) -> None:
     plan32_geometry_mode = generation["mode"] == PLAN32_GEOMETRY_MODE
     vendor_trade_mode = generation["mode"] == VENDOR_TRADE_MODE
     vendor_negative_mode = generation["mode"] == VENDOR_NEGATIVE_MODE
-    vendor_marker_mode = vendor_trade_mode or vendor_negative_mode
+    trainer_mode = generation["mode"] == TRAINER_MODE
+    vendor_marker_mode = vendor_trade_mode or vendor_negative_mode or trainer_mode
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
         WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
         INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
-        VENDOR_NEGATIVE_MODE,
+        VENDOR_NEGATIVE_MODE, TRAINER_MODE,
     }
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     # The relog stage drives the whole login twice, so the login-shaped evidence below expects two
@@ -5987,7 +6239,7 @@ def verify(args: argparse.Namespace) -> None:
     # Returning to the character screen after /logout makes the client ask for its character list
     # again (CharacterSelect_OnShow calls GetCharacterListUpdate), so vendor mode sees one
     # enumeration per session plus that closing one while still logging in exactly once.
-    expected_enumerations = 2 if (vendor_trade_mode or vendor_negative_mode) else expected_logins
+    expected_enumerations = 2 if (vendor_trade_mode or vendor_negative_mode or trainer_mode) else expected_logins
     rows = character_row_count(manifest, generation) if character_mode else None
     realm_count = realm_character_count(manifest, generation) if populated_mode else None
     seed = (
@@ -6035,6 +6287,7 @@ def verify(args: argparse.Namespace) -> None:
         vendor_negative_evidence_value=(
             vendor_negative_db_evidence(manifest, generation) if vendor_negative_mode else None
         ),
+        trainer_evidence_value=trainer_db_evidence(manifest, generation) if trainer_mode else None,
     )
     unchanged = protected_inputs_unchanged(manifest, generation)
     generation["isolation_unchanged"] = unchanged
@@ -6157,6 +6410,73 @@ def verify(args: argparse.Namespace) -> None:
                 and vendor.get("buyback_item_count", 0) >= 1
                 and vendor.get("repaired_durability", 0) == VENDOR_TRADE_DAMAGED_MAX_DURABILITY
                 and 0 < vendor.get("money", 0) < VENDOR_TRADE_MONEY
+            )
+        if trainer_mode:
+            trainer = evidence["trainer"] or {}
+            trainer_list = evidence["trainer_list"] or {}
+            list_spells = {
+                int(spell): (int(cost), int(state)) for spell, cost, state in trainer_list.get("spells") or []
+            }
+            buy_events = evidence["trainer_buy_events"] or []
+            results = evidence["trainer_results"] or []
+            learned = evidence["trainer_learned_spells"] or []
+            list_guid = int(trainer_list.get("npc_guid", 0))
+            # the runtime guid carries the creature entry in its high bits; the client and server share it
+            # for the list, the buy and the success, so an arbitrary NPC cannot stand in
+            list_entry = (list_guid >> 24) & 0xFFFFFF
+            casts = [event for event in (evidence["plan32_casts"] or [])
+                     if event.get("opcode") == "CMSG_CAST_SPELL"]
+            goes = [event for event in (evidence["plan32_casts"] or [])
+                    if event.get("opcode") == "SMSG_SPELL_GO"]
+            failures = [event for event in (evidence["plan32_casts"] or [])
+                        if event.get("opcode") == "SMSG_CAST_FAILED"]
+            list_index = int(trainer_list.get("index", -1))
+            buy_index = int(buy_events[0]["index"]) if len(buy_events) == 1 else -1
+            result_index = int(results[0]["index"]) if len(results) == 1 else -1
+            learned_index = int(learned[0]["index"]) if len(learned) == 1 else -1
+            cast_event = next((event for event in casts if int(event.get("spell", 0)) == TRAINER_SPELL_ID), None)
+            cast_index = int(cast_event["index"]) if cast_event else -1
+            cast_counter = int(cast_event["count"]) if cast_event else None
+            # the success must follow the request, not merely exist somewhere in the capture: an earlier
+            # cast with the same byte counter must not certify a later request that never succeeds
+            go_event = next((event for event in goes
+                             if int(event.get("caster", 0)) == CHARACTER_GUID
+                             and int(event.get("spell", 0)) == TRAINER_SPELL_ID
+                             and int(event.get("count", -1)) == cast_counter
+                             and int(event.get("index", -1)) > cast_index), None)
+            cast_ok = (
+                cast_event is not None
+                and go_event is not None
+                and cast_index > buy_index
+                and not any(int(event.get("spell", 0)) == TRAINER_SPELL_ID
+                            and int(event.get("count", -1)) == cast_counter for event in failures)
+            )
+            # the whole transaction has to be in order: the list first, then the buy, then its success and
+            # the learned notification, then the usability cast started after the purchase
+            ordered = (
+                list_index >= 0
+                and list_index < buy_index < result_index
+                and buy_index < learned_index
+            )
+            character_ok = character_ok and (
+                list_guid != 0
+                and list_entry == TRAINER_NPC_ENTRY
+                and int(trainer_list.get("trainer_id", -1)) == TRAINER_ID
+                and TRAINER_SPELL_ID in list_spells
+                and list_spells[TRAINER_SPELL_ID] == (TRAINER_SPELL_LISTED_PRICE, TRAINER_STATE_AVAILABLE)
+                and any(state == TRAINER_STATE_UNAVAILABLE for _cost, state in list_spells.values())
+                and [{"trainer_guid": event["trainer_guid"], "trainer_id": event["trainer_id"],
+                      "spell": event["spell"]} for event in buy_events] == [{
+                    "trainer_guid": list_guid, "trainer_id": TRAINER_ID, "spell": TRAINER_SPELL_ID,
+                }]
+                and [{"trainer_guid": event["trainer_guid"], "spell": event["spell"]}
+                     for event in results] == [{"trainer_guid": list_guid, "spell": TRAINER_SPELL_ID}]
+                and [event["spell"] for event in learned] == [TRAINER_SPELL_ID]
+                and ordered
+                and evidence["trainer_buy_failures"] == 0
+                and cast_ok
+                and trainer.get("known_spell_count", 0) == 1
+                and trainer.get("money", -1) == TRAINER_MONEY - TRAINER_SPELL_LISTED_PRICE
             )
         if vendor_negative_mode:
             case = generation.get("vendor_case")
@@ -6499,6 +6819,7 @@ def verify(args: argparse.Namespace) -> None:
                 and generation.get("plan32_stage") == "relog"
                 else "vendor_trade_pass" if vendor_trade_mode
                 else "vendor_negative_pass" if vendor_negative_mode
+                else "trainer_learn_pass" if trainer_mode
                 else "ground_movement_pass" if ground_movement_mode
                 else "basic_movement_pass" if basic_movement_mode
                 else "in_world_control_bootstrap_pass" if in_world_control_mode
@@ -8277,7 +8598,7 @@ def parser() -> argparse.ArgumentParser:
             RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE,
             BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
             INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
-            VENDOR_NEGATIVE_MODE,
+            VENDOR_NEGATIVE_MODE, TRAINER_MODE,
         ), default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)

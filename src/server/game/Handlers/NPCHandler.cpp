@@ -133,6 +133,16 @@ void WorldSession::HandleTrainerBuySpellOpcode(WorldPackets::NPC::TrainerBuySpel
     if (!trainer)
         return;
 
+    // 4.x carries the trainer id in the request; it must name the trainer this NPC currently offers
+    // through AC's creature -> default trainer mapping (the list a client was previously shown is not
+    // tracked, unlike the reference's interaction history)
+    if (trainer->GetTrainerId() != uint32(packet.TrainerID))
+    {
+        LOG_DEBUG("network", "WORLD: HandleTrainerBuySpellOpcode - trainer id {} does not match {} for {}",
+            packet.TrainerID, trainer->GetTrainerId(), packet.TrainerGUID.ToString());
+        return;
+    }
+
     trainer->TeachSpell(npc, _player, packet.SpellID);
 }
 
