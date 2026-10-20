@@ -3371,6 +3371,7 @@ def vendor_trade_packet_events(generation: Generation) -> list[dict[str, object]
     data = path.read_bytes()
     events: list[dict[str, object]] = []
     offset = PKT_LOG_HEADER_SIZE
+    packet = 0
     while offset + PKT_PACKET_HEADER_SIZE <= len(data):
         direction, _, ticks, optional_size, length = struct.unpack_from("<IIIII", data, offset)
         if optional_size != 20 or length > 65535 or length < 4:
@@ -3384,7 +3385,7 @@ def vendor_trade_packet_events(generation: Generation) -> list[dict[str, object]
                 "trainer_guid": struct.unpack_from("<Q", payload, 0)[0],
                 "trainer_id": struct.unpack_from("<I", payload, 8)[0],
                 "spell": struct.unpack_from("<i", payload, 12)[0],
-                "ticks": ticks,
+                "ticks": ticks, "index": packet,
             })
         elif direction != 0x47534D43 and opcode == SMSG_TRAINER_LIST_OPCODE and len(payload) >= 20:
             # guid, uint32 type, uint32 trainer id, uint32 count, then 34-byte spell records
@@ -3401,18 +3402,18 @@ def vendor_trade_packet_events(generation: Generation) -> list[dict[str, object]
                 cursor += 34
             events.append({
                 "opcode": "SMSG_TRAINER_LIST", "npc_guid": struct.unpack_from("<Q", payload, 0)[0],
-                "trainer_id": trainer_id, "count": count, "spells": spells, "ticks": ticks,
+                "trainer_id": trainer_id, "count": count, "spells": spells, "ticks": ticks, "index": packet,
             })
         elif direction != 0x47534D43 and opcode == SMSG_TRAINER_BUY_SUCCEEDED_OPCODE and len(payload) >= 12:
             events.append({
                 "opcode": "SMSG_TRAINER_BUY_SUCCEEDED",
                 "trainer_guid": struct.unpack_from("<Q", payload, 0)[0],
                 "spell": struct.unpack_from("<i", payload, 8)[0],
-                "ticks": ticks,
+                "ticks": ticks, "index": packet,
             })
         elif direction != 0x47534D43 and opcode == SMSG_LEARNED_SPELL_OPCODE and len(payload) >= 4:
             events.append({
-                "opcode": "SMSG_LEARNED_SPELL", "spell": struct.unpack_from("<i", payload, 0)[0], "ticks": ticks,
+                "opcode": "SMSG_LEARNED_SPELL", "spell": struct.unpack_from("<i", payload, 0)[0], "ticks": ticks, "index": packet,
             })
         elif direction == 0x47534D43 and opcode == CMSG_BUY_ITEM_OPCODE and len(payload) >= 30:
             # BuyItem::Read: guid, uint8 type, uint32 item, uint32 slot (the 1-based MuID), uint32 count,
@@ -3423,24 +3424,25 @@ def vendor_trade_packet_events(generation: Generation) -> list[dict[str, object]
                 "item": struct.unpack_from("<I", payload, 9)[0],
                 "slot": struct.unpack_from("<I", payload, 13)[0],
                 "count": struct.unpack_from("<I", payload, 17)[0],
-                "ticks": ticks,
+                "ticks": ticks, "index": packet,
             })
         elif direction != 0x47534D43 and opcode == SMSG_BUY_FAILED_OPCODE and len(payload) >= 13:
             # SendBuyError writes guid, uint32 item, optional uint32 param, then the result byte last.
             events.append({
-                "opcode": "SMSG_BUY_FAILED", "result": payload[-1], "ticks": ticks,
+                "opcode": "SMSG_BUY_FAILED", "result": payload[-1], "ticks": ticks, "index": packet,
                 "item": struct.unpack_from("<I", payload, 8)[0],
             })
         elif direction != 0x47534D43 and opcode == SMSG_INVENTORY_CHANGE_FAILURE_OPCODE and payload:
             # SendEquipError starts with the result byte.
-            events.append({"opcode": "SMSG_INVENTORY_CHANGE_FAILURE", "result": payload[0], "ticks": ticks})
+            events.append({"opcode": "SMSG_INVENTORY_CHANGE_FAILURE", "result": payload[0], "ticks": ticks, "index": packet})
         elif direction == 0x47534D43 and opcode == CMSG_SELL_ITEM_OPCODE and len(payload) >= 16:
             item = struct.unpack_from("<Q", payload, 8)[0]
-            events.append({"opcode": "CMSG_SELL_ITEM", "item_counter": item & 0xFFFFFFFF, "ticks": ticks})
+            events.append({"opcode": "CMSG_SELL_ITEM", "item_counter": item & 0xFFFFFFFF, "ticks": ticks, "index": packet})
         elif direction == 0x47534D43 and opcode == CMSG_BUYBACK_ITEM_OPCODE and len(payload) >= 12:
             slot = struct.unpack_from("<I", payload, 8)[0]
-            events.append({"opcode": "CMSG_BUYBACK_ITEM", "slot": slot, "ticks": ticks})
+            events.append({"opcode": "CMSG_BUYBACK_ITEM", "slot": slot, "ticks": ticks, "index": packet})
         offset += PKT_PACKET_HEADER_SIZE + (length - 4)
+        packet += 1
     return events
 
 
@@ -6075,17 +6077,19 @@ def sanitized_evidence(
         ),
         "trainer_buy_events": (
             [{"trainer_guid": int(event["trainer_guid"]), "trainer_id": int(event["trainer_id"]),
-              "spell": int(event["spell"])}
+              "spell": int(event["spell"]), "index": int(event["index"])}
              for event in vendor_events if event["opcode"] == "CMSG_TRAINER_BUY_SPELL"]
             if trainer_mode else None
         ),
         "trainer_results": (
-            [{"trainer_guid": int(event["trainer_guid"]), "spell": int(event["spell"])}
+            [{"trainer_guid": int(event["trainer_guid"]), "spell": int(event["spell"]),
+              "index": int(event["index"])}
              for event in vendor_events if event["opcode"] == "SMSG_TRAINER_BUY_SUCCEEDED"]
             if trainer_mode else None
         ),
         "trainer_learned_spells": (
-            [int(event["spell"]) for event in vendor_events if event["opcode"] == "SMSG_LEARNED_SPELL"]
+            [{"spell": int(event["spell"]), "index": int(event["index"])}
+             for event in vendor_events if event["opcode"] == "SMSG_LEARNED_SPELL"]
             if trainer_mode else None
         ),
         "trainer_buy_results": (
@@ -6126,7 +6130,7 @@ def sanitized_evidence(
         "plan32_stage": generation.get("plan32_stage") if plan32_geometry_mode else None,
         "plan32_casts": (
             [
-                {key: event[key] for key in ("opcode", "side", "count", "spell", "target", "result", "caster")
+                {key: event[key] for key in ("opcode", "side", "count", "spell", "target", "result", "caster", "index")
                  if key in event}
                 for event in plan32_events
                 if event["opcode"] in {
@@ -6426,15 +6430,33 @@ def verify(args: argparse.Namespace) -> None:
                     if event.get("opcode") == "SMSG_SPELL_GO"]
             failures = [event for event in (evidence["plan32_casts"] or [])
                         if event.get("opcode") == "SMSG_CAST_FAILED"]
-            cast_counter = next((int(event["count"]) for event in casts
-                                 if int(event.get("spell", 0)) == TRAINER_SPELL_ID), None)
+            list_index = int(trainer_list.get("index", -1))
+            buy_index = int(buy_events[0]["index"]) if len(buy_events) == 1 else -1
+            result_index = int(results[0]["index"]) if len(results) == 1 else -1
+            learned_index = int(learned[0]["index"]) if len(learned) == 1 else -1
+            cast_event = next((event for event in casts if int(event.get("spell", 0)) == TRAINER_SPELL_ID), None)
+            cast_index = int(cast_event["index"]) if cast_event else -1
+            cast_counter = int(cast_event["count"]) if cast_event else None
+            # the success must follow the request, not merely exist somewhere in the capture: an earlier
+            # cast with the same byte counter must not certify a later request that never succeeds
+            go_event = next((event for event in goes
+                             if int(event.get("caster", 0)) == CHARACTER_GUID
+                             and int(event.get("spell", 0)) == TRAINER_SPELL_ID
+                             and int(event.get("count", -1)) == cast_counter
+                             and int(event.get("index", -1)) > cast_index), None)
             cast_ok = (
-                cast_counter is not None
-                and any(int(event.get("caster", 0)) == CHARACTER_GUID
-                        and int(event.get("spell", 0)) == TRAINER_SPELL_ID
-                        and int(event.get("count", -1)) == cast_counter for event in goes)
+                cast_event is not None
+                and go_event is not None
+                and cast_index > buy_index
                 and not any(int(event.get("spell", 0)) == TRAINER_SPELL_ID
                             and int(event.get("count", -1)) == cast_counter for event in failures)
+            )
+            # the whole transaction has to be in order: the list first, then the buy, then its success and
+            # the learned notification, then the usability cast started after the purchase
+            ordered = (
+                list_index >= 0
+                and list_index < buy_index < result_index
+                and buy_index < learned_index
             )
             character_ok = character_ok and (
                 list_guid != 0
@@ -6443,11 +6465,14 @@ def verify(args: argparse.Namespace) -> None:
                 and TRAINER_SPELL_ID in list_spells
                 and list_spells[TRAINER_SPELL_ID] == (TRAINER_SPELL_LISTED_PRICE, TRAINER_STATE_AVAILABLE)
                 and any(state == TRAINER_STATE_UNAVAILABLE for _cost, state in list_spells.values())
-                and buy_events == [{
+                and [{"trainer_guid": event["trainer_guid"], "trainer_id": event["trainer_id"],
+                      "spell": event["spell"]} for event in buy_events] == [{
                     "trainer_guid": list_guid, "trainer_id": TRAINER_ID, "spell": TRAINER_SPELL_ID,
                 }]
-                and results == [{"trainer_guid": list_guid, "spell": TRAINER_SPELL_ID}]
-                and learned == [TRAINER_SPELL_ID]
+                and [{"trainer_guid": event["trainer_guid"], "spell": event["spell"]}
+                     for event in results] == [{"trainer_guid": list_guid, "spell": TRAINER_SPELL_ID}]
+                and [event["spell"] for event in learned] == [TRAINER_SPELL_ID]
+                and ordered
                 and evidence["trainer_buy_failures"] == 0
                 and cast_ok
                 and trainer.get("known_spell_count", 0) == 1
