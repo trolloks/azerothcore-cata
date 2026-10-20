@@ -6989,15 +6989,18 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     def index(event: dict[str, object]) -> int:
         return int(event["index"])
 
-    # Regeneration is disabled for this mode: after the first Fireball request the pool may only
-    # fall. This catches a refund hidden behind a non-Fireball completion or a target clear.
-    if fireball_requests:
-        first_request_index = index(fireball_requests[0])
-        before_first = [value for at, _, value in mana if at < first_request_index]
-        after_first = [value for at, _, value in mana if at > first_request_index]
-        if before_first:
-            after_first.insert(0, before_first[-1])
-        if any(after_first[i] > after_first[i - 1] for i in range(1, len(after_first))):
+    # Regeneration is disabled for this mode: from the self-selection that starts the invalid-target
+    # refusal the pool may only fall. This also catches a refund hidden behind a non-Fireball
+    # completion or a target clear while excluding earlier login-pool changes.
+    self_anchor = next(
+        (index(event) for event in selections
+         if int(event.get("target", 0)) == player_guid), None)
+    if self_anchor is not None:
+        before_anchor = [value for at, _, value in mana if at < self_anchor]
+        after_anchor = [value for at, _, value in mana if at > self_anchor]
+        if before_anchor:
+            after_anchor.insert(0, before_anchor[-1])
+        if any(after_anchor[i] > after_anchor[i - 1] for i in range(1, len(after_anchor))):
             return False
 
     capture_end = max(
@@ -8433,6 +8436,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         gcd_narrow=False, failure_after_go=False,
         far_refund=False, dead_refund=False, unanswered_refund=False, unanswered_reuse=False,
         failed_arcane_completion=False, non_fireball_refund=False, first_refund=False,
+        invalid_refund=False,
         drain_casts=11, cost=9, insufficient_go=False, insufficient_cost=False,
         insufficient_result=None, insufficient_refund=False, arcane_refund=False,
     ):
@@ -8443,7 +8447,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         casts: list[dict[str, object]] = []
         combat: list[dict[str, object]] = [
             {"opcode": "SMSG_POWER_UPDATE", "index": 0, "guid": guid,
-             "powers": [[0, 164 if first_refund else 165]]},
+             "powers": [[0, 164 if first_refund or invalid_refund else 165]]},
         ]
         counter = 1
 
@@ -8460,6 +8464,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         ]
 
         add(casts, opcode="CMSG_SET_SELECTION", target=guid)
+        if invalid_refund:
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 165]])
         if invalid_request:
             add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=guid, count=0)
             if invalid_result is not None:
@@ -8667,6 +8673,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_negative_accepted(negative_chain(failed_arcane_completion=True))
     assert not mage_negative_accepted(negative_chain(non_fireball_refund=True))
     assert not mage_negative_accepted(negative_chain(first_refund=True))
+    assert not mage_negative_accepted(negative_chain(invalid_refund=True))
     assert not mage_negative_accepted(negative_chain(cancel=False))
     assert not mage_negative_accepted(negative_chain(interrupt_result=69))
     assert not mage_negative_accepted(negative_chain(interrupt_go=True))
