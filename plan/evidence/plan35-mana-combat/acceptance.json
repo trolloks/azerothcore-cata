@@ -12,31 +12,31 @@
   "combat_events": [
     {
       "guid": 1,
-      "index": 13,
-      "opcode": "SMSG_POWER_UPDATE",
-      "powers": [
-        [
-          0,
-          100
-        ]
-      ],
-      "ticks": 59862
-    },
-    {
-      "guid": 1,
       "index": 15,
       "opcode": "SMSG_POWER_UPDATE",
       "powers": [
         [
           0,
-          165
+          100
         ]
       ],
-      "ticks": 59862
+      "ticks": 57414
     },
     {
       "guid": 1,
-      "index": 122,
+      "index": 17,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          165
+        ]
+      ],
+      "ticks": 57414
+    },
+    {
+      "guid": 1,
+      "index": 124,
       "opcode": "SMSG_POWER_UPDATE",
       "powers": [
         [
@@ -44,11 +44,11 @@
           100
         ]
       ],
-      "ticks": 108295
+      "ticks": 108422
     },
     {
       "guid": 1,
-      "index": 130,
+      "index": 132,
       "opcode": "SMSG_POWER_UPDATE",
       "powers": [
         [
@@ -56,11 +56,11 @@
           165
         ]
       ],
-      "ticks": 108295
+      "ticks": 108423
     },
     {
       "guid": 1,
-      "index": 814,
+      "index": 748,
       "opcode": "SMSG_POWER_UPDATE",
       "powers": [
         [
@@ -68,18 +68,18 @@
           156
         ]
       ],
-      "ticks": 171556
+      "ticks": 169471
     },
     {
       "attacker": 1,
-      "damage": 18,
-      "index": 820,
+      "damage": 15,
+      "index": 753,
       "opcode": "SMSG_SPELLNONMELEEDAMAGELOG",
       "overkill": 0,
       "school": 4,
       "spell": 133,
-      "target": 17379390968079320107,
-      "ticks": 171764
+      "target": 17379390968079320064,
+      "ticks": 169679
     }
   ],
   "creation_marker_count": 1,
@@ -127,29 +127,29 @@
     {
       "caster": 1,
       "count": 0,
-      "index": 167,
+      "index": 177,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
       "spell": 836
     },
     {
-      "index": 780,
+      "index": 719,
       "opcode": "CMSG_SET_SELECTION",
       "side": "c2s",
-      "target": 17379390968079320107
+      "target": 17379390968079320064
     },
     {
       "count": 1,
-      "index": 804,
+      "index": 737,
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379390968079320107
+      "target": 17379390968079320064
     },
     {
       "caster": 1,
       "count": 1,
-      "index": 815,
+      "index": 749,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
       "spell": 133
@@ -163,7 +163,7 @@
   "plan32_relog_problems": null,
   "plan32_settle_z": null,
   "plan32_stage": null,
-  "post_marker_hold_seconds": 114.39023750601336,
+  "post_marker_hold_seconds": 112.80974847599282,
   "post_marker_snapshots": 2,
   "pre_map_marker_count": null,
   "pre_map_packet_prefix": null,

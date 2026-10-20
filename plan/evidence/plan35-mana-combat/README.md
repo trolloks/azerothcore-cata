@@ -9,7 +9,7 @@ keeps the sanitized verdict (`acceptance.json`).
 
 - Client build **15595**; reference TrinityCore `c699217775d90794158422387b07a917e161b582`.
 - Branch `plan/35-first-mana-class-combat-and-resource-recovery`; generation 5 prepared with binaries
-  reporting `8c880bace`, harness `cfc161bd5`.
+  reporting `8c880bace`, harness `a6e7478ec`.
 - Character: level-1 **Human Mage** (race 1 / class 8) built by the native creation flow; Fireball **133**
   auto-placed on action button 0.
 - Target: **Saytr, entry 361**, faction 14, no static spawns; seeded at spawn guid 9990003,
@@ -34,13 +34,13 @@ keeps the sanitized verdict (`acceptance.json`).
 | creation | the native flow creates the mage | one `SMSG_CHAR_CREATE`, creation marker count **1** |
 | identity | row read by name/account: class 8, race 1, Fireball on button 0 | guid 1, class 8, race 1, `character_action` count **1** |
 | selection | `/targetexact Saytr` resolves the seeded creature | `CMSG_SET_SELECTION` after the marker; cast target high 24 bits = **361** |
-| request | `CMSG_CAST_SPELL` naming spell 133 and the Saytr | index **804**, spell 133, target = the Saytr guid |
-| correlation | the request names the victim and the damage log carries that same guid | request and damage target `0xf13000016900042b` (entry 361) |
-| resource | mana falls at cast completion: last value before the request vs the first after it | `SMSG_POWER_UPDATE` index **814**: **165 → 156** |
-| cast | `SMSG_SPELL_GO` for the mage and spell 133 | index **815**, caster = the mage, spell 133 |
-| damage | `SMSG_SPELLNONMELEEDAMAGELOG` from the mage to entry 361, fire school, damage >= 1 | index **820**, attacker = the mage, spell 133, **18** damage, school **4** |
-| order | request → power → go → damage | 804 → 814 → 815 → 820 |
-| persistence | the action bar row is saved for the recreated character | `character_action` button 0 / action 133 / type 0; a retry retires the previous row (rename + `deleteDate`) so the replacement cannot inherit its guid or its actions |
+| request | `CMSG_CAST_SPELL` naming spell 133 and the Saytr | index **737**, spell 133, target = the Saytr guid |
+| correlation | the request names the victim and the damage log carries that same guid | request and damage target `0xf130000169000400` (entry 361) |
+| resource | mana falls at cast completion: last value before the request vs the first after it | `SMSG_POWER_UPDATE` index **748**: **165 → 156** |
+| cast | `SMSG_SPELL_GO` for the mage and spell 133 | index **749**, caster = the mage, spell 133 |
+| damage | `SMSG_SPELLNONMELEEDAMAGELOG` from the mage to entry 361, fire school, damage >= 1 | index **753**, attacker = the mage, spell 133, **15** damage, school **4** |
+| order | request → power → go → damage | 737 → 748 → 749 → 753 |
+| persistence | the action bar row is saved for the recreated character | `character_action` button 0 / action 133 / type 0; a retry deletes the account's characters and their `character_*` rows first, so the replacement cannot inherit the previous action bar |
 
 Screenshots in the run directory: `creation-screen.png`, `creation-class.png`, `mage-target.png`,
 `mage-after-cast.png`.
