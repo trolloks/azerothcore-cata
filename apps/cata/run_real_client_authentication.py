@@ -143,6 +143,8 @@ INITIAL_POST_LOAD_PACKETS_MODE = "initial-post-load-packets"
 MAP_INSERTION_MODE = "map-insertion-object-bootstrap"
 IN_WORLD_CONTROL_MODE = "in-world-control-bootstrap"
 MAGE_COMBAT_MODE = "mage-combat"
+MAGE_FOLLOWUP_MODE = "mage-combat-followup"
+MAGE_MODES = frozenset({MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE})
 BASIC_MOVEMENT_MODE = "basic-movement"
 RUN_SPEED_MODE = "run-speed-change"
 GROUND_MOVEMENT_MODE = "ground-movement"
@@ -467,7 +469,7 @@ POPULATED_CHARACTER_MODES = frozenset({
     INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
     VENDOR_NEGATIVE_MODE, TRAINER_MODE,
 })
-CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE,
+CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *MAGE_MODES,
                              *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
 CHARACTER_NAME = "Cataplan"
@@ -788,7 +790,7 @@ def plan_number(mode: str) -> str:
         return "25"
     if mode == CHARACTER_CREATION_MODE:
         return "22"
-    if mode == MAGE_COMBAT_MODE:
+    if mode in MAGE_MODES:
         return "35"
     if mode in {GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE}:
         return "23"
@@ -3120,6 +3122,18 @@ MAGE_COMBAT_TARGET_KEYS = (
     "Return", "slash", *tuple("targetexact"), "space", *vendor_trade_name_keys("Saytr"), "Return",
 )
 MAGE_COMBAT_PROBE_TIMEOUT = 150
+# Plan 35 follow-up: a neutral, high-health dummy (entry 24792, faction 7) with no spawns near Northshire.
+# It never fights back, so the mage leaves combat, regenerates mana and can log out normally.
+MAGE_DUMMY_ENTRY = 24792
+MAGE_DUMMY_GUID = 9990005
+MAGE_DUMMY_NAME = "Advanced Training Dummy"
+MAGE_DUMMY_POSITION = (-8949.95, -128.5, 83.5312)
+MAGE_FOLLOWUP_KEYS = (
+    "Return", "slash", *tuple("targetexact"), "space", *vendor_trade_name_keys(MAGE_DUMMY_NAME), "Return",
+)
+MAGE_FOLLOWUP_REGEN_TIMEOUT = 45
+MAGE_FOLLOWUP_LOGOUT_TIMEOUT = 30
+MAGE_FOLLOWUP_RELOGIN_TIMEOUT = 150
 CREATION_CLASS_POINT = "class_warrior"
 
 
@@ -3131,9 +3145,9 @@ def creation_class_name() -> str:
 def apply_creation_class(mode: str, name: str) -> None:
     """Select the class the native creation flow clicks and the class the verification expects."""
     global CREATION_CLASS_POINT, CHARACTER_CLASS
-    if mode not in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}:
+    if mode not in {CHARACTER_CREATION_MODE, *MAGE_MODES}:
         return
-    if mode == MAGE_COMBAT_MODE:
+    if mode in MAGE_MODES:
         name = "mage"
     if name not in CREATION_CLASSES:
         raise RuntimeError(f"CREATE_CLASS must be one of {sorted(CREATION_CLASSES)}; got {name!r}")
@@ -3196,6 +3210,9 @@ def mage_combat_db_evidence(manifest: Manifest, generation: Generation) -> dict[
         "action_count": scalar(
             f"SELECT COUNT(*) FROM `character_action` WHERE `guid`={guid} "
             f"AND `button`={MAGE_COMBAT_ACTION_BUTTON} AND `action`={MAGE_COMBAT_SPELL_ID} AND `type`=0;"),
+        "spell_count": scalar(
+            f"SELECT COUNT(*) FROM `character_spell` WHERE `guid`={guid} "
+            f"AND `spell`={MAGE_COMBAT_SPELL_ID};"),
     }
 
 
@@ -3224,6 +3241,92 @@ def automate_mage_combat(generation: Generation) -> None:
     # action bar was saved when the character was created.
     time.sleep(1.0)  # let the damage log and power update land
     capture_desktop_screenshot(generation, "mage-after-cast.png")
+
+
+def mage_followup_world_seed_sql() -> str:
+    """Spawns the neutral training dummy beside the mage start."""
+    x, y, z = MAGE_DUMMY_POSITION
+    return (
+        f"DELETE FROM `creature` WHERE `guid`={MAGE_DUMMY_GUID};"
+        "INSERT INTO `creature` (`guid`,`id`,`map`,`zoneId`,`areaId`,`position_x`,`position_y`,`position_z`,"
+        "`wander_distance`,`MovementType`) "
+        f"VALUES ({MAGE_DUMMY_GUID},{MAGE_DUMMY_ENTRY},0,12,9,{x},{y},{z},0,0);"
+    )
+
+
+def mage_followup_select(generation: Generation, description: str) -> None:
+    """Target the dummy by name and wait for the client's selection request."""
+    selections = vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION")
+    for _ in range(5):
+        automate_key_sequence(generation, MAGE_FOLLOWUP_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+        time.sleep(1.2)
+        if vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION") > selections:
+            return
+    capture_desktop_screenshot(generation, f"mage-followup-{description}-target.png")
+    raise RuntimeError(f"mage follow-up could not select the dummy for {description}")
+
+
+def mage_followup_mana(generation: Generation) -> list[int]:
+    """The created mage's mana values in arrival order (the reset leaves the new character at guid 1)."""
+    return [
+        int(power[1]) for event in combat_packet_events(generation)
+        if event["opcode"] == "SMSG_POWER_UPDATE" and int(event["guid"]) == 1
+        for power in event["powers"] if int(power[0]) == 0
+    ]
+
+
+def mage_followup_wait_mana(generation: Generation, accept, description: str, timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        values = mage_followup_mana(generation)
+        if values and accept(values):
+            return
+        time.sleep(0.5)
+    capture_desktop_screenshot(generation, "mage-followup-mana.png")
+    raise RuntimeError(f"mage follow-up did not observe {description}")
+
+
+def automate_mage_followup(generation: Generation) -> None:
+    """Cast, let mana regenerate out of combat, log out, log back in and cast again."""
+    time.sleep(4.0)
+    vendor_trade_probe_input(generation, MAGE_COMBAT_PROBE_TIMEOUT)
+    mage_followup_select(generation, "first")
+
+    casts = vendor_trade_marker_count(generation, "c2s", "CMSG_CAST_SPELL") + 1
+    goes = vendor_trade_marker_count(generation, "s2c", "SMSG_SPELL_GO") + 1
+    automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
+    vendor_trade_wait(generation, "c2s", "CMSG_CAST_SPELL", "first cast request", casts)
+    vendor_trade_wait(generation, "s2c", "SMSG_SPELL_GO", "first spell go", goes)
+    capture_desktop_screenshot(generation, "mage-followup-cast.png")
+
+    mage_followup_wait_mana(
+        generation, lambda values: len(values) >= 2 and values[-1] > values[-2],
+        "mana regeneration after the cast", MAGE_FOLLOWUP_REGEN_TIMEOUT,
+    )
+    capture_desktop_screenshot(generation, "mage-followup-regen.png")
+
+    completed = vendor_trade_marker_count(generation, "s2c", "SMSG_LOGOUT_COMPLETE") + 1
+    automate_key_sequence(
+        generation, ("Return", "slash", *tuple("logout"), "Return"), hold_seconds=0.05, gap_seconds=0.05)
+    vendor_trade_wait(generation, "s2c", "SMSG_LOGOUT_COMPLETE", "logout", completed,
+                      MAGE_FOLLOWUP_LOGOUT_TIMEOUT)
+    automate_character_selection(generation)
+    deadline = time.monotonic() + MAGE_FOLLOWUP_RELOGIN_TIMEOUT
+    while time.monotonic() < deadline and len(player_login_callbacks(generation)) < 2:
+        time.sleep(0.5)
+    if len(player_login_callbacks(generation)) < 2:
+        capture_desktop_screenshot(generation, "mage-followup-relogin.png")
+        raise RuntimeError("the client did not re-enter the world after the logout")
+    vendor_trade_probe_input(generation, MAGE_COMBAT_PROBE_TIMEOUT)
+    mage_followup_select(generation, "second")
+
+    casts = vendor_trade_marker_count(generation, "c2s", "CMSG_CAST_SPELL") + 1
+    goes = vendor_trade_marker_count(generation, "s2c", "SMSG_SPELL_GO") + 1
+    automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
+    vendor_trade_wait(generation, "c2s", "CMSG_CAST_SPELL", "second cast request", casts)
+    vendor_trade_wait(generation, "s2c", "SMSG_SPELL_GO", "second spell go", goes)
+    time.sleep(1.0)
+    capture_desktop_screenshot(generation, "mage-followup-relog-cast.png")
 
 
 def character_creation_points(x: int, y: int, width: int, height: int) -> dict[str, tuple[int, int]]:
@@ -3838,12 +3941,15 @@ def run_client(args: argparse.Namespace) -> None:
         generation["vendor_case"] = case
         apply_vendor_negative_seed(generation["mode"])
         mysql(manifest, generation, vendor_negative_seed_sql(case), generation["schemas"]["characters"])
-    if generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}:
+    if generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}:
         apply_creation_class(generation["mode"], generation["inputs"].get("create_class", "warrior"))
         generation.pop("mage_combat_sent", None)
     if generation["mode"] == MAGE_COMBAT_MODE:
         mage_combat_character_reset(manifest, generation)
         mysql(manifest, generation, mage_combat_world_seed_sql(), generation["schemas"]["world"])
+    if generation["mode"] == MAGE_FOLLOWUP_MODE:
+        mage_combat_character_reset(manifest, generation)
+        mysql(manifest, generation, mage_followup_world_seed_sql(), generation["schemas"]["world"])
     if generation["mode"] == TRAINER_MODE:
         apply_trainer_seed(generation["mode"])
         mysql(manifest, generation, trainer_seed_sql(), generation["schemas"]["characters"])
@@ -3929,7 +4035,7 @@ def run_client(args: argparse.Namespace) -> None:
                     generation["mode"] in {CHARACTER_SELECTION_MODE, *POST_MARKER_MODES}
                     and character_hold_started is not None and not selection_sent
                 ):
-                    if generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}:
+                    if generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}:
                         automate_character_creation(generation)
                         generation["selection_action"] = "create"
                     else:
@@ -4035,12 +4141,14 @@ def run_client(args: argparse.Namespace) -> None:
                         capture_runtime(generation)
                         generation["post_marker_snapshots"] = 1
                         post_marker_hold_started = time.monotonic()
-                        if generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}:
+                        if generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}:
                             automate_character_selection(generation)
-                    if generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}:
+                    if generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}:
                         if post_marker_hold_started is not None and player_login_callbacks(generation):
                             if generation["mode"] == MAGE_COMBAT_MODE:
                                 automate_mage_combat(generation)
+                            elif generation["mode"] == MAGE_FOLLOWUP_MODE:
+                                automate_mage_followup(generation)
                             capture_runtime(generation)
                             generation["post_marker_snapshots"] = 2
                             generation["post_marker_hold_seconds"] = time.monotonic() - post_marker_hold_started
@@ -5970,7 +6078,7 @@ POST_MARKER_MODES = frozenset({
     GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE, CHARACTER_CREATION_MODE,
     BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
     LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE, TRAINER_MODE,
-    MAGE_COMBAT_MODE,
+    MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -5991,6 +6099,7 @@ POST_MARKER_COUNTERS = {
         generation, "s2c", "SMSG_VENDOR_INVENTORY"),
     TRAINER_MODE: lambda generation: vendor_trade_marker_count(generation, "s2c", "SMSG_TRAINER_LIST"),
     MAGE_COMBAT_MODE: character_creation_marker_count,
+    MAGE_FOLLOWUP_MODE: character_creation_marker_count,
     INVALID_TARGET_SPELL_CAST_MODE: invalid_target_spell_cast_marker_count,
     LEVEL_UP_MODE: level_up_settle_signal,
     PLAN32_GEOMETRY_MODE: plan32_progress_marker_count,
@@ -6119,6 +6228,9 @@ def sanitized_evidence(
     vendor_negative_evidence_value: dict[str, object] | None = None,
     trainer_evidence_value: dict[str, int] | None = None,
     mage_combat_evidence_value: dict[str, int] | None = None,
+    mage_followup_evidence_value: dict[str, int] | None = None,
+    login_callback_count_value: int | None = None,
+    logout_count_value: int | None = None,
 ) -> dict[str, object]:
     auth_index = next(
         (index for index, item in enumerate(transcript) if item["opcode"] == "SMSG_AUTH_RESPONSE"), None,
@@ -6141,8 +6253,9 @@ def sanitized_evidence(
     initial_packets_mode = generation["mode"] == INITIAL_POST_LOAD_PACKETS_MODE
     map_insertion_mode = generation["mode"] == MAP_INSERTION_MODE
     run_speed_mode = generation["mode"] == RUN_SPEED_MODE
-    creation_mode = generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}
+    creation_mode = generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}
     mage_combat_mode = generation["mode"] == MAGE_COMBAT_MODE
+    mage_followup_mode = generation["mode"] == MAGE_FOLLOWUP_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
     jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
@@ -6177,7 +6290,7 @@ def sanitized_evidence(
     # Parsed once: the cast correlation, the fixture witness and the geometry report all read the
     # same capture, and the evidence records what they read.
     plan32_events = plan32_packet_events(generation) if (
-        plan32_geometry_mode or trainer_mode or mage_combat_mode) else []
+        plan32_geometry_mode or trainer_mode or mage_combat_mode or mage_followup_mode) else []
     vendor_events = vendor_trade_packet_events(generation) if vendor_marker_mode else []
     vendor_sells = [event for event in vendor_events if event["opcode"] == "CMSG_SELL_ITEM"]
     vendor_buybacks = [event for event in vendor_events if event["opcode"] == "CMSG_BUYBACK_ITEM"]
@@ -6203,6 +6316,8 @@ def sanitized_evidence(
             else "vendor_negative_pass_candidate" if vendor_negative_mode and "characters_completed" in milestones
             else "trainer_learn_pass_candidate" if trainer_mode and "characters_completed" in milestones
             else "mage_combat_pass_candidate" if mage_combat_mode and "characters_completed" in milestones
+            else "mage_combat_followup_pass_candidate" if mage_followup_mode
+            and "characters_completed" in milestones
             else "plan32_geometry_pass_candidate" if plan32_geometry_mode and "characters_completed" in milestones
             else "basic_movement_pass_candidate" if basic_movement_mode and "characters_completed" in milestones
             else "in_world_control_bootstrap_candidate" if in_world_control_mode and "characters_completed" in milestones
@@ -6307,7 +6422,12 @@ def sanitized_evidence(
         ),
         "trainer": trainer_evidence_value if trainer_mode else None,
         "mage_combat": mage_combat_evidence_value if mage_combat_mode else None,
-        "combat_events": combat_packet_events(generation) if mage_combat_mode else None,
+        "mage_followup": mage_followup_evidence_value if mage_followup_mode else None,
+        "login_callback_count": login_callback_count_value,
+        "logout_count": logout_count_value,
+        "combat_events": (
+            combat_packet_events(generation) if mage_combat_mode or mage_followup_mode else None
+        ),
         "vendor_negative": vendor_negative_evidence_value if vendor_negative_mode else None,
         "vendor_sell_item_counter": vendor_sells[0]["item_counter"] if vendor_sells else None,
         "vendor_buyback_slot": vendor_buybacks[0]["slot"] if vendor_buybacks else None,
@@ -6343,7 +6463,7 @@ def sanitized_evidence(
                 if event["opcode"] in {
                     "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO",
                 }
-            ] if (plan32_geometry_mode or trainer_mode or mage_combat_mode) else None
+            ] if (plan32_geometry_mode or trainer_mode or mage_combat_mode or mage_followup_mode) else None
         ),
         "plan32_settle_z": plan32_settle_z(generation) if plan32_geometry_mode else None,
         "plan32_player_samples": (
@@ -6465,6 +6585,45 @@ def mage_combat_accepted(evidence: dict[str, object]) -> bool:
         and mana_after[0] < mana_before[-1]
     )
 
+def mage_followup_accepted(evidence: dict[str, object]) -> bool:
+    """Cast, out-of-combat regeneration, logout/relog and a second cast, bound to the created mage."""
+    mage = evidence["mage_followup"] or {}
+    player_guid = int(mage.get("guid", 0))
+    casts = evidence["plan32_casts"] or []
+    requests = [event for event in casts
+                if event.get("opcode") == "CMSG_CAST_SPELL"
+                and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID]
+    spell_goes = [event for event in casts
+                  if event.get("opcode") == "SMSG_SPELL_GO"
+                  and int(event.get("caster", 0)) == player_guid
+                  and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID]
+    mana = [(int(event["index"]), int(power[1])) for event in (evidence["combat_events"] or [])
+            if event["opcode"] == "SMSG_POWER_UPDATE" and int(event["guid"]) == player_guid
+            for power in event["powers"] if int(power[0]) == 0]
+    if len(requests) < 2 or len(spell_goes) < 2:
+        return False
+    first_index = int(requests[0]["index"])
+    second_index = int(requests[1]["index"])
+    before_first = [value for index, value in mana if index < first_index]
+    after_first = [value for index, value in mana if first_index < index < second_index]
+    after_second = [value for index, value in mana if index > second_index]
+    return (
+        player_guid != 0
+        and int(mage.get("class", 0)) == CREATION_CLASSES["mage"][1]
+        and int(mage.get("race", 0)) == CHARACTER_RACE
+        and int(mage.get("action_count", 0)) == 1
+        and int(mage.get("spell_count", 0)) >= 1
+        and int(spell_goes[0]["index"]) > first_index
+        and int(spell_goes[1]["index"]) > second_index
+        and bool(before_first) and bool(after_first)
+        and after_first[0] < before_first[-1]          # the first cast cost mana
+        and max(after_first) > after_first[0]          # out of combat, mana came back
+        and bool(after_second) and after_second[0] < max(after_first)  # the second cast cost mana
+        and int(evidence.get("login_callback_count") or 0) == 2
+        and int(evidence.get("logout_count") or 0) >= 1
+    )
+
+
 def verify(args: argparse.Namespace) -> None:
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
@@ -6483,8 +6642,9 @@ def verify(args: argparse.Namespace) -> None:
     initial_packets_mode = generation["mode"] == INITIAL_POST_LOAD_PACKETS_MODE
     map_insertion_mode = generation["mode"] == MAP_INSERTION_MODE
     run_speed_mode = generation["mode"] == RUN_SPEED_MODE
-    creation_mode = generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}
+    creation_mode = generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}
     mage_combat_mode = generation["mode"] == MAGE_COMBAT_MODE
+    mage_followup_mode = generation["mode"] == MAGE_FOLLOWUP_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
     jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
@@ -6563,6 +6723,16 @@ def verify(args: argparse.Namespace) -> None:
         trainer_evidence_value=trainer_db_evidence(manifest, generation) if trainer_mode else None,
         mage_combat_evidence_value=(
             mage_combat_db_evidence(manifest, generation) if mage_combat_mode else None
+        ),
+        mage_followup_evidence_value=(
+            mage_combat_db_evidence(manifest, generation) if mage_followup_mode else None
+        ),
+        login_callback_count_value=(
+            len(player_login_callbacks(generation)) if mage_followup_mode else None
+        ),
+        logout_count_value=(
+            vendor_trade_marker_count(generation, "s2c", "SMSG_LOGOUT_COMPLETE")
+            if mage_followup_mode else None
         ),
     )
     unchanged = protected_inputs_unchanged(manifest, generation)
@@ -6689,6 +6859,8 @@ def verify(args: argparse.Namespace) -> None:
             )
         if mage_combat_mode:
             character_ok = character_ok and mage_combat_accepted(evidence)
+        if mage_followup_mode:
+            character_ok = character_ok and mage_followup_accepted(evidence)
         if trainer_mode:
             trainer = evidence["trainer"] or {}
             trainer_list = evidence["trainer_list"] or {}
@@ -7080,6 +7252,7 @@ def verify(args: argparse.Namespace) -> None:
             evidence["outcome"] = (
                 "level_up_progression_pass" if level_up_mode
                 else "mage_combat_pass" if mage_combat_mode
+                else "mage_combat_followup_pass" if mage_followup_mode
                 else "character_creation_pass" if creation_mode
                 else "run_speed_change_pass" if run_speed_mode
                 else "basic_spell_cast_pass" if basic_spell_cast_mode
@@ -7462,6 +7635,32 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_combat_accepted(mage_chain(school=2))
     assert not mage_combat_accepted(mage_chain(selection=False))
     assert not mage_combat_accepted(mage_chain(selection_target=target_guid + 1))
+    def followup_chain(first_drop=96, regen=120, second_drop=110, login=2, logout=1, spells=1):
+        return {
+            "mage_followup": {"guid": 7, "class": 8, "race": 1, "action_count": 1, "spell_count": spells},
+            "plan32_casts": [
+                {"opcode": "CMSG_CAST_SPELL", "index": 10, "spell": MAGE_COMBAT_SPELL_ID, "target": 5},
+                {"opcode": "SMSG_SPELL_GO", "index": 11, "spell": MAGE_COMBAT_SPELL_ID, "caster": 7},
+                {"opcode": "CMSG_CAST_SPELL", "index": 30, "spell": MAGE_COMBAT_SPELL_ID, "target": 5},
+                {"opcode": "SMSG_SPELL_GO", "index": 31, "spell": MAGE_COMBAT_SPELL_ID, "caster": 7},
+            ],
+            "combat_events": [
+                {"opcode": "SMSG_POWER_UPDATE", "index": 5, "guid": 7, "powers": [[0, 100]]},
+                {"opcode": "SMSG_POWER_UPDATE", "index": 12, "guid": 7, "powers": [[0, first_drop]]},
+                {"opcode": "SMSG_POWER_UPDATE", "index": 20, "guid": 7, "powers": [[0, regen]]},
+                {"opcode": "SMSG_POWER_UPDATE", "index": 32, "guid": 7, "powers": [[0, second_drop]]},
+            ],
+            "login_callback_count": login,
+            "logout_count": logout,
+        }
+
+    assert mage_followup_accepted(followup_chain())
+    assert not mage_followup_accepted(followup_chain(second_drop=200))    # second cast must cost mana
+    assert not mage_followup_accepted(followup_chain(regen=90))           # no regeneration
+    assert not mage_followup_accepted(followup_chain(first_drop=100))     # first cast free
+    assert not mage_followup_accepted(followup_chain(login=1))            # no relog
+    assert not mage_followup_accepted(followup_chain(logout=0))           # no logout
+    assert not mage_followup_accepted(followup_chain(spells=0))           # spellbook not saved
     assert plan_number(CHARACTER_CREATION_MODE) == "22"
     populated_generation = dict(character_generation)
     populated_generation["mode"] = POPULATED_MODE
@@ -8929,6 +9128,7 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument(
         "--mode", choices=(
             "no-login", "authentication", "character-screen", CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE,
+            MAGE_FOLLOWUP_MODE,
             POPULATED_MODE,
             CHARACTER_SELECTION_MODE,
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,
