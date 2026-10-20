@@ -6993,7 +6993,10 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     # fall. This catches a refund hidden behind a non-Fireball completion or a target clear.
     if fireball_requests:
         first_request_index = index(fireball_requests[0])
+        before_first = [value for at, _, value in mana if at < first_request_index]
         after_first = [value for at, _, value in mana if at > first_request_index]
+        if before_first:
+            after_first.insert(0, before_first[-1])
         if any(after_first[i] > after_first[i - 1] for i in range(1, len(after_first))):
             return False
 
@@ -8429,7 +8432,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         dead_bounds=False, cost_refund=False, duplicate_go=False,
         gcd_narrow=False, failure_after_go=False,
         far_refund=False, dead_refund=False, unanswered_refund=False, unanswered_reuse=False,
-        failed_arcane_completion=False, non_fireball_refund=False,
+        failed_arcane_completion=False, non_fireball_refund=False, first_refund=False,
         drain_casts=11, cost=9, insufficient_go=False, insufficient_cost=False,
         insufficient_result=None, insufficient_refund=False, arcane_refund=False,
     ):
@@ -8439,7 +8442,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         adder = (MAGE_NEGATIVE_DEAD_ENTRY << 24) | 7
         casts: list[dict[str, object]] = []
         combat: list[dict[str, object]] = [
-            {"opcode": "SMSG_POWER_UPDATE", "index": 0, "guid": guid, "powers": [[0, 165]]},
+            {"opcode": "SMSG_POWER_UPDATE", "index": 0, "guid": guid,
+             "powers": [[0, 164 if first_refund else 165]]},
         ]
         counter = 1
 
@@ -8463,6 +8467,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
                     result=invalid_result)
         add(casts, opcode="CMSG_SET_SELECTION", target=near)
         add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=1)
+        if first_refund:
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 165]])
         if cancel:
             add(casts, opcode="CMSG_CANCEL_CAST")
         if interrupt_result is not None:
@@ -8660,6 +8666,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_negative_accepted(negative_chain(unanswered_reuse=True))
     assert not mage_negative_accepted(negative_chain(failed_arcane_completion=True))
     assert not mage_negative_accepted(negative_chain(non_fireball_refund=True))
+    assert not mage_negative_accepted(negative_chain(first_refund=True))
     assert not mage_negative_accepted(negative_chain(cancel=False))
     assert not mage_negative_accepted(negative_chain(interrupt_result=69))
     assert not mage_negative_accepted(negative_chain(interrupt_go=True))
