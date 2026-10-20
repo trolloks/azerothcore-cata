@@ -218,6 +218,11 @@
       "spell": 133
     },
     {
+      "index": 922,
+      "opcode": "SMSG_LOGOUT_COMPLETE",
+      "side": "s2c"
+    },
+    {
       "index": 926,
       "opcode": "CMSG_SET_SELECTION",
       "side": "c2s",

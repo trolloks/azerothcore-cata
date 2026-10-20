@@ -4532,6 +4532,10 @@ CMSG_CAST_SPELL_OPCODE = 0x4C07
 SMSG_CAST_FAILED_OPCODE = 0x4D16
 SMSG_SPELL_GO_OPCODE = 0x6E16
 SMSG_LOGOUT_COMPLETE_OPCODE = 0x2137
+# Events the verifier needs; anything else stays out of the sanitized evidence.
+PLAN32_EVIDENCE_OPCODES = {
+    "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO", "SMSG_LOGOUT_COMPLETE",
+}
 SPELL_FAILED_LINE_OF_SIGHT_RESULT = 49
 SMSG_ON_MONSTER_MOVE_OPCODE = 0x6E17
 SMSG_ATTACKERSTATEUPDATE_OPCODE = 0x0B25
@@ -6466,9 +6470,7 @@ def sanitized_evidence(
                 {key: event[key] for key in ("opcode", "side", "count", "spell", "target", "result", "caster", "index")
                  if key in event}
                 for event in plan32_events
-                if event["opcode"] in {
-                    "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO",
-                }
+                if event["opcode"] in PLAN32_EVIDENCE_OPCODES
             ] if (plan32_geometry_mode or trainer_mode or mage_combat_mode or mage_followup_mode) else None
         ),
         "plan32_settle_z": plan32_settle_z(generation) if plan32_geometry_mode else None,
@@ -6607,7 +6609,9 @@ def mage_followup_accepted(evidence: dict[str, object]) -> bool:
     mana = [(int(event["index"]), int(power[1])) for event in (evidence["combat_events"] or [])
             if event["opcode"] == "SMSG_POWER_UPDATE" and int(event["guid"]) == player_guid
             for power in event["powers"] if int(power[0]) == 0]
-    if len(requests) < 2 or len(spell_goes) < 2 or not logouts:
+    # Exactly the intended two casts: a later cast could reuse the byte cast counter and stand in
+    # for the second completion (and its mana drop) long after the relog.
+    if len(requests) != 2 or len(spell_goes) != 2 or len(logouts) != 1:
         return False
     logout_index = logouts[0]
     first_index, second_index = int(requests[0]["index"]), int(requests[1]["index"])
@@ -7653,19 +7657,26 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_combat_accepted(mage_chain(school=2))
     assert not mage_combat_accepted(mage_chain(selection=False))
     assert not mage_combat_accepted(mage_chain(selection_target=target_guid + 1))
-    def followup_chain(first_drop=96, regen=120, second_drop=110, login=2, logout=1):
+    def followup_chain(first_drop=96, regen=120, second_drop=110, login=2, logout=1,
+                       logout_index=25, extra_request=False):
+        casts = [
+            {"opcode": "CMSG_CAST_SPELL", "index": 10, "spell": MAGE_COMBAT_SPELL_ID, "target": 5,
+             "count": 1},
+            {"opcode": "SMSG_SPELL_GO", "index": 11, "spell": MAGE_COMBAT_SPELL_ID, "caster": 7,
+             "count": 1},
+            {"opcode": "CMSG_CAST_SPELL", "index": 30, "spell": MAGE_COMBAT_SPELL_ID, "target": 5,
+             "count": 2},
+            {"opcode": "SMSG_SPELL_GO", "index": 31, "spell": MAGE_COMBAT_SPELL_ID, "caster": 7,
+             "count": 2},
+        ]
+        if logout_index is not None:
+            casts.append({"opcode": "SMSG_LOGOUT_COMPLETE", "index": logout_index})
+        if extra_request:
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 40, "spell": MAGE_COMBAT_SPELL_ID,
+                          "target": 5, "count": 3})
         return {
             "mage_followup": {"guid": 7, "class": 8, "race": 1, "action_count": 1, "spell_count": 0},
-            "plan32_casts": [
-                {"opcode": "CMSG_CAST_SPELL", "index": 10, "spell": MAGE_COMBAT_SPELL_ID, "target": 5,
-                 "count": 1},
-                {"opcode": "SMSG_SPELL_GO", "index": 11, "spell": MAGE_COMBAT_SPELL_ID, "caster": 7,
-                 "count": 1},
-                {"opcode": "CMSG_CAST_SPELL", "index": 30, "spell": MAGE_COMBAT_SPELL_ID, "target": 5,
-                 "count": 1},
-                {"opcode": "SMSG_SPELL_GO", "index": 31, "spell": MAGE_COMBAT_SPELL_ID, "caster": 7,
-                 "count": 1},
-            ],
+            "plan32_casts": casts,
             "combat_events": [
                 {"opcode": "SMSG_POWER_UPDATE", "index": 5, "guid": 7, "powers": [[0, 100]]},
                 {"opcode": "SMSG_POWER_UPDATE", "index": 12, "guid": 7, "powers": [[0, first_drop]]},
@@ -7676,16 +7687,16 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             "logout_count": logout,
         }
 
-    def chip(e):
-        e["plan32_casts"].append({"opcode": "SMSG_LOGOUT_COMPLETE", "index": 25})
-        return e
-
-    assert mage_followup_accepted(chip(followup_chain()))
-    assert not mage_followup_accepted(chip(followup_chain(second_drop=200)))    # second cast must cost mana
-    assert not mage_followup_accepted(chip(followup_chain(regen=90)))           # no regeneration
-    assert not mage_followup_accepted(chip(followup_chain(first_drop=100)))     # first cast free
-    assert not mage_followup_accepted(chip(followup_chain(login=1)))            # no relog
-    assert not mage_followup_accepted(chip(followup_chain(logout=0)))           # no logout
+    assert mage_followup_accepted(followup_chain())
+    assert not mage_followup_accepted(followup_chain(second_drop=200))    # second cast must cost mana
+    assert not mage_followup_accepted(followup_chain(regen=90))           # no regeneration
+    assert not mage_followup_accepted(followup_chain(first_drop=100))     # first cast free
+    assert not mage_followup_accepted(followup_chain(login=1))            # no relog
+    assert not mage_followup_accepted(followup_chain(logout=0))           # no logout
+    assert not mage_followup_accepted(followup_chain(logout_index=None))  # no logout on the wire
+    assert not mage_followup_accepted(followup_chain(logout_index=35))    # second cast before the logout
+    assert not mage_followup_accepted(followup_chain(extra_request=True))  # a later counter can't stand in
+    assert "SMSG_LOGOUT_COMPLETE" in PLAN32_EVIDENCE_OPCODES              # survives sanitization
     assert plan_number(CHARACTER_CREATION_MODE) == "22"
     populated_generation = dict(character_generation)
     populated_generation["mode"] = POPULATED_MODE
