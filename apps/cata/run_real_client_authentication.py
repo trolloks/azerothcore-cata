@@ -6635,32 +6635,41 @@ def mage_followup_accepted(evidence: dict[str, object]) -> bool:
                    and start < int(event["index"]) < end
                    for event in casts)
 
+    def other_cast_between(request: dict, go: dict) -> bool:
+        return any(event.get("opcode") == "CMSG_CAST_SPELL"
+                   and int(request["index"]) < int(event["index"]) < int(go["index"])
+                   for event in casts)
+
     first, second = request_for(before_logout[0]), request_for(after_logout[0])
     if first is None or second is None:
         return False
     first_index, second_index = int(first["index"]), int(second["index"])
     if not first_index < logout_index < second_index:
         return False
+    first_go, second_go = before_logout[0], after_logout[0]
     # The same failed cast cannot also complete, and the second completion may not come from a
     # later cast that reused the counter after the relog.
-    if (failed_since(int(first.get("count", -1)), first_index, int(before_logout[0]["index"]))
-            or failed_since(int(second.get("count", -1)), logout_index, int(after_logout[0]["index"]))):
+    if (failed_since(int(first.get("count", -1)), first_index, int(first_go["index"]))
+            or failed_since(int(second.get("count", -1)), logout_index, int(second_go["index"]))):
+        return False
+    # A power drop inside a cast's interval must belong to that cast, not to another spell.
+    if other_cast_between(first, first_go) or other_cast_between(second, second_go):
         return False
 
     before_first = [value for index, value in mana if index < first_index]
+    first_cost = [value for index, value in mana if first_index < index <= int(first_go["index"])]
     first_session = [value for index, value in mana if first_index < index < logout_index]
     before_second = [value for index, value in mana if index < second_index]
-    # The cost must land on this cast, not on a later spell after the completion.
     after_second = [value for index, value in mana
-                    if second_index < index <= int(after_logout[0]["index"])]
+                    if second_index < index <= int(second_go["index"])]
     return (
         player_guid != 0
         and int(mage.get("class", 0)) == CREATION_CLASSES["mage"][1]
         and int(mage.get("race", 0)) == CHARACTER_RACE
         and int(mage.get("action_count", 0)) == 1
-        and bool(before_first) and bool(first_session)
-        and first_session[0] < before_first[-1]          # the first cast cost mana
-        and max(first_session) > first_session[0]        # and it regenerated before the logout
+        and bool(before_first) and bool(first_cost) and bool(first_session)
+        and first_cost[0] < before_first[-1]             # the first cast cost mana
+        and max(first_session) > first_cost[0]           # and it regenerated before the logout
         and bool(before_second) and bool(after_second)
         and after_second[0] < before_second[-1]          # the second cast cost mana after the relog
         and int(evidence.get("login_callback_count") or 0) == 2
@@ -7684,7 +7693,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     def followup_chain(first_drop=96, regen=120, second_drop=110, login=2, logout=1,
                        logout_index=25, extra_request=False, duplicate_failure=False,
                        failed_first=False, failed_second=False, reused_counter=False,
-                       late_drop=False, second_go_count=2):
+                       late_drop=False, late_first_cost=False, unrelated_first=False,
+                       unrelated_second=False, second_go_count=2):
         casts = [
             {"opcode": "CMSG_CAST_SPELL", "index": 10, "spell": MAGE_COMBAT_SPELL_ID, "target": 5,
              "count": 1},
@@ -7716,12 +7726,19 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         if extra_request:
             casts.append({"opcode": "CMSG_CAST_SPELL", "index": 50, "spell": MAGE_COMBAT_SPELL_ID,
                           "target": 5, "count": 4})
+        if unrelated_first:
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 11, "spell": 1459, "target": 5, "count": 5})
+            casts.append({"opcode": "SMSG_SPELL_GO", "index": 12, "spell": 1459, "caster": 7, "count": 5})
+        if unrelated_second:
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 38, "spell": 1459, "target": 5, "count": 5})
+            casts.append({"opcode": "SMSG_SPELL_GO", "index": 39, "spell": 1459, "caster": 7, "count": 5})
         return {
             "mage_followup": {"guid": 7, "class": 8, "race": 1, "action_count": 1, "spell_count": 0},
             "plan32_casts": casts,
             "combat_events": [
                 {"opcode": "SMSG_POWER_UPDATE", "index": 5, "guid": 7, "powers": [[0, 100]]},
-                {"opcode": "SMSG_POWER_UPDATE", "index": 12, "guid": 7, "powers": [[0, first_drop]]},
+                {"opcode": "SMSG_POWER_UPDATE", "index": 20 if late_first_cost else 12, "guid": 7,
+                 "powers": [[0, first_drop]]},
                 {"opcode": "SMSG_POWER_UPDATE", "index": 20, "guid": 7, "powers": [[0, regen]]},
                 {"opcode": "SMSG_POWER_UPDATE", "index": 60 if late_drop else 39, "guid": 7,
                  "powers": [[0, second_drop]]},
@@ -7744,6 +7761,9 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_followup_accepted(followup_chain(failed_first=True))   # nor can the first
     assert not mage_followup_accepted(followup_chain(reused_counter=True))  # a reused counter is not the cast
     assert not mage_followup_accepted(followup_chain(late_drop=True))      # a later spell cannot pay the cost
+    assert not mage_followup_accepted(followup_chain(late_first_cost=True))  # nor the first cost
+    assert not mage_followup_accepted(followup_chain(unrelated_first=True))  # another spell in the interval
+    assert not mage_followup_accepted(followup_chain(unrelated_second=True))  # and for the second cast
     assert mage_followup_accepted(followup_chain(duplicate_failure=True))  # duplicates do not invalidate
     assert mage_followup_accepted(followup_chain(extra_request=True))      # nor does an extra request
     # Decode a synthetic capture and sanitize it through the production path: dropping the logout
