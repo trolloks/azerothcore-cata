@@ -7050,6 +7050,8 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
         window = fireball_events(start, end)
         if any(event["opcode"] == "SMSG_SPELL_GO" for event in window):
             return False
+        if any(start < index(event) <= end for event in damage):
+            return False
         if dropped(start, end):
             return False
         sent = [event for event in window if event["opcode"] == "CMSG_CAST_SPELL"]
@@ -8436,7 +8438,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         gcd_narrow=False, failure_after_go=False,
         far_refund=False, dead_refund=False, unanswered_refund=False, unanswered_reuse=False,
         failed_arcane_completion=False, non_fireball_refund=False, first_refund=False,
-        invalid_refund=False,
+        invalid_refund=False, far_damage=False,
         drain_casts=11, cost=9, insufficient_go=False, insufficient_cost=False,
         insufficient_result=None, insufficient_refund=False, arcane_refund=False,
     ):
@@ -8558,6 +8560,9 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         if far_refund:
             add(combat, opcode="SMSG_POWER_UPDATE", guid=guid,
                 powers=[[0, (112 if gcd_queue else 121) + 1]])
+        if far_damage:
+            add(combat, opcode="SMSG_SPELLNONMELEEDAMAGELOG", attacker=guid, target=far,
+                spell=MAGE_COMBAT_SPELL_ID, damage=15, overkill=0, school=4)
         attempts[1]["end"] = counter - 1
 
         add(casts, opcode="CMSG_SET_SELECTION", target=adder)
@@ -8674,6 +8679,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_negative_accepted(negative_chain(non_fireball_refund=True))
     assert not mage_negative_accepted(negative_chain(first_refund=True))
     assert not mage_negative_accepted(negative_chain(invalid_refund=True))
+    assert not mage_negative_accepted(negative_chain(far_damage=True))
     assert not mage_negative_accepted(negative_chain(cancel=False))
     assert not mage_negative_accepted(negative_chain(interrupt_result=69))
     assert not mage_negative_accepted(negative_chain(interrupt_go=True))
