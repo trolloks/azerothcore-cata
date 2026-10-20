@@ -4629,6 +4629,13 @@ def plan32_packet_events(generation: Generation) -> list[dict[str, object]]:
     return events
 
 
+def plan32_evidence_events(events: list[dict[str, object]]) -> list[dict[str, object]]:
+    """The cast-correlation events kept in the sanitized evidence."""
+    keys = ("opcode", "side", "count", "spell", "target", "result", "caster", "index")
+    return [{key: event[key] for key in keys if key in event}
+            for event in events if event["opcode"] in PLAN32_EVIDENCE_OPCODES]
+
+
 def unpack_pack_xyz(packed: int) -> tuple[float, float, float]:
     """One appendPackXYZ word: 11-bit x, 11-bit y, 10-bit z, each in 0.25 steps, sign-extended."""
     x = packed & 0x7FF
@@ -6466,12 +6473,8 @@ def sanitized_evidence(
         ),
         "plan32_stage": generation.get("plan32_stage") if plan32_geometry_mode else None,
         "plan32_casts": (
-            [
-                {key: event[key] for key in ("opcode", "side", "count", "spell", "target", "result", "caster", "index")
-                 if key in event}
-                for event in plan32_events
-                if event["opcode"] in PLAN32_EVIDENCE_OPCODES
-            ] if (plan32_geometry_mode or trainer_mode or mage_combat_mode or mage_followup_mode) else None
+            plan32_evidence_events(plan32_events)
+            if (plan32_geometry_mode or trainer_mode or mage_combat_mode or mage_followup_mode) else None
         ),
         "plan32_settle_z": plan32_settle_z(generation) if plan32_geometry_mode else None,
         "plan32_player_samples": (
@@ -6609,18 +6612,40 @@ def mage_followup_accepted(evidence: dict[str, object]) -> bool:
     mana = [(int(event["index"]), int(power[1])) for event in (evidence["combat_events"] or [])
             if event["opcode"] == "SMSG_POWER_UPDATE" and int(event["guid"]) == player_guid
             for power in event["powers"] if int(power[0]) == 0]
-    # Exactly the intended two casts: a later cast could reuse the byte cast counter and stand in
-    # for the second completion (and its mana drop) long after the relog.
-    if len(requests) != 2 or len(spell_goes) != 2 or len(logouts) != 1:
+    # One completion on each side of the logout; duplicate failed requests are harmless, but a
+    # completion must name the byte counter of the request it completes.
+    if len(spell_goes) != 2 or len(logouts) != 1:
         return False
     logout_index = logouts[0]
-    first_index, second_index = int(requests[0]["index"]), int(requests[1]["index"])
-    # each cast completion must name the same cast counter as its request and sit between the two
-    # requests, and the second pair must follow the logout
-    def completes(request: dict, limit: int) -> bool:
-        return any(int(go["index"]) > int(request["index"]) and int(go["index"]) < limit
-                   and int(go.get("count", -1)) == int(request.get("count", -2))
-                   for go in spell_goes)
+    before_logout = [go for go in spell_goes if int(go["index"]) < logout_index]
+    after_logout = [go for go in spell_goes if int(go["index"]) > logout_index]
+    if len(before_logout) != 1 or len(after_logout) != 1:
+        return False
+
+    def request_for(go: dict) -> dict | None:
+        matching = [request for request in requests
+                    if int(request["index"]) < int(go["index"])
+                    and int(request.get("count", -1)) == int(go.get("count", -2))]
+        return matching[-1] if matching else None
+
+    def failed_since(count: int, start: int, end: int) -> bool:
+        return any(event.get("opcode") == "SMSG_CAST_FAILED"
+                   and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
+                   and int(event.get("count", -1)) == count
+                   and start < int(event["index"]) < end
+                   for event in casts)
+
+    first, second = request_for(before_logout[0]), request_for(after_logout[0])
+    if first is None or second is None:
+        return False
+    first_index, second_index = int(first["index"]), int(second["index"])
+    if not first_index < logout_index < second_index:
+        return False
+    # The same failed cast cannot also complete, and the second completion may not come from a
+    # later cast that reused the counter after the relog.
+    if (failed_since(int(first.get("count", -1)), first_index, int(before_logout[0]["index"]))
+            or failed_since(int(second.get("count", -1)), logout_index, int(after_logout[0]["index"]))):
+        return False
 
     before_first = [value for index, value in mana if index < first_index]
     first_session = [value for index, value in mana if first_index < index < logout_index]
@@ -6631,9 +6656,6 @@ def mage_followup_accepted(evidence: dict[str, object]) -> bool:
         and int(mage.get("class", 0)) == CREATION_CLASSES["mage"][1]
         and int(mage.get("race", 0)) == CHARACTER_RACE
         and int(mage.get("action_count", 0)) == 1
-        and first_index < logout_index < second_index
-        and completes(requests[0], logout_index)
-        and completes(requests[1], 1 << 32)
         and bool(before_first) and bool(first_session)
         and first_session[0] < before_first[-1]          # the first cast cost mana
         and max(first_session) > first_session[0]        # and it regenerated before the logout
@@ -7658,7 +7680,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_combat_accepted(mage_chain(selection=False))
     assert not mage_combat_accepted(mage_chain(selection_target=target_guid + 1))
     def followup_chain(first_drop=96, regen=120, second_drop=110, login=2, logout=1,
-                       logout_index=25, extra_request=False):
+                       logout_index=25, extra_request=False, duplicate_failure=False,
+                       failed_second=False, second_go_count=2):
         casts = [
             {"opcode": "CMSG_CAST_SPELL", "index": 10, "spell": MAGE_COMBAT_SPELL_ID, "target": 5,
              "count": 1},
@@ -7666,14 +7689,22 @@ four Completed: COP_GET_CHARACTERS result=TRUE
              "count": 1},
             {"opcode": "CMSG_CAST_SPELL", "index": 30, "spell": MAGE_COMBAT_SPELL_ID, "target": 5,
              "count": 2},
-            {"opcode": "SMSG_SPELL_GO", "index": 31, "spell": MAGE_COMBAT_SPELL_ID, "caster": 7,
-             "count": 2},
+            {"opcode": "SMSG_SPELL_GO", "index": 40, "spell": MAGE_COMBAT_SPELL_ID, "caster": 7,
+             "count": second_go_count},
         ]
         if logout_index is not None:
             casts.append({"opcode": "SMSG_LOGOUT_COMPLETE", "index": logout_index})
-        if extra_request:
-            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 40, "spell": MAGE_COMBAT_SPELL_ID,
+        if duplicate_failure:
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 22, "spell": MAGE_COMBAT_SPELL_ID,
                           "target": 5, "count": 3})
+            casts.append({"opcode": "SMSG_CAST_FAILED", "index": 23, "spell": MAGE_COMBAT_SPELL_ID,
+                          "count": 3, "result": 28})
+        if failed_second:
+            casts.append({"opcode": "SMSG_CAST_FAILED", "index": 35, "spell": MAGE_COMBAT_SPELL_ID,
+                          "count": 2, "result": 28})
+        if extra_request:
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 50, "spell": MAGE_COMBAT_SPELL_ID,
+                          "target": 5, "count": 4})
         return {
             "mage_followup": {"guid": 7, "class": 8, "race": 1, "action_count": 1, "spell_count": 0},
             "plan32_casts": casts,
@@ -7681,7 +7712,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
                 {"opcode": "SMSG_POWER_UPDATE", "index": 5, "guid": 7, "powers": [[0, 100]]},
                 {"opcode": "SMSG_POWER_UPDATE", "index": 12, "guid": 7, "powers": [[0, first_drop]]},
                 {"opcode": "SMSG_POWER_UPDATE", "index": 20, "guid": 7, "powers": [[0, regen]]},
-                {"opcode": "SMSG_POWER_UPDATE", "index": 32, "guid": 7, "powers": [[0, second_drop]]},
+                {"opcode": "SMSG_POWER_UPDATE", "index": 41, "guid": 7, "powers": [[0, second_drop]]},
             ],
             "login_callback_count": login,
             "logout_count": logout,
@@ -7695,8 +7726,14 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_followup_accepted(followup_chain(logout=0))           # no logout
     assert not mage_followup_accepted(followup_chain(logout_index=None))  # no logout on the wire
     assert not mage_followup_accepted(followup_chain(logout_index=35))    # second cast before the logout
-    assert not mage_followup_accepted(followup_chain(extra_request=True))  # a later counter can't stand in
-    assert "SMSG_LOGOUT_COMPLETE" in PLAN32_EVIDENCE_OPCODES              # survives sanitization
+    assert not mage_followup_accepted(followup_chain(logout_index=15))    # regeneration after the logout
+    assert not mage_followup_accepted(followup_chain(second_go_count=3))  # go names another cast
+    assert not mage_followup_accepted(followup_chain(failed_second=True))  # failed cast cannot complete
+    assert mage_followup_accepted(followup_chain(duplicate_failure=True))  # duplicates do not invalidate
+    assert mage_followup_accepted(followup_chain(extra_request=True))      # nor does an extra request
+    # The production filter must keep the logout the predicate needs.
+    assert any(event["opcode"] == "SMSG_LOGOUT_COMPLETE"
+               for event in plan32_evidence_events(followup_chain()["plan32_casts"]))
     assert plan_number(CHARACTER_CREATION_MODE) == "22"
     populated_generation = dict(character_generation)
     populated_generation["mode"] = POPULATED_MODE
