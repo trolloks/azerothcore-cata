@@ -143,6 +143,8 @@ INITIAL_POST_LOAD_PACKETS_MODE = "initial-post-load-packets"
 MAP_INSERTION_MODE = "map-insertion-object-bootstrap"
 IN_WORLD_CONTROL_MODE = "in-world-control-bootstrap"
 MAGE_COMBAT_MODE = "mage-combat"
+MAGE_FOLLOWUP_MODE = "mage-combat-followup"
+MAGE_MODES = frozenset({MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE})
 BASIC_MOVEMENT_MODE = "basic-movement"
 RUN_SPEED_MODE = "run-speed-change"
 GROUND_MOVEMENT_MODE = "ground-movement"
@@ -467,7 +469,7 @@ POPULATED_CHARACTER_MODES = frozenset({
     INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
     VENDOR_NEGATIVE_MODE, TRAINER_MODE,
 })
-CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE,
+CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *MAGE_MODES,
                              *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
 CHARACTER_NAME = "Cataplan"
@@ -788,7 +790,7 @@ def plan_number(mode: str) -> str:
         return "25"
     if mode == CHARACTER_CREATION_MODE:
         return "22"
-    if mode == MAGE_COMBAT_MODE:
+    if mode in MAGE_MODES:
         return "35"
     if mode in {GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE}:
         return "23"
@@ -1753,7 +1755,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
             '"packets.pkt"'
             if generation["mode"] in (
                 PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE, TRAINER_MODE,
-                MAGE_COMBAT_MODE,
+                MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE,
             )
             else '""'
         ),
@@ -1762,7 +1764,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
             "5,Server" if ISSUE97 or generation["mode"] in {
                 BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
                 WALK_RUN_MODE_SWITCH_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE,
-                TRAINER_MODE, MAGE_COMBAT_MODE,
+                TRAINER_MODE, MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE,
             }
             else "4,Server"
         ),
@@ -3120,6 +3122,18 @@ MAGE_COMBAT_TARGET_KEYS = (
     "Return", "slash", *tuple("targetexact"), "space", *vendor_trade_name_keys("Saytr"), "Return",
 )
 MAGE_COMBAT_PROBE_TIMEOUT = 150
+# Plan 35 follow-up: a neutral, high-health dummy (entry 24792, faction 7) with no spawns near Northshire.
+# It never fights back, so the mage leaves combat, regenerates mana and can log out normally.
+MAGE_DUMMY_ENTRY = 24792
+MAGE_DUMMY_GUID = 9990005
+MAGE_DUMMY_NAME = "Advanced Training Dummy"
+MAGE_DUMMY_POSITION = (-8949.95, -128.5, 83.5312)
+MAGE_FOLLOWUP_KEYS = (
+    "Return", "slash", *tuple("targetexact"), "space", *vendor_trade_name_keys(MAGE_DUMMY_NAME), "Return",
+)
+MAGE_FOLLOWUP_REGEN_TIMEOUT = 45
+MAGE_FOLLOWUP_LOGOUT_TIMEOUT = 30
+MAGE_FOLLOWUP_RELOGIN_TIMEOUT = 150
 CREATION_CLASS_POINT = "class_warrior"
 
 
@@ -3131,9 +3145,9 @@ def creation_class_name() -> str:
 def apply_creation_class(mode: str, name: str) -> None:
     """Select the class the native creation flow clicks and the class the verification expects."""
     global CREATION_CLASS_POINT, CHARACTER_CLASS
-    if mode not in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}:
+    if mode not in {CHARACTER_CREATION_MODE, *MAGE_MODES}:
         return
-    if mode == MAGE_COMBAT_MODE:
+    if mode in MAGE_MODES:
         name = "mage"
     if name not in CREATION_CLASSES:
         raise RuntimeError(f"CREATE_CLASS must be one of {sorted(CREATION_CLASSES)}; got {name!r}")
@@ -3196,6 +3210,9 @@ def mage_combat_db_evidence(manifest: Manifest, generation: Generation) -> dict[
         "action_count": scalar(
             f"SELECT COUNT(*) FROM `character_action` WHERE `guid`={guid} "
             f"AND `button`={MAGE_COMBAT_ACTION_BUTTON} AND `action`={MAGE_COMBAT_SPELL_ID} AND `type`=0;"),
+        "spell_count": scalar(
+            f"SELECT COUNT(*) FROM `character_spell` WHERE `guid`={guid} "
+            f"AND `spell`={MAGE_COMBAT_SPELL_ID};"),
     }
 
 
@@ -3224,6 +3241,95 @@ def automate_mage_combat(generation: Generation) -> None:
     # action bar was saved when the character was created.
     time.sleep(1.0)  # let the damage log and power update land
     capture_desktop_screenshot(generation, "mage-after-cast.png")
+
+
+def mage_followup_world_seed_sql() -> str:
+    """Spawns the neutral training dummy beside the mage start."""
+    x, y, z = MAGE_DUMMY_POSITION
+    return (
+        f"DELETE FROM `creature` WHERE `guid`={MAGE_DUMMY_GUID};"
+        "INSERT INTO `creature` (`guid`,`id`,`map`,`zoneId`,`areaId`,`position_x`,`position_y`,`position_z`,"
+        "`wander_distance`,`MovementType`) "
+        f"VALUES ({MAGE_DUMMY_GUID},{MAGE_DUMMY_ENTRY},0,12,9,{x},{y},{z},0,0);"
+    )
+
+
+def mage_followup_select(generation: Generation, description: str) -> None:
+    """Target the dummy by name and wait for the client's selection request."""
+    selections = vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION")
+    for _ in range(5):
+        automate_key_sequence(generation, MAGE_FOLLOWUP_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+        time.sleep(1.2)
+        if vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION") > selections:
+            return
+    capture_desktop_screenshot(generation, f"mage-followup-{description}-target.png")
+    raise RuntimeError(f"mage follow-up could not select the dummy for {description}")
+
+
+def mage_followup_mana(generation: Generation) -> list[int]:
+    """The created mage's mana values in arrival order (the reset leaves the new character at guid 1)."""
+    return [
+        int(power[1]) for event in combat_packet_events(generation)
+        if event["opcode"] == "SMSG_POWER_UPDATE" and int(event["guid"]) == 1
+        for power in event["powers"] if int(power[0]) == 0
+    ]
+
+
+def mage_followup_wait_mana(generation: Generation, accept, description: str, timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        values = mage_followup_mana(generation)
+        if values and accept(values):
+            return
+        time.sleep(0.5)
+    capture_desktop_screenshot(generation, "mage-followup-mana.png")
+    raise RuntimeError(f"mage follow-up did not observe {description}")
+
+
+def automate_mage_followup(generation: Generation) -> None:
+    """Cast, let mana regenerate out of combat, log out, log back in and cast again."""
+    time.sleep(4.0)
+    vendor_trade_probe_input(generation, MAGE_COMBAT_PROBE_TIMEOUT)
+    mage_followup_select(generation, "first")
+
+    casts = vendor_trade_marker_count(generation, "c2s", "CMSG_CAST_SPELL") + 1
+    goes = vendor_trade_marker_count(generation, "s2c", "SMSG_SPELL_GO") + 1
+    automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
+    vendor_trade_wait(generation, "c2s", "CMSG_CAST_SPELL", "first cast request", casts)
+    vendor_trade_wait(generation, "s2c", "SMSG_SPELL_GO", "first spell go", goes)
+    capture_desktop_screenshot(generation, "mage-followup-cast.png")
+
+    mage_followup_wait_mana(
+        generation, lambda values: len(values) >= 2 and values[-1] > values[-2],
+        "mana regeneration after the cast", MAGE_FOLLOWUP_REGEN_TIMEOUT,
+    )
+    capture_desktop_screenshot(generation, "mage-followup-regen.png")
+
+    completed = vendor_trade_marker_count(generation, "s2c", "SMSG_LOGOUT_COMPLETE") + 1
+    automate_key_sequence(
+        generation, ("Return", "slash", *tuple("logout"), "Return"), hold_seconds=0.05, gap_seconds=0.05)
+    vendor_trade_wait(generation, "s2c", "SMSG_LOGOUT_COMPLETE", "logout", completed,
+                      MAGE_FOLLOWUP_LOGOUT_TIMEOUT)
+    # The character screen needs a moment to rebuild after the logout, and its Enter press is the only
+    # way back in; repeat it until the world reports the second login instead of firing once into a
+    # screen that is not ready.
+    deadline = time.monotonic() + MAGE_FOLLOWUP_RELOGIN_TIMEOUT
+    while time.monotonic() < deadline and len(player_login_callbacks(generation)) < 2:
+        automate_character_selection(generation)
+        time.sleep(5.0)
+    if len(player_login_callbacks(generation)) < 2:
+        capture_desktop_screenshot(generation, "mage-followup-relogin.png")
+        raise RuntimeError("the client did not re-enter the world after the logout")
+    vendor_trade_probe_input(generation, MAGE_COMBAT_PROBE_TIMEOUT)
+    mage_followup_select(generation, "second")
+
+    casts = vendor_trade_marker_count(generation, "c2s", "CMSG_CAST_SPELL") + 1
+    goes = vendor_trade_marker_count(generation, "s2c", "SMSG_SPELL_GO") + 1
+    automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
+    vendor_trade_wait(generation, "c2s", "CMSG_CAST_SPELL", "second cast request", casts)
+    vendor_trade_wait(generation, "s2c", "SMSG_SPELL_GO", "second spell go", goes)
+    time.sleep(1.0)
+    capture_desktop_screenshot(generation, "mage-followup-relog-cast.png")
 
 
 def character_creation_points(x: int, y: int, width: int, height: int) -> dict[str, tuple[int, int]]:
@@ -3838,12 +3944,15 @@ def run_client(args: argparse.Namespace) -> None:
         generation["vendor_case"] = case
         apply_vendor_negative_seed(generation["mode"])
         mysql(manifest, generation, vendor_negative_seed_sql(case), generation["schemas"]["characters"])
-    if generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}:
+    if generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}:
         apply_creation_class(generation["mode"], generation["inputs"].get("create_class", "warrior"))
         generation.pop("mage_combat_sent", None)
     if generation["mode"] == MAGE_COMBAT_MODE:
         mage_combat_character_reset(manifest, generation)
         mysql(manifest, generation, mage_combat_world_seed_sql(), generation["schemas"]["world"])
+    if generation["mode"] == MAGE_FOLLOWUP_MODE:
+        mage_combat_character_reset(manifest, generation)
+        mysql(manifest, generation, mage_followup_world_seed_sql(), generation["schemas"]["world"])
     if generation["mode"] == TRAINER_MODE:
         apply_trainer_seed(generation["mode"])
         mysql(manifest, generation, trainer_seed_sql(), generation["schemas"]["characters"])
@@ -3929,7 +4038,7 @@ def run_client(args: argparse.Namespace) -> None:
                     generation["mode"] in {CHARACTER_SELECTION_MODE, *POST_MARKER_MODES}
                     and character_hold_started is not None and not selection_sent
                 ):
-                    if generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}:
+                    if generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}:
                         automate_character_creation(generation)
                         generation["selection_action"] = "create"
                     else:
@@ -4035,12 +4144,14 @@ def run_client(args: argparse.Namespace) -> None:
                         capture_runtime(generation)
                         generation["post_marker_snapshots"] = 1
                         post_marker_hold_started = time.monotonic()
-                        if generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}:
+                        if generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}:
                             automate_character_selection(generation)
-                    if generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}:
+                    if generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}:
                         if post_marker_hold_started is not None and player_login_callbacks(generation):
                             if generation["mode"] == MAGE_COMBAT_MODE:
                                 automate_mage_combat(generation)
+                            elif generation["mode"] == MAGE_FOLLOWUP_MODE:
+                                automate_mage_followup(generation)
                             capture_runtime(generation)
                             generation["post_marker_snapshots"] = 2
                             generation["post_marker_hold_seconds"] = time.monotonic() - post_marker_hold_started
@@ -4420,6 +4531,11 @@ VENDOR_NEGATIVE_EQUIP_ERR_INVENTORY_FULL = 50
 CMSG_CAST_SPELL_OPCODE = 0x4C07
 SMSG_CAST_FAILED_OPCODE = 0x4D16
 SMSG_SPELL_GO_OPCODE = 0x6E16
+SMSG_LOGOUT_COMPLETE_OPCODE = 0x2137
+# Events the verifier needs; anything else stays out of the sanitized evidence.
+PLAN32_EVIDENCE_OPCODES = {
+    "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO", "SMSG_LOGOUT_COMPLETE",
+}
 SPELL_FAILED_LINE_OF_SIGHT_RESULT = 49
 SMSG_ON_MONSTER_MOVE_OPCODE = 0x6E17
 SMSG_ATTACKERSTATEUPDATE_OPCODE = 0x0B25
@@ -4503,12 +4619,21 @@ def plan32_packet_events(generation: Generation) -> list[dict[str, object]]:
                 "caster": caster, "count": payload[cursor],
                 "spell": struct.unpack_from("<I", payload, cursor + 1)[0],
             })
+        elif opcode == SMSG_LOGOUT_COMPLETE_OPCODE:
+            events.append({"opcode": "SMSG_LOGOUT_COMPLETE", "side": side, "index": packet, "ticks": ticks})
         elif opcode == CMSG_CANCEL_CAST_OPCODE:
             events.append({"opcode": "CMSG_CANCEL_CAST", "side": side, "index": packet,
                            "ticks": ticks})
         offset += PKT_PACKET_HEADER_SIZE + (length - 4)
         packet += 1
     return events
+
+
+def plan32_evidence_events(events: list[dict[str, object]]) -> list[dict[str, object]]:
+    """The cast-correlation events kept in the sanitized evidence."""
+    keys = ("opcode", "side", "count", "spell", "target", "result", "caster", "index")
+    return [{key: event[key] for key in keys if key in event}
+            for event in events if event["opcode"] in PLAN32_EVIDENCE_OPCODES]
 
 
 def unpack_pack_xyz(packed: int) -> tuple[float, float, float]:
@@ -5970,7 +6095,7 @@ POST_MARKER_MODES = frozenset({
     GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE, CHARACTER_CREATION_MODE,
     BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
     LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE, TRAINER_MODE,
-    MAGE_COMBAT_MODE,
+    MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -5991,6 +6116,7 @@ POST_MARKER_COUNTERS = {
         generation, "s2c", "SMSG_VENDOR_INVENTORY"),
     TRAINER_MODE: lambda generation: vendor_trade_marker_count(generation, "s2c", "SMSG_TRAINER_LIST"),
     MAGE_COMBAT_MODE: character_creation_marker_count,
+    MAGE_FOLLOWUP_MODE: character_creation_marker_count,
     INVALID_TARGET_SPELL_CAST_MODE: invalid_target_spell_cast_marker_count,
     LEVEL_UP_MODE: level_up_settle_signal,
     PLAN32_GEOMETRY_MODE: plan32_progress_marker_count,
@@ -6119,6 +6245,9 @@ def sanitized_evidence(
     vendor_negative_evidence_value: dict[str, object] | None = None,
     trainer_evidence_value: dict[str, int] | None = None,
     mage_combat_evidence_value: dict[str, int] | None = None,
+    mage_followup_evidence_value: dict[str, int] | None = None,
+    login_callback_count_value: int | None = None,
+    logout_count_value: int | None = None,
 ) -> dict[str, object]:
     auth_index = next(
         (index for index, item in enumerate(transcript) if item["opcode"] == "SMSG_AUTH_RESPONSE"), None,
@@ -6141,8 +6270,9 @@ def sanitized_evidence(
     initial_packets_mode = generation["mode"] == INITIAL_POST_LOAD_PACKETS_MODE
     map_insertion_mode = generation["mode"] == MAP_INSERTION_MODE
     run_speed_mode = generation["mode"] == RUN_SPEED_MODE
-    creation_mode = generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}
+    creation_mode = generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}
     mage_combat_mode = generation["mode"] == MAGE_COMBAT_MODE
+    mage_followup_mode = generation["mode"] == MAGE_FOLLOWUP_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
     jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
@@ -6177,7 +6307,7 @@ def sanitized_evidence(
     # Parsed once: the cast correlation, the fixture witness and the geometry report all read the
     # same capture, and the evidence records what they read.
     plan32_events = plan32_packet_events(generation) if (
-        plan32_geometry_mode or trainer_mode or mage_combat_mode) else []
+        plan32_geometry_mode or trainer_mode or mage_combat_mode or mage_followup_mode) else []
     vendor_events = vendor_trade_packet_events(generation) if vendor_marker_mode else []
     vendor_sells = [event for event in vendor_events if event["opcode"] == "CMSG_SELL_ITEM"]
     vendor_buybacks = [event for event in vendor_events if event["opcode"] == "CMSG_BUYBACK_ITEM"]
@@ -6203,6 +6333,8 @@ def sanitized_evidence(
             else "vendor_negative_pass_candidate" if vendor_negative_mode and "characters_completed" in milestones
             else "trainer_learn_pass_candidate" if trainer_mode and "characters_completed" in milestones
             else "mage_combat_pass_candidate" if mage_combat_mode and "characters_completed" in milestones
+            else "mage_combat_followup_pass_candidate" if mage_followup_mode
+            and "characters_completed" in milestones
             else "plan32_geometry_pass_candidate" if plan32_geometry_mode and "characters_completed" in milestones
             else "basic_movement_pass_candidate" if basic_movement_mode and "characters_completed" in milestones
             else "in_world_control_bootstrap_candidate" if in_world_control_mode and "characters_completed" in milestones
@@ -6307,7 +6439,12 @@ def sanitized_evidence(
         ),
         "trainer": trainer_evidence_value if trainer_mode else None,
         "mage_combat": mage_combat_evidence_value if mage_combat_mode else None,
-        "combat_events": combat_packet_events(generation) if mage_combat_mode else None,
+        "mage_followup": mage_followup_evidence_value if mage_followup_mode else None,
+        "login_callback_count": login_callback_count_value,
+        "logout_count": logout_count_value,
+        "combat_events": (
+            combat_packet_events(generation) if mage_combat_mode or mage_followup_mode else None
+        ),
         "vendor_negative": vendor_negative_evidence_value if vendor_negative_mode else None,
         "vendor_sell_item_counter": vendor_sells[0]["item_counter"] if vendor_sells else None,
         "vendor_buyback_slot": vendor_buybacks[0]["slot"] if vendor_buybacks else None,
@@ -6336,14 +6473,8 @@ def sanitized_evidence(
         ),
         "plan32_stage": generation.get("plan32_stage") if plan32_geometry_mode else None,
         "plan32_casts": (
-            [
-                {key: event[key] for key in ("opcode", "side", "count", "spell", "target", "result", "caster", "index")
-                 if key in event}
-                for event in plan32_events
-                if event["opcode"] in {
-                    "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO",
-                }
-            ] if (plan32_geometry_mode or trainer_mode or mage_combat_mode) else None
+            plan32_evidence_events(plan32_events)
+            if (plan32_geometry_mode or trainer_mode or mage_combat_mode or mage_followup_mode) else None
         ),
         "plan32_settle_z": plan32_settle_z(generation) if plan32_geometry_mode else None,
         "plan32_player_samples": (
@@ -6465,6 +6596,90 @@ def mage_combat_accepted(evidence: dict[str, object]) -> bool:
         and mana_after[0] < mana_before[-1]
     )
 
+def mage_followup_accepted(evidence: dict[str, object]) -> bool:
+    """Cast, out-of-combat regeneration, logout, relog and a second cast, each bound to its session."""
+    mage = evidence["mage_followup"] or {}
+    player_guid = int(mage.get("guid", 0))
+    casts = evidence["plan32_casts"] or []
+    requests = [event for event in casts
+                if event.get("opcode") == "CMSG_CAST_SPELL"
+                and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID]
+    spell_goes = [event for event in casts
+                  if event.get("opcode") == "SMSG_SPELL_GO"
+                  and int(event.get("caster", 0)) == player_guid
+                  and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID]
+    logouts = [int(event["index"]) for event in casts if event.get("opcode") == "SMSG_LOGOUT_COMPLETE"]
+    mana = [(int(event["index"]), int(power[1])) for event in (evidence["combat_events"] or [])
+            if event["opcode"] == "SMSG_POWER_UPDATE" and int(event["guid"]) == player_guid
+            for power in event["powers"] if int(power[0]) == 0]
+    # One completion on each side of the logout; duplicate failed requests are harmless, but a
+    # completion must name the byte counter of the request it completes.
+    if len(spell_goes) != 2 or len(logouts) != 1:
+        return False
+    logout_index = logouts[0]
+    before_logout = [go for go in spell_goes if int(go["index"]) < logout_index]
+    after_logout = [go for go in spell_goes if int(go["index"]) > logout_index]
+    if len(before_logout) != 1 or len(after_logout) != 1:
+        return False
+
+    def request_for(go: dict) -> dict | None:
+        matching = [request for request in requests
+                    if int(request["index"]) < int(go["index"])
+                    and int(request.get("count", -1)) == int(go.get("count", -2))]
+        return matching[-1] if matching else None
+
+    def failed_since(count: int, start: int, end: int) -> bool:
+        return any(event.get("opcode") == "SMSG_CAST_FAILED"
+                   and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
+                   and int(event.get("count", -1)) == count
+                   and start < int(event["index"]) < end
+                   for event in casts)
+
+    def other_cast_between(request: dict, go: dict) -> bool:
+        # A request or another spell's completion inside the interval could carry its power cost.
+        return any(int(request["index"]) < int(event["index"]) < int(go["index"])
+                   and (event.get("opcode") == "CMSG_CAST_SPELL"
+                        or (event.get("opcode") == "SMSG_SPELL_GO"
+                            and int(event.get("spell", 0)) != MAGE_COMBAT_SPELL_ID))
+                   for event in casts)
+
+    first, second = request_for(before_logout[0]), request_for(after_logout[0])
+    if first is None or second is None:
+        return False
+    first_index, second_index = int(first["index"]), int(second["index"])
+    if not first_index < logout_index < second_index:
+        return False
+    first_go, second_go = before_logout[0], after_logout[0]
+    # The same failed cast cannot also complete, and the second completion may not come from a
+    # later cast that reused the counter after the relog.
+    if (failed_since(int(first.get("count", -1)), first_index, int(first_go["index"]))
+            or failed_since(int(second.get("count", -1)), logout_index, int(second_go["index"]))):
+        return False
+    # A power drop inside a cast's interval must belong to that cast, not to another spell.
+    if other_cast_between(first, first_go) or other_cast_between(second, second_go):
+        return False
+
+    before_first = [value for index, value in mana if index < first_index]
+    first_cost = [value for index, value in mana if first_index < index <= int(first_go["index"])]
+    first_session = [value for index, value in mana if first_index < index < logout_index]
+    before_second = [value for index, value in mana if index < second_index]
+    after_second = [value for index, value in mana
+                    if second_index < index <= int(second_go["index"])]
+    return (
+        player_guid != 0
+        and int(mage.get("class", 0)) == CREATION_CLASSES["mage"][1]
+        and int(mage.get("race", 0)) == CHARACTER_RACE
+        and int(mage.get("action_count", 0)) == 1
+        and bool(before_first) and bool(first_cost) and bool(first_session)
+        and first_cost[0] < before_first[-1]             # the first cast cost mana
+        and max(first_session) > first_cost[0]           # and it regenerated before the logout
+        and bool(before_second) and bool(after_second)
+        and after_second[0] < before_second[-1]          # the second cast cost mana after the relog
+        and int(evidence.get("login_callback_count") or 0) == 2
+        and int(evidence.get("logout_count") or 0) >= 1
+    )
+
+
 def verify(args: argparse.Namespace) -> None:
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
@@ -6483,8 +6698,9 @@ def verify(args: argparse.Namespace) -> None:
     initial_packets_mode = generation["mode"] == INITIAL_POST_LOAD_PACKETS_MODE
     map_insertion_mode = generation["mode"] == MAP_INSERTION_MODE
     run_speed_mode = generation["mode"] == RUN_SPEED_MODE
-    creation_mode = generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}
+    creation_mode = generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}
     mage_combat_mode = generation["mode"] == MAGE_COMBAT_MODE
+    mage_followup_mode = generation["mode"] == MAGE_FOLLOWUP_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
     jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
@@ -6508,7 +6724,9 @@ def verify(args: argparse.Namespace) -> None:
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     # The relog stage drives the whole login twice, so the login-shaped evidence below expects two
     # complete sessions that both name the same seeded character.
-    expected_logins = 2 if plan32_geometry_mode and generation.get("plan32_stage") == "relog" else 1
+    expected_logins = 2 if (
+        (plan32_geometry_mode and generation.get("plan32_stage") == "relog") or mage_followup_mode
+    ) else 1
     # Returning to the character screen after /logout makes the client ask for its character list
     # again (CharacterSelect_OnShow calls GetCharacterListUpdate), so vendor mode sees one
     # enumeration per session plus that closing one while still logging in exactly once.
@@ -6563,6 +6781,16 @@ def verify(args: argparse.Namespace) -> None:
         trainer_evidence_value=trainer_db_evidence(manifest, generation) if trainer_mode else None,
         mage_combat_evidence_value=(
             mage_combat_db_evidence(manifest, generation) if mage_combat_mode else None
+        ),
+        mage_followup_evidence_value=(
+            mage_combat_db_evidence(manifest, generation) if mage_followup_mode else None
+        ),
+        login_callback_count_value=(
+            len(player_login_callbacks(generation)) if mage_followup_mode else None
+        ),
+        logout_count_value=(
+            vendor_trade_marker_count(generation, "s2c", "SMSG_LOGOUT_COMPLETE")
+            if mage_followup_mode else None
         ),
     )
     unchanged = protected_inputs_unchanged(manifest, generation)
@@ -6689,6 +6917,8 @@ def verify(args: argparse.Namespace) -> None:
             )
         if mage_combat_mode:
             character_ok = character_ok and mage_combat_accepted(evidence)
+        if mage_followup_mode:
+            character_ok = character_ok and mage_followup_accepted(evidence)
         if trainer_mode:
             trainer = evidence["trainer"] or {}
             trainer_list = evidence["trainer_list"] or {}
@@ -7080,6 +7310,7 @@ def verify(args: argparse.Namespace) -> None:
             evidence["outcome"] = (
                 "level_up_progression_pass" if level_up_mode
                 else "mage_combat_pass" if mage_combat_mode
+                else "mage_combat_followup_pass" if mage_followup_mode
                 else "character_creation_pass" if creation_mode
                 else "run_speed_change_pass" if run_speed_mode
                 else "basic_spell_cast_pass" if basic_spell_cast_mode
@@ -7462,6 +7693,135 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_combat_accepted(mage_chain(school=2))
     assert not mage_combat_accepted(mage_chain(selection=False))
     assert not mage_combat_accepted(mage_chain(selection_target=target_guid + 1))
+    def followup_chain(first_drop=96, regen=120, second_drop=110, login=2, logout=1,
+                       logout_index=25, extra_request=False, duplicate_failure=False,
+                       failed_first=False, failed_second=False, reused_counter=False,
+                       late_drop=False, late_first_cost=False, unrelated_first=False,
+                       unrelated_second=False, overlapping_first=False, overlapping_second=False,
+                       second_go_count=2):
+        casts = [
+            {"opcode": "CMSG_CAST_SPELL", "index": 10, "spell": MAGE_COMBAT_SPELL_ID, "target": 5,
+             "count": 1},
+            {"opcode": "SMSG_SPELL_GO", "index": 13, "spell": MAGE_COMBAT_SPELL_ID, "caster": 7,
+             "count": 1},
+            {"opcode": "CMSG_CAST_SPELL", "index": 30, "spell": MAGE_COMBAT_SPELL_ID, "target": 5,
+             "count": 2},
+            {"opcode": "SMSG_SPELL_GO", "index": 40, "spell": MAGE_COMBAT_SPELL_ID, "caster": 7,
+             "count": second_go_count},
+        ]
+        if logout_index is not None:
+            casts.append({"opcode": "SMSG_LOGOUT_COMPLETE", "index": logout_index})
+        if duplicate_failure:
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 22, "spell": MAGE_COMBAT_SPELL_ID,
+                          "target": 5, "count": 3})
+            casts.append({"opcode": "SMSG_CAST_FAILED", "index": 23, "spell": MAGE_COMBAT_SPELL_ID,
+                          "count": 3, "result": 28})
+        if failed_first:
+            casts.append({"opcode": "SMSG_CAST_FAILED", "index": 12, "spell": MAGE_COMBAT_SPELL_ID,
+                          "count": 1, "result": 28})
+        if failed_second:
+            casts.append({"opcode": "SMSG_CAST_FAILED", "index": 35, "spell": MAGE_COMBAT_SPELL_ID,
+                          "count": 2, "result": 28})
+        if reused_counter:
+            casts.append({"opcode": "SMSG_CAST_FAILED", "index": 35, "spell": MAGE_COMBAT_SPELL_ID,
+                          "count": 2, "result": 28})
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 36, "spell": MAGE_COMBAT_SPELL_ID,
+                          "target": 5, "count": 2})
+        if extra_request:
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 50, "spell": MAGE_COMBAT_SPELL_ID,
+                          "target": 5, "count": 4})
+        if unrelated_first:
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 11, "spell": 1459, "target": 5, "count": 5})
+            casts.append({"opcode": "SMSG_SPELL_GO", "index": 12, "spell": 1459, "caster": 7, "count": 5})
+        if unrelated_second:
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 38, "spell": 1459, "target": 5, "count": 5})
+            casts.append({"opcode": "SMSG_SPELL_GO", "index": 39, "spell": 1459, "caster": 7, "count": 5})
+        if overlapping_first:
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 9, "spell": 1459, "target": 5, "count": 5})
+            casts.append({"opcode": "SMSG_SPELL_GO", "index": 12, "spell": 1459, "caster": 7, "count": 5})
+        if overlapping_second:
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 29, "spell": 1459, "target": 5, "count": 5})
+            casts.append({"opcode": "SMSG_SPELL_GO", "index": 39, "spell": 1459, "caster": 7, "count": 5})
+        return {
+            "mage_followup": {"guid": 7, "class": 8, "race": 1, "action_count": 1, "spell_count": 0},
+            "plan32_casts": casts,
+            "combat_events": [
+                {"opcode": "SMSG_POWER_UPDATE", "index": 5, "guid": 7, "powers": [[0, 100]]},
+                {"opcode": "SMSG_POWER_UPDATE", "index": 20 if late_first_cost else 12, "guid": 7,
+                 "powers": [[0, first_drop]]},
+                {"opcode": "SMSG_POWER_UPDATE", "index": 20, "guid": 7, "powers": [[0, regen]]},
+                {"opcode": "SMSG_POWER_UPDATE", "index": 60 if late_drop else 39, "guid": 7,
+                 "powers": [[0, second_drop]]},
+            ],
+            "login_callback_count": login,
+            "logout_count": logout,
+        }
+
+    assert mage_followup_accepted(followup_chain())
+    assert not mage_followup_accepted(followup_chain(second_drop=200))    # second cast must cost mana
+    assert not mage_followup_accepted(followup_chain(regen=90))           # no regeneration
+    assert not mage_followup_accepted(followup_chain(first_drop=100))     # first cast free
+    assert not mage_followup_accepted(followup_chain(login=1))            # no relog
+    assert not mage_followup_accepted(followup_chain(logout=0))           # no logout
+    assert not mage_followup_accepted(followup_chain(logout_index=None))  # no logout on the wire
+    assert not mage_followup_accepted(followup_chain(logout_index=35))    # second cast before the logout
+    assert not mage_followup_accepted(followup_chain(logout_index=15))    # regeneration after the logout
+    assert not mage_followup_accepted(followup_chain(second_go_count=3))  # go names another cast
+    assert not mage_followup_accepted(followup_chain(failed_second=True))  # failed cast cannot complete
+    assert not mage_followup_accepted(followup_chain(failed_first=True))   # nor can the first
+    assert not mage_followup_accepted(followup_chain(reused_counter=True))  # a reused counter is not the cast
+    assert not mage_followup_accepted(followup_chain(late_drop=True))      # a later spell cannot pay the cost
+    assert not mage_followup_accepted(followup_chain(late_first_cost=True))  # nor the first cost
+    assert not mage_followup_accepted(followup_chain(unrelated_first=True))  # another spell in the interval
+    assert not mage_followup_accepted(followup_chain(unrelated_second=True))  # and for the second cast
+    assert not mage_followup_accepted(followup_chain(overlapping_first=True))  # an earlier cast completing inside
+    assert not mage_followup_accepted(followup_chain(overlapping_second=True))
+    assert mage_followup_accepted(followup_chain(duplicate_failure=True))  # duplicates do not invalidate
+    assert mage_followup_accepted(followup_chain(extra_request=True))      # nor does an extra request
+    # Decode a synthetic capture and sanitize it through the production path: dropping the logout
+    # decoder or the evidence filter must fail the acceptance below.
+    def record(direction: int, opcode: int, payload: bytes) -> bytes:
+        return (struct.pack("<IIIII", direction, 0, 0, 20, 4 + len(payload))
+                + b"\x00" * 20 + struct.pack("<I", opcode) + payload)
+
+    def cast(count: int) -> bytes:
+        return bytes([count]) + struct.pack("<I", MAGE_COMBAT_SPELL_ID) + b"\x00" * 9
+
+    def go(count: int) -> bytes:
+        return b"\x01\x07" + b"\x00" + bytes([count]) + struct.pack("<I", MAGE_COMBAT_SPELL_ID)
+
+    with tempfile.TemporaryDirectory(prefix="mage-followup-self-check-") as capture_dir:
+        capture = Path(capture_dir)
+        (capture / "packets.pkt").write_bytes(
+            b"\x00" * PKT_LOG_HEADER_SIZE
+            + record(0x47534D43, CMSG_SET_SELECTION_OPCODE, struct.pack("<Q", 5))
+            + record(0x47534D43, CMSG_CAST_SPELL_OPCODE, cast(1))
+            + record(0, SMSG_SPELL_GO_OPCODE, go(1))
+            + record(0, SMSG_LOGOUT_COMPLETE_OPCODE, b"")
+            + record(0x47534D43, CMSG_CAST_SPELL_OPCODE, cast(2))
+            + record(0, SMSG_SPELL_GO_OPCODE, go(2))
+        )
+        captured = sanitized_evidence(
+            {
+                "mode": MAGE_FOLLOWUP_MODE, "stability_seconds": 10, "ports": {"world": 18085},
+                "processes": [], "paths": {"logs": str(capture), "raw_evidence": str(capture)},
+                "inputs": {"authserver": {"sha256": "a" * 64}, "worldserver": {"sha256": "b" * 64},
+                           "data_dbc_hash": "c" * 64, "data_maps_hash": "d" * 64},
+            },
+            [name for name, _ in CHARACTER_MILESTONES],
+            [{"direction": "c2s", "opcode": "CMSG_CHAR_ENUM"},
+             {"direction": "s2c", "opcode": "SMSG_CHAR_ENUM"}],
+            mage_followup_evidence_value=followup_chain()["mage_followup"],
+            login_callback_count_value=2, logout_count_value=1,
+        )
+        captured["combat_events"] = [
+            {"opcode": "SMSG_POWER_UPDATE", "index": 0, "guid": 7, "powers": [[0, 100]]},
+            {"opcode": "SMSG_POWER_UPDATE", "index": 2, "guid": 7, "powers": [[0, 96]]},
+            {"opcode": "SMSG_POWER_UPDATE", "index": 2, "guid": 7, "powers": [[0, 120]]},
+            {"opcode": "SMSG_POWER_UPDATE", "index": 5, "guid": 7, "powers": [[0, 110]]},
+        ]
+        assert any(event["opcode"] == "SMSG_LOGOUT_COMPLETE" for event in captured["plan32_casts"])
+        assert mage_followup_accepted(captured)
     assert plan_number(CHARACTER_CREATION_MODE) == "22"
     populated_generation = dict(character_generation)
     populated_generation["mode"] = POPULATED_MODE
@@ -8929,6 +9289,7 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument(
         "--mode", choices=(
             "no-login", "authentication", "character-screen", CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE,
+            MAGE_FOLLOWUP_MODE,
             POPULATED_MODE,
             CHARACTER_SELECTION_MODE,
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,
