@@ -2144,9 +2144,15 @@ def prepare(args: argparse.Namespace) -> None:
         inputs["plan32_stage"] = stage
     if args.mode == VENDOR_NEGATIVE_MODE:
         inputs["vendor_case"] = vendor_negative_case_or_fail()
+    if args.mode == CHARACTER_CREATION_MODE:
+        creation_class = creation_class_name()
+        if creation_class not in CREATION_CLASSES:
+            raise RuntimeError(f"CREATE_CLASS must be one of {sorted(CREATION_CLASSES)}; got {creation_class!r}")
+        inputs["create_class"] = creation_class
     apply_vendor_trade_seed(args.mode)
     apply_vendor_negative_seed(args.mode)
     apply_trainer_seed(args.mode)
+    apply_creation_class(args.mode, inputs.get("create_class", creation_class_name()))
     print(f"prepare preflight: {time.monotonic() - started:.1f}s", flush=True)
     manifest_path = args.manifest.resolve()
     if manifest_path.exists():
@@ -3093,6 +3099,25 @@ def automate_invalid_target_spell_cast(generation: Generation) -> None:
     capture_desktop_screenshot(generation, "desktop-after-invalid-target-cast.png")
 
 
+CREATION_CLASSES = {"warrior": ("class_warrior", 1), "mage": ("class_mage", 8)}
+CREATION_CLASS_POINT = "class_warrior"
+
+
+def creation_class_name() -> str:
+    """The class the environment asks the native creation flow to pick (default warrior)."""
+    return os.environ.get("CREATE_CLASS", "warrior")
+
+
+def apply_creation_class(mode: str, name: str) -> None:
+    """Select the class the native creation flow clicks and the class the verification expects."""
+    global CREATION_CLASS_POINT, CHARACTER_CLASS
+    if mode != CHARACTER_CREATION_MODE:
+        return
+    if name not in CREATION_CLASSES:
+        raise RuntimeError(f"CREATE_CLASS must be one of {sorted(CREATION_CLASSES)}; got {name!r}")
+    CREATION_CLASS_POINT, CHARACTER_CLASS = CREATION_CLASSES[name]
+
+
 def character_creation_points(x: int, y: int, width: int, height: int) -> dict[str, tuple[int, int]]:
     # Fractions calibrated against a 1792x1008 owned client window on the Cataclysm 15595 creation
     # screen: Alliance/Human is the first race portrait, Warrior the first class icon (both
@@ -3102,6 +3127,9 @@ def character_creation_points(x: int, y: int, width: int, height: int) -> dict[s
         "race_human": (x + round(width * 0.0636), y + round(height * 0.0912)),
         "gender_male": (x + round(width * 0.0854), y + round(height * 0.5566)),
         "class_warrior": (x + round(width * 0.0346), y + round(height * 0.6449)),
+        # class grid is two columns of five (Warrior/Paladin, Hunter/Rogue, Priest/DK, Shaman/Mage,
+        # Warlock/Druid); Mage is the right column's fourth row, calibrated from creation-screen.png
+        "class_mage": (x + round(width * 0.1317), y + round(height * 0.7774)),
         "name_field": (x + round(width * 0.5000), y + round(height * 0.8974)),
         "accept": (x + round(width * 0.8972), y + round(height * 0.9357)),
     }
@@ -3162,7 +3190,7 @@ def automate_character_creation(generation: Generation) -> None:
     points = character_creation_points(x, y, width, height)
     click(points["race_human"])
     click(points["gender_male"])
-    click(points["class_warrior"])
+    click(points[CREATION_CLASS_POINT])
     click(points["name_field"])
     enter(CHARACTER_NAME)
     # Give the client a moment to render the committed name before Accept, matching the
@@ -3651,6 +3679,8 @@ def run_client(args: argparse.Namespace) -> None:
         generation["vendor_case"] = case
         apply_vendor_negative_seed(generation["mode"])
         mysql(manifest, generation, vendor_negative_seed_sql(case), generation["schemas"]["characters"])
+    if generation["mode"] == CHARACTER_CREATION_MODE:
+        apply_creation_class(generation["mode"], generation["inputs"].get("create_class", "warrior"))
     if generation["mode"] == TRAINER_MODE:
         apply_trainer_seed(generation["mode"])
         mysql(manifest, generation, trainer_seed_sql(), generation["schemas"]["characters"])
@@ -6200,6 +6230,7 @@ def verify(args: argparse.Namespace) -> None:
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
     generation = active_generation(manifest)
+    apply_creation_class(generation["mode"], generation["inputs"].get("create_class", "warrior"))
     if generation["state"] not in {"observed", "accepted", "inconclusive"}:
         raise RuntimeError(f"cannot verify from state {generation['state']}")
     raw_log = Path(generation["paths"]["raw_evidence"]) / "connection.log"
