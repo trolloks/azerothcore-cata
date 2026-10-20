@@ -1,0 +1,366 @@
+{
+  "build": 15595,
+  "cast_failed_marker_count": null,
+  "character_rows": 1,
+  "chat_message_marker_count": null,
+  "client_milestones": [
+    "auth_login_ok",
+    "world_connected",
+    "world_auth_ok",
+    "characters_completed"
+  ],
+  "combat_events": [
+    {
+      "guid": 1,
+      "index": 13,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          100
+        ]
+      ],
+      "ticks": 70556
+    },
+    {
+      "guid": 1,
+      "index": 15,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          165
+        ]
+      ],
+      "ticks": 70556
+    },
+    {
+      "guid": 1,
+      "index": 122,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          100
+        ]
+      ],
+      "ticks": 119863
+    },
+    {
+      "guid": 1,
+      "index": 130,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          165
+        ]
+      ],
+      "ticks": 119942
+    },
+    {
+      "guid": 1,
+      "index": 741,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          156
+        ]
+      ],
+      "ticks": 165986
+    },
+    {
+      "attacker": 1,
+      "damage": 5,
+      "index": 746,
+      "opcode": "SMSG_SPELLNONMELEEDAMAGELOG",
+      "overkill": 0,
+      "school": 4,
+      "spell": 133,
+      "target": 17379391377963484203,
+      "ticks": 166194
+    },
+    {
+      "guid": 1,
+      "index": 784,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          165
+        ]
+      ],
+      "ticks": 171663
+    },
+    {
+      "guid": 1,
+      "index": 942,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          100
+        ]
+      ],
+      "ticks": 213323
+    },
+    {
+      "guid": 1,
+      "index": 950,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          165
+        ]
+      ],
+      "ticks": 213324
+    },
+    {
+      "guid": 1,
+      "index": 1173,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          156
+        ]
+      ],
+      "ticks": 229900
+    },
+    {
+      "attacker": 1,
+      "damage": 2,
+      "index": 1177,
+      "opcode": "SMSG_SPELLNONMELEEDAMAGELOG",
+      "overkill": 0,
+      "school": 4,
+      "spell": 133,
+      "target": 17379391377963484203,
+      "ticks": 230109
+    }
+  ],
+  "creation_marker_count": 1,
+  "downstream_diagnostic": null,
+  "empty_response_payload": null,
+  "endpoint_ownership": true,
+  "enumerated": null,
+  "forbidden_opcodes": [],
+  "ground_movement_sequence": null,
+  "in_world_control_marker_count": null,
+  "in_world_control_packet_prefix": null,
+  "inputs": {
+    "authserver_sha256": "c856d3337e02871a0863bc4806be55630c8c97a9f7720972683509da965679d8",
+    "client_sha256": "0ea9cc0458cb137f4e0767e8a1896e2042480a4a22397480d7ee64c2e696192a",
+    "dbc_tree_sha256": "86bee8cd69fe0988b5e650b993390884594f45643fba60caf57d1ea852ca2475",
+    "geometry": false,
+    "maps_tree_sha256": "a8113db13679a3bb2a08b6e9f6a90c9b435eae43af3a4de413dd0ab56a8d0645",
+    "mmaps_tree_sha256": "",
+    "vmaps_tree_sha256": "",
+    "worldserver_sha256": "6550ada9c7dedf3cec226065e0daf165d930b85dbf522b2ee620c79634fb43f9"
+  },
+  "invalid_target_spell_cast_sequence_count": null,
+  "jump_fall_land_sequence": null,
+  "level_up_marker_count": null,
+  "level_up_xp_gain_count": null,
+  "login_callback_count": 2,
+  "logout_count": 1,
+  "mage_combat": null,
+  "mage_followup": {
+    "action_count": 1,
+    "class": 8,
+    "guid": 1,
+    "race": 1,
+    "spell_count": 0
+  },
+  "map_insertion_marker_count": null,
+  "map_insertion_packet_prefix": null,
+  "mode": "mage-combat-followup",
+  "movement_heartbeat_count": null,
+  "network_scope": "owned-auth-and-world-only",
+  "next_server_packet": {
+    "opcode": "SMSG_ADDON_INFO",
+    "status": "candidate/inconclusive"
+  },
+  "outcome": "mage_combat_followup_pass",
+  "owned_window": true,
+  "payload_shape": "typed-auth-success; no raw payload retained",
+  "plan32_casts": [
+    {
+      "caster": 1,
+      "count": 0,
+      "index": 169,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 836
+    },
+    {
+      "index": 716,
+      "opcode": "CMSG_SET_SELECTION",
+      "side": "c2s",
+      "target": 17379391377963484203
+    },
+    {
+      "count": 1,
+      "index": 733,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484203
+    },
+    {
+      "caster": 1,
+      "count": 1,
+      "index": 742,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "index": 926,
+      "opcode": "CMSG_SET_SELECTION",
+      "side": "c2s",
+      "target": 0
+    },
+    {
+      "caster": 1,
+      "count": 0,
+      "index": 985,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 836
+    },
+    {
+      "index": 1146,
+      "opcode": "CMSG_SET_SELECTION",
+      "side": "c2s",
+      "target": 17379391377963484203
+    },
+    {
+      "count": 2,
+      "index": 1167,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484203
+    },
+    {
+      "caster": 1,
+      "count": 2,
+      "index": 1174,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    }
+  ],
+  "plan32_chase": null,
+  "plan32_fixture": null,
+  "plan32_geometry": null,
+  "plan32_geometry_facts": null,
+  "plan32_player_samples": null,
+  "plan32_relog_problems": null,
+  "plan32_settle_z": null,
+  "plan32_stage": null,
+  "post_marker_hold_seconds": 162.79492452798877,
+  "post_marker_snapshots": 2,
+  "pre_map_marker_count": null,
+  "pre_map_packet_prefix": null,
+  "protected_inputs_unchanged": true,
+  "realm_character_count": null,
+  "reset": "pending",
+  "response_body": null,
+  "run_speed_acknowledgements": null,
+  "schema": 1,
+  "screen_confirmed": true,
+  "selection": {
+    "action": "create",
+    "callback_guid_low": 1,
+    "enumerated_guid_low": null,
+    "legit_characters_admission": true,
+    "request_guid_low": 1,
+    "seeded_guid_low": 1
+  },
+  "server_milestones": [
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_AUTH_CHALLENGE"
+    },
+    {
+      "direction": "c2s",
+      "opcode": "CMSG_AUTH_SESSION"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_AUTH_RESPONSE"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_CLIENTCACHE_VERSION"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_TUTORIAL_FLAGS"
+    },
+    {
+      "direction": "c2s",
+      "opcode": "CMSG_CHAR_ENUM"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_CHAR_ENUM"
+    },
+    {
+      "direction": "c2s",
+      "opcode": "CMSG_CHAR_ENUM"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_CHAR_ENUM"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_TUTORIAL_FLAGS"
+    },
+    {
+      "direction": "c2s",
+      "opcode": "CMSG_CHAR_ENUM"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_CHAR_ENUM"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_TUTORIAL_FLAGS"
+    }
+  ],
+  "spell_cast_marker_count": null,
+  "stability_seconds": 8,
+  "target_targeted_spell_cast_sequence_count": null,
+  "trainer": null,
+  "trainer_buy_events": null,
+  "trainer_buy_failures": null,
+  "trainer_buy_results": null,
+  "trainer_learned_spells": null,
+  "trainer_list": null,
+  "trainer_results": null,
+  "vendor_buy_failed_items": null,
+  "vendor_buy_failure_reasons": null,
+  "vendor_buy_failures": null,
+  "vendor_buy_requests": null,
+  "vendor_buy_requests_detail": null,
+  "vendor_buy_results": null,
+  "vendor_buyback_requests": null,
+  "vendor_buyback_slot": null,
+  "vendor_case": null,
+  "vendor_inventory_count": null,
+  "vendor_inventory_failure_reasons": null,
+  "vendor_inventory_failures": null,
+  "vendor_negative": null,
+  "vendor_repair_requests": null,
+  "vendor_sell_item_counter": null,
+  "vendor_sell_requests": null,
+  "vendor_trade": null,
+  "walk_run_mode_switch_sequence": null
+}

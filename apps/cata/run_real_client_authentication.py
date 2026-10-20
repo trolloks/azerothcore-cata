@@ -6615,7 +6615,8 @@ def mage_followup_accepted(evidence: dict[str, object]) -> bool:
         and int(mage.get("class", 0)) == CREATION_CLASSES["mage"][1]
         and int(mage.get("race", 0)) == CHARACTER_RACE
         and int(mage.get("action_count", 0)) == 1
-        and int(mage.get("spell_count", 0)) >= 1
+        # starting spells are re-granted by Player::LoadFromDB -> LearnDefaultSkills(), so
+        # character_spell is empty for a fresh mage; the second cast after the relog is the witness
         and int(spell_goes[0]["index"]) > first_index
         and int(spell_goes[1]["index"]) > second_index
         and bool(before_first) and bool(after_first)
@@ -6671,7 +6672,9 @@ def verify(args: argparse.Namespace) -> None:
     login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
     # The relog stage drives the whole login twice, so the login-shaped evidence below expects two
     # complete sessions that both name the same seeded character.
-    expected_logins = 2 if plan32_geometry_mode and generation.get("plan32_stage") == "relog" else 1
+    expected_logins = 2 if (
+        (plan32_geometry_mode and generation.get("plan32_stage") == "relog") or mage_followup_mode
+    ) else 1
     # Returning to the character screen after /logout makes the client ask for its character list
     # again (CharacterSelect_OnShow calls GetCharacterListUpdate), so vendor mode sees one
     # enumeration per session plus that closing one while still logging in exactly once.
@@ -7638,9 +7641,9 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_combat_accepted(mage_chain(school=2))
     assert not mage_combat_accepted(mage_chain(selection=False))
     assert not mage_combat_accepted(mage_chain(selection_target=target_guid + 1))
-    def followup_chain(first_drop=96, regen=120, second_drop=110, login=2, logout=1, spells=1):
+    def followup_chain(first_drop=96, regen=120, second_drop=110, login=2, logout=1):
         return {
-            "mage_followup": {"guid": 7, "class": 8, "race": 1, "action_count": 1, "spell_count": spells},
+            "mage_followup": {"guid": 7, "class": 8, "race": 1, "action_count": 1, "spell_count": 0},
             "plan32_casts": [
                 {"opcode": "CMSG_CAST_SPELL", "index": 10, "spell": MAGE_COMBAT_SPELL_ID, "target": 5},
                 {"opcode": "SMSG_SPELL_GO", "index": 11, "spell": MAGE_COMBAT_SPELL_ID, "caster": 7},
@@ -7663,7 +7666,6 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_followup_accepted(followup_chain(first_drop=100))     # first cast free
     assert not mage_followup_accepted(followup_chain(login=1))            # no relog
     assert not mage_followup_accepted(followup_chain(logout=0))           # no logout
-    assert not mage_followup_accepted(followup_chain(spells=0))           # spellbook not saved
     assert plan_number(CHARACTER_CREATION_MODE) == "22"
     populated_generation = dict(character_generation)
     populated_generation["mode"] = POPULATED_MODE
