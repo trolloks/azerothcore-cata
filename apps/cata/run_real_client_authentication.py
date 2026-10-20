@@ -3157,8 +3157,9 @@ def mage_combat_character_reset_sql() -> str:
     The row keeps its guid: character tables do not cascade, so deleting it would let the replacement
     reuse the guid and inherit stale action/spell rows, and with them the saved-action witness.
     """
-    return (f"UPDATE `characters` SET `name`=CONCAT('Old', `guid`), `deleteDate`=NOW() "
-            f"WHERE `account`={ACCOUNT_ID} AND `name`='{CHARACTER_NAME}' AND `deleteDate` IS NULL;")
+    return (f"UPDATE `characters` SET `name`=CONCAT('Old', `guid`), "
+            f"`deleteDate`=UNIX_TIMESTAMP() WHERE `account`={ACCOUNT_ID} "
+            f"AND `name`='{CHARACTER_NAME}' AND `deleteDate` IS NULL;")
 
 
 def mage_combat_db_evidence(manifest: Manifest, generation: Generation) -> dict[str, int]:
