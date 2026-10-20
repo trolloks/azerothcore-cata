@@ -4531,6 +4531,7 @@ VENDOR_NEGATIVE_EQUIP_ERR_INVENTORY_FULL = 50
 CMSG_CAST_SPELL_OPCODE = 0x4C07
 SMSG_CAST_FAILED_OPCODE = 0x4D16
 SMSG_SPELL_GO_OPCODE = 0x6E16
+SMSG_LOGOUT_COMPLETE_OPCODE = 0x2137
 SPELL_FAILED_LINE_OF_SIGHT_RESULT = 49
 SMSG_ON_MONSTER_MOVE_OPCODE = 0x6E17
 SMSG_ATTACKERSTATEUPDATE_OPCODE = 0x0B25
@@ -4614,6 +4615,8 @@ def plan32_packet_events(generation: Generation) -> list[dict[str, object]]:
                 "caster": caster, "count": payload[cursor],
                 "spell": struct.unpack_from("<I", payload, cursor + 1)[0],
             })
+        elif opcode == SMSG_LOGOUT_COMPLETE_OPCODE:
+            events.append({"opcode": "SMSG_LOGOUT_COMPLETE", "side": side, "index": packet, "ticks": ticks})
         elif opcode == CMSG_CANCEL_CAST_OPCODE:
             events.append({"opcode": "CMSG_CANCEL_CAST", "side": side, "index": packet,
                            "ticks": ticks})
@@ -6589,7 +6592,7 @@ def mage_combat_accepted(evidence: dict[str, object]) -> bool:
     )
 
 def mage_followup_accepted(evidence: dict[str, object]) -> bool:
-    """Cast, out-of-combat regeneration, logout/relog and a second cast, bound to the created mage."""
+    """Cast, out-of-combat regeneration, logout, relog and a second cast, each bound to its session."""
     mage = evidence["mage_followup"] or {}
     player_guid = int(mage.get("guid", 0))
     casts = evidence["plan32_casts"] or []
@@ -6600,29 +6603,38 @@ def mage_followup_accepted(evidence: dict[str, object]) -> bool:
                   if event.get("opcode") == "SMSG_SPELL_GO"
                   and int(event.get("caster", 0)) == player_guid
                   and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID]
+    logouts = [int(event["index"]) for event in casts if event.get("opcode") == "SMSG_LOGOUT_COMPLETE"]
     mana = [(int(event["index"]), int(power[1])) for event in (evidence["combat_events"] or [])
             if event["opcode"] == "SMSG_POWER_UPDATE" and int(event["guid"]) == player_guid
             for power in event["powers"] if int(power[0]) == 0]
-    if len(requests) < 2 or len(spell_goes) < 2:
+    if len(requests) < 2 or len(spell_goes) < 2 or not logouts:
         return False
-    first_index = int(requests[0]["index"])
-    second_index = int(requests[1]["index"])
+    logout_index = logouts[0]
+    first_index, second_index = int(requests[0]["index"]), int(requests[1]["index"])
+    # each cast completion must name the same cast counter as its request and sit between the two
+    # requests, and the second pair must follow the logout
+    def completes(request: dict, limit: int) -> bool:
+        return any(int(go["index"]) > int(request["index"]) and int(go["index"]) < limit
+                   and int(go.get("count", -1)) == int(request.get("count", -2))
+                   for go in spell_goes)
+
     before_first = [value for index, value in mana if index < first_index]
-    after_first = [value for index, value in mana if first_index < index < second_index]
+    first_session = [value for index, value in mana if first_index < index < logout_index]
+    before_second = [value for index, value in mana if index < second_index]
     after_second = [value for index, value in mana if index > second_index]
     return (
         player_guid != 0
         and int(mage.get("class", 0)) == CREATION_CLASSES["mage"][1]
         and int(mage.get("race", 0)) == CHARACTER_RACE
         and int(mage.get("action_count", 0)) == 1
-        # starting spells are re-granted by Player::LoadFromDB -> LearnDefaultSkills(), so
-        # character_spell is empty for a fresh mage; the second cast after the relog is the witness
-        and int(spell_goes[0]["index"]) > first_index
-        and int(spell_goes[1]["index"]) > second_index
-        and bool(before_first) and bool(after_first)
-        and after_first[0] < before_first[-1]          # the first cast cost mana
-        and max(after_first) > after_first[0]          # out of combat, mana came back
-        and bool(after_second) and after_second[0] < max(after_first)  # the second cast cost mana
+        and first_index < logout_index < second_index
+        and completes(requests[0], logout_index)
+        and completes(requests[1], 1 << 32)
+        and bool(before_first) and bool(first_session)
+        and first_session[0] < before_first[-1]          # the first cast cost mana
+        and max(first_session) > first_session[0]        # and it regenerated before the logout
+        and bool(before_second) and bool(after_second)
+        and after_second[0] < before_second[-1]          # the second cast cost mana after the relog
         and int(evidence.get("login_callback_count") or 0) == 2
         and int(evidence.get("logout_count") or 0) >= 1
     )
@@ -7645,10 +7657,14 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         return {
             "mage_followup": {"guid": 7, "class": 8, "race": 1, "action_count": 1, "spell_count": 0},
             "plan32_casts": [
-                {"opcode": "CMSG_CAST_SPELL", "index": 10, "spell": MAGE_COMBAT_SPELL_ID, "target": 5},
-                {"opcode": "SMSG_SPELL_GO", "index": 11, "spell": MAGE_COMBAT_SPELL_ID, "caster": 7},
-                {"opcode": "CMSG_CAST_SPELL", "index": 30, "spell": MAGE_COMBAT_SPELL_ID, "target": 5},
-                {"opcode": "SMSG_SPELL_GO", "index": 31, "spell": MAGE_COMBAT_SPELL_ID, "caster": 7},
+                {"opcode": "CMSG_CAST_SPELL", "index": 10, "spell": MAGE_COMBAT_SPELL_ID, "target": 5,
+                 "count": 1},
+                {"opcode": "SMSG_SPELL_GO", "index": 11, "spell": MAGE_COMBAT_SPELL_ID, "caster": 7,
+                 "count": 1},
+                {"opcode": "CMSG_CAST_SPELL", "index": 30, "spell": MAGE_COMBAT_SPELL_ID, "target": 5,
+                 "count": 1},
+                {"opcode": "SMSG_SPELL_GO", "index": 31, "spell": MAGE_COMBAT_SPELL_ID, "caster": 7,
+                 "count": 1},
             ],
             "combat_events": [
                 {"opcode": "SMSG_POWER_UPDATE", "index": 5, "guid": 7, "powers": [[0, 100]]},
@@ -7660,12 +7676,16 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             "logout_count": logout,
         }
 
-    assert mage_followup_accepted(followup_chain())
-    assert not mage_followup_accepted(followup_chain(second_drop=200))    # second cast must cost mana
-    assert not mage_followup_accepted(followup_chain(regen=90))           # no regeneration
-    assert not mage_followup_accepted(followup_chain(first_drop=100))     # first cast free
-    assert not mage_followup_accepted(followup_chain(login=1))            # no relog
-    assert not mage_followup_accepted(followup_chain(logout=0))           # no logout
+    def chip(e):
+        e["plan32_casts"].append({"opcode": "SMSG_LOGOUT_COMPLETE", "index": 25})
+        return e
+
+    assert mage_followup_accepted(chip(followup_chain()))
+    assert not mage_followup_accepted(chip(followup_chain(second_drop=200)))    # second cast must cost mana
+    assert not mage_followup_accepted(chip(followup_chain(regen=90)))           # no regeneration
+    assert not mage_followup_accepted(chip(followup_chain(first_drop=100)))     # first cast free
+    assert not mage_followup_accepted(chip(followup_chain(login=1)))            # no relog
+    assert not mage_followup_accepted(chip(followup_chain(logout=0)))           # no logout
     assert plan_number(CHARACTER_CREATION_MODE) == "22"
     populated_generation = dict(character_generation)
     populated_generation["mode"] = POPULATED_MODE
