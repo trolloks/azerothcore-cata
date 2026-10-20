@@ -625,19 +625,22 @@
       "index": 166,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 836
+      "spell": 836,
+      "ticks": 81519
     },
     {
       "index": 744,
       "opcode": "CMSG_SET_SELECTION",
       "side": "c2s",
-      "target": 1
+      "target": 1,
+      "ticks": 138020
     },
     {
       "index": 831,
       "opcode": "CMSG_SET_SELECTION",
       "side": "c2s",
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 150455
     },
     {
       "count": 2,
@@ -645,12 +648,14 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 152637
     },
     {
       "index": 875,
       "opcode": "CMSG_CANCEL_CAST",
-      "side": "c2s"
+      "side": "c2s",
+      "ticks": 153487
     },
     {
       "count": 2,
@@ -658,7 +663,8 @@
       "opcode": "SMSG_CAST_FAILED",
       "result": 42,
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 153487
     },
     {
       "count": 3,
@@ -666,7 +672,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 157904
     },
     {
       "caster": 1,
@@ -674,7 +681,8 @@
       "index": 913,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 159403
     },
     {
       "count": 4,
@@ -682,7 +690,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 1459,
-      "target": 1
+      "target": 1,
+      "ticks": 161053
     },
     {
       "caster": 1,
@@ -690,7 +699,8 @@
       "index": 930,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 1459
+      "spell": 1459,
+      "ticks": 161060
     },
     {
       "count": 5,
@@ -698,7 +708,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 162270
     },
     {
       "caster": 1,
@@ -706,7 +717,8 @@
       "index": 953,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 164052
     },
     {
       "count": 6,
@@ -714,7 +726,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 164753
     },
     {
       "caster": 1,
@@ -722,19 +735,22 @@
       "index": 972,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 166250
     },
     {
       "index": 1001,
       "opcode": "CMSG_SET_SELECTION",
       "side": "c2s",
-      "target": 17379391507970130988
+      "target": 17379391507970130988,
+      "ticks": 170287
     },
     {
       "index": 1089,
       "opcode": "CMSG_SET_SELECTION",
       "side": "c2s",
-      "target": 17379391017387557931
+      "target": 17379391017387557931,
+      "ticks": 181304
     },
     {
       "count": 8,
@@ -742,7 +758,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391017387557931
+      "target": 17379391017387557931,
+      "ticks": 183837
     },
     {
       "caster": 1,
@@ -750,19 +767,22 @@
       "index": 1121,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 185341
     },
     {
       "index": 1140,
       "opcode": "CMSG_SET_SELECTION",
       "side": "c2s",
-      "target": 0
+      "target": 0,
+      "ticks": 185572
     },
     {
       "index": 1225,
       "opcode": "CMSG_SET_SELECTION",
       "side": "c2s",
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 199104
     },
     {
       "count": 10,
@@ -770,7 +790,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 201687
     },
     {
       "caster": 1,
@@ -778,7 +799,8 @@
       "index": 1258,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 203191
     },
     {
       "count": 11,
@@ -786,7 +808,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 205437
     },
     {
       "caster": 1,
@@ -794,7 +817,8 @@
       "index": 1290,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 206934
     },
     {
       "count": 12,
@@ -802,7 +826,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 209287
     },
     {
       "caster": 1,
@@ -810,7 +835,8 @@
       "index": 1318,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 210785
     },
     {
       "count": 13,
@@ -818,7 +844,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 213237
     },
     {
       "caster": 1,
@@ -826,7 +853,8 @@
       "index": 1350,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 214733
     },
     {
       "count": 14,
@@ -834,7 +862,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 216904
     },
     {
       "caster": 1,
@@ -842,7 +871,8 @@
       "index": 1379,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 218399
     },
     {
       "count": 15,
@@ -850,7 +880,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 220621
     },
     {
       "caster": 1,
@@ -858,7 +889,8 @@
       "index": 1406,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 222126
     },
     {
       "count": 16,
@@ -866,7 +898,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 224671
     },
     {
       "caster": 1,
@@ -874,7 +907,8 @@
       "index": 1435,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 226167
     },
     {
       "count": 17,
@@ -882,7 +916,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 228738
     },
     {
       "caster": 1,
@@ -890,7 +925,8 @@
       "index": 1471,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 230237
     },
     {
       "count": 18,
@@ -898,7 +934,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 232888
     },
     {
       "caster": 1,
@@ -906,7 +943,8 @@
       "index": 1499,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 234387
     },
     {
       "count": 19,
@@ -914,7 +952,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 237121
     },
     {
       "caster": 1,
@@ -922,7 +961,8 @@
       "index": 1536,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 238621
     },
     {
       "count": 20,
@@ -930,7 +970,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 241455
     },
     {
       "caster": 1,
@@ -938,7 +979,8 @@
       "index": 1569,
       "opcode": "SMSG_SPELL_GO",
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 242954
     },
     {
       "count": 21,
@@ -946,7 +988,8 @@
       "opcode": "CMSG_CAST_SPELL",
       "side": "c2s",
       "spell": 133,
-      "target": 17379391377963484205
+      "target": 17379391377963484205,
+      "ticks": 245589
     },
     {
       "count": 21,
@@ -954,7 +997,8 @@
       "opcode": "SMSG_CAST_FAILED",
       "result": 87,
       "side": "s2c",
-      "spell": 133
+      "spell": 133,
+      "ticks": 245594
     }
   ],
   "plan32_chase": null,
@@ -969,9 +1013,7 @@
   "post_marker_snapshots": 2,
   "pre_map_marker_count": null,
   "pre_map_packet_prefix": null,
-  "protected_inputs_unchanged": true,
   "realm_character_count": null,
-  "reset": "pending",
   "response_body": null,
   "run_speed_acknowledgements": null,
   "schema": 1,

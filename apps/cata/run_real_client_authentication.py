@@ -3350,6 +3350,7 @@ MAGE_NEGATIVE_SPELL_COST = 9
 # Arcane Intellect 1459 is instant, self-castable at level 1 and starts the shared cooldown.
 MAGE_NEGATIVE_GCD_SPELL_ID = 1459
 MAGE_NEGATIVE_GCD_KEYS = ("2",)
+MAGE_NEGATIVE_GCD_MS = 1500
 MAGE_NEGATIVE_DEAD_ENTRY = 3300
 MAGE_NEGATIVE_DEAD_GUID = 9990006
 MAGE_NEGATIVE_DEAD_NAME = "Adder"
@@ -4858,7 +4859,7 @@ def plan32_packet_events(generation: Generation) -> list[dict[str, object]]:
 
 def plan32_evidence_events(events: list[dict[str, object]]) -> list[dict[str, object]]:
     """The cast-correlation events kept in the sanitized evidence."""
-    keys = ("opcode", "side", "count", "spell", "target", "result", "caster", "index")
+    keys = ("opcode", "side", "count", "spell", "target", "result", "caster", "index", "ticks")
     return [{key: event[key] for key in keys if key in event}
             for event in events if event["opcode"] in PLAN32_EVIDENCE_OPCODES]
 
@@ -7055,10 +7056,11 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
              if event.get("opcode") == "CMSG_CAST_SPELL" and index(event) > index(go)), None)
         settle_end = index(next_request) if next_request is not None else capture_end + 1
         values = [value for at, value in mana if index(request) < at < settle_end]
-        # The cost is both the lowest and the settled reading: a temporary debit followed by a
-        # refund fails the settled check. Regeneration is disabled for this mode, so no tick can
-        # lift the last reading.
+        # Regeneration is disabled for this mode, so any increase is a refund. The cost is both the
+        # lowest and the settled reading: a refund before or after the completion fails.
+        series = [before, *values] if before is not None else values
         if (before is None or not values
+                or any(series[i] > series[i - 1] for i in range(1, len(series)))
                 or min(values) != before - MAGE_NEGATIVE_SPELL_COST
                 or values[-1] != before - MAGE_NEGATIVE_SPELL_COST):
             return None
@@ -7115,9 +7117,25 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     gcd_start, gcd_end = bounds["gcd"]
     if gcd_starter_go is None or gcd_start < index(gcd_starter_go):
         return False
-    gcd_window = fireball_events(gcd_start, gcd_end)
-    if any(event["opcode"] == "SMSG_SPELL_GO" for event in gcd_window) or dropped(
-            gcd_start, gcd_end):
+    starter_ticks = gcd_starter_go.get("ticks")
+    if type(starter_ticks) is not int:
+        return False
+    cooldown_end = int(starter_ticks) + MAGE_NEGATIVE_GCD_MS
+    # The starter's actual cooldown, not the movable attempt bounds: a queued completion recorded
+    # inside the 1.5 s window would complete the press, and moving the attempt bounds cannot hide it.
+    gcd_window = [
+        event for event in casts
+        if type(event.get("ticks")) is int
+        and int(event["ticks"]) > int(starter_ticks)
+        and int(event["ticks"]) <= cooldown_end
+        and index(event) <= gcd_end
+        and event.get("opcode") in {"CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO"}
+        and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
+    ]
+    if any(event["opcode"] == "SMSG_SPELL_GO" for event in gcd_window):
+        return False
+    window_end = max((index(event) for event in gcd_window), default=index(gcd_starter_go))
+    if dropped(index(gcd_starter_go), window_end):
         return False
     for request in (event for event in gcd_window if event["opcode"] == "CMSG_CAST_SPELL"):
         if any(event["opcode"] == "SMSG_CAST_FAILED"
@@ -7126,14 +7144,15 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
                for event in failures):
             continue
         # The 4.3.4 client queues a press made near the cooldown's end; the queued cast completes
-        # after the window and pays the full Fireball cost. Only an immediate go or cost would make
-        # the press itself free.
+        # after the cooldown and pays the full Fireball cost. Only an immediate go or cost would
+        # make the press itself free.
         if not any(int(go.get("count", -1)) == int(request.get("count", -2))
-                   and index(go) > gcd_end and cost_at(go) is not None for go in goes):
+                   and type(go.get("ticks")) is int
+                   and int(go["ticks"]) > cooldown_end and cost_at(go) is not None for go in goes):
             return False
     gcd_recovery = next(
-        (go for go in goes if index(go) > gcd_end
-         and request_for(go) is not None and index(request_for(go)) > gcd_end), None)
+        (go for go in goes if type(go.get("ticks")) is int
+         and int(go["ticks"]) > cooldown_end and request_for(go) is not None), None)
     if gcd_recovery is None or cost_at(gcd_recovery) is None:
         return False
 
@@ -7194,8 +7213,7 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     if not all(cost_at(go) is not None for go in goes):
         return False
     return not any(
-        any(int(go.get("count", -1)) == int(failure.get("count", -2))
-            and index(go) > index(failure) for go in goes)
+        any(int(go.get("count", -1)) == int(failure.get("count", -2)) for go in goes)
         for failure in failures
     )
 
@@ -8360,6 +8378,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         far_go=False, far_cost=False, far_result=None,
         kill=True, overkill=14, dead_go=False, dead_cost=False, dead_result=None, dead_extra=False,
         dead_bounds=False, cost_refund=False, duplicate_go=False,
+        gcd_narrow=False, failure_after_go=False,
         drain_casts=11, cost=9, insufficient_go=False, insufficient_cost=False,
         insufficient_result=None,
     ):
@@ -8375,7 +8394,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
 
         def add(bucket: list[dict[str, object]], **fields: object) -> int:
             nonlocal counter
-            bucket.append({"index": counter, **fields})
+            bucket.append({"index": counter, "ticks": counter * 100, **fields})
             counter += 1
             return counter - 1
 
@@ -8407,12 +8426,13 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             powers=[[0, 147 if interrupt_cost else 156]])
         add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=2)
 
+        gcd_starter_index = None
         if gcd_starter:
             add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_NEGATIVE_GCD_SPELL_ID,
                 target=guid, count=3)
             add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 130]])
-            add(casts, opcode="SMSG_SPELL_GO", caster=guid,
-                spell=MAGE_NEGATIVE_GCD_SPELL_ID, count=3)
+            gcd_starter_index = add(casts, opcode="SMSG_SPELL_GO", caster=guid,
+                                    spell=MAGE_NEGATIVE_GCD_SPELL_ID, count=3)
         gcd_start = counter
         counter += 1
         attempts.append({"scenario": "gcd", "start": gcd_start, "end": 0})
@@ -8427,14 +8447,20 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         if gcd_queue:
             add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=4)
         attempts[-1]["end"] = counter - 1
+        if gcd_narrow:
+            attempts[-1]["end"] = attempts[-1]["start"]
         if gcd_queue:
             if gcd_queue_cost:
                 add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 121]])
-            add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=4)
+            add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=4,
+                ticks=(gcd_starter_index * 100 + MAGE_NEGATIVE_GCD_MS + 100
+                       if gcd_starter_index is not None else counter * 100))
         add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=5)
         add(combat, opcode="SMSG_POWER_UPDATE", guid=guid,
             powers=[[0, 112 if gcd_queue else 121]])
         add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=5)
+        if failure_after_go:
+            add(casts, opcode="SMSG_CAST_FAILED", spell=MAGE_COMBAT_SPELL_ID, count=5, result=69)
         if duplicate_go:
             add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=5)
         if cost_refund:
@@ -8545,6 +8571,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_negative_accepted(negative_chain(dead_bounds=True))
     assert not mage_negative_accepted(negative_chain(cost_refund=True))
     assert not mage_negative_accepted(negative_chain(duplicate_go=True))
+    assert not mage_negative_accepted(negative_chain(failure_after_go=True))
     assert not mage_negative_accepted(negative_chain(drain_casts=9))
     assert not mage_negative_accepted(negative_chain(cost=8))
     assert not mage_negative_accepted(negative_chain(insufficient_go=True))
