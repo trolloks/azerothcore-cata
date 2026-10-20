@@ -6966,6 +6966,9 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
         if event.get("opcode") == "SMSG_SPELL_GO"
         and int(event.get("caster", 0)) == player_guid
     ]
+    all_failures = [
+        event for event in casts if event.get("opcode") == "SMSG_CAST_FAILED"
+    ]
     cancels = [int(event["index"]) for event in casts if event.get("opcode") == "CMSG_CANCEL_CAST"]
     selections = [event for event in casts if event.get("opcode") == "CMSG_SET_SELECTION"]
     damage = [
@@ -7070,6 +7073,9 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
             (request for request in casts
              if request.get("opcode") == "CMSG_CAST_SPELL"
              and index(request) > index(go)
+             and not any(int(failed.get("count", -1)) == int(request.get("count", -2))
+                         and int(failed.get("spell", 0)) == int(request.get("spell", -1))
+                         for failed in all_failures)
              and any(int(other.get("count", -1)) == int(request.get("count", -2))
                      and int(other.get("spell", 0)) == int(request.get("spell", -1))
                      and index(other) > index(request)
@@ -7246,8 +7252,10 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     if not all(cost_at(go) is not None for go in goes):
         return False
     return not any(
-        any(int(go.get("count", -1)) == int(failure.get("count", -2)) for go in goes)
-        for failure in failures
+        any(int(go.get("count", -1)) == int(failure.get("count", -2))
+            and int(go.get("spell", 0)) == int(failure.get("spell", -1))
+            for go in goes_all)
+        for failure in all_failures
     )
 
 
@@ -8413,6 +8421,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         dead_bounds=False, cost_refund=False, duplicate_go=False,
         gcd_narrow=False, failure_after_go=False,
         far_refund=False, dead_refund=False, unanswered_refund=False, unanswered_reuse=False,
+        failed_arcane_completion=False,
         drain_casts=11, cost=9, insufficient_go=False, insufficient_cost=False,
         insufficient_result=None, insufficient_refund=False, arcane_refund=False,
     ):
@@ -8599,6 +8608,14 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_NEGATIVE_GCD_SPELL_ID,
                 target=guid, count=4)
             add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 165]])
+        if failed_arcane_completion:
+            add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_NEGATIVE_GCD_SPELL_ID,
+                target=guid, count=count)
+            add(casts, opcode="SMSG_CAST_FAILED", spell=MAGE_NEGATIVE_GCD_SPELL_ID,
+                count=count, result=MAGE_NEGATIVE_NO_POWER_RESULT)
+            add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_NEGATIVE_GCD_SPELL_ID,
+                count=count)
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 165]])
         attempts.append({
             "scenario": "insufficient", "start": insufficient_start, "end": counter - 1,
         })
@@ -8627,6 +8644,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_negative_accepted(negative_chain(dead_result=111, dead_refund=True))
     assert not mage_negative_accepted(negative_chain(unanswered_refund=True))
     assert not mage_negative_accepted(negative_chain(unanswered_reuse=True))
+    assert not mage_negative_accepted(negative_chain(failed_arcane_completion=True))
     assert not mage_negative_accepted(negative_chain(cancel=False))
     assert not mage_negative_accepted(negative_chain(interrupt_result=69))
     assert not mage_negative_accepted(negative_chain(interrupt_go=True))
