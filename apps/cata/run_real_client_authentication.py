@@ -3112,7 +3112,9 @@ MAGE_COMBAT_SPELL_ID = 133
 MAGE_COMBAT_ACTION_BUTTON = 0
 MAGE_COMBAT_TARGET_GUID = 9990003
 MAGE_COMBAT_TARGET_ENTRY = 361
-MAGE_COMBAT_TARGET_POSITION = (-8954.0, -138.0, 83.5312)
+# Four yards along the creation facing (orientation 0 is +y): a target behind the mage is refused
+# with SPELL_FAILED_UNIT_NOT_INFRONT.
+MAGE_COMBAT_TARGET_POSITION = (-8949.95, -128.5, 83.5312)
 MAGE_COMBAT_TARGET_KEYS = (
     "Return", "slash", *tuple("targetexact"), "space", *vendor_trade_name_keys("Saytr"), "Return",
 )
@@ -3147,6 +3149,12 @@ def mage_combat_world_seed_sql() -> str:
         "`wander_distance`,`MovementType`) "
         f"VALUES ({MAGE_COMBAT_TARGET_GUID},{MAGE_COMBAT_TARGET_ENTRY},0,12,9,{x},{y},{z},0,0);"
     )
+
+
+def mage_combat_character_reset_sql() -> str:
+    """Drops the mage this mode creates, so a retry starts from the creation screen again."""
+    return (f"DELETE FROM `characters` WHERE `account`={ACCOUNT_ID} "
+            f"AND `name`='{CHARACTER_NAME}';")
 
 
 def mage_combat_db_evidence(manifest: Manifest, generation: Generation) -> dict[str, int]:
@@ -3821,6 +3829,8 @@ def run_client(args: argparse.Namespace) -> None:
         apply_creation_class(generation["mode"], generation["inputs"].get("create_class", "warrior"))
         generation.pop("mage_combat_sent", None)
     if generation["mode"] == MAGE_COMBAT_MODE:
+        mysql(manifest, generation, mage_combat_character_reset_sql(),
+              generation["schemas"]["characters"])
         mysql(manifest, generation, mage_combat_world_seed_sql(), generation["schemas"]["world"])
     if generation["mode"] == TRAINER_MODE:
         apply_trainer_seed(generation["mode"])
