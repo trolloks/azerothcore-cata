@@ -6980,6 +6980,16 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     def index(event: dict[str, object]) -> int:
         return int(event["index"])
 
+    capture_end = max(
+        [index(event) for event in casts] + [index(event) for event in combat], default=-1,
+    )
+    if any(start > capture_end or end > capture_end
+           for name, (start, end) in bounds.items() if name != "insufficient"):
+        return False
+    insufficient_start, insufficient_end = bounds["insufficient"]
+    if insufficient_start > capture_end + 1 or insufficient_end > capture_end + 1:
+        return False
+
     def selection_indices(entry: int) -> list[int]:
         return [
             index(event) for event in selections
@@ -7036,7 +7046,13 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
         if any(index(request) < index(event) < index(go) for event in fireball_requests):
             return None
         before = mana_at(index(request))
-        values = [value for at, value in mana if index(request) < at <= index(go)]
+        # Settlement runs to the next cast request (any spell), not just the completion: a refund
+        # after the go but before the next cast would make the completion free.
+        next_request = next(
+            (event for event in casts
+             if event.get("opcode") == "CMSG_CAST_SPELL" and index(event) > index(go)), None)
+        settle_end = index(next_request) if next_request is not None else capture_end + 1
+        values = [value for at, value in mana if index(request) < at < settle_end]
         # The cost is both the lowest and the settled reading: a temporary debit followed by a
         # refund fails the settled check. Regeneration is disabled for this mode, so no tick can
         # lift the last reading.
@@ -7147,13 +7163,13 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     kill_go = next((go for go in reversed(goes) if index(go) < index(kill)), None)
     if kill_go is None or cost_at(kill_go) is None:
         return False
-    # The corpse-clear selection is not the end of the attempt: bind the check to the dead press's
-    # own window and keep it open until the next selection (the drain target), so a cast after the
-    # clear cannot hide inside it.
+    # Bind the dead attempt to the post-kill interval and keep the check open through the drain
+    # selection, so a corpse cast after the client clears the target cannot hide inside it.
     dead_start, dead_end = bounds["dead"]
-    dead_end = next((at for at in any_selections if at > max(dead_start, dead_end)), None)
-    if dead_end is None or dead_end <= index(kill) or not refused(
-            index(kill), dead_end, MAGE_NEGATIVE_TARGETS_DEAD_RESULT):
+    drain_selection = next((at for at in near_selections if at > index(kill)), None)
+    if (drain_selection is None
+            or not (index(kill) < dead_start <= dead_end < drain_selection)
+            or not refused(index(kill), drain_selection, MAGE_NEGATIVE_TARGETS_DEAD_RESULT)):
         return False
 
     # Insufficient mana: the attempt is on the sub-cost side of the boundary, after a drain cast
@@ -8340,6 +8356,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         gcd_go=False, gcd_cost=False, gcd_result=None,
         far_go=False, far_cost=False, far_result=None,
         kill=True, overkill=14, dead_go=False, dead_cost=False, dead_result=None, dead_extra=False,
+        dead_bounds=False, cost_refund=False,
         drain_casts=11, cost=9, insufficient_go=False, insufficient_cost=False,
         insufficient_result=None,
     ):
@@ -8415,6 +8432,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         add(combat, opcode="SMSG_POWER_UPDATE", guid=guid,
             powers=[[0, 112 if gcd_queue else 121]])
         add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=5)
+        if cost_refund:
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 165]])
 
         far_index = add(casts, opcode="CMSG_SET_SELECTION", target=far)
         attempts[1]["start"] = far_index
@@ -8433,9 +8452,11 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=adder, count=7)
         add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, kill_power]])
         add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=7)
+        kill_index = None
         if kill:
-            add(combat, opcode="SMSG_SPELLNONMELEEDAMAGELOG", attacker=guid, target=adder,
-                spell=MAGE_COMBAT_SPELL_ID, damage=15, overkill=overkill, school=4)
+            kill_index = add(combat, opcode="SMSG_SPELLNONMELEEDAMAGELOG", attacker=guid,
+                             target=adder, spell=MAGE_COMBAT_SPELL_ID, damage=15, overkill=overkill,
+                             school=4)
         dead_start = counter
         add(casts, opcode="CMSG_SET_SELECTION", target=0)  # the client clears the dead target
         attempts[2]["start"] = dead_start
@@ -8452,10 +8473,13 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=adder, count=8)
             add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, kill_power - 9]])
             add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=8)
+        if dead_bounds and kill_index is not None:
+            attempts[2]["start"] = kill_index
+            attempts[2]["end"] = kill_index
 
         add(casts, opcode="CMSG_SET_SELECTION", target=near)
-        value, count = kill_power, 9
-        for _ in range(drain_casts):
+        value, count = kill_power - (9 if dead_extra else 0), 9
+        for _ in range(drain_casts - (1 if dead_extra else 0)):
             add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=count)
             add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, value - cost]])
             add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=count)
@@ -8512,6 +8536,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_negative_accepted(negative_chain(dead_cost=True))
     assert not mage_negative_accepted(negative_chain(dead_result=42))
     assert not mage_negative_accepted(negative_chain(dead_extra=True))
+    assert not mage_negative_accepted(negative_chain(dead_bounds=True))
+    assert not mage_negative_accepted(negative_chain(cost_refund=True))
     assert not mage_negative_accepted(negative_chain(drain_casts=9))
     assert not mage_negative_accepted(negative_chain(cost=8))
     assert not mage_negative_accepted(negative_chain(insufficient_go=True))
