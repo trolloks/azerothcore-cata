@@ -3127,9 +3127,10 @@ def character_creation_points(x: int, y: int, width: int, height: int) -> dict[s
         "race_human": (x + round(width * 0.0636), y + round(height * 0.0912)),
         "gender_male": (x + round(width * 0.0854), y + round(height * 0.5566)),
         "class_warrior": (x + round(width * 0.0346), y + round(height * 0.6449)),
-        # class grid is two columns of five (Warrior/Paladin, Hunter/Rogue, Priest/DK, Shaman/Mage,
-        # Warlock/Druid); Mage is the right column's fourth row, calibrated from creation-screen.png
-        "class_mage": (x + round(width * 0.1317), y + round(height * 0.7774)),
+        # class buttons are anchored as two rows of five (Warrior..Priest, then
+        # Death Knight/Shaman/Mage/Warlock/Druid); a race hides the classes it cannot be, so the Mage
+        # (classID 8) sits at row 2, column 3: calibrated from creation-screen.png
+        "class_mage": (x + round(width * 0.1006), y + round(height * 0.6929)),
         "name_field": (x + round(width * 0.5000), y + round(height * 0.8974)),
         "accept": (x + round(width * 0.8972), y + round(height * 0.9357)),
     }
