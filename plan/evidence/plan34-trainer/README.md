@@ -7,8 +7,9 @@ this directory keeps the sanitized verdict (`acceptance.json`).
 ## Pins
 
 - Client build **15595**; reference TrinityCore `c699217775d90794158422387b07a917e161b582`.
-- Branch `plan/34-native-trainer-learning-and-spellbook-persistence`; generation 2 prepared with binaries
-  reporting `ba1ebdc0c`, the C++ unchanged since; the harness at `6599f543e` (verify includes the cast fix).
+- Branch `plan/34-native-trainer-learning-and-spellbook-persistence`; generation 3 prepared with binaries
+  reporting `b513b631d`, which carry the reviewed C++ (including the bounded required-ability copy); the
+  harness is the same commit.
 - Fixture: the shared **Human Warrior**, level 1, seeded with 50000 copper beside **Llane Beshere**
   (creature 911, spawn guid 79964, trainer table id **2**, Class/Warrior, `npcflag 51`).
 - Offer: **Battle Shout, spell 6673** — `trainer_spell` MoneyCost 10 copper, ReqLevel 1, no skill or ability
@@ -28,10 +29,11 @@ this directory keeps the sanitized verdict (`acceptance.json`).
 | --- | --- | --- |
 | trainer frame | `SMSG_TRAINER_LIST` with trainer id **2** | id 2, five rows |
 | state mapping | Battle Shout **available**, the level-locked rows **unavailable** | 6673 state **1**, the other four state **2** (4.x remap) |
+| identity | the list, buy and success name the same runtime NPC (creature entry 911) | same guid for all three, entry 911 |
 | purchase | `CMSG_TRAINER_BUY_SPELL` naming trainer 2 and spell 6673 | exactly one, trainer 2 / 6673 |
-| result | `SMSG_TRAINER_BUY_SUCCEEDED`, `SMSG_LEARNED_SPELL`, no failure | one each, zero failures |
-| usability | `/cast Battle Shout` → `CMSG_CAST_SPELL` + `SMSG_SPELL_GO` | cast 6673, spell-go received |
-| persistence | saved row: spell known, money − listed price, bar slot | `character_spell` 1, `character_action` 1, money **49991** |
+| result | `SMSG_TRAINER_BUY_SUCCEEDED` for the same NPC and `SMSG_LEARNED_SPELL` naming 6673 once, no failure | one each, zero failures |
+| usability | `/cast Battle Shout` → the player's own `CMSG_CAST_SPELL` counter matched by `SMSG_SPELL_GO` (same spell and caster), no `SMSG_CAST_FAILED` | counter 1 / spell 6673 / caster = the fixture player |
+| persistence | saved row: spell known, money − the pinned 9-copper price, bar slot | `character_spell` 1, `character_action` 1, money **49991** |
 
 Screenshots in the run directory: `trainer-before-target.png`, `trainer-after-target.png`,
 `trainer-gossip.png`, `trainer-open.png`, `trainer-selected.png`, `trainer-after-buy.png`,
