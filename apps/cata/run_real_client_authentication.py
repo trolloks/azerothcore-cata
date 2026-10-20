@@ -7071,6 +7071,8 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
              if request.get("opcode") == "CMSG_CAST_SPELL"
              and index(request) > index(go)
              and any(int(other.get("count", -1)) == int(request.get("count", -2))
+                     and int(other.get("spell", 0)) == int(request.get("spell", -1))
+                     and index(other) > index(request)
                      for other in goes_all)),
             None,
         )
@@ -8410,7 +8412,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         kill=True, overkill=14, dead_go=False, dead_cost=False, dead_result=None, dead_extra=False,
         dead_bounds=False, cost_refund=False, duplicate_go=False,
         gcd_narrow=False, failure_after_go=False,
-        far_refund=False, dead_refund=False, unanswered_refund=False,
+        far_refund=False, dead_refund=False, unanswered_refund=False, unanswered_reuse=False,
         drain_casts=11, cost=9, insufficient_go=False, insufficient_cost=False,
         insufficient_result=None, insufficient_refund=False, arcane_refund=False,
     ):
@@ -8593,6 +8595,10 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_NEGATIVE_GCD_SPELL_ID,
                 target=guid, count=count)
             add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, value + 1]])
+        if unanswered_reuse:
+            add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_NEGATIVE_GCD_SPELL_ID,
+                target=guid, count=4)
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 165]])
         attempts.append({
             "scenario": "insufficient", "start": insufficient_start, "end": counter - 1,
         })
@@ -8620,6 +8626,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_negative_accepted(negative_chain(far_result=99, far_refund=True))
     assert not mage_negative_accepted(negative_chain(dead_result=111, dead_refund=True))
     assert not mage_negative_accepted(negative_chain(unanswered_refund=True))
+    assert not mage_negative_accepted(negative_chain(unanswered_reuse=True))
     assert not mage_negative_accepted(negative_chain(cancel=False))
     assert not mage_negative_accepted(negative_chain(interrupt_result=69))
     assert not mage_negative_accepted(negative_chain(interrupt_go=True))
