@@ -1753,6 +1753,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
             '"packets.pkt"'
             if generation["mode"] in (
                 PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE, TRAINER_MODE,
+                MAGE_COMBAT_MODE,
             )
             else '""'
         ),
@@ -1761,7 +1762,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
             "5,Server" if ISSUE97 or generation["mode"] in {
                 BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
                 WALK_RUN_MODE_SWITCH_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE,
-                TRAINER_MODE,
+                TRAINER_MODE, MAGE_COMBAT_MODE,
             }
             else "4,Server"
         ),
@@ -3115,7 +3116,7 @@ MAGE_COMBAT_TARGET_POSITION = (-8954.0, -138.0, 83.5312)
 MAGE_COMBAT_TARGET_KEYS = (
     "Return", "slash", *tuple("targetexact"), "space", *vendor_trade_name_keys("Saytr"), "Return",
 )
-MAGE_COMBAT_TIMEOUT = 20
+MAGE_COMBAT_PROBE_TIMEOUT = 150
 MAGE_COMBAT_LOGOUT_TIMEOUT = 45
 CREATION_CLASS_POINT = "class_warrior"
 
@@ -3175,7 +3176,7 @@ def mage_combat_db_evidence(manifest: Manifest, generation: Generation) -> dict[
 def automate_mage_combat(generation: Generation) -> None:
     """Cast Fireball at the seeded Saytr from the action bar, then log out so the row is saved."""
     time.sleep(4.0)
-    vendor_trade_probe_input(generation)
+    vendor_trade_probe_input(generation, MAGE_COMBAT_PROBE_TIMEOUT)
     selections = vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION")
     for _ in range(5):
         automate_key_sequence(generation, MAGE_COMBAT_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05)
@@ -3342,7 +3343,7 @@ def vendor_trade_wait_any(generation: Generation, opcodes: tuple[str, ...], desc
         f"the vendor round trip did not reach the {description} ({' / '.join(opcodes)})")
 
 
-def vendor_trade_probe_input(generation: Generation) -> None:
+def vendor_trade_probe_input(generation: Generation, timeout: float = VENDOR_TRADE_PROBE_TIMEOUT) -> None:
     """Type a plain chat message until the server echoes it.
 
     The loading screen's dismissal and the window-focus handover can swallow whole key bursts, and a
@@ -3351,7 +3352,7 @@ def vendor_trade_probe_input(generation: Generation) -> None:
     input yet.
     """
     before = vendor_trade_marker_count(generation, "s2c", "SMSG_MESSAGECHAT")
-    deadline = time.monotonic() + VENDOR_TRADE_PROBE_TIMEOUT
+    deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         automate_key_sequence(generation, VENDOR_TRADE_PROBE_KEYS, hold_seconds=0.05, gap_seconds=0.05)
         until = time.monotonic() + 4.0
@@ -4078,9 +4079,9 @@ def run_client(args: argparse.Namespace) -> None:
 def world_log_text(generation: Generation) -> str:
     paths = generation["paths"]
     candidates = [
-        Path(paths["raw_evidence"]) / "WorldServer.log",
         Path(paths["logs"]) / "WorldServer.log",
         Path(paths["logs"]) / "worldserver.stdout.log",
+        Path(paths["raw_evidence"]) / "WorldServer.log",
     ]
     source = next((path for path in candidates if path.is_file()), None)
     return source.read_text(errors="replace") if source else ""
