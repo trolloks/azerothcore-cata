@@ -6989,6 +6989,8 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     insufficient_start, insufficient_end = bounds["insufficient"]
     if insufficient_start > capture_end + 1 or insufficient_end > capture_end + 1:
         return False
+    if len({int(go.get("count", -1)) for go in goes}) != len(goes):
+        return False
 
     def selection_indices(entry: int) -> list[int]:
         return [
@@ -7175,16 +7177,17 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
     # Insufficient mana: the attempt is on the sub-cost side of the boundary, after a drain cast
     # that started in the last full-cost band.
     insufficient_start, insufficient_end = bounds["insufficient"]
-    if (not refused(insufficient_start, insufficient_end, MAGE_NEGATIVE_NO_POWER_RESULT)
-            or (mana_at(insufficient_start) or 0) >= MAGE_NEGATIVE_SPELL_COST):
-        return False
     drain = [go for go in goes if index(go) > near_selections[-1]]
     last = next((go for go in reversed(drain) if index(go) <= insufficient_start), None)
-    if last is None:
+    if last is None or (mana_at(insufficient_start) or 0) >= MAGE_NEGATIVE_SPELL_COST:
         return False
     last_cost = cost_at(last)
     if last_cost is None or not (
             MAGE_NEGATIVE_SPELL_COST <= last_cost < 2 * MAGE_NEGATIVE_SPELL_COST):
+        return False
+    # Bind the remaining suffix, not the supplied terminal bounds: an incorrect result on the real
+    # insufficient request cannot be skipped by moving the attempt to the end of the capture.
+    if not refused(index(last), capture_end, MAGE_NEGATIVE_NO_POWER_RESULT):
         return False
 
     # Every completion costs the same 9, and no failed counter later completes.
@@ -8356,7 +8359,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         gcd_go=False, gcd_cost=False, gcd_result=None,
         far_go=False, far_cost=False, far_result=None,
         kill=True, overkill=14, dead_go=False, dead_cost=False, dead_result=None, dead_extra=False,
-        dead_bounds=False, cost_refund=False,
+        dead_bounds=False, cost_refund=False, duplicate_go=False,
         drain_casts=11, cost=9, insufficient_go=False, insufficient_cost=False,
         insufficient_result=None,
     ):
@@ -8432,8 +8435,11 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         add(combat, opcode="SMSG_POWER_UPDATE", guid=guid,
             powers=[[0, 112 if gcd_queue else 121]])
         add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=5)
+        if duplicate_go:
+            add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=5)
         if cost_refund:
-            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 165]])
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid,
+                powers=[[0, (112 if gcd_queue else 121) + 1]])
 
         far_index = add(casts, opcode="CMSG_SET_SELECTION", target=far)
         attempts[1]["start"] = far_index
@@ -8448,7 +8454,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         attempts[1]["end"] = counter - 1
 
         add(casts, opcode="CMSG_SET_SELECTION", target=adder)
-        kill_power = 103 if gcd_queue else 112
+        kill_power = (103 if gcd_queue else 112) + (1 if cost_refund else 0)
         add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=adder, count=7)
         add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, kill_power]])
         add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=7)
@@ -8538,6 +8544,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_negative_accepted(negative_chain(dead_extra=True))
     assert not mage_negative_accepted(negative_chain(dead_bounds=True))
     assert not mage_negative_accepted(negative_chain(cost_refund=True))
+    assert not mage_negative_accepted(negative_chain(duplicate_go=True))
     assert not mage_negative_accepted(negative_chain(drain_casts=9))
     assert not mage_negative_accepted(negative_chain(cost=8))
     assert not mage_negative_accepted(negative_chain(insufficient_go=True))
