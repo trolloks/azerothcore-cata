@@ -3155,8 +3155,10 @@ def automate_character_creation(generation: Generation) -> None:
             press(character, shift if character.isalpha() else None)
             time.sleep(0.05)
 
-    # The creation screen needs a moment to become interactive after the window gains focus.
+    # The creation screen needs a moment to become interactive after the window gains focus. The capture
+    # is the calibration evidence for the race/class/gender click fractions.
     time.sleep(2)
+    capture_desktop_screenshot(generation, "creation-screen.png")
     points = character_creation_points(x, y, width, height)
     click(points["race_human"])
     click(points["gender_male"])
