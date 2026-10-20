@@ -142,6 +142,7 @@ CHARACTER_SELECTION_MODE = "character-selection"
 INITIAL_POST_LOAD_PACKETS_MODE = "initial-post-load-packets"
 MAP_INSERTION_MODE = "map-insertion-object-bootstrap"
 IN_WORLD_CONTROL_MODE = "in-world-control-bootstrap"
+MAGE_COMBAT_MODE = "mage-combat"
 BASIC_MOVEMENT_MODE = "basic-movement"
 RUN_SPEED_MODE = "run-speed-change"
 GROUND_MOVEMENT_MODE = "ground-movement"
@@ -190,7 +191,7 @@ TARGET_TARGETED_SPELL_CAST_ACTION_BUTTON = 0
 # inserted fresh near CHARACTER_POSITION instead, rather than reusing a creature already spawned
 # nearby - the only ones near this fixture's spawn point are friendly NPCs and non-hostile critters
 # (see above).
-TARGET_TARGETED_SPELL_CAST_DUMMY_GUID = 99990001
+TARGET_TARGETED_SPELL_CAST_DUMMY_GUID = 9990001
 TARGET_TARGETED_SPELL_CAST_DUMMY_ENTRY = 2809
 PLAN32_GEOMETRY_MODE = "plan32-geometry"
 # One acceptance mode carries the remaining Plan 32 stages; each generation runs one stage from a
@@ -309,7 +310,7 @@ CHAT_MESSAGE_TEXT = "chatcheck"
 # killed with the main-hand attack, which routes XP through KillRewarder -> Player::GiveXP.
 # No GM level command and no character-row edit (see .agents/docs/cataclysm-conversion-goal.md).
 LEVEL_UP_MODE = "level-up-progression"
-LEVEL_UP_XP_TARGET_GUID = 0x0A0B0C0D
+LEVEL_UP_XP_TARGET_GUID = 9991001
 # Entry 2809 "Boar": faction 14 (hostile to all), no ScriptName/special AI, so it neither dies on
 # its own nor needs a lifespan limit. Same creature the targeted-spell-cast modes already seed.
 # Overridable because the fixture character is level 1 and the target's level comes from
@@ -466,7 +467,8 @@ POPULATED_CHARACTER_MODES = frozenset({
     INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
     VENDOR_NEGATIVE_MODE, TRAINER_MODE,
 })
-CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *POPULATED_CHARACTER_MODES})
+CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE,
+                             *POPULATED_CHARACTER_MODES})
 CHARACTER_GUID = 0x01020304
 CHARACTER_NAME = "Cataplan"
 CHARACTER_LIST_POSITION = 7
@@ -786,6 +788,8 @@ def plan_number(mode: str) -> str:
         return "25"
     if mode == CHARACTER_CREATION_MODE:
         return "22"
+    if mode == MAGE_COMBAT_MODE:
+        return "35"
     if mode in {GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE}:
         return "23"
     if mode == PLAN32_GEOMETRY_MODE:
@@ -1749,6 +1753,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
             '"packets.pkt"'
             if generation["mode"] in (
                 PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE, TRAINER_MODE,
+                MAGE_COMBAT_MODE,
             )
             else '""'
         ),
@@ -1757,7 +1762,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
             "5,Server" if ISSUE97 or generation["mode"] in {
                 BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
                 WALK_RUN_MODE_SWITCH_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE,
-                TRAINER_MODE,
+                TRAINER_MODE, MAGE_COMBAT_MODE,
             }
             else "4,Server"
         ),
@@ -2144,9 +2149,15 @@ def prepare(args: argparse.Namespace) -> None:
         inputs["plan32_stage"] = stage
     if args.mode == VENDOR_NEGATIVE_MODE:
         inputs["vendor_case"] = vendor_negative_case_or_fail()
+    if args.mode == CHARACTER_CREATION_MODE:
+        creation_class = creation_class_name()
+        if creation_class not in CREATION_CLASSES:
+            raise RuntimeError(f"CREATE_CLASS must be one of {sorted(CREATION_CLASSES)}; got {creation_class!r}")
+        inputs["create_class"] = creation_class
     apply_vendor_trade_seed(args.mode)
     apply_vendor_negative_seed(args.mode)
     apply_trainer_seed(args.mode)
+    apply_creation_class(args.mode, inputs.get("create_class", creation_class_name()))
     print(f"prepare preflight: {time.monotonic() - started:.1f}s", flush=True)
     manifest_path = args.manifest.resolve()
     if manifest_path.exists():
@@ -3093,6 +3104,128 @@ def automate_invalid_target_spell_cast(generation: Generation) -> None:
     capture_desktop_screenshot(generation, "desktop-after-invalid-target-cast.png")
 
 
+CREATION_CLASSES = {"warrior": ("class_warrior", 1), "mage": ("class_mage", 8)}
+# Plan 35: a natively created level-1 Human Mage casts Fireball (133) from action button 0 at a pinned
+# Saytr (361: hostile level 1 with no static spawns anywhere, so /targetexact resolves only ours).
+# Creature guids must stay below 0xFFFFFF: the spawn-id allocator starts at MAX(guid) + 1.
+MAGE_COMBAT_SPELL_ID = 133
+MAGE_COMBAT_ACTION_BUTTON = 0
+MAGE_COMBAT_TARGET_GUID = 9990003
+MAGE_COMBAT_TARGET_ENTRY = 361
+# Four yards from the mage start on the side the cast accepts: a seed on the far side of the mage was
+# refused with SPELL_FAILED_UNIT_NOT_INFRONT (136). The arc test also admits targets whose radius
+# reaches the boundary, so this is evidence of acceptance, not of the exact facing axis.
+MAGE_COMBAT_TARGET_POSITION = (-8949.95, -128.5, 83.5312)
+MAGE_COMBAT_TARGET_KEYS = (
+    "Return", "slash", *tuple("targetexact"), "space", *vendor_trade_name_keys("Saytr"), "Return",
+)
+MAGE_COMBAT_PROBE_TIMEOUT = 150
+CREATION_CLASS_POINT = "class_warrior"
+
+
+def creation_class_name() -> str:
+    """The class the environment asks the native creation flow to pick (default warrior)."""
+    return os.environ.get("CREATE_CLASS", "warrior")
+
+
+def apply_creation_class(mode: str, name: str) -> None:
+    """Select the class the native creation flow clicks and the class the verification expects."""
+    global CREATION_CLASS_POINT, CHARACTER_CLASS
+    if mode not in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}:
+        return
+    if mode == MAGE_COMBAT_MODE:
+        name = "mage"
+    if name not in CREATION_CLASSES:
+        raise RuntimeError(f"CREATE_CLASS must be one of {sorted(CREATION_CLASSES)}; got {name!r}")
+    CREATION_CLASS_POINT, CHARACTER_CLASS = CREATION_CLASSES[name]
+
+
+def mage_combat_world_seed_sql() -> str:
+    """Spawns the pinned Saytr beside the mage's start position."""
+    x, y, z = MAGE_COMBAT_TARGET_POSITION
+    return (
+        f"DELETE FROM `creature` WHERE `guid`={MAGE_COMBAT_TARGET_GUID};"
+        "INSERT INTO `creature` (`guid`,`id`,`map`,`zoneId`,`areaId`,`position_x`,`position_y`,`position_z`,"
+        "`wander_distance`,`MovementType`) "
+        f"VALUES ({MAGE_COMBAT_TARGET_GUID},{MAGE_COMBAT_TARGET_ENTRY},0,12,9,{x},{y},{z},0,0);"
+    )
+
+
+def mage_combat_character_reset(manifest: Manifest, generation: Generation) -> None:
+    """Deletes the fixture account's characters and their `character_*` rows.
+
+    Character tables do not cascade and the 4.3.4 character list ignores `deleteDate`, so a retry has to
+    remove the previous mage's dependent rows itself; otherwise a reused guid inherits them, including the
+    saved action the acceptance reads.
+    """
+    schema = generation["schemas"]["characters"]
+    guids = mysql(
+        manifest, generation,
+        f"SELECT GROUP_CONCAT(`guid`) FROM `characters` WHERE `account`={ACCOUNT_ID};", schema,
+    ).strip()
+    if not guids:
+        return
+    tables = mysql(
+        manifest, generation,
+        "SELECT `TABLE_NAME` FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA`=DATABASE() "
+        "AND `COLUMN_NAME`='guid' AND `TABLE_NAME` LIKE 'character\\_%';", schema,
+    ).split()
+    statements = [f"DELETE FROM `{table}` WHERE `guid` IN ({guids});" for table in tables]
+    statements.append(f"DELETE FROM `characters` WHERE `account`={ACCOUNT_ID};")
+    mysql(manifest, generation, "".join(statements), schema)
+
+
+def mage_combat_db_evidence(manifest: Manifest, generation: Generation) -> dict[str, int]:
+    """The created character's class/race and its action-bar slot, read by name and account."""
+    schema = generation["schemas"]["characters"]
+
+    def scalar(sql: str) -> int:
+        output = mysql(manifest, generation, sql, schema)
+        try:
+            return int(output)
+        except ValueError as error:
+            raise RuntimeError(f"owned character database returned a non-numeric value: {output!r}") from error
+
+    guid = scalar(
+        f"SELECT `guid` FROM `characters` WHERE `account`={ACCOUNT_ID} AND `name`='{CHARACTER_NAME}' "
+        "AND `deleteDate` IS NULL;")
+    return {
+        "guid": guid,
+        "class": scalar(f"SELECT `class` FROM `characters` WHERE `guid`={guid};"),
+        "race": scalar(f"SELECT `race` FROM `characters` WHERE `guid`={guid};"),
+        "action_count": scalar(
+            f"SELECT COUNT(*) FROM `character_action` WHERE `guid`={guid} "
+            f"AND `button`={MAGE_COMBAT_ACTION_BUTTON} AND `action`={MAGE_COMBAT_SPELL_ID} AND `type`=0;"),
+    }
+
+
+def automate_mage_combat(generation: Generation) -> None:
+    """Cast Fireball at the seeded Saytr from the action bar."""
+    time.sleep(4.0)
+    vendor_trade_probe_input(generation, MAGE_COMBAT_PROBE_TIMEOUT)
+    selections = vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION")
+    for _ in range(5):
+        automate_key_sequence(generation, MAGE_COMBAT_TARGET_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+        time.sleep(1.2)  # let the client resolve the name and register the target
+        if vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION") > selections:
+            break
+    else:
+        capture_desktop_screenshot(generation, "mage-after-target.png")
+        raise RuntimeError("mage target macro did not select the Saytr")
+    capture_desktop_screenshot(generation, "mage-target.png")
+
+    # Both baselines precede the keypress: the responses can arrive before the helper returns.
+    casts = vendor_trade_marker_count(generation, "c2s", "CMSG_CAST_SPELL") + 1
+    goes = vendor_trade_marker_count(generation, "s2c", "SMSG_SPELL_GO") + 1
+    automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
+    vendor_trade_wait(generation, "c2s", "CMSG_CAST_SPELL", "cast request", casts)
+    vendor_trade_wait(generation, "s2c", "SMSG_SPELL_GO", "spell go", goes)
+    # The Saytr keeps the mage in combat, which refuses /logout; the harness stops the client and the
+    # action bar was saved when the character was created.
+    time.sleep(1.0)  # let the damage log and power update land
+    capture_desktop_screenshot(generation, "mage-after-cast.png")
+
+
 def character_creation_points(x: int, y: int, width: int, height: int) -> dict[str, tuple[int, int]]:
     # Fractions calibrated against a 1792x1008 owned client window on the Cataclysm 15595 creation
     # screen: Alliance/Human is the first race portrait, Warrior the first class icon (both
@@ -3102,6 +3235,10 @@ def character_creation_points(x: int, y: int, width: int, height: int) -> dict[s
         "race_human": (x + round(width * 0.0636), y + round(height * 0.0912)),
         "gender_male": (x + round(width * 0.0854), y + round(height * 0.5566)),
         "class_warrior": (x + round(width * 0.0346), y + round(height * 0.6449)),
+        # class buttons are anchored as two rows of five (Warrior..Priest, then
+        # Death Knight/Shaman/Mage/Warlock/Druid); a race hides the classes it cannot be, so the Mage
+        # (classID 8) sits at row 2, column 3: calibrated from creation-screen.png
+        "class_mage": (x + round(width * 0.1006), y + round(height * 0.6929)),
         "name_field": (x + round(width * 0.5000), y + round(height * 0.8974)),
         "accept": (x + round(width * 0.8972), y + round(height * 0.9357)),
     }
@@ -3155,12 +3292,16 @@ def automate_character_creation(generation: Generation) -> None:
             press(character, shift if character.isalpha() else None)
             time.sleep(0.05)
 
-    # The creation screen needs a moment to become interactive after the window gains focus.
+    # The creation screen needs a moment to become interactive after the window gains focus. The capture
+    # is the calibration evidence for the race/class/gender click fractions.
     time.sleep(2)
+    capture_desktop_screenshot(generation, "creation-screen.png")
     points = character_creation_points(x, y, width, height)
     click(points["race_human"])
     click(points["gender_male"])
-    click(points["class_warrior"])
+    click(points[CREATION_CLASS_POINT])
+    time.sleep(0.6)  # let the class panel redraw
+    capture_desktop_screenshot(generation, "creation-class.png")
     click(points["name_field"])
     enter(CHARACTER_NAME)
     # Give the client a moment to render the committed name before Accept, matching the
@@ -3223,7 +3364,7 @@ def vendor_trade_wait_any(generation: Generation, opcodes: tuple[str, ...], desc
         f"the vendor round trip did not reach the {description} ({' / '.join(opcodes)})")
 
 
-def vendor_trade_probe_input(generation: Generation) -> None:
+def vendor_trade_probe_input(generation: Generation, timeout: float = VENDOR_TRADE_PROBE_TIMEOUT) -> None:
     """Type a plain chat message until the server echoes it.
 
     The loading screen's dismissal and the window-focus handover can swallow whole key bursts, and a
@@ -3232,7 +3373,7 @@ def vendor_trade_probe_input(generation: Generation) -> None:
     input yet.
     """
     before = vendor_trade_marker_count(generation, "s2c", "SMSG_MESSAGECHAT")
-    deadline = time.monotonic() + VENDOR_TRADE_PROBE_TIMEOUT
+    deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         automate_key_sequence(generation, VENDOR_TRADE_PROBE_KEYS, hold_seconds=0.05, gap_seconds=0.05)
         until = time.monotonic() + 4.0
@@ -3556,6 +3697,54 @@ def automate_trainer_learn(generation: Generation) -> None:
     capture_desktop_screenshot(generation, "trainer-after-logout.png")
 
 
+def combat_packet_events(generation: Generation) -> list[dict[str, object]]:
+    """Spell damage logs and power updates from this run's capture, in arrival order.
+
+    Plan 35 checks mana and damage from the wire, not from a UI reading. The layouts are identical in AC
+    and the 4.x pin: the damage log is packed target guid, packed attacker guid, uint32 spell, uint32 damage,
+    uint32 overkill, uint8 school, then the absorb/resist/periodic/unused/blocked/hit-info tail; the power
+    update is packed guid, uint32 count, then uint8 power type + int32 value per entry.
+    """
+    path = Path(generation["paths"]["logs"]) / "packets.pkt"
+    if not path.is_file():
+        return []
+    data = path.read_bytes()
+    events: list[dict[str, object]] = []
+    offset = PKT_LOG_HEADER_SIZE
+    packet = 0
+    while offset + PKT_PACKET_HEADER_SIZE <= len(data):
+        direction, _, ticks, optional_size, length = struct.unpack_from("<IIIII", data, offset)
+        if optional_size != 20 or length > 65535 or length < 4:
+            raise RuntimeError(f"combat packet log desynchronised at byte {offset}")
+        opcode = struct.unpack_from("<I", data, offset + 40)[0]
+        payload = data[offset + 44:offset + 40 + length]
+        if direction != 0x47534D43 and opcode == SMSG_SPELLNONMELEEDAMAGELOG_OPCODE and len(payload) >= 24:
+            target, cursor = read_packed_guid(payload, 0)
+            attacker, cursor = read_packed_guid(payload, cursor)
+            spell, damage, overkill = struct.unpack_from("<III", payload, cursor)
+            events.append({
+                "opcode": "SMSG_SPELLNONMELEEDAMAGELOG", "target": target, "attacker": attacker,
+                "spell": spell, "damage": damage, "overkill": overkill, "school": payload[cursor + 12],
+                "ticks": ticks, "index": packet,
+            })
+        elif direction != 0x47534D43 and opcode == SMSG_POWER_UPDATE_OPCODE and len(payload) >= 8:
+            guid, cursor = read_packed_guid(payload, 0)
+            count = struct.unpack_from("<I", payload, cursor)[0]
+            cursor += 4
+            powers: list[list[int]] = []
+            for _ in range(min(count, 10)):
+                if cursor + 5 > len(payload):
+                    break
+                powers.append([payload[cursor], struct.unpack_from("<i", payload, cursor + 1)[0]])
+                cursor += 5
+            events.append({
+                "opcode": "SMSG_POWER_UPDATE", "guid": guid, "powers": powers, "ticks": ticks, "index": packet,
+            })
+        offset += PKT_PACKET_HEADER_SIZE + (length - 4)
+        packet += 1
+    return events
+
+
 def character_row_count(manifest: Manifest, generation: Generation) -> int:
     output = mysql(
         manifest, generation,
@@ -3649,6 +3838,12 @@ def run_client(args: argparse.Namespace) -> None:
         generation["vendor_case"] = case
         apply_vendor_negative_seed(generation["mode"])
         mysql(manifest, generation, vendor_negative_seed_sql(case), generation["schemas"]["characters"])
+    if generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}:
+        apply_creation_class(generation["mode"], generation["inputs"].get("create_class", "warrior"))
+        generation.pop("mage_combat_sent", None)
+    if generation["mode"] == MAGE_COMBAT_MODE:
+        mage_combat_character_reset(manifest, generation)
+        mysql(manifest, generation, mage_combat_world_seed_sql(), generation["schemas"]["world"])
     if generation["mode"] == TRAINER_MODE:
         apply_trainer_seed(generation["mode"])
         mysql(manifest, generation, trainer_seed_sql(), generation["schemas"]["characters"])
@@ -3734,7 +3929,7 @@ def run_client(args: argparse.Namespace) -> None:
                     generation["mode"] in {CHARACTER_SELECTION_MODE, *POST_MARKER_MODES}
                     and character_hold_started is not None and not selection_sent
                 ):
-                    if generation["mode"] == CHARACTER_CREATION_MODE:
+                    if generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}:
                         automate_character_creation(generation)
                         generation["selection_action"] = "create"
                     else:
@@ -3840,10 +4035,12 @@ def run_client(args: argparse.Namespace) -> None:
                         capture_runtime(generation)
                         generation["post_marker_snapshots"] = 1
                         post_marker_hold_started = time.monotonic()
-                        if generation["mode"] == CHARACTER_CREATION_MODE:
+                        if generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}:
                             automate_character_selection(generation)
-                    if generation["mode"] == CHARACTER_CREATION_MODE:
+                    if generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}:
                         if post_marker_hold_started is not None and player_login_callbacks(generation):
+                            if generation["mode"] == MAGE_COMBAT_MODE:
+                                automate_mage_combat(generation)
                             capture_runtime(generation)
                             generation["post_marker_snapshots"] = 2
                             generation["post_marker_hold_seconds"] = time.monotonic() - post_marker_hold_started
@@ -3904,9 +4101,9 @@ def run_client(args: argparse.Namespace) -> None:
 def world_log_text(generation: Generation) -> str:
     paths = generation["paths"]
     candidates = [
-        Path(paths["raw_evidence"]) / "WorldServer.log",
         Path(paths["logs"]) / "WorldServer.log",
         Path(paths["logs"]) / "worldserver.stdout.log",
+        Path(paths["raw_evidence"]) / "WorldServer.log",
     ]
     source = next((path for path in candidates if path.is_file()), None)
     return source.read_text(errors="replace") if source else ""
@@ -4210,6 +4407,8 @@ CMSG_BUYBACK_ITEM_OPCODE = 0x6C17
 CMSG_BUY_ITEM_OPCODE = 0x0736
 CMSG_TRAINER_BUY_SPELL_OPCODE = 0x4415
 SMSG_TRAINER_LIST_OPCODE = 0x4414
+SMSG_SPELLNONMELEEDAMAGELOG_OPCODE = 0x4315
+SMSG_POWER_UPDATE_OPCODE = 0x4A07
 SMSG_TRAINER_BUY_SUCCEEDED_OPCODE = 0x6A05
 SMSG_LEARNED_SPELL_OPCODE = 0x58A2
 SMSG_BUY_FAILED_OPCODE = 0x6435
@@ -5771,6 +5970,7 @@ POST_MARKER_MODES = frozenset({
     GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE, CHARACTER_CREATION_MODE,
     BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
     LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE, TRAINER_MODE,
+    MAGE_COMBAT_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -5790,6 +5990,7 @@ POST_MARKER_COUNTERS = {
     VENDOR_NEGATIVE_MODE: lambda generation: vendor_trade_marker_count(
         generation, "s2c", "SMSG_VENDOR_INVENTORY"),
     TRAINER_MODE: lambda generation: vendor_trade_marker_count(generation, "s2c", "SMSG_TRAINER_LIST"),
+    MAGE_COMBAT_MODE: character_creation_marker_count,
     INVALID_TARGET_SPELL_CAST_MODE: invalid_target_spell_cast_marker_count,
     LEVEL_UP_MODE: level_up_settle_signal,
     PLAN32_GEOMETRY_MODE: plan32_progress_marker_count,
@@ -5917,6 +6118,7 @@ def sanitized_evidence(
     vendor_trade_evidence_value: dict[str, int] | None = None,
     vendor_negative_evidence_value: dict[str, object] | None = None,
     trainer_evidence_value: dict[str, int] | None = None,
+    mage_combat_evidence_value: dict[str, int] | None = None,
 ) -> dict[str, object]:
     auth_index = next(
         (index for index, item in enumerate(transcript) if item["opcode"] == "SMSG_AUTH_RESPONSE"), None,
@@ -5939,7 +6141,8 @@ def sanitized_evidence(
     initial_packets_mode = generation["mode"] == INITIAL_POST_LOAD_PACKETS_MODE
     map_insertion_mode = generation["mode"] == MAP_INSERTION_MODE
     run_speed_mode = generation["mode"] == RUN_SPEED_MODE
-    creation_mode = generation["mode"] == CHARACTER_CREATION_MODE
+    creation_mode = generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}
+    mage_combat_mode = generation["mode"] == MAGE_COMBAT_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
     jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
@@ -5973,7 +6176,8 @@ def sanitized_evidence(
     forbidden = sorted({item["opcode"] for item in transcript if item["opcode"] in forbidden_opcodes})
     # Parsed once: the cast correlation, the fixture witness and the geometry report all read the
     # same capture, and the evidence records what they read.
-    plan32_events = plan32_packet_events(generation) if (plan32_geometry_mode or trainer_mode) else []
+    plan32_events = plan32_packet_events(generation) if (
+        plan32_geometry_mode or trainer_mode or mage_combat_mode) else []
     vendor_events = vendor_trade_packet_events(generation) if vendor_marker_mode else []
     vendor_sells = [event for event in vendor_events if event["opcode"] == "CMSG_SELL_ITEM"]
     vendor_buybacks = [event for event in vendor_events if event["opcode"] == "CMSG_BUYBACK_ITEM"]
@@ -5998,6 +6202,7 @@ def sanitized_evidence(
             else "vendor_trade_pass_candidate" if vendor_trade_mode and "characters_completed" in milestones
             else "vendor_negative_pass_candidate" if vendor_negative_mode and "characters_completed" in milestones
             else "trainer_learn_pass_candidate" if trainer_mode and "characters_completed" in milestones
+            else "mage_combat_pass_candidate" if mage_combat_mode and "characters_completed" in milestones
             else "plan32_geometry_pass_candidate" if plan32_geometry_mode and "characters_completed" in milestones
             else "basic_movement_pass_candidate" if basic_movement_mode and "characters_completed" in milestones
             else "in_world_control_bootstrap_candidate" if in_world_control_mode and "characters_completed" in milestones
@@ -6101,6 +6306,8 @@ def sanitized_evidence(
             if trainer_mode else None
         ),
         "trainer": trainer_evidence_value if trainer_mode else None,
+        "mage_combat": mage_combat_evidence_value if mage_combat_mode else None,
+        "combat_events": combat_packet_events(generation) if mage_combat_mode else None,
         "vendor_negative": vendor_negative_evidence_value if vendor_negative_mode else None,
         "vendor_sell_item_counter": vendor_sells[0]["item_counter"] if vendor_sells else None,
         "vendor_buyback_slot": vendor_buybacks[0]["slot"] if vendor_buybacks else None,
@@ -6136,7 +6343,7 @@ def sanitized_evidence(
                 if event["opcode"] in {
                     "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO",
                 }
-            ] if (plan32_geometry_mode or trainer_mode) else None
+            ] if (plan32_geometry_mode or trainer_mode or mage_combat_mode) else None
         ),
         "plan32_settle_z": plan32_settle_z(generation) if plan32_geometry_mode else None,
         "plan32_player_samples": (
@@ -6194,10 +6401,75 @@ def sanitized_evidence(
     }
 
 
+def mage_combat_accepted(evidence: dict[str, object]) -> bool:
+    """The cast chain: request -> mana drop -> spell go -> fire damage, bound to the created mage."""
+    mage = evidence["mage_combat"] or {}
+    player_guid = int(mage.get("guid", 0))
+    combat = evidence["combat_events"] or []
+    casts = evidence["plan32_casts"] or []
+    requests = [
+        event for event in casts
+        if event.get("opcode") == "CMSG_CAST_SPELL"
+        and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
+    ]
+    request = requests[-1] if requests else None
+    request_index = int(request["index"]) if request else -1
+    request_target = int(request.get("target", 0)) if request else 0
+    selections = [
+        event for event in casts
+        if event.get("opcode") == "CMSG_SET_SELECTION" and int(event.get("index", 0)) < request_index
+    ]
+    selection = selections[-1] if selections else None
+    spell_goes = [
+        event for event in casts
+        if event.get("opcode") == "SMSG_SPELL_GO"
+        and int(event.get("caster", 0)) == player_guid
+        and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
+        and int(event.get("index", 0)) > request_index
+    ]
+    go_index = int(spell_goes[0]["index"]) if spell_goes else -1
+    damage = [
+        event for event in combat
+        if event["opcode"] == "SMSG_SPELLNONMELEEDAMAGELOG"
+        and int(event["attacker"]) == player_guid
+        and int(event["spell"]) == MAGE_COMBAT_SPELL_ID
+        and int(event["target"]) == request_target
+        and int(event["damage"]) >= 1
+        and int(event["school"]) == 4
+        and int(event["index"]) > go_index
+    ]
+    mana = [
+        (int(event["index"]), int(power[1])) for event in combat
+        if event["opcode"] == "SMSG_POWER_UPDATE" and int(event["guid"]) == player_guid
+        for power in event["powers"] if int(power[0]) == 0
+    ]
+    # the cast must cost mana: compare the last value before the request with the first one the
+    # cast produces (before the damage log). Login/creation initialization is excluded.
+    mana_before = [value for index, value in mana if index < request_index]
+    damage_index = int(damage[0]["index"]) if damage else -1
+    mana_after = [value for index, value in mana if request_index < index < damage_index]
+    return (
+        player_guid != 0
+        and int(mage.get("class", 0)) == CREATION_CLASSES["mage"][1]
+        and int(mage.get("race", 0)) == CHARACTER_RACE
+        and int(mage.get("action_count", 0)) == 1
+        and request is not None
+        and request_target != 0
+        and selection is not None
+        and int(selection.get("target", 0)) == request_target
+        and ((request_target >> 24) & 0xFFFFFF) == MAGE_COMBAT_TARGET_ENTRY
+        and bool(spell_goes)
+        and bool(damage)
+        and bool(mana_before)
+        and bool(mana_after)
+        and mana_after[0] < mana_before[-1]
+    )
+
 def verify(args: argparse.Namespace) -> None:
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
     generation = active_generation(manifest)
+    apply_creation_class(generation["mode"], generation["inputs"].get("create_class", "warrior"))
     if generation["state"] not in {"observed", "accepted", "inconclusive"}:
         raise RuntimeError(f"cannot verify from state {generation['state']}")
     raw_log = Path(generation["paths"]["raw_evidence"]) / "connection.log"
@@ -6211,7 +6483,8 @@ def verify(args: argparse.Namespace) -> None:
     initial_packets_mode = generation["mode"] == INITIAL_POST_LOAD_PACKETS_MODE
     map_insertion_mode = generation["mode"] == MAP_INSERTION_MODE
     run_speed_mode = generation["mode"] == RUN_SPEED_MODE
-    creation_mode = generation["mode"] == CHARACTER_CREATION_MODE
+    creation_mode = generation["mode"] in {CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE}
+    mage_combat_mode = generation["mode"] == MAGE_COMBAT_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
     jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
@@ -6288,6 +6561,9 @@ def verify(args: argparse.Namespace) -> None:
             vendor_negative_db_evidence(manifest, generation) if vendor_negative_mode else None
         ),
         trainer_evidence_value=trainer_db_evidence(manifest, generation) if trainer_mode else None,
+        mage_combat_evidence_value=(
+            mage_combat_db_evidence(manifest, generation) if mage_combat_mode else None
+        ),
     )
     unchanged = protected_inputs_unchanged(manifest, generation)
     generation["isolation_unchanged"] = unchanged
@@ -6411,6 +6687,8 @@ def verify(args: argparse.Namespace) -> None:
                 and vendor.get("repaired_durability", 0) == VENDOR_TRADE_DAMAGED_MAX_DURABILITY
                 and 0 < vendor.get("money", 0) < VENDOR_TRADE_MONEY
             )
+        if mage_combat_mode:
+            character_ok = character_ok and mage_combat_accepted(evidence)
         if trainer_mode:
             trainer = evidence["trainer"] or {}
             trainer_list = evidence["trainer_list"] or {}
@@ -6801,6 +7079,7 @@ def verify(args: argparse.Namespace) -> None:
         if character_ok:
             evidence["outcome"] = (
                 "level_up_progression_pass" if level_up_mode
+                else "mage_combat_pass" if mage_combat_mode
                 else "character_creation_pass" if creation_mode
                 else "run_speed_change_pass" if run_speed_mode
                 else "basic_spell_cast_pass" if basic_spell_cast_mode
@@ -7146,6 +7425,43 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         creation_generation, [name for name, _ in CHARACTER_MILESTONES],
         [{"direction": "c2s", "opcode": "CMSG_CHAR_DELETE"}],
     )["forbidden_opcodes"]
+    # Plan 35: the cast chain must hang together — the request names the victim, the cast costs mana,
+    # the spell go belongs to the mage and the damage is fire on that same victim.
+    target_guid = (MAGE_COMBAT_TARGET_ENTRY << 24) | 42
+
+    def mage_chain(request=True, spell_go=True, caster=7, damage_target=target_guid, school=4,
+                   cast_mana=True, selection=True, selection_target=target_guid):
+        casts = []
+        if selection:
+            casts.append({"opcode": "CMSG_SET_SELECTION", "index": 9, "target": selection_target})
+        if request:
+            casts.append({"opcode": "CMSG_CAST_SPELL", "index": 10, "spell": MAGE_COMBAT_SPELL_ID,
+                          "target": target_guid})
+        if spell_go:
+            casts.append({"opcode": "SMSG_SPELL_GO", "index": 12, "spell": MAGE_COMBAT_SPELL_ID,
+                          "caster": caster})
+        events = [
+            {"opcode": "SMSG_POWER_UPDATE", "index": 5, "guid": 7, "powers": [[0, 100]]},
+            {"opcode": "SMSG_SPELLNONMELEEDAMAGELOG", "index": 13, "attacker": 7,
+             "spell": MAGE_COMBAT_SPELL_ID, "target": damage_target, "damage": 3, "school": school},
+        ]
+        if cast_mana:
+            events.append({"opcode": "SMSG_POWER_UPDATE", "index": 11, "guid": 7, "powers": [[0, 96]]})
+        return {
+            "mage_combat": {"guid": 7, "class": 8, "race": 1, "action_count": 1},
+            "plan32_casts": casts,
+            "combat_events": events,
+        }
+
+    assert mage_combat_accepted(mage_chain())
+    assert not mage_combat_accepted(mage_chain(request=False))
+    assert not mage_combat_accepted(mage_chain(spell_go=False))
+    assert not mage_combat_accepted(mage_chain(caster=8))
+    assert not mage_combat_accepted(mage_chain(cast_mana=False))
+    assert not mage_combat_accepted(mage_chain(damage_target=target_guid + 1))
+    assert not mage_combat_accepted(mage_chain(school=2))
+    assert not mage_combat_accepted(mage_chain(selection=False))
+    assert not mage_combat_accepted(mage_chain(selection_target=target_guid + 1))
     assert plan_number(CHARACTER_CREATION_MODE) == "22"
     populated_generation = dict(character_generation)
     populated_generation["mode"] = POPULATED_MODE
@@ -7984,6 +8300,26 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert abs(halfway[0] - (create_position[0] + 50.0)) < 0.01
     assert abs(halfway[1] - create_position[1]) < 0.01 and halfway[2] == create_position[2]
     assert abs(frozen[0] - (create_position[0] + 60.0)) < 0.01
+    # Plan 35: the spell-damage-log and power-update decoders (identical layouts in AC and the pin).
+    damage_log = (
+        pack_guid(CHARACTER_GUID) + pack_guid(real_guid)
+        + struct.pack("<III", 133, 17, 0) + bytes([4]) + bytes(4 + 4 + 1 + 1 + 4 + 4 + 1)
+    )
+    power_log = pack_guid(CHARACTER_GUID) + struct.pack("<I", 1) + bytes([0]) + struct.pack("<i", 83)
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary) / "logs"
+        logs.mkdir()
+        (logs / "packets.pkt").write_bytes(
+            b"PKT" + bytes(63)
+            + pkt(S2C, SMSG_SPELLNONMELEEDAMAGELOG_OPCODE, damage_log, ticks=10)
+            + pkt(S2C, SMSG_POWER_UPDATE_OPCODE, power_log, ticks=11)
+        )
+        combat_events = combat_packet_events({"paths": {"logs": str(logs)}})
+    assert [event["opcode"] for event in combat_events] == [
+        "SMSG_SPELLNONMELEEDAMAGELOG", "SMSG_POWER_UPDATE"], combat_events
+    assert combat_events[0]["attacker"] == real_guid and combat_events[0]["damage"] == 17
+    assert combat_events[0]["spell"] == 133 and combat_events[0]["overkill"] == 0
+    assert combat_events[1]["guid"] == CHARACTER_GUID and combat_events[1]["powers"] == [[0, 83]]
     # The chase window starts at the run leg: an approach spline ending within arrival range of
     # the player's final position is not the chase, so the executed path is the chase spline's
     # own L-shaped detour (30 m against a 10 m straight line). A swing only counts once the path
@@ -8592,7 +8928,8 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--xauthority", type=Path)
     prepare_parser.add_argument(
         "--mode", choices=(
-            "no-login", "authentication", "character-screen", CHARACTER_CREATION_MODE, POPULATED_MODE,
+            "no-login", "authentication", "character-screen", CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE,
+            POPULATED_MODE,
             CHARACTER_SELECTION_MODE,
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,
             RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE,
