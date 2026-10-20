@@ -6415,6 +6415,11 @@ def mage_combat_accepted(evidence: dict[str, object]) -> bool:
     request = requests[-1] if requests else None
     request_index = int(request["index"]) if request else -1
     request_target = int(request.get("target", 0)) if request else 0
+    selections = [
+        event for event in casts
+        if event.get("opcode") == "CMSG_SET_SELECTION" and int(event.get("index", 0)) < request_index
+    ]
+    selection = selections[-1] if selections else None
     spell_goes = [
         event for event in casts
         if event.get("opcode") == "SMSG_SPELL_GO"
@@ -6450,6 +6455,8 @@ def mage_combat_accepted(evidence: dict[str, object]) -> bool:
         and int(mage.get("action_count", 0)) == 1
         and request is not None
         and request_target != 0
+        and selection is not None
+        and int(selection.get("target", 0)) == request_target
         and ((request_target >> 24) & 0xFFFFFF) == MAGE_COMBAT_TARGET_ENTRY
         and bool(spell_goes)
         and bool(damage)
@@ -7423,8 +7430,10 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     target_guid = (MAGE_COMBAT_TARGET_ENTRY << 24) | 42
 
     def mage_chain(request=True, spell_go=True, caster=7, damage_target=target_guid, school=4,
-                   cast_mana=True):
+                   cast_mana=True, selection=True, selection_target=target_guid):
         casts = []
+        if selection:
+            casts.append({"opcode": "CMSG_SET_SELECTION", "index": 9, "target": selection_target})
         if request:
             casts.append({"opcode": "CMSG_CAST_SPELL", "index": 10, "spell": MAGE_COMBAT_SPELL_ID,
                           "target": target_guid})
@@ -7451,6 +7460,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_combat_accepted(mage_chain(cast_mana=False))
     assert not mage_combat_accepted(mage_chain(damage_target=target_guid + 1))
     assert not mage_combat_accepted(mage_chain(school=2))
+    assert not mage_combat_accepted(mage_chain(selection=False))
+    assert not mage_combat_accepted(mage_chain(selection_target=target_guid + 1))
     assert plan_number(CHARACTER_CREATION_MODE) == "22"
     populated_generation = dict(character_generation)
     populated_generation["mode"] = POPULATED_MODE

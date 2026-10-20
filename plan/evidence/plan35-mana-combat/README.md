@@ -33,9 +33,9 @@ keeps the sanitized verdict (`acceptance.json`).
 | --- | --- | --- |
 | creation | the native flow creates the mage | one `SMSG_CHAR_CREATE`, creation marker count **1** |
 | identity | row read by name/account: class 8, race 1, Fireball on button 0 | guid 1, class 8, race 1, `character_action` count **1** |
-| selection | `/targetexact Saytr` resolves the seeded creature | `CMSG_SET_SELECTION` after the marker; cast target high 24 bits = **361** |
+| selection | `/targetexact Saytr` resolves the seeded creature | `CMSG_SET_SELECTION` index **719** names the Saytr guid (entry 361), before the cast |
 | request | `CMSG_CAST_SPELL` naming spell 133 and the Saytr | index **737**, spell 133, target = the Saytr guid |
-| correlation | the request names the victim and the damage log carries that same guid | request and damage target `0xf130000169000400` (entry 361) |
+| correlation | selection, request and damage log all name the same victim | selection 719, request 737 and damage 753 target `0xf130000169000400` (entry 361) |
 | resource | mana falls at cast completion: last value before the request vs the first after it | `SMSG_POWER_UPDATE` index **748**: **165 → 156** |
 | cast | `SMSG_SPELL_GO` for the mage and spell 133 | index **749**, caster = the mage, spell 133 |
 | damage | `SMSG_SPELLNONMELEEDAMAGELOG` from the mage to entry 361, fire school, damage >= 1 | index **753**, attacker = the mage, spell 133, **15** damage, school **4** |
