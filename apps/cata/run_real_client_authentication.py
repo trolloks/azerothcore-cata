@@ -3151,15 +3151,28 @@ def mage_combat_world_seed_sql() -> str:
     )
 
 
-def mage_combat_character_reset_sql() -> str:
-    """Retires the mage this mode creates, so a retry can create it again.
+def mage_combat_character_reset(manifest: Manifest, generation: Generation) -> None:
+    """Deletes the fixture account's characters and their `character_*` rows.
 
-    The row keeps its guid: character tables do not cascade, so deleting it would let the replacement
-    reuse the guid and inherit stale action/spell rows, and with them the saved-action witness.
+    Character tables do not cascade and the 4.3.4 character list ignores `deleteDate`, so a retry has to
+    remove the previous mage's dependent rows itself; otherwise a reused guid inherits them, including the
+    saved action the acceptance reads.
     """
-    return (f"UPDATE `characters` SET `name`=CONCAT('Old', `guid`), "
-            f"`deleteDate`=UNIX_TIMESTAMP() WHERE `account`={ACCOUNT_ID} "
-            f"AND `name`='{CHARACTER_NAME}' AND `deleteDate` IS NULL;")
+    schema = generation["schemas"]["characters"]
+    guids = mysql(
+        manifest, generation,
+        f"SELECT GROUP_CONCAT(`guid`) FROM `characters` WHERE `account`={ACCOUNT_ID};", schema,
+    ).strip()
+    if not guids:
+        return
+    tables = mysql(
+        manifest, generation,
+        "SELECT `TABLE_NAME` FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA`=DATABASE() "
+        "AND `COLUMN_NAME`='guid' AND `TABLE_NAME` LIKE 'character\\_%';", schema,
+    ).split()
+    statements = [f"DELETE FROM `{table}` WHERE `guid` IN ({guids});" for table in tables]
+    statements.append(f"DELETE FROM `characters` WHERE `account`={ACCOUNT_ID};")
+    mysql(manifest, generation, "".join(statements), schema)
 
 
 def mage_combat_db_evidence(manifest: Manifest, generation: Generation) -> dict[str, int]:
@@ -3829,8 +3842,7 @@ def run_client(args: argparse.Namespace) -> None:
         apply_creation_class(generation["mode"], generation["inputs"].get("create_class", "warrior"))
         generation.pop("mage_combat_sent", None)
     if generation["mode"] == MAGE_COMBAT_MODE:
-        mysql(manifest, generation, mage_combat_character_reset_sql(),
-              generation["schemas"]["characters"])
+        mage_combat_character_reset(manifest, generation)
         mysql(manifest, generation, mage_combat_world_seed_sql(), generation["schemas"]["world"])
     if generation["mode"] == TRAINER_MODE:
         apply_trainer_seed(generation["mode"])
