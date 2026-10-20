@@ -6961,8 +6961,10 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
         if event.get("opcode") == "SMSG_CAST_FAILED"
         and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
     ]
-    all_failures = [
-        event for event in casts if event.get("opcode") == "SMSG_CAST_FAILED"
+    goes_all = [
+        event for event in casts
+        if event.get("opcode") == "SMSG_SPELL_GO"
+        and int(event.get("caster", 0)) == player_guid
     ]
     cancels = [int(event["index"]) for event in casts if event.get("opcode") == "CMSG_CANCEL_CAST"]
     selections = [event for event in casts if event.get("opcode") == "CMSG_SET_SELECTION"]
@@ -7061,23 +7063,18 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
         before = mana_at(index(request))
         # Settlement runs to the next cast request (any spell), not just the completion: a refund
         # after the go but before the next cast would make the completion free.
-        next_request = next(
-            (event for event in casts
-             if event.get("opcode") == "CMSG_CAST_SPELL" and index(event) > index(go)), None)
-        # A failed next request does not consume the pool: settle through its scenario boundary when
-        # a later cast succeeds, otherwise through the terminal capture. Match failures across all
-        # spells, and never let a target clear end the terminal settlement.
-        if next_request is not None and any(
-                int(failure.get("count", -1)) == int(next_request.get("count", -2))
-                for failure in all_failures):
-            later_success = any(index(go) > index(next_request) for go in goes)
-            boundary = (
-                next((at for at in any_selections if at > index(next_request)), None)
-                if later_success else None
-            )
-            settle_end = boundary if boundary is not None else capture_end + 1
-        else:
-            settle_end = index(next_request) if next_request is not None else capture_end + 1
+        # Settlement ends at the next request with a verified completion, not at a failed or
+        # unanswered request and not at a target clear; a delayed refund before the next consuming
+        # cast would otherwise reduce this cast's net cost.
+        consuming = next(
+            (request for request in casts
+             if request.get("opcode") == "CMSG_CAST_SPELL"
+             and index(request) > index(go)
+             and any(int(other.get("count", -1)) == int(request.get("count", -2))
+                     for other in goes_all)),
+            None,
+        )
+        settle_end = index(consuming) if consuming is not None else capture_end + 1
         values = [value for at, _, value in mana if index(request) < at < settle_end]
         # Regeneration is disabled for this mode, so any increase is a refund. The cost is both the
         # lowest and the settled reading: a refund before or after the completion fails.
@@ -8413,6 +8410,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         kill=True, overkill=14, dead_go=False, dead_cost=False, dead_result=None, dead_extra=False,
         dead_bounds=False, cost_refund=False, duplicate_go=False,
         gcd_narrow=False, failure_after_go=False,
+        far_refund=False, dead_refund=False, unanswered_refund=False,
         drain_casts=11, cost=9, insufficient_go=False, insufficient_cost=False,
         insufficient_result=None, insufficient_refund=False, arcane_refund=False,
     ):
@@ -8526,6 +8524,9 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=far, count=6)
             add(casts, opcode="SMSG_CAST_FAILED", spell=MAGE_COMBAT_SPELL_ID, count=6,
                 result=far_result)
+        if far_refund:
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid,
+                powers=[[0, (112 if gcd_queue else 121) + 1]])
         attempts[1]["end"] = counter - 1
 
         add(casts, opcode="CMSG_SET_SELECTION", target=adder)
@@ -8549,6 +8550,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=adder, count=8)
             add(casts, opcode="SMSG_CAST_FAILED", spell=MAGE_COMBAT_SPELL_ID, count=8,
                 result=dead_result)
+        if dead_refund:
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, kill_power + 1]])
         attempts[2]["end"] = counter - 1
         if dead_extra:
             add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=adder, count=8)
@@ -8586,6 +8589,10 @@ four Completed: COP_GET_CHARACTERS result=TRUE
             add(casts, opcode="SMSG_CAST_FAILED", spell=MAGE_NEGATIVE_GCD_SPELL_ID,
                 count=count, result=MAGE_NEGATIVE_NO_POWER_RESULT)
             add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, value + 1]])
+        if unanswered_refund:
+            add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_NEGATIVE_GCD_SPELL_ID,
+                target=guid, count=count)
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, value + 1]])
         attempts.append({
             "scenario": "insufficient", "start": insufficient_start, "end": counter - 1,
         })
@@ -8610,6 +8617,9 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert not mage_negative_accepted(
         negative_chain(insufficient_result=87, insufficient_refund=True))
     assert not mage_negative_accepted(negative_chain(arcane_refund=True))
+    assert not mage_negative_accepted(negative_chain(far_result=99, far_refund=True))
+    assert not mage_negative_accepted(negative_chain(dead_result=111, dead_refund=True))
+    assert not mage_negative_accepted(negative_chain(unanswered_refund=True))
     assert not mage_negative_accepted(negative_chain(cancel=False))
     assert not mage_negative_accepted(negative_chain(interrupt_result=69))
     assert not mage_negative_accepted(negative_chain(interrupt_go=True))
