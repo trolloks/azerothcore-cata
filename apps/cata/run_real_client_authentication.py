@@ -144,7 +144,8 @@ MAP_INSERTION_MODE = "map-insertion-object-bootstrap"
 IN_WORLD_CONTROL_MODE = "in-world-control-bootstrap"
 MAGE_COMBAT_MODE = "mage-combat"
 MAGE_FOLLOWUP_MODE = "mage-combat-followup"
-MAGE_MODES = frozenset({MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE})
+MAGE_NEGATIVE_MODE = "mage-negative"
+MAGE_MODES = frozenset({MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE, MAGE_NEGATIVE_MODE})
 BASIC_MOVEMENT_MODE = "basic-movement"
 RUN_SPEED_MODE = "run-speed-change"
 GROUND_MOVEMENT_MODE = "ground-movement"
@@ -1747,6 +1748,12 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         "Ra.Enable": "0",
         "SOAP.Enabled": "0",
         "Cluster.Enabled": "0",
+        # The negative mode needs one instant spell on the bar besides Fireball; the level-1 mage
+        # auto-learns only Fireball, so Arcane Intellect (1459) comes from the custom spell seed.
+        "PlayerStart.CustomSpells": "1" if generation["mode"] == MAGE_NEGATIVE_MODE else "0",
+        # Mana regeneration would let a tick land between a Fireball's cost and its completion,
+        # masking the exact 9-mana cost. The negative mode only needs the initial pool.
+        "Rate.Mana": "0.0001" if generation["mode"] == MAGE_NEGATIVE_MODE else "1",
         # The Plan 32 mode verifies against the wire payloads (cast counters, the CAST_FAILED
         # reason byte), so its generations always capture them. Filenames are relative to LogsDir;
         # empty everywhere else, which leaves packet logging off (sessions also need the flag the
@@ -1755,7 +1762,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
             '"packets.pkt"'
             if generation["mode"] in (
                 PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE, TRAINER_MODE,
-                MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE,
+                MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE, MAGE_NEGATIVE_MODE,
             )
             else '""'
         ),
@@ -1764,7 +1771,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
             "5,Server" if ISSUE97 or generation["mode"] in {
                 BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
                 WALK_RUN_MODE_SWITCH_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE,
-                TRAINER_MODE, MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE,
+                TRAINER_MODE, MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE, MAGE_NEGATIVE_MODE,
             }
             else "4,Server"
         ),
@@ -2460,7 +2467,7 @@ def client_login_points(x: int, y: int, width: int, height: int) -> tuple[tuple[
 # X11 keysym names for punctuation used in Lua string literals typed via "/script" (e.g. the
 # SetBinding("N","TOGGLERUN") call in WALK_RUN_BIND_SETUP_KEYS); "," has no keysym named "," so
 # string_to_keysym(",") silently fails to resolve and the keystroke is dropped without error.
-UNSHIFTED_PUNCTUATION_KEYSYM_NAMES = {",": "comma"}
+UNSHIFTED_PUNCTUATION_KEYSYM_NAMES = {",": "comma", "'": "apostrophe"}
 
 
 def x_keysym_name(value: str) -> str:
@@ -3267,10 +3274,10 @@ def mage_followup_select(generation: Generation, description: str) -> None:
 
 
 def mage_followup_mana(generation: Generation) -> list[int]:
-    """The created mage's mana values in arrival order (the reset leaves the new character at guid 1)."""
+    """The mage's mana values in arrival order (the only mana user in these modes)."""
     return [
         int(power[1]) for event in combat_packet_events(generation)
-        if event["opcode"] == "SMSG_POWER_UPDATE" and int(event["guid"]) == 1
+        if event["opcode"] == "SMSG_POWER_UPDATE"
         for power in event["powers"] if int(power[0]) == 0
     ]
 
@@ -3330,6 +3337,220 @@ def automate_mage_followup(generation: Generation) -> None:
     vendor_trade_wait(generation, "s2c", "SMSG_SPELL_GO", "second spell go", goes)
     time.sleep(1.0)
     capture_desktop_screenshot(generation, "mage-followup-relog-cast.png")
+
+
+# Plan 35 negative batch: the same natively created mage exercises every refusal that has to leave
+# mana and the world untouched. The near dummy is the legal target for the interrupt/GCD/mana cases;
+# the one-health Adder (3300, neutral faction 7, no static spawns) is the kill-then-dead case; the
+# far Initiate's Training Dummy is 50 yards out (Fireball's range is 40). Arcane Intellect (1459)
+# is instant and seeded onto action bar button 2, so it starts a real shared cooldown for the GCD
+# case; Fireball's own 1.5s cast time equals the 1.5s GCD and would never be refused.
+MAGE_NEGATIVE_SPELL_COST = 9
+# Frost Armor 168 is absent from the server's Cata Spell.dbc, so the stock action row is stale.
+# Arcane Intellect 1459 is instant, self-castable at level 1 and starts the shared cooldown.
+MAGE_NEGATIVE_GCD_SPELL_ID = 1459
+MAGE_NEGATIVE_GCD_KEYS = ("2",)
+MAGE_NEGATIVE_DEAD_ENTRY = 3300
+MAGE_NEGATIVE_DEAD_GUID = 9990006
+MAGE_NEGATIVE_DEAD_NAME = "Adder"
+# The west-side spawn is refused with SPELL_FAILED_UNIT_NOT_INFRONT (136): keep the Adder on the
+# near dummy's proven front point. The two names are distinct, so /targetexact still picks one.
+MAGE_NEGATIVE_DEAD_POSITION = MAGE_DUMMY_POSITION
+MAGE_NEGATIVE_FAR_ENTRY = 32541
+MAGE_NEGATIVE_FAR_GUID = 9990007
+MAGE_NEGATIVE_FAR_NAME = "Initiate's Training Dummy"
+MAGE_NEGATIVE_FAR_POSITION = (-8952.08, -83.9177, 88.3006)
+MAGE_NEGATIVE_DUMMY_GUID = 9990008
+# The `creature` table's spawn default is curhealth=1, not max health: without this the dummy dies
+# on the first Fireball and the drain has nothing legal to cast at.
+MAGE_NEGATIVE_DUMMY_HEALTH = 1000000
+MAGE_NEGATIVE_MAX_DRAIN_CASTS = 30
+MAGE_NEGATIVE_INTERRUPTED_RESULT = 42
+MAGE_NEGATIVE_NOT_READY_RESULT = 69
+MAGE_NEGATIVE_NO_POWER_RESULT = 87
+MAGE_NEGATIVE_OUT_OF_RANGE_RESULT = 99
+MAGE_NEGATIVE_TARGETS_DEAD_RESULT = 111
+MAGE_NEGATIVE_BAD_TARGETS_RESULT = 13
+
+
+def mage_negative_world_seed_sql() -> str:
+    """Seeds the durable dummy, the one-health Adder and the far dummy at their pinned points."""
+    near_x, near_y, near_z = MAGE_DUMMY_POSITION
+    dead_x, dead_y, dead_z = MAGE_NEGATIVE_DEAD_POSITION
+    far_x, far_y, far_z = MAGE_NEGATIVE_FAR_POSITION
+    return (
+        # A level-1 mage only auto-learns Fireball from the skill line, and the stock button 1
+        # spell (Frost Armor 168) is absent from the server's Cata Spell.dbc. Seed an instant
+        # level-1 spell as a custom starting spell and point button 1 at it; the mode's config
+        # enables PlayerStart.CustomSpells.
+        "DELETE FROM `playercreateinfo_spell_custom` "
+        f"WHERE `racemask`=1 AND `classmask`=128 AND `Spell`={MAGE_NEGATIVE_GCD_SPELL_ID};"
+        "INSERT INTO `playercreateinfo_spell_custom` (`racemask`,`classmask`,`Spell`,`Note`) "
+        f"VALUES (1,128,{MAGE_NEGATIVE_GCD_SPELL_ID},'Plan 35c GCD fixture');"
+        "DELETE FROM `playercreateinfo_action` WHERE `race`=1 AND `class`=8 AND `button`=1;"
+        "INSERT INTO `playercreateinfo_action` (`race`,`class`,`button`,`action`,`type`) "
+        f"VALUES (1,8,1,{MAGE_NEGATIVE_GCD_SPELL_ID},0);"
+        f"DELETE FROM `creature` WHERE `guid` IN "
+        f"({MAGE_NEGATIVE_DUMMY_GUID},{MAGE_NEGATIVE_DEAD_GUID},{MAGE_NEGATIVE_FAR_GUID});"
+        "INSERT INTO `creature` (`guid`,`id`,`map`,`zoneId`,`areaId`,`position_x`,`position_y`,"
+        "`position_z`,`wander_distance`,`MovementType`,`curhealth`) VALUES "
+        f"({MAGE_NEGATIVE_DUMMY_GUID},{MAGE_DUMMY_ENTRY},0,12,9,{near_x},{near_y},{near_z},0,0,"
+        f"{MAGE_NEGATIVE_DUMMY_HEALTH}),"
+        f"({MAGE_NEGATIVE_DEAD_GUID},{MAGE_NEGATIVE_DEAD_ENTRY},0,12,9,{dead_x},{dead_y},{dead_z},"
+        "0,0,1),"
+        f"({MAGE_NEGATIVE_FAR_GUID},{MAGE_NEGATIVE_FAR_ENTRY},0,12,9,{far_x},{far_y},{far_z},"
+        "0,0,1000);"
+    )
+
+
+def mage_negative_cursor(generation: Generation) -> int:
+    """The highest captured packet index; an attempt window starts just past it."""
+    return max((int(event["index"]) for event in plan32_packet_events(generation)), default=-1)
+
+
+def mage_negative_select(generation: Generation, name: str, description: str) -> None:
+    selections = vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION")
+    keys = ("Return", "slash", *tuple("targetexact"), "space", *vendor_trade_name_keys(name), "Return")
+    for _ in range(5):
+        automate_key_sequence(generation, keys, hold_seconds=0.05, gap_seconds=0.05)
+        time.sleep(1.2)
+        if vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION") > selections:
+            return
+    capture_desktop_screenshot(generation, f"mage-negative-{description}-target.png")
+    raise RuntimeError(f"mage negative could not select {name} for {description}")
+
+
+def mage_negative_attempt(
+    generation: Generation, description: str, keys: tuple[str, ...] = ("1",), settle: float = 0.5,
+) -> dict[str, object]:
+    """Press one action button and classify the answer: a completion, a refusal, or no request."""
+    casts = vendor_trade_marker_count(generation, "c2s", "CMSG_CAST_SPELL")
+    goes = vendor_trade_marker_count(generation, "s2c", "SMSG_SPELL_GO")
+    failures = vendor_trade_marker_count(generation, "s2c", "SMSG_CAST_FAILED")
+    start = mage_negative_cursor(generation)
+    automate_key_sequence(generation, keys, hold_seconds=0.05, gap_seconds=0.05)
+    if not vendor_trade_wait_optional(generation, "c2s", "CMSG_CAST_SPELL", casts + 1, 2.0):
+        time.sleep(1.0)  # the client refuses locally: wait for the refusal to draw
+        return {"kind": "client", "start": start, "end": mage_negative_cursor(generation)}
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        if (vendor_trade_marker_count(generation, "s2c", "SMSG_SPELL_GO") > goes
+                or vendor_trade_marker_count(generation, "s2c", "SMSG_CAST_FAILED") > failures):
+            break
+        time.sleep(0.1)
+    time.sleep(settle)
+    kind = "go" if vendor_trade_marker_count(generation, "s2c", "SMSG_SPELL_GO") > goes else "failed"
+    return {"kind": kind, "start": start, "end": mage_negative_cursor(generation)}
+
+
+def mage_negative_interrupt(generation: Generation) -> None:
+    """Start Fireball and press Escape once the request is on the wire."""
+    requests = vendor_trade_marker_count(generation, "c2s", "CMSG_CAST_SPELL") + 1
+    cancels = vendor_trade_marker_count(generation, "c2s", "CMSG_CANCEL_CAST") + 1
+    failures = vendor_trade_marker_count(generation, "s2c", "SMSG_CAST_FAILED") + 1
+    automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
+    vendor_trade_wait(generation, "c2s", "CMSG_CAST_SPELL", "interrupt request", requests, 5.0)
+    automate_key_sequence(generation, ("Escape",), hold_seconds=0.05, gap_seconds=0.05)
+    vendor_trade_wait(generation, "c2s", "CMSG_CANCEL_CAST", "interrupt cancel", cancels, 5.0)
+    vendor_trade_wait(generation, "s2c", "SMSG_CAST_FAILED", "interrupt failure", failures, 5.0)
+    time.sleep(0.5)
+
+
+def mage_negative_kill_damage(generation: Generation, target: int) -> list[dict[str, object]]:
+    """The killing blow on the Adder: overkill proves the one-health fixture actually died."""
+    return [
+        event for event in combat_packet_events(generation)
+        if event["opcode"] == "SMSG_SPELLNONMELEEDAMAGELOG"
+        and int(event["target"]) == target
+        and int(event["spell"]) == MAGE_COMBAT_SPELL_ID
+        and int(event["overkill"]) > 0
+    ]
+
+
+def automate_mage_negative(generation: Generation) -> None:
+    """Refuse a cast five ways, then drain to the mana boundary, proving none of them cost anything."""
+    time.sleep(4.0)
+    vendor_trade_probe_input(generation, MAGE_COMBAT_PROBE_TIMEOUT)
+    attempts: list[dict[str, object]] = []
+    generation["mage_negative_attempts"] = attempts
+
+    # Invalid: self-target, then the enemy-only Fireball (the client refuses without a cast).
+    automate_key_sequence(generation, INVALID_TARGET_SPELL_CAST_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(1.0)
+    attempts.append({"scenario": "invalid", **mage_negative_attempt(generation, "invalid target")})
+    capture_desktop_screenshot(generation, "mage-negative-invalid.png")
+
+    # Interrupted: cancel the cast, then prove the mage can still cast.
+    mage_negative_select(generation, MAGE_DUMMY_NAME, "dummy")
+    mage_negative_interrupt(generation)
+    capture_desktop_screenshot(generation, "mage-negative-interrupted.png")
+    recovery = mage_negative_attempt(generation, "interrupt recovery")
+    if recovery["kind"] != "go":
+        raise RuntimeError(f"the mage could not cast after the interrupt ({recovery['kind']})")
+
+    # GCD: Arcane Intellect starts the shared cooldown; Fireball pressed inside it must do nothing.
+    gcd_starter = mage_negative_attempt(
+        generation, "gcd starter", keys=MAGE_NEGATIVE_GCD_KEYS, settle=0.2)
+    if gcd_starter["kind"] != "go":
+        raise RuntimeError(f"the GCD starter was not cast ({gcd_starter['kind']})")
+    gcd_start = mage_negative_cursor(generation)
+    automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(0.5)
+    attempts.append({"scenario": "gcd", "start": gcd_start, "end": mage_negative_cursor(generation)})
+    time.sleep(1.0)
+    recovery = mage_negative_attempt(generation, "gcd recovery")
+    if recovery["kind"] != "go":
+        raise RuntimeError(f"the mage could not cast after the global cooldown ({recovery['kind']})")
+
+    # Out of range: the far dummy is 50 yards away; Fireball's 40-yard range refuses it.
+    mage_negative_select(generation, MAGE_NEGATIVE_FAR_NAME, "far dummy")
+    attempts.append({"scenario": "out_of_range", **mage_negative_attempt(generation, "out of range")})
+    capture_desktop_screenshot(generation, "mage-negative-out-of-range.png")
+
+    # Dead: kill the one-health Adder, keep it selected and try to cast again.
+    mage_negative_select(generation, MAGE_NEGATIVE_DEAD_NAME, "adder")
+    selections = [
+        event for event in plan32_packet_events(generation) if event["opcode"] == "CMSG_SET_SELECTION"
+    ]
+    adder_target = int(selections[-1]["target"])
+    if ((adder_target >> 24) & 0xFFFFFF) != MAGE_NEGATIVE_DEAD_ENTRY:
+        raise RuntimeError("the Adder selection named another creature")
+    for _ in range(5):
+        kill = mage_negative_attempt(generation, "adder kill", settle=1.0)
+        if kill["kind"] != "go":
+            raise RuntimeError(f"the Adder kill cast was not accepted ({kill['kind']})")
+        if mage_negative_kill_damage(generation, adder_target):
+            break
+    else:
+        raise RuntimeError("the Adder survived five Fireballs")
+    time.sleep(0.5)
+    attempts.append({"scenario": "dead", **mage_negative_attempt(generation, "dead target")})
+    capture_desktop_screenshot(generation, "mage-negative-dead.png")
+
+    # Insufficient mana: drain on the durable dummy until the last cast leaves less than its cost.
+    mage_negative_select(generation, MAGE_DUMMY_NAME, "drain dummy")
+    drain = 0
+    while drain < MAGE_NEGATIVE_MAX_DRAIN_CASTS:
+        mana = mage_followup_mana(generation)
+        if not mana:
+            raise RuntimeError("the mage's mana never appeared on the wire")
+        if mana[-1] < MAGE_NEGATIVE_SPELL_COST:
+            result = mage_negative_attempt(generation, "insufficient mana")
+            if result["kind"] == "go":
+                # A regen tick between the reading and the press let that cast through; keep
+                # draining until a press actually starts below the cost.
+                drain += 1
+                continue
+            attempts.append({"scenario": "insufficient", **result})
+            break
+        result = mage_negative_attempt(generation, f"drain cast {drain + 1}")
+        if result["kind"] != "go":
+            attempts.append({"scenario": "insufficient", **result})
+            break
+        drain += 1
+    else:
+        raise RuntimeError("the mage never ran out of mana")
+    capture_desktop_screenshot(generation, "mage-negative-insufficient.png")
 
 
 def character_creation_points(x: int, y: int, width: int, height: int) -> dict[str, tuple[int, int]]:
@@ -3953,6 +4174,9 @@ def run_client(args: argparse.Namespace) -> None:
     if generation["mode"] == MAGE_FOLLOWUP_MODE:
         mage_combat_character_reset(manifest, generation)
         mysql(manifest, generation, mage_followup_world_seed_sql(), generation["schemas"]["world"])
+    if generation["mode"] == MAGE_NEGATIVE_MODE:
+        mage_combat_character_reset(manifest, generation)
+        mysql(manifest, generation, mage_negative_world_seed_sql(), generation["schemas"]["world"])
     if generation["mode"] == TRAINER_MODE:
         apply_trainer_seed(generation["mode"])
         mysql(manifest, generation, trainer_seed_sql(), generation["schemas"]["characters"])
@@ -4152,6 +4376,8 @@ def run_client(args: argparse.Namespace) -> None:
                                 automate_mage_combat(generation)
                             elif generation["mode"] == MAGE_FOLLOWUP_MODE:
                                 automate_mage_followup(generation)
+                            elif generation["mode"] == MAGE_NEGATIVE_MODE:
+                                automate_mage_negative(generation)
                             capture_runtime(generation)
                             generation["post_marker_snapshots"] = 2
                             generation["post_marker_hold_seconds"] = time.monotonic() - post_marker_hold_started
@@ -4535,6 +4761,7 @@ SMSG_LOGOUT_COMPLETE_OPCODE = 0x2137
 # Events the verifier needs; anything else stays out of the sanitized evidence.
 PLAN32_EVIDENCE_OPCODES = {
     "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO", "SMSG_LOGOUT_COMPLETE",
+    "CMSG_CANCEL_CAST",
 }
 SPELL_FAILED_LINE_OF_SIGHT_RESULT = 49
 SMSG_ON_MONSTER_MOVE_OPCODE = 0x6E17
@@ -6095,7 +6322,7 @@ POST_MARKER_MODES = frozenset({
     GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE, CHARACTER_CREATION_MODE,
     BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
     LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE, TRAINER_MODE,
-    MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE,
+    MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE, MAGE_NEGATIVE_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -6117,6 +6344,7 @@ POST_MARKER_COUNTERS = {
     TRAINER_MODE: lambda generation: vendor_trade_marker_count(generation, "s2c", "SMSG_TRAINER_LIST"),
     MAGE_COMBAT_MODE: character_creation_marker_count,
     MAGE_FOLLOWUP_MODE: character_creation_marker_count,
+    MAGE_NEGATIVE_MODE: character_creation_marker_count,
     INVALID_TARGET_SPELL_CAST_MODE: invalid_target_spell_cast_marker_count,
     LEVEL_UP_MODE: level_up_settle_signal,
     PLAN32_GEOMETRY_MODE: plan32_progress_marker_count,
@@ -6246,6 +6474,7 @@ def sanitized_evidence(
     trainer_evidence_value: dict[str, int] | None = None,
     mage_combat_evidence_value: dict[str, int] | None = None,
     mage_followup_evidence_value: dict[str, int] | None = None,
+    mage_negative_evidence_value: dict[str, int] | None = None,
     login_callback_count_value: int | None = None,
     logout_count_value: int | None = None,
 ) -> dict[str, object]:
@@ -6273,6 +6502,7 @@ def sanitized_evidence(
     creation_mode = generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}
     mage_combat_mode = generation["mode"] == MAGE_COMBAT_MODE
     mage_followup_mode = generation["mode"] == MAGE_FOLLOWUP_MODE
+    mage_negative_mode = generation["mode"] == MAGE_NEGATIVE_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
     jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
@@ -6307,7 +6537,8 @@ def sanitized_evidence(
     # Parsed once: the cast correlation, the fixture witness and the geometry report all read the
     # same capture, and the evidence records what they read.
     plan32_events = plan32_packet_events(generation) if (
-        plan32_geometry_mode or trainer_mode or mage_combat_mode or mage_followup_mode) else []
+        plan32_geometry_mode or trainer_mode or mage_combat_mode or mage_followup_mode
+        or mage_negative_mode) else []
     vendor_events = vendor_trade_packet_events(generation) if vendor_marker_mode else []
     vendor_sells = [event for event in vendor_events if event["opcode"] == "CMSG_SELL_ITEM"]
     vendor_buybacks = [event for event in vendor_events if event["opcode"] == "CMSG_BUYBACK_ITEM"]
@@ -6334,6 +6565,8 @@ def sanitized_evidence(
             else "trainer_learn_pass_candidate" if trainer_mode and "characters_completed" in milestones
             else "mage_combat_pass_candidate" if mage_combat_mode and "characters_completed" in milestones
             else "mage_combat_followup_pass_candidate" if mage_followup_mode
+            and "characters_completed" in milestones
+            else "mage_negative_pass_candidate" if mage_negative_mode
             and "characters_completed" in milestones
             else "plan32_geometry_pass_candidate" if plan32_geometry_mode and "characters_completed" in milestones
             else "basic_movement_pass_candidate" if basic_movement_mode and "characters_completed" in milestones
@@ -6440,10 +6673,15 @@ def sanitized_evidence(
         "trainer": trainer_evidence_value if trainer_mode else None,
         "mage_combat": mage_combat_evidence_value if mage_combat_mode else None,
         "mage_followup": mage_followup_evidence_value if mage_followup_mode else None,
+        "mage_negative": mage_negative_evidence_value if mage_negative_mode else None,
+        "mage_negative_attempts": (
+            generation.get("mage_negative_attempts") if mage_negative_mode else None
+        ),
         "login_callback_count": login_callback_count_value,
         "logout_count": logout_count_value,
         "combat_events": (
-            combat_packet_events(generation) if mage_combat_mode or mage_followup_mode else None
+            combat_packet_events(generation)
+            if mage_combat_mode or mage_followup_mode or mage_negative_mode else None
         ),
         "vendor_negative": vendor_negative_evidence_value if vendor_negative_mode else None,
         "vendor_sell_item_counter": vendor_sells[0]["item_counter"] if vendor_sells else None,
@@ -6474,7 +6712,8 @@ def sanitized_evidence(
         "plan32_stage": generation.get("plan32_stage") if plan32_geometry_mode else None,
         "plan32_casts": (
             plan32_evidence_events(plan32_events)
-            if (plan32_geometry_mode or trainer_mode or mage_combat_mode or mage_followup_mode) else None
+            if (plan32_geometry_mode or trainer_mode or mage_combat_mode or mage_followup_mode
+                or mage_negative_mode) else None
         ),
         "plan32_settle_z": plan32_settle_z(generation) if plan32_geometry_mode else None,
         "plan32_player_samples": (
@@ -6680,6 +6919,246 @@ def mage_followup_accepted(evidence: dict[str, object]) -> bool:
     )
 
 
+def mage_negative_accepted(evidence: dict[str, object]) -> bool:
+    """Every refusal leaves mana and the world untouched; every accepted Fireball costs 9."""
+    mage = evidence["mage_negative"] or {}
+    player_guid = int(mage.get("guid", 0))
+    if (player_guid == 0
+            or int(mage.get("class", 0)) != CREATION_CLASSES["mage"][1]
+            or int(mage.get("race", 0)) != CHARACTER_RACE
+            or int(mage.get("action_count", 0)) != 1):
+        return False
+    casts = evidence["plan32_casts"] or []
+    combat = evidence["combat_events"] or []
+    attempts = {str(item["scenario"]): item for item in (evidence.get("mage_negative_attempts") or [])}
+    if set(attempts) != {"invalid", "gcd", "out_of_range", "dead", "insufficient"}:
+        return False
+    fireball_requests = [
+        event for event in casts
+        if event.get("opcode") == "CMSG_CAST_SPELL"
+        and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
+    ]
+    goes = [
+        event for event in casts
+        if event.get("opcode") == "SMSG_SPELL_GO"
+        and int(event.get("caster", 0)) == player_guid
+        and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
+    ]
+    failures = [
+        event for event in casts
+        if event.get("opcode") == "SMSG_CAST_FAILED"
+        and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
+    ]
+    cancels = [int(event["index"]) for event in casts if event.get("opcode") == "CMSG_CANCEL_CAST"]
+    selections = [event for event in casts if event.get("opcode") == "CMSG_SET_SELECTION"]
+    damage = [
+        event for event in combat
+        if event.get("opcode") == "SMSG_SPELLNONMELEEDAMAGELOG"
+        and int(event.get("attacker", 0)) == player_guid
+        and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
+    ]
+    mana = [
+        (int(event["index"]), int(power[1])) for event in combat
+        if event.get("opcode") == "SMSG_POWER_UPDATE"
+        and int(event.get("guid", 0)) == player_guid
+        for power in (event.get("powers") or []) if int(power[0]) == 0
+    ]
+    if not mana:
+        return False
+
+    def index(event: dict[str, object]) -> int:
+        return int(event["index"])
+
+    def selection_indices(entry: int) -> list[int]:
+        return [
+            index(event) for event in selections
+            if ((int(event.get("target", 0)) >> 24) & 0xFFFFFF) == entry
+        ]
+
+    def mana_at(position: int) -> int | None:
+        values = [value for at, value in mana if at < position]
+        return values[-1] if values else None
+
+    def dropped(start: int, end: int) -> bool:
+        before = mana_at(start)
+        if before is None:
+            return True
+        return any(value < before for at, value in mana if start < at <= end)
+
+    def fireball_events(start: int, end: int) -> list[dict[str, object]]:
+        return [
+            event for event in casts
+            if start < index(event) <= end
+            and event.get("opcode") in {"CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO"}
+            and int(event.get("spell", 0)) == MAGE_COMBAT_SPELL_ID
+        ]
+
+    def refused(start: int, end: int, result: int) -> bool:
+        window = fireball_events(start, end)
+        if any(event["opcode"] == "SMSG_SPELL_GO" for event in window):
+            return False
+        if dropped(start, end):
+            return False
+        sent = [event for event in window if event["opcode"] == "CMSG_CAST_SPELL"]
+        return all(
+            any(event["opcode"] == "SMSG_CAST_FAILED"
+                and int(event.get("count", -1)) == int(request.get("count", -2))
+                and int(event.get("result", -1)) == result
+                and index(request) < index(event) <= end
+                for event in failures)
+            for request in sent
+        )
+
+    def request_for(go: dict[str, object]) -> dict[str, object] | None:
+        matching = [
+            event for event in fireball_requests
+            if index(event) < index(go)
+            and int(event.get("count", -1)) == int(go.get("count", -2))
+        ]
+        return matching[-1] if matching else None
+
+    def cost_at(go: dict[str, object]) -> int | None:
+        request = request_for(go)
+        if request is None:
+            return None
+        # A second request inside this cast could carry its own power drop.
+        if any(index(request) < index(event) < index(go) for event in fireball_requests):
+            return None
+        before = mana_at(index(request))
+        values = [value for at, value in mana if index(request) < at <= index(go)]
+        # The spell cost is the lowest reading in the request->completion interval; a regeneration
+        # tick on either side of the cost update only lifts the other reading. Regeneration is
+        # disabled for this mode, so this is exactly the 9-mana Fireball cost.
+        if before is None or not values or min(values) != before - MAGE_NEGATIVE_SPELL_COST:
+            return None
+        return before
+
+    # Invalid target: self-selection to the next selection, with no accepted cast between them.
+    self_selections = [
+        index(event) for event in selections if int(event.get("target", 0)) == player_guid
+    ]
+    near_selections = selection_indices(MAGE_DUMMY_ENTRY)
+    any_selections = [index(event) for event in selections]
+    if not self_selections or not near_selections:
+        return False
+    invalid_end = next((at for at in any_selections if at > self_selections[0]), None)
+    if invalid_end is None or not refused(
+            self_selections[0], invalid_end, MAGE_NEGATIVE_BAD_TARGETS_RESULT):
+        return False
+
+    # Interrupted: request -> cancel -> INTERRUPTED with no completion and no mana drop.
+    interrupt = next(
+        (event for event in fireball_requests if index(event) > near_selections[0]), None)
+    if interrupt is None:
+        return False
+    cancel = next((at for at in cancels if at > index(interrupt)), None)
+    failure = next(
+        (event for event in failures
+         if index(event) > index(interrupt)
+         and int(event.get("count", -1)) == int(interrupt.get("count", -2))), None)
+    if (cancel is None or failure is None or len(cancels) != 1
+            or int(failure.get("result", -1)) != MAGE_NEGATIVE_INTERRUPTED_RESULT
+            or not index(interrupt) < cancel < index(failure)
+            or dropped(index(interrupt), cancel)):
+        return False
+    if any(int(go.get("count", -1)) == int(interrupt.get("count", -2)) for go in goes):
+        return False
+    recovery = next((go for go in goes if index(go) > index(failure)), None)
+    if recovery is None or cost_at(recovery) is None:
+        return False
+
+    # GCD: the starter's completion precedes the window; Fireball inside it neither completes nor
+    # costs, and the same Fireball succeeds after the cooldown.
+    gcd_starter_go = next(
+        (event for event in casts
+         if event.get("opcode") == "SMSG_SPELL_GO"
+         and int(event.get("caster", 0)) == player_guid
+         and int(event.get("spell", 0)) == MAGE_NEGATIVE_GCD_SPELL_ID), None)
+    gcd = attempts["gcd"]
+    gcd_start, gcd_end = int(gcd.get("start", -1)), int(gcd.get("end", -2))
+    if gcd_starter_go is None or gcd_start < index(gcd_starter_go):
+        return False
+    gcd_window = fireball_events(gcd_start, gcd_end)
+    if any(event["opcode"] == "SMSG_SPELL_GO" for event in gcd_window) or dropped(
+            gcd_start, gcd_end):
+        return False
+    for request in (event for event in gcd_window if event["opcode"] == "CMSG_CAST_SPELL"):
+        if any(event["opcode"] == "SMSG_CAST_FAILED"
+               and int(event.get("count", -1)) == int(request.get("count", -2))
+               and int(event.get("result", -1)) == MAGE_NEGATIVE_NOT_READY_RESULT
+               for event in failures):
+            continue
+        # The 4.3.4 client queues a press made near the cooldown's end; the queued cast completes
+        # after the window and pays the full Fireball cost. Only an immediate go or cost would make
+        # the press itself free.
+        if not any(int(go.get("count", -1)) == int(request.get("count", -2))
+                   and index(go) > gcd_end and cost_at(go) is not None for go in goes):
+            return False
+    gcd_recovery = next(
+        (go for go in goes if index(go) > gcd_end
+         and request_for(go) is not None and index(request_for(go)) > gcd_end), None)
+    if gcd_recovery is None or cost_at(gcd_recovery) is None:
+        return False
+
+    # Out of range: far-dummy selection to the next selection, with no accepted cast between.
+    far_selections = selection_indices(MAGE_NEGATIVE_FAR_ENTRY)
+    if not far_selections:
+        return False
+    far_end = next((at for at in any_selections if at > far_selections[0]), None)
+    if far_end is None or not refused(
+            far_selections[0], far_end, MAGE_NEGATIVE_OUT_OF_RANGE_RESULT):
+        return False
+
+    # Dead: the killing blow on the selected Adder, then no accepted cast on its corpse.
+    adder_selections = [
+        event for event in selections
+        if ((int(event.get("target", 0)) >> 24) & 0xFFFFFF) == MAGE_NEGATIVE_DEAD_ENTRY
+    ]
+    if not adder_selections:
+        return False
+    adder_target = int(adder_selections[0]["target"])
+    kill = next(
+        (event for event in damage
+         if int(event.get("target", 0)) == adder_target
+         and int(event.get("overkill", 0)) > 0
+         and index(event) > index(adder_selections[0])), None)
+    if kill is None:
+        return False
+    kill_go = next((go for go in reversed(goes) if index(go) < index(kill)), None)
+    if kill_go is None or cost_at(kill_go) is None:
+        return False
+    dead_end = next((at for at in any_selections if at > index(adder_selections[0])), None)
+    if dead_end is None or dead_end <= index(kill) or not refused(
+            index(kill), dead_end, MAGE_NEGATIVE_TARGETS_DEAD_RESULT):
+        return False
+
+    # Insufficient mana: the attempt is on the sub-cost side of the boundary, after a drain cast
+    # that started in the last full-cost band.
+    insufficient = attempts["insufficient"]
+    insufficient_start = int(insufficient.get("start", -1))
+    insufficient_end = int(insufficient.get("end", -2))
+    if (not refused(insufficient_start, insufficient_end, MAGE_NEGATIVE_NO_POWER_RESULT)
+            or (mana_at(insufficient_start) or 0) >= MAGE_NEGATIVE_SPELL_COST):
+        return False
+    drain = [go for go in goes if index(go) > near_selections[-1]]
+    last = next((go for go in reversed(drain) if index(go) <= insufficient_start), None)
+    if last is None:
+        return False
+    last_cost = cost_at(last)
+    if last_cost is None or not (
+            MAGE_NEGATIVE_SPELL_COST <= last_cost < 2 * MAGE_NEGATIVE_SPELL_COST):
+        return False
+
+    # Every completion costs the same 9, and no failed counter later completes.
+    if not all(cost_at(go) is not None for go in goes):
+        return False
+    return not any(
+        any(int(go.get("count", -1)) == int(failure.get("count", -2))
+            and index(go) > index(failure) for go in goes)
+        for failure in failures
+    )
+
+
 def verify(args: argparse.Namespace) -> None:
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
@@ -6701,6 +7180,7 @@ def verify(args: argparse.Namespace) -> None:
     creation_mode = generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}
     mage_combat_mode = generation["mode"] == MAGE_COMBAT_MODE
     mage_followup_mode = generation["mode"] == MAGE_FOLLOWUP_MODE
+    mage_negative_mode = generation["mode"] == MAGE_NEGATIVE_MODE
     basic_movement_mode = generation["mode"] in {BASIC_MOVEMENT_MODE, RUN_SPEED_MODE}
     ground_movement_mode = generation["mode"] == GROUND_MOVEMENT_MODE
     jump_fall_land_mode = generation["mode"] == JUMP_FALL_LAND_MODE
@@ -6784,6 +7264,9 @@ def verify(args: argparse.Namespace) -> None:
         ),
         mage_followup_evidence_value=(
             mage_combat_db_evidence(manifest, generation) if mage_followup_mode else None
+        ),
+        mage_negative_evidence_value=(
+            mage_combat_db_evidence(manifest, generation) if mage_negative_mode else None
         ),
         login_callback_count_value=(
             len(player_login_callbacks(generation)) if mage_followup_mode else None
@@ -6919,6 +7402,8 @@ def verify(args: argparse.Namespace) -> None:
             character_ok = character_ok and mage_combat_accepted(evidence)
         if mage_followup_mode:
             character_ok = character_ok and mage_followup_accepted(evidence)
+        if mage_negative_mode:
+            character_ok = character_ok and mage_negative_accepted(evidence)
         if trainer_mode:
             trainer = evidence["trainer"] or {}
             trainer_list = evidence["trainer_list"] or {}
@@ -7311,6 +7796,7 @@ def verify(args: argparse.Namespace) -> None:
                 "level_up_progression_pass" if level_up_mode
                 else "mage_combat_pass" if mage_combat_mode
                 else "mage_combat_followup_pass" if mage_followup_mode
+                else "mage_negative_pass" if mage_negative_mode
                 else "character_creation_pass" if creation_mode
                 else "run_speed_change_pass" if run_speed_mode
                 else "basic_spell_cast_pass" if basic_spell_cast_mode
@@ -7822,6 +8308,190 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         ]
         assert any(event["opcode"] == "SMSG_LOGOUT_COMPLETE" for event in captured["plan32_casts"])
         assert mage_followup_accepted(captured)
+
+    # Plan 35 negative batch: one synthetic chain covers every refusal path, and each mutant
+    # removes exactly one guarantee the acceptance has to enforce.
+    def negative_chain(
+        cancel=True, interrupt_result=42, interrupt_go=False, interrupt_cost=False,
+        invalid_request=False, invalid_result=None,
+        gcd_starter=True, gcd_queue=True, gcd_queue_cost=True,
+        gcd_go=False, gcd_cost=False, gcd_result=None,
+        far_go=False, far_cost=False, far_result=None,
+        kill=True, overkill=14, dead_go=False, dead_cost=False, dead_result=None,
+        drain_casts=11, cost=9, insufficient_go=False, insufficient_cost=False,
+        insufficient_result=None,
+    ):
+        guid = 7
+        near = (MAGE_DUMMY_ENTRY << 24) | 5
+        far = (MAGE_NEGATIVE_FAR_ENTRY << 24) | 6
+        adder = (MAGE_NEGATIVE_DEAD_ENTRY << 24) | 7
+        casts: list[dict[str, object]] = []
+        combat: list[dict[str, object]] = [
+            {"opcode": "SMSG_POWER_UPDATE", "index": 0, "guid": guid, "powers": [[0, 165]]},
+        ]
+        counter = 1
+
+        def add(bucket: list[dict[str, object]], **fields: object) -> int:
+            nonlocal counter
+            bucket.append({"index": counter, **fields})
+            counter += 1
+            return counter - 1
+
+        attempts = [
+            {"scenario": "invalid", "start": 1, "end": 2},
+            {"scenario": "out_of_range", "start": 1, "end": 2},
+            {"scenario": "dead", "start": 1, "end": 2},
+        ]
+
+        add(casts, opcode="CMSG_SET_SELECTION", target=guid)
+        if invalid_request:
+            add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=guid, count=0)
+            if invalid_result is not None:
+                add(casts, opcode="SMSG_CAST_FAILED", spell=MAGE_COMBAT_SPELL_ID, count=0,
+                    result=invalid_result)
+        add(casts, opcode="CMSG_SET_SELECTION", target=near)
+        add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=1)
+        if cancel:
+            add(casts, opcode="CMSG_CANCEL_CAST")
+        if interrupt_result is not None:
+            add(casts, opcode="SMSG_CAST_FAILED", spell=MAGE_COMBAT_SPELL_ID, count=1,
+                result=interrupt_result)
+        if interrupt_go:
+            add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=1)
+        if interrupt_cost:
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 156]])
+        add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=2)
+        add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 156]])
+        add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=2)
+
+        if gcd_starter:
+            add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_NEGATIVE_GCD_SPELL_ID,
+                target=guid, count=3)
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 130]])
+            add(casts, opcode="SMSG_SPELL_GO", caster=guid,
+                spell=MAGE_NEGATIVE_GCD_SPELL_ID, count=3)
+        gcd_start = counter
+        counter += 1
+        attempts.append({"scenario": "gcd", "start": gcd_start, "end": 0})
+        if gcd_go:
+            add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=4)
+        if gcd_cost:
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 121]])
+        if gcd_result is not None:
+            add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=4)
+            add(casts, opcode="SMSG_CAST_FAILED", spell=MAGE_COMBAT_SPELL_ID, count=4,
+                result=gcd_result)
+        if gcd_queue:
+            add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=4)
+        attempts[-1]["end"] = counter - 1
+        if gcd_queue:
+            if gcd_queue_cost:
+                add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 121]])
+            add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=4)
+        add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=5)
+        add(combat, opcode="SMSG_POWER_UPDATE", guid=guid,
+            powers=[[0, 112 if gcd_queue else 121]])
+        add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=5)
+
+        far_index = add(casts, opcode="CMSG_SET_SELECTION", target=far)
+        attempts[1]["start"] = far_index + 1
+        if far_go:
+            add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=6)
+        if far_cost:
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, 98]])
+        if far_result is not None:
+            add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=far, count=6)
+            add(casts, opcode="SMSG_CAST_FAILED", spell=MAGE_COMBAT_SPELL_ID, count=6,
+                result=far_result)
+        attempts[1]["end"] = counter - 1
+
+        add(casts, opcode="CMSG_SET_SELECTION", target=adder)
+        kill_power = 103 if gcd_queue else 112
+        add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=adder, count=7)
+        add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, kill_power]])
+        add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=7)
+        if kill:
+            add(combat, opcode="SMSG_SPELLNONMELEEDAMAGELOG", attacker=guid, target=adder,
+                spell=MAGE_COMBAT_SPELL_ID, damage=15, overkill=overkill, school=4)
+        dead_start = counter
+        counter += 1
+        attempts[2]["start"] = dead_start
+        if dead_go:
+            add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=8)
+        if dead_cost:
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, kill_power - 9]])
+        if dead_result is not None:
+            add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=adder, count=8)
+            add(casts, opcode="SMSG_CAST_FAILED", spell=MAGE_COMBAT_SPELL_ID, count=8,
+                result=dead_result)
+        attempts[2]["end"] = counter - 1
+
+        add(casts, opcode="CMSG_SET_SELECTION", target=near)
+        value, count = kill_power, 9
+        for _ in range(drain_casts):
+            add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near, count=count)
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, value - cost]])
+            add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID, count=count)
+            value -= cost
+            count += 1
+        insufficient_start = counter
+        counter += 1
+        if insufficient_go:
+            add(casts, opcode="SMSG_SPELL_GO", caster=guid, spell=MAGE_COMBAT_SPELL_ID,
+                count=count)
+        if insufficient_cost:
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, value - 1]])
+        if insufficient_result is not None:
+            add(casts, opcode="CMSG_CAST_SPELL", spell=MAGE_COMBAT_SPELL_ID, target=near,
+                count=count)
+            add(casts, opcode="SMSG_CAST_FAILED", spell=MAGE_COMBAT_SPELL_ID, count=count,
+                result=insufficient_result)
+        attempts.append({
+            "scenario": "insufficient", "start": insufficient_start, "end": counter - 1,
+        })
+        return {
+            "mage_negative": {"guid": guid, "class": 8, "race": 1, "action_count": 1,
+                              "spell_count": 1},
+            "plan32_casts": casts,
+            "combat_events": combat,
+            "mage_negative_attempts": attempts,
+        }
+
+    assert "playercreateinfo_spell_custom" in mage_negative_world_seed_sql()
+    assert mage_negative_accepted(negative_chain())
+    assert mage_negative_accepted(negative_chain(invalid_request=True, invalid_result=13))
+    assert mage_negative_accepted(
+        negative_chain(gcd_result=69, gcd_queue=False, drain_casts=12))
+    assert mage_negative_accepted(negative_chain(gcd_queue=False, drain_casts=12))
+    assert not mage_negative_accepted(negative_chain(gcd_queue_cost=False))
+    assert mage_negative_accepted(negative_chain(far_result=99))
+    assert mage_negative_accepted(negative_chain(dead_result=111))
+    assert mage_negative_accepted(negative_chain(insufficient_result=87))
+    assert not mage_negative_accepted(negative_chain(cancel=False))
+    assert not mage_negative_accepted(negative_chain(interrupt_result=69))
+    assert not mage_negative_accepted(negative_chain(interrupt_go=True))
+    assert not mage_negative_accepted(negative_chain(interrupt_cost=True))
+    assert not mage_negative_accepted(negative_chain(invalid_request=True))  # unanswered request
+    assert not mage_negative_accepted(negative_chain(gcd_starter=False))
+    assert not mage_negative_accepted(negative_chain(gcd_go=True))
+    assert not mage_negative_accepted(negative_chain(gcd_cost=True))
+    assert not mage_negative_accepted(negative_chain(gcd_result=87))
+    assert not mage_negative_accepted(negative_chain(far_go=True))
+    assert not mage_negative_accepted(negative_chain(far_cost=True))
+    assert not mage_negative_accepted(negative_chain(far_result=49))
+    assert not mage_negative_accepted(negative_chain(kill=False))
+    assert not mage_negative_accepted(negative_chain(overkill=0))
+    assert not mage_negative_accepted(negative_chain(dead_go=True))
+    assert not mage_negative_accepted(negative_chain(dead_cost=True))
+    assert not mage_negative_accepted(negative_chain(dead_result=42))
+    assert not mage_negative_accepted(negative_chain(drain_casts=9))
+    assert not mage_negative_accepted(negative_chain(cost=8))
+    assert not mage_negative_accepted(negative_chain(insufficient_go=True))
+    assert not mage_negative_accepted(negative_chain(insufficient_cost=True))
+    assert not mage_negative_accepted(negative_chain(insufficient_result=42))
+    assert MAGE_NEGATIVE_MODE in MAGE_MODES and plan_number(MAGE_NEGATIVE_MODE) == "35"
+    assert "curhealth" in mage_negative_world_seed_sql()
+    assert str(MAGE_NEGATIVE_FAR_GUID) in mage_negative_world_seed_sql()
     assert plan_number(CHARACTER_CREATION_MODE) == "22"
     populated_generation = dict(character_generation)
     populated_generation["mode"] = POPULATED_MODE
@@ -8144,7 +8814,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         "CharacterDatabaseInfo", "DataDir", "LogsDir", "PidFile", "Console.Enable",
         "Updates.EnableDatabases", "Updates.AutoSetup", "Expansion", "MoveMaps.Enable",
         "vmap.enableLOS", "vmap.enableHeight", "Warden.Enabled", "Ra.Enable", "SOAP.Enabled",
-        "Cluster.Enabled", "Appender.Server", "Logger.network", "Logger.network.opcode",
+        "Cluster.Enabled", "PlayerStart.CustomSpells", "Rate.Mana", "Appender.Server",
+        "Logger.network", "Logger.network.opcode",
     )
     replace_config(
         (REPO_ROOT / "src/server/apps/authserver/authserver.conf.dist").read_text(),
@@ -8162,6 +8833,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert SHIFTED_KEYSYM_NAMES["("] == "9" and SHIFTED_KEYSYM_NAMES[")"] == "0"
     assert SHIFTED_KEYSYM_NAMES['"'] == "apostrophe"
     assert UNSHIFTED_PUNCTUATION_KEYSYM_NAMES[","] == "comma"
+    assert UNSHIFTED_PUNCTUATION_KEYSYM_NAMES["'"] == "apostrophe"
     walk_run_samples = [
         {"opcode": opcode, "x": x, "y": y, "z": 0.0, "o": 0.0}
         for opcode, x, y in zip(
@@ -8359,6 +9031,9 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED",
         "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO", "CMSG_CANCEL_CAST",
     ]
+    assert "CMSG_CANCEL_CAST" in {
+        event["opcode"] for event in plan32_evidence_events(events)
+    }
     assert events[0]["target"] == fixture
     cast_requests = [
         (e.get("count"), e.get("spell")) for e in events if e["opcode"] == "CMSG_CAST_SPELL"
@@ -9289,7 +9964,7 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument(
         "--mode", choices=(
             "no-login", "authentication", "character-screen", CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE,
-            MAGE_FOLLOWUP_MODE,
+            MAGE_FOLLOWUP_MODE, MAGE_NEGATIVE_MODE,
             POPULATED_MODE,
             CHARACTER_SELECTION_MODE,
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,

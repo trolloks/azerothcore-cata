@@ -326,6 +326,26 @@ rejected the cast). Generation 2 passed on this basis (`invalid_target_spell_cas
 1`, `spell_cast_marker_count: 0`, `cast_failed_marker_count: 0`), with screenshots confirming the
 on-screen "Invalid target" flash. This closes out issue #85's real-client acceptance checklist.
 
+`--mode mage-negative` (Plan 35, issue #137) completes the cast-failure matrix on the same
+natively created level-1 Human Mage. One session walks five refusals: self-target (client-local,
+no request), Escape-cancel (`CMSG_CANCEL_CAST` then `SMSG_CAST_FAILED` 42), Fireball pressed inside
+Arcane Intellect's shared cooldown, a 50-yard far dummy (Fireball's range is 40), and a one-health Adder
+killed then re-targeted (client-local dead-target refusal). Arcane Intellect (1459) is seeded as a
+custom starting spell, enabled with `PlayerStart.CustomSpells`, and placed on action bar button 2
+(the level-1 mage auto-learns only Fireball from its skill line, and the stock Frost Armor 168 is
+absent from the server's Cata `Spell.dbc`); it is instant and starts the shared cooldown. The 4.3.4
+client queued a press made near the cooldown's end in the live run, so the predicate accepts either
+an immediate local refusal (or 69) or a queued cast whose completion lies outside the window and
+pays the full 9 mana. Fireball's own 1.5 s cast time equals
+the 1.5 s GCD, so pressing Fireball after *its own* completion can never hit the GCD. Mana
+regeneration is set to 0.0001 (`Rate.Mana`) for this mode so a regeneration tick cannot land
+between a cost and its completion and mask the exact 9. The mode then drains the durable dummy
+to below Fireball's 9 mana and presses once more. A refusal passes only with its expected path (no
+cast request, or a matching `SMSG_CAST_FAILED` result) and no `SMSG_SPELL_GO`; every accepted
+Fireball must cost exactly 9 mana, and the last successful drain cast must start in the 9..17 band.
+The seed sets `curhealth` explicitly because the `creature` spawn default is 1, which is what killed
+the follow-up dummy after its first cast.
+
 ## GM commands for setup
 
 A scenario usually reaches its starting state faster with GM commands than by seeding SQL directly:

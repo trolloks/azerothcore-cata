@@ -1,0 +1,1057 @@
+{
+  "build": 15595,
+  "cast_failed_marker_count": null,
+  "character_rows": 1,
+  "chat_message_marker_count": null,
+  "client_milestones": [
+    "auth_login_ok",
+    "world_connected",
+    "world_auth_ok",
+    "characters_completed"
+  ],
+  "combat_events": [
+    {
+      "guid": 1,
+      "index": 13,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          100
+        ]
+      ],
+      "ticks": 56156
+    },
+    {
+      "guid": 1,
+      "index": 15,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          165
+        ]
+      ],
+      "ticks": 56156
+    },
+    {
+      "guid": 1,
+      "index": 121,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          100
+        ]
+      ],
+      "ticks": 81379
+    },
+    {
+      "guid": 1,
+      "index": 129,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          165
+        ]
+      ],
+      "ticks": 81380
+    },
+    {
+      "guid": 1,
+      "index": 912,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          156
+        ]
+      ],
+      "ticks": 159403
+    },
+    {
+      "attacker": 1,
+      "damage": 4,
+      "index": 917,
+      "opcode": "SMSG_SPELLNONMELEEDAMAGELOG",
+      "overkill": 0,
+      "school": 4,
+      "spell": 133,
+      "target": 17379391377963484205,
+      "ticks": 159611
+    },
+    {
+      "guid": 1,
+      "index": 929,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          130
+        ]
+      ],
+      "ticks": 161060
+    },
+    {
+      "guid": 1,
+      "index": 952,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          121
+        ]
+      ],
+      "ticks": 164052
+    },
+    {
+      "guid": 1,
+      "index": 971,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          112
+        ]
+      ],
+      "ticks": 166250
+    },
+    {
+      "guid": 1,
+      "index": 1012,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          112
+        ]
+      ],
+      "ticks": 171326
+    },
+    {
+      "guid": 1,
+      "index": 1032,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          112
+        ]
+      ],
+      "ticks": 173326
+    },
+    {
+      "guid": 1,
+      "index": 1045,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          112
+        ]
+      ],
+      "ticks": 175337
+    },
+    {
+      "guid": 1,
+      "index": 1056,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          112
+        ]
+      ],
+      "ticks": 177326
+    },
+    {
+      "guid": 1,
+      "index": 1067,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          112
+        ]
+      ],
+      "ticks": 179326
+    },
+    {
+      "guid": 1,
+      "index": 1091,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          112
+        ]
+      ],
+      "ticks": 181326
+    },
+    {
+      "guid": 1,
+      "index": 1104,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          112
+        ]
+      ],
+      "ticks": 183326
+    },
+    {
+      "guid": 1,
+      "index": 1118,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          112
+        ]
+      ],
+      "ticks": 185327
+    },
+    {
+      "guid": 1,
+      "index": 1120,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          103
+        ]
+      ],
+      "ticks": 185341
+    },
+    {
+      "attacker": 1,
+      "damage": 21,
+      "index": 1126,
+      "opcode": "SMSG_SPELLNONMELEEDAMAGELOG",
+      "overkill": 20,
+      "school": 4,
+      "spell": 133,
+      "target": 17379391017387557931,
+      "ticks": 185548
+    },
+    {
+      "guid": 1,
+      "index": 1174,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          103
+        ]
+      ],
+      "ticks": 191329
+    },
+    {
+      "guid": 1,
+      "index": 1185,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          103
+        ]
+      ],
+      "ticks": 193327
+    },
+    {
+      "guid": 1,
+      "index": 1198,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          103
+        ]
+      ],
+      "ticks": 195327
+    },
+    {
+      "guid": 1,
+      "index": 1212,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          103
+        ]
+      ],
+      "ticks": 197326
+    },
+    {
+      "guid": 1,
+      "index": 1228,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          103
+        ]
+      ],
+      "ticks": 199327
+    },
+    {
+      "guid": 1,
+      "index": 1241,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          103
+        ]
+      ],
+      "ticks": 201326
+    },
+    {
+      "guid": 1,
+      "index": 1257,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          94
+        ]
+      ],
+      "ticks": 203191
+    },
+    {
+      "attacker": 1,
+      "damage": 4,
+      "index": 1263,
+      "opcode": "SMSG_SPELLNONMELEEDAMAGELOG",
+      "overkill": 0,
+      "school": 4,
+      "spell": 133,
+      "target": 17379391377963484205,
+      "ticks": 203396
+    },
+    {
+      "guid": 1,
+      "index": 1289,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          85
+        ]
+      ],
+      "ticks": 206934
+    },
+    {
+      "guid": 1,
+      "index": 1317,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          76
+        ]
+      ],
+      "ticks": 210785
+    },
+    {
+      "attacker": 1,
+      "damage": 7,
+      "index": 1324,
+      "opcode": "SMSG_SPELLNONMELEEDAMAGELOG",
+      "overkill": 0,
+      "school": 4,
+      "spell": 133,
+      "target": 17379391377963484205,
+      "ticks": 210996
+    },
+    {
+      "guid": 1,
+      "index": 1349,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          67
+        ]
+      ],
+      "ticks": 214733
+    },
+    {
+      "attacker": 1,
+      "damage": 6,
+      "index": 1353,
+      "opcode": "SMSG_SPELLNONMELEEDAMAGELOG",
+      "overkill": 0,
+      "school": 4,
+      "spell": 133,
+      "target": 17379391377963484205,
+      "ticks": 214946
+    },
+    {
+      "guid": 1,
+      "index": 1378,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          58
+        ]
+      ],
+      "ticks": 218399
+    },
+    {
+      "attacker": 1,
+      "damage": 2,
+      "index": 1381,
+      "opcode": "SMSG_SPELLNONMELEEDAMAGELOG",
+      "overkill": 0,
+      "school": 4,
+      "spell": 133,
+      "target": 17379391377963484205,
+      "ticks": 218613
+    },
+    {
+      "guid": 1,
+      "index": 1405,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          49
+        ]
+      ],
+      "ticks": 222126
+    },
+    {
+      "guid": 1,
+      "index": 1434,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          40
+        ]
+      ],
+      "ticks": 226167
+    },
+    {
+      "attacker": 1,
+      "damage": 4,
+      "index": 1438,
+      "opcode": "SMSG_SPELLNONMELEEDAMAGELOG",
+      "overkill": 0,
+      "school": 4,
+      "spell": 133,
+      "target": 17379391377963484205,
+      "ticks": 226376
+    },
+    {
+      "guid": 1,
+      "index": 1470,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          31
+        ]
+      ],
+      "ticks": 230237
+    },
+    {
+      "attacker": 1,
+      "damage": 4,
+      "index": 1474,
+      "opcode": "SMSG_SPELLNONMELEEDAMAGELOG",
+      "overkill": 0,
+      "school": 4,
+      "spell": 133,
+      "target": 17379391377963484205,
+      "ticks": 230446
+    },
+    {
+      "guid": 1,
+      "index": 1498,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          22
+        ]
+      ],
+      "ticks": 234387
+    },
+    {
+      "attacker": 1,
+      "damage": 3,
+      "index": 1504,
+      "opcode": "SMSG_SPELLNONMELEEDAMAGELOG",
+      "overkill": 0,
+      "school": 4,
+      "spell": 133,
+      "target": 17379391377963484205,
+      "ticks": 234597
+    },
+    {
+      "guid": 1,
+      "index": 1535,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          13
+        ]
+      ],
+      "ticks": 238621
+    },
+    {
+      "attacker": 1,
+      "damage": 2,
+      "index": 1540,
+      "opcode": "SMSG_SPELLNONMELEEDAMAGELOG",
+      "overkill": 0,
+      "school": 4,
+      "spell": 133,
+      "target": 17379391377963484205,
+      "ticks": 238833
+    },
+    {
+      "guid": 1,
+      "index": 1568,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          4
+        ]
+      ],
+      "ticks": 242954
+    },
+    {
+      "guid": 1,
+      "index": 1614,
+      "opcode": "SMSG_POWER_UPDATE",
+      "powers": [
+        [
+          0,
+          4
+        ]
+      ],
+      "ticks": 249332
+    }
+  ],
+  "creation_marker_count": 1,
+  "downstream_diagnostic": null,
+  "empty_response_payload": null,
+  "endpoint_ownership": true,
+  "enumerated": null,
+  "forbidden_opcodes": [],
+  "ground_movement_sequence": null,
+  "in_world_control_marker_count": null,
+  "in_world_control_packet_prefix": null,
+  "inputs": {
+    "authserver_sha256": "2ca84e3403c057f8c644488da28ba1a934b3eb6cdeadf9da15f1ec234352ae0a",
+    "client_sha256": "0ea9cc0458cb137f4e0767e8a1896e2042480a4a22397480d7ee64c2e696192a",
+    "dbc_tree_sha256": "86bee8cd69fe0988b5e650b993390884594f45643fba60caf57d1ea852ca2475",
+    "geometry": false,
+    "maps_tree_sha256": "a8113db13679a3bb2a08b6e9f6a90c9b435eae43af3a4de413dd0ab56a8d0645",
+    "mmaps_tree_sha256": "",
+    "vmaps_tree_sha256": "",
+    "worldserver_sha256": "218307ec35754904f91201b56442d27b115bec83fd238e3057892e2ebc04d731"
+  },
+  "invalid_target_spell_cast_sequence_count": null,
+  "jump_fall_land_sequence": null,
+  "level_up_marker_count": null,
+  "level_up_xp_gain_count": null,
+  "login_callback_count": null,
+  "logout_count": null,
+  "mage_combat": null,
+  "mage_followup": null,
+  "mage_negative": {
+    "action_count": 1,
+    "class": 8,
+    "guid": 1,
+    "race": 1,
+    "spell_count": 0
+  },
+  "mage_negative_attempts": [
+    {
+      "end": 744,
+      "kind": "client",
+      "scenario": "invalid",
+      "start": 744
+    },
+    {
+      "end": 941,
+      "scenario": "gcd",
+      "start": 930
+    },
+    {
+      "end": 1001,
+      "kind": "client",
+      "scenario": "out_of_range",
+      "start": 1001
+    },
+    {
+      "end": 1140,
+      "kind": "client",
+      "scenario": "dead",
+      "start": 1140
+    },
+    {
+      "end": 1590,
+      "kind": "failed",
+      "scenario": "insufficient",
+      "start": 1569
+    }
+  ],
+  "map_insertion_marker_count": null,
+  "map_insertion_packet_prefix": null,
+  "mode": "mage-negative",
+  "movement_heartbeat_count": null,
+  "network_scope": "owned-auth-and-world-only",
+  "next_server_packet": {
+    "opcode": "SMSG_ADDON_INFO",
+    "status": "candidate/inconclusive"
+  },
+  "outcome": "mage_negative_pass",
+  "owned_window": true,
+  "payload_shape": "typed-auth-success; no raw payload retained",
+  "plan32_casts": [
+    {
+      "caster": 1,
+      "count": 0,
+      "index": 166,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 836
+    },
+    {
+      "index": 744,
+      "opcode": "CMSG_SET_SELECTION",
+      "side": "c2s",
+      "target": 1
+    },
+    {
+      "index": 831,
+      "opcode": "CMSG_SET_SELECTION",
+      "side": "c2s",
+      "target": 17379391377963484205
+    },
+    {
+      "count": 2,
+      "index": 867,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "index": 875,
+      "opcode": "CMSG_CANCEL_CAST",
+      "side": "c2s"
+    },
+    {
+      "count": 2,
+      "index": 876,
+      "opcode": "SMSG_CAST_FAILED",
+      "result": 42,
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "count": 3,
+      "index": 902,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "caster": 1,
+      "count": 3,
+      "index": 913,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "count": 4,
+      "index": 927,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 1459,
+      "target": 1
+    },
+    {
+      "caster": 1,
+      "count": 4,
+      "index": 930,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 1459
+    },
+    {
+      "count": 5,
+      "index": 941,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "caster": 1,
+      "count": 5,
+      "index": 953,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "count": 6,
+      "index": 963,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "caster": 1,
+      "count": 6,
+      "index": 972,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "index": 1001,
+      "opcode": "CMSG_SET_SELECTION",
+      "side": "c2s",
+      "target": 17379391507970130988
+    },
+    {
+      "index": 1089,
+      "opcode": "CMSG_SET_SELECTION",
+      "side": "c2s",
+      "target": 17379391017387557931
+    },
+    {
+      "count": 8,
+      "index": 1107,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391017387557931
+    },
+    {
+      "caster": 1,
+      "count": 8,
+      "index": 1121,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "index": 1140,
+      "opcode": "CMSG_SET_SELECTION",
+      "side": "c2s",
+      "target": 0
+    },
+    {
+      "index": 1225,
+      "opcode": "CMSG_SET_SELECTION",
+      "side": "c2s",
+      "target": 17379391377963484205
+    },
+    {
+      "count": 10,
+      "index": 1246,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "caster": 1,
+      "count": 10,
+      "index": 1258,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "count": 11,
+      "index": 1279,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "caster": 1,
+      "count": 11,
+      "index": 1290,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "count": 12,
+      "index": 1307,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "caster": 1,
+      "count": 12,
+      "index": 1318,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "count": 13,
+      "index": 1338,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "caster": 1,
+      "count": 13,
+      "index": 1350,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "count": 14,
+      "index": 1369,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "caster": 1,
+      "count": 14,
+      "index": 1379,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "count": 15,
+      "index": 1394,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "caster": 1,
+      "count": 15,
+      "index": 1406,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "count": 16,
+      "index": 1426,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "caster": 1,
+      "count": 16,
+      "index": 1435,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "count": 17,
+      "index": 1461,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "caster": 1,
+      "count": 17,
+      "index": 1471,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "count": 18,
+      "index": 1489,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "caster": 1,
+      "count": 18,
+      "index": 1499,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "count": 19,
+      "index": 1526,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "caster": 1,
+      "count": 19,
+      "index": 1536,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "count": 20,
+      "index": 1556,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "caster": 1,
+      "count": 20,
+      "index": 1569,
+      "opcode": "SMSG_SPELL_GO",
+      "side": "s2c",
+      "spell": 133
+    },
+    {
+      "count": 21,
+      "index": 1589,
+      "opcode": "CMSG_CAST_SPELL",
+      "side": "c2s",
+      "spell": 133,
+      "target": 17379391377963484205
+    },
+    {
+      "count": 21,
+      "index": 1590,
+      "opcode": "SMSG_CAST_FAILED",
+      "result": 87,
+      "side": "s2c",
+      "spell": 133
+    }
+  ],
+  "plan32_chase": null,
+  "plan32_fixture": null,
+  "plan32_geometry": null,
+  "plan32_geometry_facts": null,
+  "plan32_player_samples": null,
+  "plan32_relog_problems": null,
+  "plan32_settle_z": null,
+  "plan32_stage": null,
+  "post_marker_hold_seconds": 192.89196654399893,
+  "post_marker_snapshots": 2,
+  "pre_map_marker_count": null,
+  "pre_map_packet_prefix": null,
+  "protected_inputs_unchanged": true,
+  "realm_character_count": null,
+  "reset": "pending",
+  "response_body": null,
+  "run_speed_acknowledgements": null,
+  "schema": 1,
+  "screen_confirmed": true,
+  "selection": {
+    "action": "create",
+    "callback_guid_low": 1,
+    "enumerated_guid_low": null,
+    "legit_characters_admission": true,
+    "request_guid_low": 1,
+    "seeded_guid_low": 1
+  },
+  "server_milestones": [
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_AUTH_CHALLENGE"
+    },
+    {
+      "direction": "c2s",
+      "opcode": "CMSG_AUTH_SESSION"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_AUTH_RESPONSE"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_CLIENTCACHE_VERSION"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_TUTORIAL_FLAGS"
+    },
+    {
+      "direction": "c2s",
+      "opcode": "CMSG_CHAR_ENUM"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_CHAR_ENUM"
+    },
+    {
+      "direction": "c2s",
+      "opcode": "CMSG_CHAR_ENUM"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_CHAR_ENUM"
+    },
+    {
+      "direction": "s2c",
+      "opcode": "SMSG_TUTORIAL_FLAGS"
+    }
+  ],
+  "spell_cast_marker_count": null,
+  "stability_seconds": 8,
+  "target_targeted_spell_cast_sequence_count": null,
+  "trainer": null,
+  "trainer_buy_events": null,
+  "trainer_buy_failures": null,
+  "trainer_buy_results": null,
+  "trainer_learned_spells": null,
+  "trainer_list": null,
+  "trainer_results": null,
+  "vendor_buy_failed_items": null,
+  "vendor_buy_failure_reasons": null,
+  "vendor_buy_failures": null,
+  "vendor_buy_requests": null,
+  "vendor_buy_requests_detail": null,
+  "vendor_buy_results": null,
+  "vendor_buyback_requests": null,
+  "vendor_buyback_slot": null,
+  "vendor_case": null,
+  "vendor_inventory_count": null,
+  "vendor_inventory_failure_reasons": null,
+  "vendor_inventory_failures": null,
+  "vendor_negative": null,
+  "vendor_repair_requests": null,
+  "vendor_sell_item_counter": null,
+  "vendor_sell_requests": null,
+  "vendor_trade": null,
+  "walk_run_mode_switch_sequence": null
+}
