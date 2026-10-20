@@ -7061,7 +7061,16 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
         next_request = next(
             (event for event in casts
              if event.get("opcode") == "CMSG_CAST_SPELL" and index(event) > index(go)), None)
-        settle_end = index(next_request) if next_request is not None else capture_end + 1
+        # A failed next request does not consume the pool: settle through its scenario boundary (or
+        # the terminal capture) so a delayed refund after the refusal cannot reduce the net cost.
+        if next_request is not None and any(
+                int(failure.get("count", -1)) == int(next_request.get("count", -2))
+                for failure in failures):
+            boundary = next(
+                (at for at in any_selections if at > index(next_request)), None)
+            settle_end = boundary if boundary is not None else capture_end + 1
+        else:
+            settle_end = index(next_request) if next_request is not None else capture_end + 1
         values = [value for at, _, value in mana if index(request) < at < settle_end]
         # Regeneration is disabled for this mode, so any increase is a refund. The cost is both the
         # lowest and the settled reading: a refund before or after the completion fails.
@@ -7147,11 +7156,12 @@ def mage_negative_accepted(evidence: dict[str, object]) -> bool:
         return False
     # The press must be inside the starter's cooldown; moving the attempt bounds onto an
     # after-cooldown completion cannot substitute an ordinary cast for the GCD refusal.
-    first_after_cooldown = next(
-        (index(event) for event in casts
+    first_after_cooldown = min(
+        [index(event) for event in casts + combat
          if type(event.get("ticks")) is int
          and int(event["ticks"]) > cooldown_end
-         and index(event) > index(gcd_starter_go)), None)
+         and index(event) > index(gcd_starter_go)],
+        default=None)
     if first_after_cooldown is None or gcd_start >= first_after_cooldown:
         return False
     for request in (event for event in gcd_window if event["opcode"] == "CMSG_CAST_SPELL"):
@@ -8397,7 +8407,7 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         dead_bounds=False, cost_refund=False, duplicate_go=False,
         gcd_narrow=False, failure_after_go=False,
         drain_casts=11, cost=9, insufficient_go=False, insufficient_cost=False,
-        insufficient_result=None,
+        insufficient_result=None, insufficient_refund=False,
     ):
         guid = 7
         near = (MAGE_DUMMY_ENTRY << 24) | 5
@@ -8561,6 +8571,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
                 count=count)
             add(casts, opcode="SMSG_CAST_FAILED", spell=MAGE_COMBAT_SPELL_ID, count=count,
                 result=insufficient_result)
+        if insufficient_refund:
+            add(combat, opcode="SMSG_POWER_UPDATE", guid=guid, powers=[[0, value + 1]])
         attempts.append({
             "scenario": "insufficient", "start": insufficient_start, "end": counter - 1,
         })
@@ -8582,6 +8594,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert mage_negative_accepted(negative_chain(far_result=99))
     assert mage_negative_accepted(negative_chain(dead_result=111))
     assert mage_negative_accepted(negative_chain(insufficient_result=87))
+    assert not mage_negative_accepted(
+        negative_chain(insufficient_result=87, insufficient_refund=True))
     assert not mage_negative_accepted(negative_chain(cancel=False))
     assert not mage_negative_accepted(negative_chain(interrupt_result=69))
     assert not mage_negative_accepted(negative_chain(interrupt_go=True))
