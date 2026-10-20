@@ -3119,7 +3119,6 @@ MAGE_COMBAT_TARGET_KEYS = (
     "Return", "slash", *tuple("targetexact"), "space", *vendor_trade_name_keys("Saytr"), "Return",
 )
 MAGE_COMBAT_PROBE_TIMEOUT = 150
-MAGE_COMBAT_LOGOUT_TIMEOUT = 45
 CREATION_CLASS_POINT = "class_warrior"
 
 
@@ -3182,7 +3181,7 @@ def mage_combat_db_evidence(manifest: Manifest, generation: Generation) -> dict[
 
 
 def automate_mage_combat(generation: Generation) -> None:
-    """Cast Fireball at the seeded Saytr from the action bar, then log out so the row is saved."""
+    """Cast Fireball at the seeded Saytr from the action bar."""
     time.sleep(4.0)
     vendor_trade_probe_input(generation, MAGE_COMBAT_PROBE_TIMEOUT)
     selections = vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION")
@@ -3202,15 +3201,10 @@ def automate_mage_combat(generation: Generation) -> None:
     automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
     vendor_trade_wait(generation, "c2s", "CMSG_CAST_SPELL", "cast request", casts)
     vendor_trade_wait(generation, "s2c", "SMSG_SPELL_GO", "spell go", goes)
+    # The Saytr keeps the mage in combat, which refuses /logout; the harness stops the client and the
+    # action bar was saved when the character was created.
     time.sleep(1.0)  # let the damage log and power update land
     capture_desktop_screenshot(generation, "mage-after-cast.png")
-
-    completed = vendor_trade_marker_count(generation, "s2c", "SMSG_LOGOUT_COMPLETE") + 1
-    automate_key_sequence(
-        generation, ("Return", "slash", *tuple("logout"), "Return"), hold_seconds=0.05, gap_seconds=0.05)
-    vendor_trade_wait(
-        generation, "s2c", "SMSG_LOGOUT_COMPLETE", "logout", completed, MAGE_COMBAT_LOGOUT_TIMEOUT)
-    capture_desktop_screenshot(generation, "mage-after-logout.png")
 
 
 def character_creation_points(x: int, y: int, width: int, height: int) -> dict[str, tuple[int, int]]:
