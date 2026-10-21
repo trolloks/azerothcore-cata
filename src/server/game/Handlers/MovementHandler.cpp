@@ -296,12 +296,12 @@ void WorldSession::HandleMoveTeleportAck(WorldPacket& recvData)
     LOG_DEBUG("network", "MSG_MOVE_TELEPORT_ACK");
 
     ObjectGuid guid;
-    recvData >> guid.ReadAsPacked();
-
-    uint32 flags, time;
-    recvData >> flags >> time; // unused
+    uint32 counter, time;
+    // Cata sends the ack index and move time first, then a bit-packed mover GUID; the old
+    // packed-guid-first WotLK read produced a different GUID and left the teleport semaphore set.
+    WorldPackets::Movement::ReadTeleportAck(recvData, guid, counter, time);
     LOG_DEBUG("network.opcode", "Guid {}", guid.ToString());
-    LOG_DEBUG("network.opcode", "Flags {}, time {}", flags, time / IN_MILLISECONDS);
+    LOG_DEBUG("network.opcode", "Counter {}, time {}", counter, time / IN_MILLISECONDS);
 
     Player* plMover = _player->m_mover->ToPlayer();
 
@@ -1013,8 +1013,7 @@ void WorldSession::HandleMoveTimeSkippedOpcode(WorldPacket& recvData)
 
     ObjectGuid guid;
     uint32 timeSkipped;
-    recvData >> guid.ReadAsPacked();
-    recvData >> timeSkipped;
+    WorldPackets::Movement::ReadTimeSkipped(recvData, guid, timeSkipped);
 
     Unit* mover = GetPlayer()->m_mover;
 
@@ -1034,8 +1033,7 @@ void WorldSession::HandleMoveTimeSkippedOpcode(WorldPacket& recvData)
     mover->m_movementInfo.time += timeSkipped;
 
     WorldPacket data(MSG_MOVE_TIME_SKIPPED, recvData.size());
-    data << guid.WriteAsPacked();
-    data << timeSkipped;
+    WorldPackets::Movement::WriteTimeSkipped(data, guid, timeSkipped);
     GetPlayer()->SendMessageToSet(&data, false);
 }
 

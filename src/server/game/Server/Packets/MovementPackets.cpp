@@ -2028,6 +2028,23 @@ void WorldPackets::Movement::ReadTeleportAck(WorldPacket& packet, ObjectGuid& gu
         packet.ReadByteSeq(guid[index]);
 }
 
+void WorldPackets::Movement::ReadTimeSkipped(WorldPacket& packet, ObjectGuid& guid, uint32& time)
+{
+    // Cata: time first, then the bit-packed mover GUID.
+    packet >> time;
+    guid.Clear();
+    for (uint8 index : { 5, 1, 3, 7, 6, 0, 4, 2 })
+        guid[index] = packet.ReadBit();
+    for (uint8 index : { 7, 1, 2, 4, 3, 6, 0, 5 })
+        packet.ReadByteSeq(guid[index]);
+}
+
+void WorldPackets::Movement::WriteTimeSkipped(WorldPacket& packet, ObjectGuid const& guid, uint32 time)
+{
+    packet << time;
+    packet << guid.WriteAsPacked();
+}
+
 void WorldPackets::Movement::WriteTeleportUpdate(WorldPacket& packet, MovementInfo const& info)
 {
     uint32 flags = MovementFlagsToClient(info.flags);
