@@ -90,5 +90,6 @@ layout (with the relay writing time then the packed GUID). Unit tests:
 
 `quest-kill-6of8.png` (quest log at 6/8, rewards 25/170 and Kobold Vermin visible),
 `quest-kill-783-accepted.png`, `quest-kill-783-complete.png`, `quest-kill-7-accepted.png`,
-`quest-kill-7-reaccepted.png`. Raw logs, the packet capture and the disposable database remain
-under the run root `/mnt/f79365ff-6a68-45da-925e-b9ddc6d5da6c/cata-runs/plan36-quest7/generation-6`.
+`quest-kill-7-reaccepted.png`. The disposable client, database container/volume, cache and raw
+run root were removed after acceptance; the committed screenshots and `acceptance.json` are the
+retained record.
