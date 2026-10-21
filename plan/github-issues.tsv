@@ -32,7 +32,7 @@ plan	issue	state	title	url
 31	102	open	Plan 31: first normal level-up and persisted progression	https://github.com/trolloks/azerothcore-cata/issues/102
 32	134	closed	Plan 32: reproducible Northshire collision and pathfinding	https://github.com/trolloks/azerothcore-cata/issues/134
 33	135	closed	Plan 33: native vendor buy, sell, buyback and repair	https://github.com/trolloks/azerothcore-cata/issues/135
-33a	157	open	Plan 33 follow-up: negative native vendor cases	https://github.com/trolloks/azerothcore-cata/issues/157
-34	136	open	Plan 34: native trainer learning and spellbook persistence	https://github.com/trolloks/azerothcore-cata/issues/136
-35	137	open	Plan 35: first mana-class combat and resource recovery	https://github.com/trolloks/azerothcore-cata/issues/137
-36	138	open	Plan 36: first normal kill-objective quest loop	https://github.com/trolloks/azerothcore-cata/issues/138
+33a	157	closed	Plan 33 follow-up: negative native vendor cases	https://github.com/trolloks/azerothcore-cata/issues/157
+34	136	closed	Plan 34: native trainer learning and spellbook persistence	https://github.com/trolloks/azerothcore-cata/issues/136
+35	137	closed	Plan 35: first mana-class combat and resource recovery	https://github.com/trolloks/azerothcore-cata/issues/137
+36	138	closed	Plan 36: first normal kill-objective quest loop	https://github.com/trolloks/azerothcore-cata/issues/138
