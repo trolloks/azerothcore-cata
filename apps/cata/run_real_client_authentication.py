@@ -152,6 +152,8 @@ GROUND_MOVEMENT_MODE = "ground-movement"
 JUMP_FALL_LAND_MODE = "jump-fall-land"
 WALK_RUN_MODE_SWITCH_MODE = "walk-run-mode-switch"
 CHARACTER_CREATION_MODE = "character-creation"
+QUEST_KILL_MODE = "quest-kill"
+CREATE_MODES = frozenset({CHARACTER_CREATION_MODE, *MAGE_MODES})
 BASIC_SPELL_CAST_MODE = "basic-spell-cast"
 RUN_SPEED_AURA = 2983
 RUN_SPEED_AURA_AMOUNT = 50
@@ -462,13 +464,56 @@ TRAINER_TRAIN_BUTTON = (0.170, 0.531)
 TRAINER_STATE_AVAILABLE = 1
 TRAINER_STATE_UNAVAILABLE = 2
 
+# Plan 36: quest 7 "Kobold Camp Cleanup" through the native Human start. Deputy Willem (823)
+# auto-accepts 783; Marshal McBride (197) ends it, auto-accepts 7 through the normal next-quest
+# branch, and ends 7 for +25 money, +275 Stormwind and no item. Travel uses run-owned DB position
+# seeds or the account's own `.go xyz`; every accept/abandon/complete/reward is a client action.
+QUEST_KILL_QUEST_ID = 7
+QUEST_KILL_PREREQ_QUEST_ID = 783
+QUEST_KILL_STARTER_NAME = "Deputy Willem"
+QUEST_KILL_STARTER_POSITION = (-8949.95, -132.493, 83.5312, 0.0)
+QUEST_KILL_NPC_NAME = "Marshal McBride"
+QUEST_KILL_NPC_POSITION = (-8902.59, -159.0, 82.0223, 3.14159)
+QUEST_KILL_TARGET_ENTRY = 6
+QUEST_KILL_TARGET_NAME = "Kobold Vermin"
+QUEST_KILL_TARGET_GUID_PREFIX = 0xF130
+QUEST_KILL_REQUIRED_COUNT = 8
+QUEST_KILL_UNRELATED_NAME = "Diseased Young Wolf"
+QUEST_KILL_UNRELATED_ENTRY = 299
+QUEST_KILL_WOLF_POSITION = (-8876.07, -114.909, 81.4776, 0.0)
+QUEST_KILL_REWARD_MONEY = 25
+QUEST_KILL_REWARD_XP = 170
+QUEST_KILL_REWARD_REPUTATION = 275
+QUEST_KILL_PREREQ_REWARD_XP = 40
+QUEST_KILL_PREREQ_REWARD_REPUTATION = 82
+QUEST_KILL_STORMWIND_FACTION = 72
+QUEST_KILL_FULL_BAG_ENTRY = 58231   # Recruit's Vest, the native starter chest piece
+QUEST_KILL_FULL_BAG_GUIDS = tuple(99000500 + index for index in range(16))
+QUEST_KILL_BACKPACK_SLOTS = tuple(range(23, 39))
+QUEST_KILL_TIMEOUT = 30
+QUEST_KILL_PROBE_TIMEOUT = 180
+# A single "x" has no default keybind, so a probe typed before the loading screen dismisses does
+# nothing instead of opening the character sheet or strafing the character.
+QUEST_KILL_PROBE_KEYS = ("Return", "x", "Return")
+QUEST_KILL_LOGOUT_TIMEOUT = 45
+QUEST_KILL_RELOGIN_TIMEOUT = 150
+QUEST_KILL_FIGHT_SECONDS = 35
+QUEST_KILL_COMMAND_DELAY_SECONDS = 2.0
+# The first eight targets are authentic Kobold Vermin spawns; each is reached with `.go xyz` travel.
+# The 9th proves a completed objective ignores further credit; the last one is after the reward.
+# Edge-of-camp spawns: each has at most one neighbour within 8 yd, so the social-alert chain does
+# not turn one pull into the whole camp. The target, count and all rows stay authentic.
+QUEST_KILL_SPAWN_GUIDS = (
+    80024, 79999, 80028, 80031, 80032, 80094, 80098, 80099, 80100, 80108, 80110,
+)
+
 
 POPULATED_CHARACTER_MODES = frozenset({
     POPULATED_MODE, CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
     IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
     WALK_RUN_MODE_SWITCH_MODE, BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
     INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
-    VENDOR_NEGATIVE_MODE, TRAINER_MODE,
+    VENDOR_NEGATIVE_MODE, TRAINER_MODE, QUEST_KILL_MODE,
 })
 CHARACTER_MODES = frozenset({"character-screen", CHARACTER_CREATION_MODE, *MAGE_MODES,
                              *POPULATED_CHARACTER_MODES})
@@ -601,6 +646,15 @@ def apply_trainer_seed(mode: str) -> None:
         return
     CHARACTER_POSITION = TRAINER_CHARACTER_POSITION
     CHARACTER_ORIENTATION = TRAINER_CHARACTER_ORIENTATION
+
+
+def apply_quest_kill_seed(mode: str) -> None:
+    """Put the seeded quest warrior on the native Human start, beside Deputy Willem."""
+    global CHARACTER_POSITION, CHARACTER_ORIENTATION
+    if mode != QUEST_KILL_MODE:
+        return
+    CHARACTER_POSITION = QUEST_KILL_STARTER_POSITION[:3]
+    CHARACTER_ORIENTATION = QUEST_KILL_STARTER_POSITION[3]
 
 
 def vendor_negative_seed_sql(case: str) -> str:
@@ -783,6 +837,8 @@ def plan32_frozen_stage(generation: Generation) -> str:
 
 
 def plan_number(mode: str) -> str:
+    if mode == QUEST_KILL_MODE:
+        return "36"
     if mode == LEVEL_UP_MODE:
         return "31"
     if mode == CHAT_MESSAGE_MODE:
@@ -1754,6 +1810,9 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         # Mana regeneration would let a tick land between a Fireball's cost and its completion,
         # masking the exact 9-mana cost. The negative mode only needs the initial pool.
         "Rate.Mana": "0.0001" if generation["mode"] == MAGE_NEGATIVE_MODE else "1",
+        # Plan 36 fights eight level-1/2 creatures in a row with a level-1 warrior; faster health
+        # regeneration keeps the fixture alive between pulls without changing damage or credit.
+        "Rate.Health": "10" if generation["mode"] == QUEST_KILL_MODE else "1",
         # The Plan 32 mode verifies against the wire payloads (cast counters, the CAST_FAILED
         # reason byte), so its generations always capture them. Filenames are relative to LogsDir;
         # empty everywhere else, which leaves packet logging off (sessions also need the flag the
@@ -1762,7 +1821,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
             '"packets.pkt"'
             if generation["mode"] in (
                 PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE, TRAINER_MODE,
-                MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE, MAGE_NEGATIVE_MODE,
+                MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE, MAGE_NEGATIVE_MODE, QUEST_KILL_MODE,
             )
             else '""'
         ),
@@ -1771,7 +1830,7 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
             "5,Server" if ISSUE97 or generation["mode"] in {
                 BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
                 WALK_RUN_MODE_SWITCH_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE,
-                TRAINER_MODE, MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE, MAGE_NEGATIVE_MODE,
+                TRAINER_MODE, MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE, MAGE_NEGATIVE_MODE, QUEST_KILL_MODE,
             }
             else "4,Server"
         ),
@@ -2166,6 +2225,7 @@ def prepare(args: argparse.Namespace) -> None:
     apply_vendor_trade_seed(args.mode)
     apply_vendor_negative_seed(args.mode)
     apply_trainer_seed(args.mode)
+    apply_quest_kill_seed(args.mode)
     apply_creation_class(args.mode, inputs.get("create_class", creation_class_name()))
     print(f"prepare preflight: {time.monotonic() - started:.1f}s", flush=True)
     manifest_path = args.manifest.resolve()
@@ -2337,6 +2397,8 @@ def prepare(args: argparse.Namespace) -> None:
         )
         if args.mode in POPULATED_CHARACTER_MODES:
             mysql(manifest, generation, populated_character_seed_sql(), characters)
+            if args.mode == QUEST_KILL_MODE:
+                mysql(manifest, generation, quest_kill_character_seed_sql(), characters)
             verify_populated_character_seed(manifest, generation)
             if character_row_count(manifest, generation) != 1 or realm_character_count(manifest, generation) != 1:
                 raise RuntimeError("owned populated character seed counts do not equal one")
@@ -2467,7 +2529,9 @@ def client_login_points(x: int, y: int, width: int, height: int) -> tuple[tuple[
 # X11 keysym names for punctuation used in Lua string literals typed via "/script" (e.g. the
 # SetBinding("N","TOGGLERUN") call in WALK_RUN_BIND_SETUP_KEYS); "," has no keysym named "," so
 # string_to_keysym(",") silently fails to resolve and the keystroke is dropped without error.
-UNSHIFTED_PUNCTUATION_KEYSYM_NAMES = {",": "comma", "'": "apostrophe"}
+UNSHIFTED_PUNCTUATION_KEYSYM_NAMES = {
+    ",": "comma", "'": "apostrophe", ".": "period", "-": "minus", ";": "semicolon", "=": "equal",
+}
 
 
 def x_keysym_name(value: str) -> str:
@@ -2570,10 +2634,14 @@ def automate_client_login(generation: Generation) -> None:
     control = connection.keysym_to_keycode(XK.string_to_keysym("Control_L"))
 
     def require_focus() -> None:
+        nonlocal window_id
         active = connection.screen().root.get_full_property(
             connection.intern_atom("_NET_ACTIVE_WINDOW"), X.AnyPropertyType,
         )
         if active is None or not len(active.value) or int(active.value[0]) != int(window_id, 16):
+            if REACQUIRE_FOCUS:
+                window_id, *_ = focus_owned_window(generation, timeout=10)
+                return
             raise RuntimeError("owned WoW window lost focus before input")
 
     def press(value: str, modifier: int | None = None) -> None:
@@ -2671,6 +2739,10 @@ BASIC_SPELL_CAST_KEYS = ("1",)
 # Lua call such as SetBinding("N","TOGGLERUN") via the chat edit box (see WALK_RUN_BIND_SETUP_KEYS).
 # '"' lives on the shifted level of the apostrophe key, so it maps to "apostrophe" with Shift held.
 SHIFTED_KEYSYM_NAMES = {"(": "9", ")": "0", '"': "apostrophe"}
+# Quest-kill runs while the operator watches the desktop; re-acquire the owned window with the
+# WM activation protocol instead of aborting a burst when focus moves. Other modes keep the
+# original abort-on-focus-loss safety behaviour.
+REACQUIRE_FOCUS = False
 
 
 def automate_key_sequence(
@@ -2687,10 +2759,14 @@ def automate_key_sequence(
     shift = connection.keysym_to_keycode(XK.string_to_keysym("Shift_L"))
 
     def require_focus() -> None:
+        nonlocal window_id
         active = connection.screen().root.get_full_property(
             connection.intern_atom("_NET_ACTIVE_WINDOW"), X.AnyPropertyType,
         )
         if active is None or not len(active.value) or int(active.value[0]) != int(window_id, 16):
+            if REACQUIRE_FOCUS:
+                window_id, *_ = focus_owned_window(generation, timeout=10)
+                return
             raise RuntimeError("owned WoW window lost focus before input")
 
     for key in keys:
@@ -3554,6 +3630,708 @@ def automate_mage_negative(generation: Generation) -> None:
     capture_desktop_screenshot(generation, "mage-negative-insufficient.png")
 
 
+def quest_kill_character_seed_sql() -> str:
+    """The seeded level-1 warrior, real starting kit, Attack button and seen tutorials.
+
+    The tutorial flags are the Plan 31 lesson: a fresh account's "click Attack" modal swallows
+    keyboard input before it reaches the chat edit box, which looked like a client loading stall.
+    """
+    return (
+        f"DELETE FROM `character_queststatus` WHERE `guid`={CHARACTER_GUID};"
+        f"DELETE FROM `character_queststatus_rewarded` WHERE `guid`={CHARACTER_GUID};"
+        f"DELETE FROM `character_reputation` WHERE `guid`={CHARACTER_GUID};"
+        # A previous attempt may have died; the corpse row would load the re-seeded character as
+        # a ghost even though the fresh character row is alive.
+        f"DELETE FROM `corpse` WHERE `guid`={CHARACTER_GUID};"
+        f"DELETE FROM `character_aura` WHERE `guid`={CHARACTER_GUID};"
+        + level_up_gear_seed_sql()
+        + level_up_action_seed_sql()
+        + level_up_tutorial_seed_sql()
+    )
+
+
+def quest_kill_scalar(manifest: Manifest, generation: Generation, sql: str, schema: str) -> int:
+    output = mysql(manifest, generation, sql, schema)
+    try:
+        return int(output)
+    except ValueError as error:
+        raise RuntimeError(f"owned character database returned a non-numeric value: {output!r}") from error
+
+
+def quest_kill_character_guid(manifest: Manifest, generation: Generation) -> int:
+    guids = mysql(
+        manifest, generation,
+        f"SELECT `guid` FROM `characters` WHERE `account`={ACCOUNT_ID} AND `name`='{CHARACTER_NAME}' "
+        "AND `deleteDate` IS NULL;",
+        generation["schemas"]["characters"],
+    ).splitlines()
+    if len(guids) != 1:
+        raise RuntimeError(f"the Plan 36 character matched {len(guids)} rows instead of one")
+    return int(guids[0])
+
+
+def quest_kill_quest_row(
+    manifest: Manifest, generation: Generation, guid: int, quest: int,
+) -> dict[str, int] | None:
+    text = mysql(
+        manifest, generation,
+        f"SELECT `status`, `mobcount1` FROM `character_queststatus` "
+        f"WHERE `guid`={guid} AND `quest`={quest};",
+        generation["schemas"]["characters"],
+    ).strip()
+    if not text:
+        return None
+    fields = text.split("\t")
+    return {"status": int(fields[0]), "mobcount1": int(fields[1])}
+
+
+def quest_kill_state(manifest: Manifest, generation: Generation) -> dict[str, object]:
+    """The saved character state the acceptance reads back after a normal logout."""
+    schema = generation["schemas"]["characters"]
+    guid = quest_kill_character_guid(manifest, generation)
+    items = []
+    for line in mysql(
+        manifest, generation,
+        f"SELECT `itemEntry`, `count` FROM `item_instance` WHERE `owner_guid`={guid} ORDER BY `guid`;",
+        schema,
+    ).splitlines():
+        if line.strip():
+            entry, count = line.split("\t")[:2]
+            items.append({"entry": int(entry), "count": int(count)})
+    return {
+        "guid": guid,
+        "level": quest_kill_scalar(
+            manifest, generation, f"SELECT `level` FROM `characters` WHERE `guid`={guid};", schema),
+        "xp": quest_kill_scalar(
+            manifest, generation, f"SELECT `xp` FROM `characters` WHERE `guid`={guid};", schema),
+        "money": quest_kill_scalar(
+            manifest, generation, f"SELECT `money` FROM `characters` WHERE `guid`={guid};", schema),
+        "reputation": quest_kill_scalar(
+            manifest, generation,
+            "SELECT COALESCE((SELECT `standing` FROM `character_reputation` "
+            f"WHERE `guid`={guid} AND `faction`={QUEST_KILL_STORMWIND_FACTION}), 0);",
+            schema,
+        ),
+        "quest_7": quest_kill_quest_row(manifest, generation, guid, QUEST_KILL_QUEST_ID),
+        "quest_783": quest_kill_quest_row(manifest, generation, guid, QUEST_KILL_PREREQ_QUEST_ID),
+        "rewarded_7": quest_kill_scalar(
+            manifest, generation,
+            f"SELECT COUNT(*) FROM `character_queststatus_rewarded` "
+            f"WHERE `guid`={guid} AND `quest`={QUEST_KILL_QUEST_ID};",
+            schema,
+        ),
+        "rewarded_783": quest_kill_scalar(
+            manifest, generation,
+            f"SELECT COUNT(*) FROM `character_queststatus_rewarded` "
+            f"WHERE `guid`={guid} AND `quest`={QUEST_KILL_PREREQ_QUEST_ID};",
+            schema,
+        ),
+        "items": items,
+        "item_count": len(items),
+        "backpack_slots": quest_kill_scalar(
+            manifest, generation,
+            f"SELECT COUNT(*) FROM `character_inventory` WHERE `guid`={guid} AND `bag`=0 "
+            "AND `slot` BETWEEN 23 AND 38;",
+            schema,
+        ),
+    }
+
+
+def quest_kill_fill_bags(manifest: Manifest, generation: Generation) -> None:
+    """Fill all sixteen backpack slots with native starter vests before the no-item turn-in.
+
+    Quest 7 rewards no item, so a full bag cannot block it; this is the inverse check: the reward
+    must still be delivered when no item could have fitted.
+    """
+    guid = quest_kill_character_guid(manifest, generation)
+    schema = generation["schemas"]["characters"]
+    item_rows = ", ".join(
+        f"({item_guid},{QUEST_KILL_FULL_BAG_ENTRY},{guid},1,100,'0 0 0 0 0 ','{'0 ' * 36}')"
+        for item_guid in QUEST_KILL_FULL_BAG_GUIDS
+    )
+    slot_rows = ", ".join(
+        f"({guid},0,{slot},{item_guid})"
+        for slot, item_guid in zip(QUEST_KILL_BACKPACK_SLOTS, QUEST_KILL_FULL_BAG_GUIDS)
+    )
+    fill_guids = ",".join(str(item_guid) for item_guid in QUEST_KILL_FULL_BAG_GUIDS)
+    mysql(
+        manifest, generation,
+        f"DELETE FROM `character_inventory` WHERE `guid`={guid} AND `bag`=0 AND `slot` BETWEEN 23 AND 38;"
+        # The equipped starter vest is the same entry; delete only the fill instances.
+        f"DELETE FROM `item_instance` WHERE `guid` IN ({fill_guids});"
+        "INSERT INTO `item_instance` (`guid`,`itemEntry`,`owner_guid`,`count`,`durability`,`charges`,"
+        "`enchantments`) "
+        f"VALUES {item_rows};"
+        "INSERT INTO `character_inventory` (`guid`,`bag`,`slot`,`item`) "
+        f"VALUES {slot_rows};",
+        schema,
+    )
+    if quest_kill_state(manifest, generation)["backpack_slots"] != len(QUEST_KILL_BACKPACK_SLOTS):
+        raise RuntimeError("the Plan 36 full-bag fill did not occupy all sixteen backpack slots")
+
+
+def quest_kill_grant_travel(manifest: Manifest, generation: Generation) -> None:
+    """Give the fixture account enough RBAC to use `.go xyz` for travel only.
+
+    The command is setup, never the mechanic under test: every accept, abandon, kill, turn-in and
+    reward still comes from the client's own UI and is asserted on the wire.
+    """
+    mysql(
+        manifest, generation,
+        f"DELETE FROM `account_access` WHERE `id`={ACCOUNT_ID};"
+        "INSERT INTO `account_access` (`id`,`gmlevel`,`RealmID`,`comment`) "
+        f"VALUES ({ACCOUNT_ID},3,-1,'Plan 36 travel-only fixture');"
+        # Security level 3 does not include the gamemaster command role by default; grant only
+        # the `.go` permission this mode needs.
+        f"DELETE FROM `rbac_account_permissions` WHERE `accountId`={ACCOUNT_ID} "
+        "AND `permissionId` IN (377,523,552) AND `realmId`=-1;"
+        "INSERT INTO `rbac_account_permissions` (`accountId`,`permissionId`,`granted`,`realmId`) "
+        f"VALUES ({ACCOUNT_ID},377,1,-1),({ACCOUNT_ID},523,1,-1),({ACCOUNT_ID},552,1,-1);",
+        generation["schemas"]["auth"],
+    )
+
+
+def quest_kill_keys(text: str) -> tuple[str, ...]:
+    """Type text through the client's chat edit box; spaces use the client's own keysym name."""
+    return tuple("space" if character == " " else character for character in text)
+
+
+def quest_kill_probe_input(generation: Generation, timeout: float) -> None:
+    """Type a harmless chat line until the client echoes it.
+
+    Quest-kill keeps the account's `.go` permission, so its say lines echo as GM chat; both
+    opcodes count as the client accepting input. The tutorials are pre-marked seen in the seed,
+    which is what used to swallow the first input here.
+    """
+    def chat_count() -> int:
+        return sum(
+            vendor_trade_marker_count(generation, "s2c", opcode)
+            for opcode in ("SMSG_MESSAGECHAT", "SMSG_GM_MESSAGECHAT")
+        )
+
+    before = chat_count()
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        automate_key_sequence(generation, QUEST_KILL_PROBE_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+        until = time.monotonic() + 4.0
+        while time.monotonic() < until:
+            if chat_count() > before:
+                return
+            time.sleep(0.2)
+    capture_desktop_screenshot(generation, "quest-kill-input-probe.png")
+    raise RuntimeError("the client did not accept a chat probe; keyboard input is not reaching it")
+
+
+def quest_kill_command(generation: Generation, command: str) -> None:
+    automate_key_sequence(
+        generation, ("Return", *quest_kill_keys(command), "Return"), hold_seconds=0.03, gap_seconds=0.03,
+    )
+
+
+def quest_kill_slash_command(generation: Generation, command: str) -> None:
+    automate_key_sequence(
+        generation, ("Return", "slash", *quest_kill_keys(command), "Return"),
+        hold_seconds=0.03, gap_seconds=0.03,
+    )
+
+
+def quest_kill_script(generation: Generation, script: str) -> None:
+    automate_key_sequence(
+        generation, ("Return", "slash", *tuple("script"), "space", *quest_kill_keys(script), "Return"),
+        hold_seconds=0.03, gap_seconds=0.03,
+    )
+
+
+def quest_kill_wait(
+    generation: Generation, direction: str, opcode: str, target: int, description: str,
+    timeout: float = QUEST_KILL_TIMEOUT,
+) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if vendor_trade_marker_count(generation, direction, opcode) >= target:
+            return
+        time.sleep(0.2)
+    raise RuntimeError(f"the Plan 36 run did not reach the {description} ({direction} {opcode})")
+
+
+def quest_kill_wait_increment(
+    generation: Generation, opcodes: tuple[str, ...], before: dict[str, int], description: str,
+    timeout: float = QUEST_KILL_TIMEOUT,
+) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if any(vendor_trade_marker_count(generation, "s2c", opcode) > before.get(opcode, 0)
+               for opcode in opcodes):
+            return
+        time.sleep(0.2)
+    raise RuntimeError(f"the Plan 36 run did not reach the {description} ({' / '.join(opcodes)})")
+
+
+def quest_kill_wait_teleport(
+    generation: Generation, teleports: int, updates: int, loading: int,
+) -> None:
+    """Wait for the move, the client's loading screen and the destination grid before typing.
+
+    The client sends CMSG_LOADING_SCREEN_NOTIFY when the teleport's loading screen shows and hides;
+    typing before the hide turns the macro text into game keybinds and opens character/spellbook/
+    quest/bag frames (observed live). The object block follows the hide, so both are awaited.
+    """
+    vendor_trade_wait_optional(generation, "s2c", "MSG_MOVE_TELEPORT", teleports + 1, 15.0)
+    vendor_trade_wait_optional(
+        generation, "c2s", "CMSG_LOADING_SCREEN_NOTIFY", loading + 2, 15.0)
+    if not vendor_trade_wait_optional(generation, "s2c", "SMSG_UPDATE_OBJECT", updates + 1, 25.0):
+        time.sleep(8.0)
+    time.sleep(2.0)
+
+
+def quest_kill_travel(generation: Generation, position: tuple[float, float, float]) -> None:
+    """Travel to an NPC's interior floor point (the abbey positions)."""
+    x, y, z = position
+    teleports = vendor_trade_marker_count(generation, "s2c", "MSG_MOVE_TELEPORT")
+    updates = vendor_trade_marker_count(generation, "s2c", "SMSG_UPDATE_OBJECT")
+    loading = vendor_trade_marker_count(generation, "c2s", "CMSG_LOADING_SCREEN_NOTIFY")
+    quest_kill_command(generation, f".go xyz {x:.2f} {y:.2f} {z:.2f} 0")
+    quest_kill_wait_teleport(generation, teleports, updates, loading)
+
+
+def quest_kill_travel_spawn(generation: Generation, spawn_guid: int) -> None:
+    """Travel to a creature's authentic spawn row (its own x, y and z).
+
+    `.go xyz` with terrain height can land above a cave or below a rise where the pinned creature
+    is not in view; the spawn row is the exact point the creature occupies.
+    """
+    teleports = vendor_trade_marker_count(generation, "s2c", "MSG_MOVE_TELEPORT")
+    updates = vendor_trade_marker_count(generation, "s2c", "SMSG_UPDATE_OBJECT")
+    loading = vendor_trade_marker_count(generation, "c2s", "CMSG_LOADING_SCREEN_NOTIFY")
+    quest_kill_command(generation, f".go creature {spawn_guid}")
+    quest_kill_wait_teleport(generation, teleports, updates, loading)
+
+
+def quest_kill_bind_interact(generation: Generation) -> None:
+    """Bind G to interact-with-target with the client's own protected binding setter."""
+    automate_key_sequence(generation, VENDOR_TRADE_BIND_KEYS, hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(0.5)  # let the client save the binding before it is pressed
+
+
+def quest_kill_select_gossip_quest(generation: Generation, opcode: str, target: int) -> None:
+    """Choose the NPC's only quest from the gossip frame without relying on its screen corner.
+
+    The client's own quest-select APIs work for both an available and an active quest; the old
+    calibrated click assumed the vendor's right-hand frame and missed Willem's left-hand one
+    (the run screenshot shows 'A Threat Within' at the top-left).
+    """
+    # Click the gossip row first. Typing a /script while the gossip frame is open sends Return to
+    # the frame's default (Goodbye) button, which closes it and turns the script into game keys;
+    # the screen capture shows the quest row at the top-left of this NPC's frame.
+    for point in ((0.06, 0.27), (0.10, 0.285), VENDOR_TRADE_GOSSIP_OPTION_ORIGIN):
+        click_owned_window(generation, *point)
+        time.sleep(0.8)
+        if vendor_trade_marker_count(generation, "s2c", opcode) >= target:
+            return
+    # Last resort for another frame layout: the client's own select APIs.
+    for script in ("SelectGossipAvailableQuest(1)", "SelectGossipActiveQuest(1)"):
+        quest_kill_script(generation, script)
+        time.sleep(1.0)
+        if vendor_trade_marker_count(generation, "s2c", opcode) >= target:
+            return
+
+
+def quest_kill_wait_gossip_opcode(
+    generation: Generation, opcode: str, target: int, description: str,
+) -> None:
+    """Wait for the quest frame; if the NPC showed a gossip list first, select its quest."""
+    if vendor_trade_wait_optional(generation, "s2c", opcode, target, 8.0):
+        return
+    capture_desktop_screenshot(generation, "quest-kill-gossip.png")
+    quest_kill_select_gossip_quest(generation, opcode, target)
+    quest_kill_wait(generation, "s2c", opcode, target, description)
+
+
+def quest_kill_heal(generation: Generation) -> None:
+    """Restore the level-1 fixture between pulls (GM setup, not the credit under test).
+
+    `.modify hp` acts on the selected player, so a live kobold target makes it fail (and would
+    otherwise leave the fixture at one health); select self first, then revive/set health.
+    """
+    automate_key_sequence(
+        generation,
+        ("Return", "slash", *tuple("targetexact"), "space",
+         *vendor_trade_name_keys(CHARACTER_NAME), "Return"),
+        hold_seconds=0.05, gap_seconds=0.05,
+    )
+    time.sleep(0.5)
+    quest_kill_command(generation, ".revive")
+    time.sleep(0.3)
+    quest_kill_command(generation, ".modify hp 1000")
+    time.sleep(0.5)
+
+
+def quest_kill_select(
+    generation: Generation, name: str, description: str, *, already_targeted: bool = False,
+) -> None:
+    # The client sends no CMSG_SET_SELECTION when /targetexact resolves to the target it already
+    # has (McBride stays targeted through his quest frames), so callers that know he is current
+    # skip the selection instead of waiting for a packet that will never come.
+    if already_targeted:
+        return
+    selections = vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION")
+    for _ in range(10):
+        automate_key_sequence(
+            generation,
+            ("Return", "slash", *tuple("targetexact"), "space", *vendor_trade_name_keys(name), "Return"),
+            hold_seconds=0.05, gap_seconds=0.05,
+        )
+        time.sleep(1.5)  # let the client resolve the name and register the target
+        if vendor_trade_marker_count(generation, "c2s", "CMSG_SET_SELECTION") > selections:
+            return
+    raise RuntimeError(f"the Plan 36 run could not select {description} ({name})")
+
+
+def quest_kill_interact(
+    generation: Generation, name: str, description: str, *, already_targeted: bool = False,
+) -> None:
+    quest_kill_select(generation, name, description, already_targeted=already_targeted)
+    before = {
+        opcode: vendor_trade_marker_count(generation, "s2c", opcode)
+        for opcode in (
+            "SMSG_GOSSIP_MESSAGE", "SMSG_QUESTGIVER_QUEST_LIST", "SMSG_QUESTGIVER_QUEST_DETAILS",
+            "SMSG_QUESTGIVER_REQUEST_ITEMS", "SMSG_QUESTGIVER_OFFER_REWARD",
+        )
+    }
+    automate_key_sequence(generation, ("g",), hold_seconds=0.05, gap_seconds=0.05)
+    quest_kill_wait_increment(
+        generation,
+        ("SMSG_GOSSIP_MESSAGE", "SMSG_QUESTGIVER_QUEST_LIST", "SMSG_QUESTGIVER_QUEST_DETAILS",
+         "SMSG_QUESTGIVER_REQUEST_ITEMS", "SMSG_QUESTGIVER_OFFER_REWARD"),
+        before, f"{description} interaction",
+    )
+
+
+def quest_kill_kill(
+    generation: Generation, name: str, description: str, opcode: str,
+    timeout: float = QUEST_KILL_FIGHT_SECONDS, spawn_guid: int | None = None,
+) -> None:
+    for attempt in range(3):
+        quest_kill_heal(generation)
+        if attempt and spawn_guid is not None:
+            # The creature wandered out of melee reach; return to its spawn and try again.
+            quest_kill_travel_spawn(generation, spawn_guid)
+        quest_kill_select(generation, name, description)
+        before = vendor_trade_marker_count(generation, "s2c", opcode)
+        # Main-hand Attack (spell 6603) on action button 0. One press starts auto-attack; the
+        # server swings on the weapon timer until the target dies. A timeout means the target
+        # was out of melee range (it wandered from its spawn), so retry the selection once the
+        # client has had time to walk/face it again.
+        automate_key_sequence(generation, ("1",), hold_seconds=0.05, gap_seconds=0.05)
+        try:
+            quest_kill_wait(generation, "s2c", opcode, before + 1, description, timeout)
+            return
+        except RuntimeError:
+            if attempt == 2:
+                raise
+            capture_desktop_screenshot(generation, f"quest-kill-{description.replace(' ', '-')}.png")
+            time.sleep(2.0)
+
+
+def quest_kill_logout(generation: Generation) -> None:
+    for _ in range(4):
+        completed = vendor_trade_marker_count(generation, "s2c", "SMSG_LOGOUT_COMPLETE") + 1
+        quest_kill_slash_command(generation, "logout")
+        if vendor_trade_wait_optional(
+            generation, "s2c", "SMSG_LOGOUT_COMPLETE", completed, QUEST_KILL_LOGOUT_TIMEOUT,
+        ):
+            time.sleep(1.0)
+            return
+        # The first press may land while another kobold still has the player in combat.
+        time.sleep(6.0)
+    raise RuntimeError("the Plan 36 run could not log out")
+
+
+def quest_kill_login(generation: Generation) -> None:
+    target = len(player_login_callbacks(generation)) + 1
+    deadline = time.monotonic() + QUEST_KILL_RELOGIN_TIMEOUT
+    while time.monotonic() < deadline:
+        automate_character_selection(generation)
+        time.sleep(5.0)
+        if len(player_login_callbacks(generation)) >= target:
+            break
+    else:
+        raise RuntimeError("the Plan 36 client did not re-enter the world after the logout")
+    time.sleep(5.0)
+    quest_kill_probe_input(generation, 90)
+    quest_kill_bind_interact(generation)
+
+
+def quest_kill_open_log(generation: Generation, name: str) -> None:
+    automate_key_sequence(generation, ("l",), hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(1.0)  # let the quest log draw
+    capture_desktop_screenshot(generation, name)
+    automate_key_sequence(generation, ("l",), hold_seconds=0.05, gap_seconds=0.05)
+
+
+def quest_kill_open_turnin(
+    generation: Generation, description: str, *, already_targeted: bool = False,
+) -> str:
+    """Open McBride's turn-in frame and return which frame the server sent.
+
+    A completed quest with no required items can be offered directly (SMSG_QUESTGIVER_OFFER_REWARD)
+    or through the request-items frame that leads to CMSG_QUESTGIVER_COMPLETE_QUEST; both are
+    native and the caller must not demand the intermediate packet.
+    """
+    requests = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTGIVER_REQUEST_ITEMS")
+    offers = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTGIVER_OFFER_REWARD")
+    details = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTGIVER_QUEST_DETAILS")
+    quest_kill_interact(
+        generation, QUEST_KILL_NPC_NAME, description, already_targeted=already_targeted)
+    for attempt in range(2):
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            if vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTGIVER_REQUEST_ITEMS") > requests:
+                return "request"
+            if vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTGIVER_QUEST_DETAILS") > details:
+                return "details"
+            if vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTGIVER_OFFER_REWARD") > offers:
+                return "offer"
+            time.sleep(0.2)
+        if attempt == 0:
+            capture_desktop_screenshot(generation, "quest-kill-gossip.png")
+            # /click targets the button by name, so the frame's left/right placement cannot move
+            # the click off the row. Then fall back to the captured left-hand row and the vendor
+            # calibration's right-hand row.
+            quest_kill_slash_command(generation, "click GossipTitleButton1")
+            time.sleep(1.0)
+            if vendor_trade_marker_count(
+                generation, "s2c", "SMSG_QUESTGIVER_REQUEST_ITEMS") > requests:
+                return "request"
+            if vendor_trade_marker_count(
+                generation, "s2c", "SMSG_QUESTGIVER_QUEST_DETAILS") > details:
+                return "details"
+            if vendor_trade_marker_count(
+                generation, "s2c", "SMSG_QUESTGIVER_OFFER_REWARD") > offers:
+                return "offer"
+            for point in ((0.06, 0.27), (0.10, 0.285), VENDOR_TRADE_GOSSIP_OPTION_ORIGIN):
+                click_owned_window(generation, *point)
+                time.sleep(0.8)
+                if vendor_trade_marker_count(
+                    generation, "s2c", "SMSG_QUESTGIVER_REQUEST_ITEMS") > requests:
+                    return "request"
+                if vendor_trade_marker_count(
+                    generation, "s2c", "SMSG_QUESTGIVER_QUEST_DETAILS") > details:
+                    return "details"
+                if vendor_trade_marker_count(
+                    generation, "s2c", "SMSG_QUESTGIVER_OFFER_REWARD") > offers:
+                    return "offer"
+    raise RuntimeError(f"the Plan 36 run did not open the {description} frame")
+
+
+def quest_kill_turn_in(
+    generation: Generation, description: str, *, already_targeted: bool = False,
+) -> None:
+    """Drive a completed quest to its offer-reward frame, sending CompleteQuest only if asked."""
+    frame = quest_kill_open_turnin(
+        generation, description, already_targeted=already_targeted)
+    if frame in ("request", "details"):
+        offers = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTGIVER_OFFER_REWARD") + 1
+        quest_kill_script(generation, "CompleteQuest()")
+        quest_kill_wait(
+            generation, "s2c", "SMSG_QUESTGIVER_OFFER_REWARD", offers, f"{description} offer")
+
+
+def automate_quest_kill(generation: Generation, manifest: Manifest) -> None:
+    """Accept 783, turn it in, abandon/reaccept 7, earn eight kills, then turn in 7 once.
+
+    Travel is `.go xyz` (setup); everything else is driven through the client's normal quest and
+    combat UI, and each step waits for the opcode the server logs for that action.
+    """
+    snapshots: dict[str, object] = {}
+    generation["quest_kill_snapshots"] = snapshots
+    time.sleep(5.0)
+    quest_kill_probe_input(generation, QUEST_KILL_PROBE_TIMEOUT)
+    quest_kill_bind_interact(generation)
+
+    # No quest yet: the same creature must not advance anything.
+    quest_kill_travel_spawn(generation, QUEST_KILL_SPAWN_GUIDS[0])
+    no_quest_add_kills = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTUPDATE_ADD_KILL")
+    quest_kill_kill(
+        generation, QUEST_KILL_TARGET_NAME, "Kobold Vermin with no active quest", "SMSG_LOG_XPGAIN",
+        spawn_guid=QUEST_KILL_SPAWN_GUIDS[0])
+    if vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTUPDATE_ADD_KILL") != no_quest_add_kills:
+        raise RuntimeError("a Kobold Vermin gave credit with no active quest")
+    snapshots["no_quest_add_kills"] = no_quest_add_kills
+    quest_kill_travel(generation, QUEST_KILL_STARTER_POSITION[:3])
+
+    # 783 auto-accepts from Deputy Willem's gossip.
+    details = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTGIVER_QUEST_DETAILS") + 1
+    quest_kill_interact(generation, QUEST_KILL_STARTER_NAME, "Deputy Willem")
+    quest_kill_wait_gossip_opcode(
+        generation, "SMSG_QUESTGIVER_QUEST_DETAILS", details, "783 auto-accept")
+    capture_desktop_screenshot(generation, "quest-kill-783-accepted.png")
+
+    # Turn 783 in at Marshal McBride; the reward handler auto-accepts the next quest (7).
+    quest_kill_travel(generation, QUEST_KILL_NPC_POSITION[:3])
+    quest_kill_turn_in(generation, "783 turn-in")
+    capture_desktop_screenshot(generation, "quest-kill-783-complete.png")
+
+    completed = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTGIVER_QUEST_COMPLETE")
+    details = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTGIVER_QUEST_DETAILS")
+    quest_kill_script(generation, "GetQuestReward(1)")
+    # The next-quest branch can auto-accept 7 in the same handler, so its details frame is the
+    # stronger progress signal; accept either it or the completion packet (log flush order varies).
+    auto_details = False
+    deadline = time.monotonic() + 30.0
+    while time.monotonic() < deadline:
+        if vendor_trade_marker_count(
+            generation, "s2c", "SMSG_QUESTGIVER_QUEST_DETAILS") > details:
+            auto_details = True
+            break
+        if vendor_trade_marker_count(
+            generation, "s2c", "SMSG_QUESTGIVER_QUEST_COMPLETE") > completed:
+            for _ in range(50):
+                if vendor_trade_marker_count(
+                    generation, "s2c", "SMSG_QUESTGIVER_QUEST_DETAILS") > details:
+                    auto_details = True
+                    break
+                time.sleep(0.2)
+            break
+        time.sleep(0.2)
+    if not auto_details:
+        next_details = vendor_trade_marker_count(
+            generation, "s2c", "SMSG_QUESTGIVER_QUEST_DETAILS") + 1
+        quest_kill_interact(
+            generation, QUEST_KILL_NPC_NAME, "Marshal McBride (7 accept)", already_targeted=True)
+        quest_kill_wait_gossip_opcode(
+            generation, "SMSG_QUESTGIVER_QUEST_DETAILS", next_details, "7 auto-accept")
+    capture_desktop_screenshot(generation, "quest-kill-7-accepted.png")
+
+    # Abandon 7 through the client's own quest log, then re-accept it from Marshal McBride. The
+    # first credited kill after this must arrive as count 1, which is the reset proof.
+    removed = vendor_trade_marker_count(generation, "c2s", "CMSG_QUESTLOG_REMOVE_QUEST") + 1
+    # The auto-accepted 7 leaves its details frame on screen; close it so Return opens chat
+    # instead of pressing the frame's default button, then select quest 7's log row (the first
+    # row is the zone header).
+    automate_key_sequence(generation, ("Escape",), hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(0.5)
+    automate_key_sequence(generation, ("l",), hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(1.0)
+    capture_desktop_screenshot(generation, "quest-kill-log-before-abandon.png")
+    quest_kill_script(
+        generation,
+        "for i=1,GetNumQuestLogEntries() do if select(8,GetQuestLogTitle(i))==7 then "
+        "SelectQuestLogEntry(i) end end SetAbandonQuest() AbandonQuest()",
+    )
+    quest_kill_wait(generation, "c2s", "CMSG_QUESTLOG_REMOVE_QUEST", removed, "7 abandon")
+    # AbandonQuest may close the log itself; Escape closes it if it is still open, while "l"
+    # would reopen a log that already closed.
+    automate_key_sequence(generation, ("Escape",), hold_seconds=0.05, gap_seconds=0.05)
+    time.sleep(1.0)
+    reaccepted = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTGIVER_QUEST_DETAILS") + 1
+    quest_kill_interact(
+        generation, QUEST_KILL_NPC_NAME, "Marshal McBride (7 reaccept)", already_targeted=True)
+    quest_kill_wait_gossip_opcode(
+        generation, "SMSG_QUESTGIVER_QUEST_DETAILS", reaccepted, "7 reaccept")
+    capture_desktop_screenshot(generation, "quest-kill-7-reaccepted.png")
+
+    # Three credited kills at authentic spawns, then a normal logout saves the 3/8 state.
+    for index, spawn_guid in enumerate(QUEST_KILL_SPAWN_GUIDS[:3]):
+        quest_kill_travel_spawn(generation, spawn_guid)
+        quest_kill_kill(
+            generation, QUEST_KILL_TARGET_NAME, f"Kobold Vermin kill {index + 1}",
+            "SMSG_QUESTUPDATE_ADD_KILL", spawn_guid=spawn_guid,
+        )
+        time.sleep(2.0)
+    quest_kill_open_log(generation, "quest-kill-3of8.png")
+    quest_kill_logout(generation)
+    snapshots["after_three_kills"] = quest_kill_state(manifest, generation)
+
+    # The relog proves 3/8 survived; the wolf kill proves another creature gives no credit.
+    quest_kill_login(generation)
+    quest_kill_open_log(generation, "quest-kill-relog-3of8.png")
+    quest_kill_travel_spawn(generation, 79960)
+    add_kills_before_wolf = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTUPDATE_ADD_KILL")
+    quest_kill_kill(
+        generation, QUEST_KILL_UNRELATED_NAME, "Diseased Young Wolf", "SMSG_LOG_XPGAIN",
+        spawn_guid=79960)
+    if vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTUPDATE_ADD_KILL") != add_kills_before_wolf:
+        raise RuntimeError("the unrelated Diseased Young Wolf advanced quest 7")
+    snapshots["wolf_add_kills"] = add_kills_before_wolf
+
+    # Kills four through eight credit and complete the objective. The complete packet arrives
+    # with the eighth kill, so its baseline is taken before the loop.
+    completes_before = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTUPDATE_COMPLETE")
+    for index, spawn_guid in enumerate(QUEST_KILL_SPAWN_GUIDS[3:8], start=4):
+        quest_kill_travel_spawn(generation, spawn_guid)
+        quest_kill_kill(
+            generation, QUEST_KILL_TARGET_NAME, f"Kobold Vermin kill {index}",
+            "SMSG_QUESTUPDATE_ADD_KILL", spawn_guid=spawn_guid,
+        )
+        time.sleep(2.0)
+    quest_kill_wait(
+        generation, "s2c", "SMSG_QUESTUPDATE_COMPLETE", completes_before + 1,
+        "7 objective complete",
+    )
+    quest_kill_open_log(generation, "quest-kill-8of8.png")
+
+    # A ninth kill must not add credit beyond the required eight.
+    quest_kill_travel_spawn(generation, QUEST_KILL_SPAWN_GUIDS[8])
+    add_kills_before_ninth = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTUPDATE_ADD_KILL")
+    quest_kill_kill(
+        generation, QUEST_KILL_TARGET_NAME, "ninth Kobold Vermin", "SMSG_LOG_XPGAIN",
+        spawn_guid=QUEST_KILL_SPAWN_GUIDS[8])
+    if vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTUPDATE_ADD_KILL") != add_kills_before_ninth:
+        raise RuntimeError("the ninth Kobold Vermin advanced quest 7 past 8/8")
+    snapshots["ninth_add_kills"] = add_kills_before_ninth
+
+    # Return to Marshal McBride and save the completed 8/8 state before filling the bags.
+    quest_kill_travel(generation, QUEST_KILL_NPC_POSITION[:3])
+    quest_kill_logout(generation)
+    snapshots["after_eight_kills"] = quest_kill_state(manifest, generation)
+    quest_kill_fill_bags(manifest, generation)
+
+    # Full bags must not stop a no-item reward: turn 7 in, then repeat the interaction and prove
+    # nothing is awarded a second time.
+    quest_kill_login(generation)
+    quest_kill_turn_in(generation, "7 turn-in")
+    capture_desktop_screenshot(generation, "quest-kill-turnin.png")
+    completed = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTGIVER_QUEST_COMPLETE") + 1
+    quest_kill_script(generation, "GetQuestReward(1)")
+    quest_kill_wait(generation, "s2c", "SMSG_QUESTGIVER_QUEST_COMPLETE", completed, "7 reward")
+    capture_desktop_screenshot(generation, "quest-kill-reward.png")
+
+    # Repeating the reward interaction must not send another offer or completion.
+    offers_before = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTGIVER_OFFER_REWARD")
+    completes_before = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTGIVER_QUEST_COMPLETE")
+    try:
+        quest_kill_interact(
+            generation, QUEST_KILL_NPC_NAME, "Marshal McBride (repeat reward)", already_targeted=True)
+    except RuntimeError:
+        # No gossip/quest frame at all is also a valid replay refusal; the packet counts below
+        # are the assertion, and the screenshot shows the NPC without a reward frame.
+        pass
+    time.sleep(2.0)
+    if vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTGIVER_OFFER_REWARD") != offers_before:
+        raise RuntimeError("the repeat interaction offered quest 7 again")
+    if vendor_trade_marker_count(
+        generation, "s2c", "SMSG_QUESTGIVER_QUEST_COMPLETE") != completes_before:
+        raise RuntimeError("the repeat interaction awarded quest 7 again")
+    capture_desktop_screenshot(generation, "quest-kill-repeat.png")
+    quest_kill_logout(generation)
+    snapshots["after_reward"] = quest_kill_state(manifest, generation)
+
+    # Reload the saved character and kill one more Kobold Vermin: the rewarded quest must not
+    # reappear and no further progress may be recorded.
+    quest_kill_login(generation)
+    quest_kill_travel_spawn(generation, QUEST_KILL_SPAWN_GUIDS[9])
+    add_kills_before_last = vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTUPDATE_ADD_KILL")
+    quest_kill_kill(
+        generation, QUEST_KILL_TARGET_NAME, "post-reward Kobold Vermin", "SMSG_LOG_XPGAIN",
+        spawn_guid=QUEST_KILL_SPAWN_GUIDS[9])
+    if vendor_trade_marker_count(generation, "s2c", "SMSG_QUESTUPDATE_ADD_KILL") != add_kills_before_last:
+        raise RuntimeError("a post-reward kill restarted quest 7")
+    capture_desktop_screenshot(generation, "quest-kill-post-reward.png")
+    quest_kill_logout(generation)
+    snapshots["after_relog_kill"] = quest_kill_state(manifest, generation)
+
+
 def character_creation_points(x: int, y: int, width: int, height: int) -> dict[str, tuple[int, int]]:
     # Fractions calibrated against a 1792x1008 owned client window on the Cataclysm 15595 creation
     # screen: Alliance/Human is the first race portrait, Warrior the first class icon (both
@@ -3584,10 +4362,14 @@ def automate_character_creation(generation: Generation) -> None:
     shift = connection.keysym_to_keycode(XK.string_to_keysym("Shift_L"))
 
     def require_focus() -> None:
+        nonlocal window_id
         active = connection.screen().root.get_full_property(
             connection.intern_atom("_NET_ACTIVE_WINDOW"), X.AnyPropertyType,
         )
         if active is None or not len(active.value) or int(active.value[0]) != int(window_id, 16):
+            if REACQUIRE_FOCUS:
+                window_id, *_ = focus_owned_window(generation, timeout=10)
+                return
             raise RuntimeError("owned WoW window lost focus before input")
 
     def click(point: tuple[int, int]) -> None:
@@ -4073,6 +4855,95 @@ def combat_packet_events(generation: Generation) -> list[dict[str, object]]:
     return events
 
 
+def quest_packet_events(generation: Generation) -> list[dict[str, object]]:
+    """Quest accept/progress/complete/reward and quest-XP packets from this run's capture.
+
+    The layout is the server's own: SMSG_QUESTGIVER_QUEST_DETAILS writes the NPC guid, the
+    player's divider guid and the quest id; SMSG_QUESTGIVER_QUEST_COMPLETE writes talents,
+    skill-ups, money, XP, quest id and skill line before two bits; SMSG_QUESTUPDATE_ADD_KILL
+    writes a raw ObjectGuid for the dead creature. Reading the same bytes the client read is
+    what lets the verdict bind each award to the request that caused it.
+    """
+    path = Path(generation["paths"]["logs"]) / "packets.pkt"
+    if not path.is_file():
+        return []
+    data = path.read_bytes()
+    events: list[dict[str, object]] = []
+    offset = PKT_LOG_HEADER_SIZE
+    packet = 0
+    while offset + PKT_PACKET_HEADER_SIZE <= len(data):
+        direction, _, ticks, optional_size, length = struct.unpack_from("<IIIII", data, offset)
+        if optional_size != 20 or length > 65535 or length < 4:
+            raise RuntimeError(f"quest packet log desynchronised at byte {offset}")
+        opcode = struct.unpack_from("<I", data, offset + 40)[0]
+        payload = data[offset + 44: offset + 40 + length]
+        client_to_server = direction == 0x47534D43
+        if not client_to_server and opcode == SMSG_QUESTGIVER_QUEST_DETAILS_OPCODE and len(payload) >= 20:
+            events.append({
+                "opcode": "SMSG_QUESTGIVER_QUEST_DETAILS", "npc": struct.unpack_from("<Q", payload, 0)[0],
+                "quest": struct.unpack_from("<I", payload, 16)[0], "ticks": ticks, "index": packet,
+            })
+        elif not client_to_server and opcode == SMSG_QUESTGIVER_REQUEST_ITEMS_OPCODE and len(payload) >= 12:
+            events.append({
+                "opcode": "SMSG_QUESTGIVER_REQUEST_ITEMS", "npc": struct.unpack_from("<Q", payload, 0)[0],
+                "quest": struct.unpack_from("<I", payload, 8)[0], "ticks": ticks, "index": packet,
+            })
+        elif not client_to_server and opcode == SMSG_QUESTGIVER_OFFER_REWARD_OPCODE and len(payload) >= 12:
+            events.append({
+                "opcode": "SMSG_QUESTGIVER_OFFER_REWARD", "npc": struct.unpack_from("<Q", payload, 0)[0],
+                "quest": struct.unpack_from("<I", payload, 8)[0], "ticks": ticks, "index": packet,
+            })
+        elif not client_to_server and opcode == SMSG_QUESTGIVER_QUEST_COMPLETE_OPCODE and len(payload) >= 24:
+            money, experience, quest = struct.unpack_from("<III", payload, 8)
+            events.append({
+                "opcode": "SMSG_QUESTGIVER_QUEST_COMPLETE", "money": money, "xp": experience,
+                "quest": quest, "ticks": ticks, "index": packet,
+            })
+        elif not client_to_server and opcode == SMSG_QUESTUPDATE_ADD_KILL_OPCODE and len(payload) >= 24:
+            quest, entry, current, required, guid = struct.unpack_from("<IIIIQ", payload, 0)
+            events.append({
+                "opcode": "SMSG_QUESTUPDATE_ADD_KILL", "quest": quest, "entry": entry,
+                "current": current, "required": required, "guid": guid,
+                "ticks": ticks, "index": packet,
+            })
+        elif not client_to_server and opcode == SMSG_QUESTUPDATE_COMPLETE_OPCODE and len(payload) >= 4:
+            events.append({
+                "opcode": "SMSG_QUESTUPDATE_COMPLETE", "quest": struct.unpack_from("<I", payload, 0)[0],
+                "ticks": ticks, "index": packet,
+            })
+        # Quest/non-kill XP has no victim block: 8-byte empty guid, uint32 xp, uint8 type and the
+        # recruit-a-friend byte, i.e. 14 bytes. Kill XP adds the 8-byte victim detail after type.
+        elif not client_to_server and opcode == SMSG_LOG_XPGAIN_OPCODE and len(payload) >= 14:
+            guid, experience, gain_type = struct.unpack_from("<QIB", payload, 0)
+            events.append({
+                "opcode": "SMSG_LOG_XPGAIN", "victim": guid, "victim_entry": (guid >> 24) & 0xFFFFFF,
+                "xp": experience, "type": gain_type, "ticks": ticks, "index": packet,
+            })
+        elif client_to_server and opcode == CMSG_QUESTGIVER_ACCEPT_QUEST_OPCODE and len(payload) >= 16:
+            events.append({
+                "opcode": "CMSG_QUESTGIVER_ACCEPT_QUEST", "npc": struct.unpack_from("<Q", payload, 0)[0],
+                "quest": struct.unpack_from("<I", payload, 8)[0], "ticks": ticks, "index": packet,
+            })
+        elif client_to_server and opcode == CMSG_QUESTGIVER_COMPLETE_QUEST_OPCODE and len(payload) >= 12:
+            events.append({
+                "opcode": "CMSG_QUESTGIVER_COMPLETE_QUEST", "npc": struct.unpack_from("<Q", payload, 0)[0],
+                "quest": struct.unpack_from("<I", payload, 8)[0], "ticks": ticks, "index": packet,
+            })
+        elif client_to_server and opcode == CMSG_QUESTGIVER_CHOOSE_REWARD_OPCODE and len(payload) >= 16:
+            events.append({
+                "opcode": "CMSG_QUESTGIVER_CHOOSE_REWARD", "npc": struct.unpack_from("<Q", payload, 0)[0],
+                "quest": struct.unpack_from("<I", payload, 8)[0],
+                "reward": struct.unpack_from("<I", payload, 12)[0], "ticks": ticks, "index": packet,
+            })
+        elif client_to_server and opcode == CMSG_QUESTLOG_REMOVE_QUEST_OPCODE and len(payload) >= 1:
+            events.append({
+                "opcode": "CMSG_QUESTLOG_REMOVE_QUEST", "slot": payload[0], "ticks": ticks, "index": packet,
+            })
+        offset += PKT_PACKET_HEADER_SIZE + (length - 4)
+        packet += 1
+    return events
+
+
 def character_row_count(manifest: Manifest, generation: Generation) -> int:
     output = mysql(
         manifest, generation,
@@ -4086,9 +4957,11 @@ def character_row_count(manifest: Manifest, generation: Generation) -> int:
 
 
 def run_client(args: argparse.Namespace) -> None:
+    global REACQUIRE_FOCUS
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
     generation = active_generation(manifest)
+    REACQUIRE_FOCUS = generation["mode"] == QUEST_KILL_MODE
     if generation["mode"] in CHARACTER_MODES and args.stability_seconds < 5:
         raise RuntimeError("--stability-seconds must be at least 5")
     retryable = generation["state"] in {"observed", "accepted", "failed", "inconclusive"}
@@ -4166,9 +5039,22 @@ def run_client(args: argparse.Namespace) -> None:
         generation["vendor_case"] = case
         apply_vendor_negative_seed(generation["mode"])
         mysql(manifest, generation, vendor_negative_seed_sql(case), generation["schemas"]["characters"])
-    if generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}:
+    if generation["mode"] in CREATE_MODES:
         apply_creation_class(generation["mode"], generation["inputs"].get("create_class", "warrior"))
         generation.pop("mage_combat_sent", None)
+    if generation["mode"] == QUEST_KILL_MODE:
+        # Re-seed the prepared character instead of creating another one: this resets quest,
+        # reputation and inventory state for a retry while keeping the native character row.
+        apply_quest_kill_seed(generation["mode"])
+        mysql(manifest, generation, populated_character_seed_sql(), generation["schemas"]["characters"])
+        mysql(manifest, generation, quest_kill_character_seed_sql(), generation["schemas"]["characters"])
+        mysql(
+            manifest, generation,
+            f"UPDATE `realmcharacters` SET `numchars`=1 "
+            f"WHERE `realmid`={REALM_ID} AND `acctid`={ACCOUNT_ID};",
+            generation["schemas"]["auth"],
+        )
+        quest_kill_grant_travel(manifest, generation)
     if generation["mode"] == MAGE_COMBAT_MODE:
         mage_combat_character_reset(manifest, generation)
         mysql(manifest, generation, mage_combat_world_seed_sql(), generation["schemas"]["world"])
@@ -4263,7 +5149,7 @@ def run_client(args: argparse.Namespace) -> None:
                     generation["mode"] in {CHARACTER_SELECTION_MODE, *POST_MARKER_MODES}
                     and character_hold_started is not None and not selection_sent
                 ):
-                    if generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}:
+                    if generation["mode"] in CREATE_MODES:
                         automate_character_creation(generation)
                         generation["selection_action"] = "create"
                     else:
@@ -4369,9 +5255,9 @@ def run_client(args: argparse.Namespace) -> None:
                         capture_runtime(generation)
                         generation["post_marker_snapshots"] = 1
                         post_marker_hold_started = time.monotonic()
-                        if generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}:
+                        if generation["mode"] in CREATE_MODES:
                             automate_character_selection(generation)
-                    if generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES}:
+                    if generation["mode"] in {CHARACTER_CREATION_MODE, *MAGE_MODES, QUEST_KILL_MODE}:
                         if post_marker_hold_started is not None and player_login_callbacks(generation):
                             if generation["mode"] == MAGE_COMBAT_MODE:
                                 automate_mage_combat(generation)
@@ -4379,6 +5265,8 @@ def run_client(args: argparse.Namespace) -> None:
                                 automate_mage_followup(generation)
                             elif generation["mode"] == MAGE_NEGATIVE_MODE:
                                 automate_mage_negative(generation)
+                            elif generation["mode"] == QUEST_KILL_MODE:
+                                automate_quest_kill(generation, manifest)
                             capture_runtime(generation)
                             generation["post_marker_snapshots"] = 2
                             generation["post_marker_hold_seconds"] = time.monotonic() - post_marker_hold_started
@@ -4759,6 +5647,19 @@ CMSG_CAST_SPELL_OPCODE = 0x4C07
 SMSG_CAST_FAILED_OPCODE = 0x4D16
 SMSG_SPELL_GO_OPCODE = 0x6E16
 SMSG_LOGOUT_COMPLETE_OPCODE = 0x2137
+# Plan 36 quest wire numbers (Opcodes.h) and the payload fields the acceptance reads.
+CMSG_QUEST_QUERY_OPCODE = 0x0D06
+CMSG_QUESTGIVER_ACCEPT_QUEST_OPCODE = 0x6B37
+CMSG_QUESTGIVER_COMPLETE_QUEST_OPCODE = 0x0114
+CMSG_QUESTGIVER_CHOOSE_REWARD_OPCODE = 0x2125
+CMSG_QUESTLOG_REMOVE_QUEST_OPCODE = 0x0D16
+SMSG_QUESTGIVER_QUEST_DETAILS_OPCODE = 0x2425
+SMSG_QUESTGIVER_REQUEST_ITEMS_OPCODE = 0x6236
+SMSG_QUESTGIVER_OFFER_REWARD_OPCODE = 0x2427
+SMSG_QUESTGIVER_QUEST_COMPLETE_OPCODE = 0x55A4
+SMSG_QUESTUPDATE_ADD_KILL_OPCODE = 0x0199
+SMSG_QUESTUPDATE_COMPLETE_OPCODE = 0x2937
+SMSG_LOG_XPGAIN_OPCODE = 0x01D0
 # Events the verifier needs; anything else stays out of the sanitized evidence.
 PLAN32_EVIDENCE_OPCODES = {
     "CMSG_SET_SELECTION", "CMSG_CAST_SPELL", "SMSG_CAST_FAILED", "SMSG_SPELL_GO", "SMSG_LOGOUT_COMPLETE",
@@ -6323,7 +7224,7 @@ POST_MARKER_MODES = frozenset({
     GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE, CHARACTER_CREATION_MODE,
     BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE, INVALID_TARGET_SPELL_CAST_MODE,
     LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE, VENDOR_NEGATIVE_MODE, TRAINER_MODE,
-    MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE, MAGE_NEGATIVE_MODE,
+    MAGE_COMBAT_MODE, MAGE_FOLLOWUP_MODE, MAGE_NEGATIVE_MODE, QUEST_KILL_MODE,
 })
 POST_MARKER_COUNTERS = {
     INITIAL_POST_LOAD_PACKETS_MODE: initial_packets_marker_count,
@@ -6349,6 +7250,7 @@ POST_MARKER_COUNTERS = {
     INVALID_TARGET_SPELL_CAST_MODE: invalid_target_spell_cast_marker_count,
     LEVEL_UP_MODE: level_up_settle_signal,
     PLAN32_GEOMETRY_MODE: plan32_progress_marker_count,
+    QUEST_KILL_MODE: in_world_control_marker_count,
 }
 
 
@@ -6473,6 +7375,7 @@ def sanitized_evidence(
     vendor_trade_evidence_value: dict[str, int] | None = None,
     vendor_negative_evidence_value: dict[str, object] | None = None,
     trainer_evidence_value: dict[str, int] | None = None,
+    quest_kill_evidence_value: dict[str, object] | None = None,
     mage_combat_evidence_value: dict[str, int] | None = None,
     mage_followup_evidence_value: dict[str, int] | None = None,
     mage_negative_evidence_value: dict[str, int] | None = None,
@@ -6517,6 +7420,7 @@ def sanitized_evidence(
     vendor_trade_mode = generation["mode"] == VENDOR_TRADE_MODE
     vendor_negative_mode = generation["mode"] == VENDOR_NEGATIVE_MODE
     trainer_mode = generation["mode"] == TRAINER_MODE
+    quest_kill_mode = generation["mode"] == QUEST_KILL_MODE
     vendor_marker_mode = vendor_trade_mode or vendor_negative_mode or trainer_mode
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
@@ -6524,7 +7428,10 @@ def sanitized_evidence(
         INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
         VENDOR_NEGATIVE_MODE, TRAINER_MODE,
     }
-    login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
+    login_mode = (
+        quest_kill_mode or selection_mode or initial_packets_mode or map_insertion_mode
+        or in_world_control_mode or creation_mode
+    )
     owned_window = owned_window_evidence(generation) if character_mode else (
         Path(generation["paths"]["raw_evidence"]) / "window.xprop"
     ).is_file()
@@ -6569,6 +7476,7 @@ def sanitized_evidence(
             and "characters_completed" in milestones
             else "mage_negative_pass_candidate" if mage_negative_mode
             and "characters_completed" in milestones
+            else "quest_kill_pass_candidate" if quest_kill_mode and "characters_completed" in milestones
             else "plan32_geometry_pass_candidate" if plan32_geometry_mode and "characters_completed" in milestones
             else "basic_movement_pass_candidate" if basic_movement_mode and "characters_completed" in milestones
             else "in_world_control_bootstrap_candidate" if in_world_control_mode and "characters_completed" in milestones
@@ -6672,6 +7580,9 @@ def sanitized_evidence(
             if trainer_mode else None
         ),
         "trainer": trainer_evidence_value if trainer_mode else None,
+        "quest_kill": quest_kill_evidence_value if quest_kill_mode else None,
+        "quest_events": quest_packet_events(generation) if quest_kill_mode else None,
+        "quest_kill_snapshots": generation.get("quest_kill_snapshots") if quest_kill_mode else None,
         "mage_combat": mage_combat_evidence_value if mage_combat_mode else None,
         "mage_followup": mage_followup_evidence_value if mage_followup_mode else None,
         "mage_negative": mage_negative_evidence_value if mage_negative_mode else None,
@@ -6918,6 +7829,147 @@ def mage_followup_accepted(evidence: dict[str, object]) -> bool:
         and int(evidence.get("login_callback_count") or 0) == 2
         and int(evidence.get("logout_count") or 0) >= 1
     )
+
+
+def quest_kill_accepted(evidence: dict[str, object]) -> bool:
+    """One native quest 7 loop: 8 credited kills, one complete, one exact reward, no replay."""
+    state = evidence["quest_kill"] or {}
+    snapshots = evidence.get("quest_kill_snapshots") or {}
+    events = evidence.get("quest_events") or []
+    if not state or int(state.get("guid", 0)) == 0:
+        return False
+    if state.get("quest_7") is not None or int(state.get("rewarded_7", 0)) != 1:
+        return False
+    if state.get("quest_783") is not None or int(state.get("rewarded_783", 0)) != 1:
+        return False
+    if int(state.get("level", 0)) < 2:
+        return False
+    if int(state.get("money", -1)) != QUEST_KILL_REWARD_MONEY:
+        return False
+    if int(state.get("reputation", -1)) != (
+        QUEST_KILL_REWARD_REPUTATION + QUEST_KILL_PREREQ_REWARD_REPUTATION
+    ):
+        return False
+    if int(state.get("backpack_slots", 0)) != len(QUEST_KILL_BACKPACK_SLOTS):
+        return False
+
+    add_kills = [
+        event for event in events
+        if event["opcode"] == "SMSG_QUESTUPDATE_ADD_KILL" and int(event["quest"]) == QUEST_KILL_QUEST_ID
+    ]
+    if [int(event["current"]) for event in add_kills] != list(range(1, QUEST_KILL_REQUIRED_COUNT + 1)):
+        return False
+    if any(
+        int(event["entry"]) != QUEST_KILL_TARGET_ENTRY
+        or int(event["required"]) != QUEST_KILL_REQUIRED_COUNT for event in add_kills
+    ):
+        return False
+    credited_guids = {int(event["guid"]) for event in add_kills}
+    if len(credited_guids) != QUEST_KILL_REQUIRED_COUNT:
+        return False
+
+    completes = [
+        event for event in events
+        if event["opcode"] == "SMSG_QUESTUPDATE_COMPLETE" and int(event["quest"]) == QUEST_KILL_QUEST_ID
+    ]
+    if len(completes) != 1 or int(completes[0]["index"]) < int(add_kills[-1]["index"]):
+        return False
+
+    xp_gains = [event for event in events if event["opcode"] == "SMSG_LOG_XPGAIN"]
+    quest_xp = [int(event["xp"]) for event in xp_gains if int(event["type"]) == 1]
+    if quest_xp.count(QUEST_KILL_PREREQ_REWARD_XP) != 1:
+        return False
+    if quest_xp.count(QUEST_KILL_REWARD_XP) != 1:
+        return False
+    kill_xp = [event for event in xp_gains if int(event["type"]) == 0]
+    kobold_kills = [event for event in kill_xp if int(event["victim_entry"]) == QUEST_KILL_TARGET_ENTRY]
+    wolf_kills = [event for event in kill_xp if int(event["victim_entry"]) == QUEST_KILL_UNRELATED_ENTRY]
+    if not wolf_kills:
+        return False
+    if not credited_guids.issubset({int(event["victim"]) for event in kobold_kills}):
+        return False
+    # The 9th and post-reward kills must be real kills that earned no credit: at least two kobold
+    # deaths on the wire whose guids never appear in an add-kill event.
+    if len([event for event in kobold_kills if int(event["victim"]) not in credited_guids]) < 2:
+        return False
+    if any(int(event["victim"]) in credited_guids for event in wolf_kills):
+        return False
+
+    quest_completes = [
+        event for event in events if event["opcode"] == "SMSG_QUESTGIVER_QUEST_COMPLETE"
+    ]
+    prereq_awards = [
+        event for event in quest_completes if int(event["quest"]) == QUEST_KILL_PREREQ_QUEST_ID
+    ]
+    quest_awards = [event for event in quest_completes if int(event["quest"]) == QUEST_KILL_QUEST_ID]
+    if len(prereq_awards) != 1 or len(quest_awards) != 1:
+        return False
+    if int(prereq_awards[0]["xp"]) != QUEST_KILL_PREREQ_REWARD_XP or int(prereq_awards[0]["money"]) != 0:
+        return False
+    if int(quest_awards[0]["xp"]) != QUEST_KILL_REWARD_XP:
+        return False
+    if int(quest_awards[0]["money"]) != QUEST_KILL_REWARD_MONEY:
+        return False
+
+    offers = [event for event in events if event["opcode"] == "SMSG_QUESTGIVER_OFFER_REWARD"]
+    if len([event for event in offers if int(event["quest"]) == QUEST_KILL_PREREQ_QUEST_ID]) != 1:
+        return False
+    if len([event for event in offers if int(event["quest"]) == QUEST_KILL_QUEST_ID]) != 1:
+        return False
+    choices = [event for event in events if event["opcode"] == "CMSG_QUESTGIVER_CHOOSE_REWARD"]
+    if len([event for event in choices if int(event["quest"]) == QUEST_KILL_PREREQ_QUEST_ID]) != 1:
+        return False
+    if len([event for event in choices if int(event["quest"]) == QUEST_KILL_QUEST_ID]) != 1:
+        return False
+    # A completed no-item quest may be offered directly, so the intermediate request-items
+    # exchange (and its CMSG_QUESTGIVER_COMPLETE_QUEST) is native but not mandatory. At most
+    # one complete request per quest; the offer and reward-choice below remain mandatory.
+    completes_requested = [
+        int(event["quest"]) for event in events
+        if event["opcode"] == "CMSG_QUESTGIVER_COMPLETE_QUEST"
+    ]
+    if completes_requested.count(QUEST_KILL_PREREQ_QUEST_ID) > 1:
+        return False
+    if completes_requested.count(QUEST_KILL_QUEST_ID) > 1:
+        return False
+
+    # Abandon then reinteract: a second details frame for 7 after the remove request is the
+    # native reaccept, and the first credited kill afterwards arriving as count 1 is the reset.
+    details_7 = [
+        event for event in events
+        if event["opcode"] == "SMSG_QUESTGIVER_QUEST_DETAILS" and int(event["quest"]) == QUEST_KILL_QUEST_ID
+    ]
+    removes = [event for event in events if event["opcode"] == "CMSG_QUESTLOG_REMOVE_QUEST"]
+    if len(details_7) < 2 or not removes:
+        return False
+    if int(removes[0]["index"]) > int(details_7[1]["index"]):
+        return False
+
+    after_three = snapshots.get("after_three_kills") or {}
+    after_eight = snapshots.get("after_eight_kills") or {}
+    after_reward = snapshots.get("after_reward") or {}
+    after_relog = snapshots.get("after_relog_kill") or {}
+    if int(after_three.get("rewarded_783", 0)) != 1:
+        return False
+    if (after_three.get("quest_7") or {}).get("mobcount1") != 3:
+        return False
+    if (after_eight.get("quest_7") or {}).get("mobcount1") != QUEST_KILL_REQUIRED_COUNT:
+        return False
+    if (after_eight.get("quest_7") or {}).get("status") != 1:
+        return False
+    if after_reward.get("quest_7") is not None or int(after_reward.get("rewarded_7", 0)) != 1:
+        return False
+    if int(after_reward.get("money", -1)) != QUEST_KILL_REWARD_MONEY:
+        return False
+    if int(after_reward.get("reputation", -1)) != (
+        QUEST_KILL_REWARD_REPUTATION + QUEST_KILL_PREREQ_REWARD_REPUTATION
+    ):
+        return False
+    if after_relog.get("quest_7") is not None or int(after_relog.get("rewarded_7", 0)) != 1:
+        return False
+    if int(after_relog.get("money", -1)) != int(after_reward.get("money", -2)):
+        return False
+    return True
 
 
 def mage_negative_accepted(evidence: dict[str, object]) -> bool:
@@ -7310,6 +8362,7 @@ def verify(args: argparse.Namespace) -> None:
     vendor_trade_mode = generation["mode"] == VENDOR_TRADE_MODE
     vendor_negative_mode = generation["mode"] == VENDOR_NEGATIVE_MODE
     trainer_mode = generation["mode"] == TRAINER_MODE
+    quest_kill_mode = generation["mode"] == QUEST_KILL_MODE
     vendor_marker_mode = vendor_trade_mode or vendor_negative_mode or trainer_mode
     in_world_control_mode = generation["mode"] in {
         IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE, RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE,
@@ -7317,16 +8370,23 @@ def verify(args: argparse.Namespace) -> None:
         INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
         VENDOR_NEGATIVE_MODE, TRAINER_MODE,
     }
-    login_mode = selection_mode or initial_packets_mode or map_insertion_mode or in_world_control_mode or creation_mode
+    login_mode = (
+        quest_kill_mode or selection_mode or initial_packets_mode or map_insertion_mode
+        or in_world_control_mode or creation_mode
+    )
     # The relog stage drives the whole login twice, so the login-shaped evidence below expects two
     # complete sessions that both name the same seeded character.
-    expected_logins = 2 if (
+    expected_logins = 4 if quest_kill_mode else 2 if (
         (plan32_geometry_mode and generation.get("plan32_stage") == "relog") or mage_followup_mode
     ) else 1
     # Returning to the character screen after /logout makes the client ask for its character list
     # again (CharacterSelect_OnShow calls GetCharacterListUpdate), so vendor mode sees one
     # enumeration per session plus that closing one while still logging in exactly once.
-    expected_enumerations = 2 if (vendor_trade_mode or vendor_negative_mode or trainer_mode) else expected_logins
+    expected_enumerations = (
+        5 if quest_kill_mode
+        else 2 if (vendor_trade_mode or vendor_negative_mode or trainer_mode)
+        else expected_logins
+    )
     rows = character_row_count(manifest, generation) if character_mode else None
     realm_count = realm_character_count(manifest, generation) if populated_mode else None
     seed = (
@@ -7375,6 +8435,7 @@ def verify(args: argparse.Namespace) -> None:
             vendor_negative_db_evidence(manifest, generation) if vendor_negative_mode else None
         ),
         trainer_evidence_value=trainer_db_evidence(manifest, generation) if trainer_mode else None,
+        quest_kill_evidence_value=quest_kill_state(manifest, generation) if quest_kill_mode else None,
         mage_combat_evidence_value=(
             mage_combat_db_evidence(manifest, generation) if mage_combat_mode else None
         ),
@@ -7520,6 +8581,9 @@ def verify(args: argparse.Namespace) -> None:
             character_ok = character_ok and mage_followup_accepted(evidence)
         if mage_negative_mode:
             character_ok = character_ok and mage_negative_accepted(evidence)
+        if quest_kill_mode:
+            character_ok = character_ok and quest_kill_accepted(evidence) and selection_proof_is_complete(
+                selection, transcript, enum_events, expected_logins, expected_enumerations)
         if trainer_mode:
             trainer = evidence["trainer"] or {}
             trainer_list = evidence["trainer_list"] or {}
@@ -7913,6 +8977,7 @@ def verify(args: argparse.Namespace) -> None:
                 else "mage_combat_pass" if mage_combat_mode
                 else "mage_combat_followup_pass" if mage_followup_mode
                 else "mage_negative_pass" if mage_negative_mode
+                else "quest_kill_pass" if quest_kill_mode
                 else "character_creation_pass" if creation_mode
                 else "run_speed_change_pass" if run_speed_mode
                 else "basic_spell_cast_pass" if basic_spell_cast_mode
@@ -8713,6 +9778,120 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     assert "curhealth" in mage_negative_world_seed_sql()
     assert str(MAGE_NEGATIVE_FAR_GUID) in mage_negative_world_seed_sql()
     assert plan_number(CHARACTER_CREATION_MODE) == "22"
+    assert QUEST_KILL_MODE in CHARACTER_MODES
+    assert QUEST_KILL_MODE in POPULATED_CHARACTER_MODES
+    assert QUEST_KILL_MODE in POST_MARKER_MODES
+    assert POST_MARKER_COUNTERS[QUEST_KILL_MODE] is in_world_control_marker_count
+
+    def quest_evidence(**overrides: object) -> dict[str, object]:
+        def unit_guid(entry: int, counter: int) -> int:
+            return 0xF130000000000000 | (entry << 24) | counter
+
+        credited = [unit_guid(6, 100 + index) for index in range(8)]
+        add_kills = [
+            {"opcode": "SMSG_QUESTUPDATE_ADD_KILL", "quest": 7, "entry": 6, "current": count,
+             "required": 8, "guid": guid, "index": 30 + count}
+            for count, guid in enumerate(credited, start=1)
+        ]
+        kill_xp = [
+            {"opcode": "SMSG_LOG_XPGAIN", "victim": guid, "victim_entry": 6, "xp": 80, "type": 0,
+             "index": 30 + count}
+            for count, guid in enumerate(credited, start=1)
+        ]
+        kill_xp += [
+            {"opcode": "SMSG_LOG_XPGAIN", "victim": unit_guid(6, 200), "victim_entry": 6, "xp": 60,
+             "type": 0, "index": 50},
+            {"opcode": "SMSG_LOG_XPGAIN", "victim": unit_guid(6, 201), "victim_entry": 6, "xp": 50,
+             "type": 0, "index": 60},
+            {"opcode": "SMSG_LOG_XPGAIN", "victim": unit_guid(299, 1), "victim_entry": 299, "xp": 70,
+             "type": 0, "index": 45},
+        ]
+        events = [
+            {"opcode": "SMSG_QUESTGIVER_QUEST_DETAILS", "quest": 783, "index": 1},
+            {"opcode": "SMSG_QUESTGIVER_QUEST_DETAILS", "quest": 7, "index": 2},
+            {"opcode": "CMSG_QUESTLOG_REMOVE_QUEST", "slot": 0, "index": 20},
+            {"opcode": "SMSG_QUESTGIVER_QUEST_DETAILS", "quest": 7, "index": 29},
+            {"opcode": "SMSG_QUESTGIVER_REQUEST_ITEMS", "quest": 783, "index": 3},
+            {"opcode": "SMSG_QUESTGIVER_OFFER_REWARD", "quest": 783, "index": 4},
+            {"opcode": "CMSG_QUESTGIVER_COMPLETE_QUEST", "quest": 783, "index": 5},
+            {"opcode": "CMSG_QUESTGIVER_CHOOSE_REWARD", "quest": 783, "reward": 1, "index": 6},
+            {"opcode": "SMSG_QUESTGIVER_QUEST_COMPLETE", "quest": 783, "xp": 40, "money": 0, "index": 7},
+            {"opcode": "SMSG_QUESTGIVER_REQUEST_ITEMS", "quest": 7, "index": 50},
+            {"opcode": "SMSG_QUESTGIVER_OFFER_REWARD", "quest": 7, "index": 51},
+            {"opcode": "CMSG_QUESTGIVER_COMPLETE_QUEST", "quest": 7, "index": 52},
+            {"opcode": "CMSG_QUESTGIVER_CHOOSE_REWARD", "quest": 7, "reward": 1, "index": 53},
+            {"opcode": "SMSG_QUESTGIVER_QUEST_COMPLETE", "quest": 7, "xp": 170, "money": 25, "index": 54},
+            {"opcode": "SMSG_LOG_XPGAIN", "victim": 0, "victim_entry": 0, "xp": 40, "type": 1, "index": 8},
+            {"opcode": "SMSG_LOG_XPGAIN", "victim": 0, "victim_entry": 0, "xp": 170, "type": 1, "index": 55},
+            {"opcode": "SMSG_QUESTUPDATE_COMPLETE", "quest": 7, "index": 40},
+        ]
+        if overrides.pop("extra_add_kill", False):
+            add_kills.append({"opcode": "SMSG_QUESTUPDATE_ADD_KILL", "quest": 7, "entry": 6,
+                              "current": 9, "required": 8, "guid": unit_guid(6, 300), "index": 61})
+        evidence = {
+            "quest_kill": {
+                "guid": 99, "level": 2, "money": 25, "reputation": 357, "xp": 0,
+                "quest_7": None, "quest_783": None, "rewarded_7": 1, "rewarded_783": 1,
+                "backpack_slots": 16, "item_count": 21, "items": [],
+            },
+            "quest_kill_snapshots": {
+                "after_three_kills": {"rewarded_783": 1, "quest_7": {"status": 3, "mobcount1": 3}},
+                "after_eight_kills": {"quest_7": {"status": 1, "mobcount1": 8}},
+                "after_reward": {"quest_7": None, "rewarded_7": 1, "money": 25, "reputation": 357},
+                "after_relog_kill": {"quest_7": None, "rewarded_7": 1, "money": 25, "reputation": 357},
+            },
+            "quest_events": events + add_kills + kill_xp,
+        }
+        evidence.update(overrides)
+        return evidence
+
+    assert quest_kill_accepted(quest_evidence())
+    assert not quest_kill_accepted(quest_evidence(extra_add_kill=True))
+    trimmed = quest_evidence()
+    trimmed["quest_events"] = [
+        event for event in trimmed["quest_events"]
+        if not (event["opcode"] == "SMSG_QUESTUPDATE_ADD_KILL" and event["current"] == 8)
+    ]
+    assert not quest_kill_accepted(trimmed)
+    assert not quest_kill_accepted({
+        **quest_evidence(),
+        "quest_kill": {**quest_evidence()["quest_kill"], "rewarded_7": 0},
+    })
+    assert not quest_kill_accepted({
+        **quest_evidence(),
+        "quest_kill": {**quest_evidence()["quest_kill"], "money": 24},
+    })
+    assert not quest_kill_accepted({
+        **quest_evidence(),
+        "quest_kill_snapshots": {
+            **quest_evidence()["quest_kill_snapshots"],
+            "after_three_kills": {"rewarded_783": 1, "quest_7": {"status": 3, "mobcount1": 2}},
+        },
+    })
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary)
+        synthetic = (
+            bytes(66)
+            + struct.pack("<IIIII", 0x47534D53, 0, 10, 20, 4 + 24)
+            + bytes(20) + struct.pack("<I", SMSG_QUESTUPDATE_ADD_KILL_OPCODE)
+            + struct.pack("<IIIIQ", 7, 6, 1, 8, 0xF130000000000064)
+            + struct.pack("<IIIII", 0x47534D43, 0, 20, 20, 4 + 12)
+            + bytes(20) + struct.pack("<I", CMSG_QUESTGIVER_COMPLETE_QUEST_OPCODE)
+            + struct.pack("<QI", 0xF130000000000001, 7)
+            # Quest XP is the 14-byte non-kill form: empty guid, xp, type, RaF byte.
+            + struct.pack("<IIIII", 0x47534D53, 0, 30, 20, 4 + 14)
+            + bytes(20) + struct.pack("<I", SMSG_LOG_XPGAIN_OPCODE)
+            + struct.pack("<QIB", 0, 40, 1) + b"\x00"
+        )
+        (logs / "packets.pkt").write_bytes(synthetic)
+        parsed = quest_packet_events({"paths": {"logs": str(logs)}})
+    assert [event["opcode"] for event in parsed] == [
+        "SMSG_QUESTUPDATE_ADD_KILL", "CMSG_QUESTGIVER_COMPLETE_QUEST", "SMSG_LOG_XPGAIN",
+    ]
+    assert parsed[0]["current"] == 1 and parsed[0]["guid"] == 0xF130000000000064
+    assert parsed[1]["quest"] == 7
+    assert parsed[2]["xp"] == 40 and parsed[2]["type"] == 1
+    assert plan_number(QUEST_KILL_MODE) == "36"
     populated_generation = dict(character_generation)
     populated_generation["mode"] = POPULATED_MODE
     expected_character = {
@@ -10184,7 +11363,7 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument(
         "--mode", choices=(
             "no-login", "authentication", "character-screen", CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE,
-            MAGE_FOLLOWUP_MODE, MAGE_NEGATIVE_MODE,
+            MAGE_FOLLOWUP_MODE, MAGE_NEGATIVE_MODE, QUEST_KILL_MODE,
             POPULATED_MODE,
             CHARACTER_SELECTION_MODE,
             INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,

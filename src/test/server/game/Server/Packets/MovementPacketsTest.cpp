@@ -324,6 +324,36 @@ TEST_F(RunSpeedAcknowledgementTest, TracksLatestRequestAndRejectsInvalidAcknowle
     EXPECT_FLOAT_EQ(player->GetPositionX(), 0.0f);
 }
 
+TEST(MovementPacketsTest, ReadsCataTeleportAcknowledgment)
+{
+    // Captured 4.3.4 client packet: ack index, move time, then a bit-packed mover GUID.
+    WorldPacket packet = ClientPacket(MSG_MOVE_TELEPORT_ACK, "01000000e3dcc8006a03020005");
+    ObjectGuid guid;
+    uint32 counter = 0;
+    uint32 time = 0;
+    WorldPackets::Movement::ReadTeleportAck(packet, guid, counter, time);
+    EXPECT_EQ(guid, ObjectGuid(uint64(0x01020304)));
+    EXPECT_EQ(counter, 1u);
+    EXPECT_EQ(time, 0x00C8DCE3u);
+    EXPECT_EQ(packet.rpos(), packet.size());
+}
+
+TEST(MovementPacketsTest, ReadsAndWritesCataMoveTimeSkipped)
+{
+    WorldPacket packet = ClientPacket(CMSG_MOVE_TIME_SKIPPED, "680100006502030005");
+    ObjectGuid guid;
+    uint32 time = 0;
+    WorldPackets::Movement::ReadTimeSkipped(packet, guid, time);
+    EXPECT_EQ(guid, ObjectGuid(uint64(0x01020304)));
+    EXPECT_EQ(time, 360u);
+    EXPECT_EQ(packet.rpos(), packet.size());
+
+    WorldPacket relay(MSG_MOVE_TIME_SKIPPED);
+    WorldPackets::Movement::WriteTimeSkipped(relay, guid, time);
+    EXPECT_EQ(ByteArrayToHexStr(std::span<uint8 const>(relay.contents(), relay.size())),
+        "680100000F04030201");
+}
+
 using GroundMovementRoutingTest = IntegrationTestFixture;
 
 TEST_F(GroundMovementRoutingTest, RejectsGroundMovementFromASpoofedMoverGuid)

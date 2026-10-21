@@ -1,0 +1,137 @@
+{
+  "acceptance": "manual native completion; harness packet capture and owned database",
+  "artifact_sha256": {
+    "quest-kill-6of8.png": "a48d0c831914e521c4b789fdb341decfae971dbf4f9808d1297858151b578e0a",
+    "quest-kill-7-accepted.png": "f1dda3745c66234fc6f611c3cced22f4bd58f9614b41d2a066c4d0a64ec5e536",
+    "quest-kill-7-reaccepted.png": "e839500129fe2c0576c5c4d96ab8b00305fa08edb10d233454b6b86712486b55",
+    "quest-kill-783-accepted.png": "6edd240806b6bc70fc42545b6cb935ed4db51f299070d826c16b54ab403ba4b4",
+    "quest-kill-783-complete.png": "db7a5865fb427ff758b2354a0004649d1bcb1a9da79c5089a7f30551ef030239"
+  },
+  "checks": {
+    "783_accept": "PASS",
+    "783_turn_in": "PASS",
+    "7_abandon_reaccept": "PASS",
+    "cata_move_time_skipped_layout": "PASS",
+    "full_bag_inverse": "N/A (no item reward)",
+    "intermediate_3of8_relog": "not captured (operator took over)",
+    "kill_credit_1_to_8": "PASS",
+    "ninth_kill_cap": "not run",
+    "no_active_7_row": "PASS",
+    "objective_complete": "PASS",
+    "persisted_rewarded_row": "PASS",
+    "post_reward_kill": "not run",
+    "teleport_ack_cata_layout": "PASS",
+    "turn_in_783_xp_40_money_0": "PASS",
+    "turn_in_7_money_25_xp_170": "PASS",
+    "turn_in_7_no_item": "PASS",
+    "turn_in_7_reputation_275": "PASS"
+  },
+  "client_build": 15595,
+  "final_database": {
+    "active_quests": [],
+    "guid": 16909060,
+    "items": [
+      58231,
+      39,
+      40,
+      49778,
+      6948
+    ],
+    "level": 2,
+    "money": 25,
+    "name": "Cataplan",
+    "reputation": {
+      "faction": 72,
+      "standing": 357
+    },
+    "rewarded": [
+      7,
+      783
+    ],
+    "xp": 569
+  },
+  "generation": 6,
+  "issue": 138,
+  "kills": [
+    {
+      "current": 1,
+      "entry": 6,
+      "required": 8
+    },
+    {
+      "current": 2,
+      "entry": 6,
+      "required": 8
+    },
+    {
+      "current": 3,
+      "entry": 6,
+      "required": 8
+    },
+    {
+      "current": 4,
+      "entry": 6,
+      "required": 8
+    },
+    {
+      "current": 5,
+      "entry": 6,
+      "required": 8
+    },
+    {
+      "current": 6,
+      "entry": 6,
+      "required": 8
+    },
+    {
+      "current": 7,
+      "entry": 6,
+      "required": 8
+    },
+    {
+      "current": 8,
+      "entry": 6,
+      "required": 8
+    }
+  ],
+  "limits": [
+    "The operator completed the remaining kills and the hand-in manually after the harness lost the client window; this is a manual native acceptance, not the fully automated predicate.",
+    "The 3/8 intermediate relog checkpoint was not captured; the final rewarded row and the 6/8 quest-log screenshot are retained.",
+    "The ninth-kill cap and post-reward kill were not run.",
+    "Full-bag failure is N/A for quest 7; the live item-reward full-bag failure remains Plan 26 quest 2158.",
+    "Party credit, other objective types, other races/classes and quest 15/21 are excluded."
+  ],
+  "plan": 36,
+  "prerequisite_quest": 783,
+  "quest": 7,
+  "reference_commit": "c699217775d90794158422387b07a917e161b582",
+  "rewards": {
+    "7": {
+      "items": [],
+      "money": 25,
+      "reputation": 275,
+      "xp": 170
+    },
+    "783": {
+      "money": 0,
+      "reputation": 82,
+      "xp": 40
+    }
+  },
+  "run_id": "e231b7f842b7",
+  "run_root": "/mnt/f79365ff-6a68-45da-925e-b9ddc6d5da6c/cata-runs/plan36-quest7/generation-6",
+  "runtime_commit": "15e0da7e646937c394882f457c34a2afaa28a9b0",
+  "schema": 1,
+  "source_manifest": "apps/cata/fixtures/plan36-cata-quest7.json",
+  "teleport_fix": {
+    "evidence": "client reached (-8749.19,-115.32,85.92) beside spawn 80024; kobolds visible and fightable",
+    "handlers": [
+      "HandleMoveTeleportAck",
+      "HandleMoveTimeSkippedOpcode"
+    ],
+    "unit_tests": [
+      "MovementPacketsTest.ReadsCataTeleportAcknowledgment",
+      "MovementPacketsTest.ReadsAndWritesCataMoveTimeSkipped"
+    ]
+  }
+}
