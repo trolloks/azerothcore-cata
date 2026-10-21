@@ -26,6 +26,7 @@
     "turn_in_7_no_item": "PASS",
     "turn_in_7_reputation_275": "PASS"
   },
+  "cleanup": "raw run root, disposable database container/volume, cache and client removed after acceptance",
   "client_build": 15595,
   "final_database": {
     "active_quests": [],
@@ -120,6 +121,7 @@
   },
   "run_id": "e231b7f842b7",
   "run_root": "/mnt/f79365ff-6a68-45da-925e-b9ddc6d5da6c/cata-runs/plan36-quest7/generation-6",
+  "run_root_removed": true,
   "runtime_commit": "15e0da7e646937c394882f457c34a2afaa28a9b0",
   "schema": 1,
   "source_manifest": "apps/cata/fixtures/plan36-cata-quest7.json",
