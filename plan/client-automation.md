@@ -789,6 +789,26 @@ required first. Two things about `var/build-plan7` that will otherwise cost time
 - `mysql_com.h` includes `"mysql/udf_registration_types.h"`, so the include root needs a
   self-referential `mysql -> .` symlink inside it.
 
+## `.go`/teleport acknowledgement and post-teleport input
+
+The Cata client's `MSG_MOVE_TELEPORT_ACK` is **ack index, move time, then a bit-packed mover GUID**
+(`ReadTeleportAck` in `MovementPackets.cpp`); the old WotLK packed-guid-first read produced a
+different GUID, the server rejected the ACK, and the player stayed at the old position while the
+client's camp grid was never sent — the symptom is "the teleport ran but no creatures/objects
+appear". `CMSG_MOVE_TIME_SKIPPED` likewise is **time first, then the bit-packed GUID**, and its
+relay writes time then the packed GUID. Unit tests
+`MovementPacketsTest.ReadsCataTeleportAcknowledgment` and
+`ReadsAndWritesCataMoveTimeSkipped` pin the captured 4.3.4 bytes.
+
+After the teleport, wait for the client's **loading screen to show and hide**
+(`CMSG_LOADING_SCREEN_NOTIFY`, two notifications after the command) and for the destination
+`SMSG_UPDATE_OBJECT` before sending any key. Typing during that window turns `/targetexact` and
+`/script` text into ordinary game keybinds and opens character/spellbook/quest/bag frames; it can
+also lose the owned window. For a fresh native character, mark the account's tutorials seen
+(`account_tutorial` all `0xFFFFFFFF`) and `cinematic=1`; the "click Attack" tutorial otherwise
+swallows the first input exactly like a loading stall. Verified in Plan 36 after the ACK fix: the
+character landed beside spawn 80024 and the Kobold Vermin were visible and fightable.
+
 ## Reading opcodes back out of a run
 
 `GetOpcodeNameForLogging` emits a bracketed form, so grep for the bracket or you will get
