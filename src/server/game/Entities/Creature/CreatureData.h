@@ -293,15 +293,19 @@ typedef std::unordered_map<uint32, CreatureTemplate> CreatureTemplateContainer;
 #pragma pack(push, 1)
 #endif
 
+// 4.3.4 creature base stats are not imported yet, so the stat tables keep the three WotLK columns and
+// Cataclysm creatures fall back to the WotLK row until those columns land.
+constexpr uint8 MAX_CREATURE_EXPANSIONS = 3;
+
 // Defines base stats for creatures (used to calculate HP/mana/armor/attackpower/rangedattackpower/all damage).
 struct CreatureBaseStats
 {
-    uint32 BaseHealth[MAX_EXPANSIONS];
+    uint32 BaseHealth[MAX_CREATURE_EXPANSIONS];
     uint32 BaseMana;
     float  BaseArmor;
     uint32 AttackPower;
     uint32 RangedAttackPower;
-    float BaseDamage[MAX_EXPANSIONS];
+    float BaseDamage[MAX_CREATURE_EXPANSIONS];
     uint32 Strength;
     uint32 Agility;
     uint32 Stamina;

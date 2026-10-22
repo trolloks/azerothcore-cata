@@ -1160,7 +1160,8 @@ bool Guardian::InitStatsForLevel(uint8 petlevel)
             factorHealth *= _GetHealthMod(cinfo->rank);
         }
 
-        SetCreateHealth(std::max<uint32>(1, stats->BaseHealth[cinfo->expansion]*factorHealth));
+        uint8 statExpansion = std::min<uint8>(cinfo->expansion, MAX_CREATURE_EXPANSIONS - 1);
+        SetCreateHealth(std::max<uint32>(1, stats->BaseHealth[statExpansion]*factorHealth));
         SetStatFlatModifier(UNIT_MOD_HEALTH, BASE_VALUE, GetCreateHealth());
         SetCreateMana(stats->BaseMana * factorMana);
         SetStatFlatModifier(UNIT_MOD_MANA, BASE_VALUE, GetCreateMana());

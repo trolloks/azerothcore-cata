@@ -16,6 +16,7 @@
  */
 
 #include "Player.h"
+#include "SharedDefines.h"
 #include "WorldConfig.h"
 
 void WorldConfig::BuildConfigCache()
@@ -341,7 +342,7 @@ void WorldConfig::BuildConfigCache()
 
     SetConfigValue<bool>(CONFIG_ALWAYS_MAX_SKILL_FOR_LEVEL, "AlwaysMaxSkillForLevel", false);
 
-    SetConfigValue<uint32>(CONFIG_EXPANSION, "Expansion", 2, ConfigValueCache::Reloadable::No);
+    SetConfigValue<uint32>(CONFIG_EXPANSION, "Expansion", EXPANSION_CATACLYSM, ConfigValueCache::Reloadable::No);
 
     SetConfigValue<uint32>(CONFIG_CHATFLOOD_MESSAGE_COUNT, "ChatFlood.MessageCount", 10);
     SetConfigValue<uint32>(CONFIG_CHATFLOOD_MESSAGE_DELAY, "ChatFlood.MessageDelay", 1);

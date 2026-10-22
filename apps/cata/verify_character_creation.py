@@ -368,9 +368,9 @@ def run_negative_cases(auth_port: int, world_port: int, container: str, root_pas
     salt = bytes(range(33, 65))
     verifier = plan6.srp_registration(SECOND_ACCOUNT, SECOND_PASSWORD, salt)
     mysql(container, root_password,
-          "INSERT INTO `account` (`id`,`username`,`salt`,`verifier`,`email`,`reg_mail`,`expansion`,`Flags`) "
+          "INSERT INTO `account` (`id`,`username`,`salt`,`verifier`,`email`,`reg_mail`,`Flags`) "
           f"VALUES ({SECOND_ACCOUNT_ID},'{SECOND_ACCOUNT}',UNHEX('{salt.hex()}'),UNHEX('{verifier.hex()}'),"
-          "'charcreate-2@example.invalid','charcreate-2@example.invalid',3,0);"
+          "'charcreate-2@example.invalid','charcreate-2@example.invalid',0);"
           f"INSERT INTO `realmcharacters` (`realmid`,`acctid`,`numchars`) VALUES ({REALM_ID},{SECOND_ACCOUNT_ID},0);",
           auth_schema)
 
@@ -786,9 +786,9 @@ def main() -> int:
         salt = bytes(range(1, 33))
         verifier = plan6.srp_registration(ACCOUNT, PASSWORD, salt)
         mysql(container, root_password,
-              "INSERT INTO `account` (`id`,`username`,`salt`,`verifier`,`email`,`reg_mail`,`expansion`,`Flags`) "
+              "INSERT INTO `account` (`id`,`username`,`salt`,`verifier`,`email`,`reg_mail`,`Flags`) "
               f"VALUES ({ACCOUNT_ID},'{ACCOUNT}',UNHEX('{salt.hex()}'),UNHEX('{verifier.hex()}'),"
-              "'charcreate@example.invalid','charcreate@example.invalid',3,0);"
+              "'charcreate@example.invalid','charcreate@example.invalid',0);"
               "INSERT INTO `realmlist` (`id`,`name`,`address`,`localAddress`,`localSubnetMask`,`port`,`icon`,"
               "`flag`,`timezone`,`allowedSecurityLevel`,`population`,`gamebuild`) "
               f"VALUES ({REALM_ID},'CharCreate Realm','127.0.0.1','127.0.0.1','255.255.255.0',"
@@ -827,7 +827,6 @@ def main() -> int:
             "Console.Enable": "0",
             "Updates.EnableDatabases": "0",
             "Updates.AutoSetup": "0",
-            "Expansion": "3",
             "MoveMaps.Enable": "0",
             "vmap.enableLOS": "0",
             "vmap.enableHeight": "0",
