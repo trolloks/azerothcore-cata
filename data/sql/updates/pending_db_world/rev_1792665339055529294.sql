@@ -451,6 +451,8 @@ INSERT INTO `playercreateinfo_action` (`race`, `class`, `button`, `action`, `typ
 (22, 11, 84, 6603, 0),
 (22, 11, 96, 6603, 0);
 
+-- Undead Rigor Mortis (73523) is deliberately not imported: the native intro removes it through
+-- start-zone content that this fork does not have yet, so the cast would leave new Undead stunned.
 DELETE FROM `playercreateinfo_cast_spell`;
 INSERT INTO `playercreateinfo_cast_spell` (`raceMask`, `classMask`, `spell`, `note`) VALUES
 (0, 32, 48266, 'Death Knight - Blood Presence'),
@@ -467,10 +469,37 @@ INSERT INTO `playercreateinfo_cast_spell` (`raceMask`, `classMask`, `spell`, `no
 (1024, 4, 79601, 'Draenei - Hunter - Young Moth'),
 (2097152, 4, 79596, 'Worgen - Hunter - Young Mastiff'),
 (0, 256, 688, 'Warlock - Summon Imp'),
-(16, 925, 73523, 'Undead - Rigor Mortis'),
 (64, 256, 80653, 'Warlock - Gnome - Irradiated Aura'),
 (64, 128, 80653, 'Mage - Gnome - Irradiated Aura'),
 (64, 16, 80653, 'Priest - Gnome - Irradiated Aura'),
 (64, 8, 80653, 'Rogue - Gnome - Irradiated Aura'),
 (64, 1, 80653, 'Warrior - Gnome - Irradiated Aura'),
 (128, 1503, 71033, 'Troll - Calm of the Novice');
+
+-- Hunter starting pets: native creature templates and models required by the create-pet casts above.
+INSERT INTO `creature_template` (`entry`, `name`, `minlevel`, `maxlevel`, `faction`, `speed_walk`, `speed_run`, `BaseAttackTime`, `RangeAttackTime`, `unit_class`, `unit_flags2`, `family`, `type`, `type_flags`, `VerifiedBuild`) VALUES
+(42710, 'Young Dragonhawk', 1, 1, 7, 1, 1.14286, 2000, 2000, 1, 2048, 30, 1, 1, 15595),
+(42712, 'Young Moth', 1, 1, 7, 1, 1.14286, 2000, 2000, 1, 2048, 37, 1, 1, 15595),
+(42713, 'Young Bear', 1, 1, 7, 1, 1.14286, 2000, 2000, 1, 2048, 4, 1, 1, 15595),
+(42715, 'Young Crab', 1, 1, 7, 1, 1.14286, 2000, 2000, 1, 2048, 8, 1, 1, 15595),
+(42717, 'Young Wolf', 1, 1, 7, 1, 1.14286, 2000, 2000, 1, 2048, 1, 1, 1, 15595),
+(42718, 'Young Cat', 1, 1, 7, 1, 1.14286, 2000, 2000, 1, 2048, 2, 1, 1, 15595),
+(42719, 'Young Boar', 1, 1, 7, 1, 1.14286, 2000, 2000, 1, 2048, 5, 1, 1, 15595),
+(42720, 'Young Tallstrider', 1, 1, 7, 1, 1.14286, 2000, 2000, 1, 2048, 12, 1, 1, 15595),
+(42721, 'Young Raptor', 1, 1, 7, 1, 1.14286, 2000, 2000, 1, 2048, 11, 1, 1, 15595),
+(42722, 'Young Mastiff', 1, 1, 7, 1, 1.14286, 2000, 2000, 1, 2048, 52, 1, 1, 15595),
+(51107, 'Young Widow', 1, 1, 7, 1, 1.14286, 2000, 2000, 1, 2048, 3, 1, 1, 15595);
+
+DELETE FROM `creature_template_model` WHERE `CreatureID` IN (42710, 42712, 42713, 42715, 42717, 42718, 42719, 42720, 42721, 42722, 51107);
+INSERT INTO `creature_template_model` (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`, `VerifiedBuild`) VALUES
+(42710, 0, 23515, 1, 1, 15595),
+(42712, 0, 29056, 1, 1, 15595),
+(42713, 0, 822, 1, 1, 15595),
+(42715, 0, 27692, 1, 1, 15595),
+(42717, 0, 903, 1, 1, 15595),
+(42718, 0, 17090, 1, 1, 15595),
+(42719, 0, 744, 1, 1, 15595),
+(42720, 0, 29057, 1, 1, 15595),
+(42721, 0, 23518, 1, 1, 15595),
+(42722, 0, 30221, 1, 1, 15595),
+(51107, 0, 368, 1, 1, 15595);
