@@ -10702,7 +10702,7 @@ CreatureBaseStats const* ObjectMgr::GetCreatureBaseStats(uint8 level, uint8 unit
         DefaultCreatureBaseStats()
         {
             BaseArmor = 1;
-            for (uint8 j = 0; j < MAX_EXPANSIONS; ++j)
+            for (uint8 j = 0; j < MAX_CREATURE_EXPANSIONS; ++j)
             {
                 BaseHealth[j] = 1;
                 BaseDamage[j] = 0.0f;
@@ -10747,7 +10747,7 @@ void ObjectMgr::LoadCreatureClassLevelStats()
 
         CreatureBaseStats stats;
 
-        for (uint8 i = 0; i < MAX_EXPANSIONS; ++i)
+        for (uint8 i = 0; i < MAX_CREATURE_EXPANSIONS; ++i)
         {
             stats.BaseHealth[i] = fields[2 + i].Get<uint32>();
 

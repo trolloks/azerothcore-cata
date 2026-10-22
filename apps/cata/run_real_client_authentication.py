@@ -1796,7 +1796,6 @@ def write_configs(manifest: Manifest, generation: Generation) -> None:
         "Console.Enable": "0",
         "Updates.EnableDatabases": "0",
         "Updates.AutoSetup": "0",
-        "Expansion": "3",
         "MoveMaps.Enable": "1" if geometry else "0",
         "vmap.enableLOS": "1" if geometry else "0",
         "vmap.enableHeight": "1" if geometry else "0",
@@ -2384,9 +2383,9 @@ def prepare(args: argparse.Namespace) -> None:
             f"DELETE FROM `realmcharacters` WHERE `acctid`={ACCOUNT_ID} OR `realmid`={REALM_ID};"
             f"DELETE FROM `account` WHERE `id`={ACCOUNT_ID} OR `username`='{ACCOUNT}';"
             f"DELETE FROM `realmlist` WHERE `id`={REALM_ID} OR `name`='Plan 7 Realm';"
-            "INSERT INTO `account` (`id`,`username`,`salt`,`verifier`,`email`,`reg_mail`,`expansion`,`Flags`) "
+            "INSERT INTO `account` (`id`,`username`,`salt`,`verifier`,`email`,`reg_mail`,`Flags`) "
             f"VALUES ({ACCOUNT_ID},'{ACCOUNT}',UNHEX('{salt.hex()}'),UNHEX('{verifier.hex()}'),"
-            "'plan7@example.invalid','plan7@example.invalid',3,0);"
+            "'plan7@example.invalid','plan7@example.invalid',0);"
             "INSERT INTO `realmlist` (`id`,`name`,`address`,`localAddress`,`localSubnetMask`,`port`,`icon`,"
             "`flag`,`timezone`,`allowedSecurityLevel`,`population`,`gamebuild`) "
             f"VALUES ({REALM_ID},'Plan 7 Realm','127.0.0.1','127.0.0.1','255.255.255.0',"

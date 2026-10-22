@@ -104,8 +104,9 @@ This audit reconciles existing proof, without new native acceptance:
 The most immediate functional/data gaps are ordinary progression beyond creation, server geometry,
 NPC commerce/training, mana-class combat and kill-objective credit. Current acceptance defaults
 explicitly disable VMAP LOS/height. Vendor and trainer layouts still differ from the Cata pin.
-Distributed defaults still say `Expansion = 2` and `MaxPlayerLevel = 80`; level-85 progression and
-release defaults remain unfinished. Plan 31 proves only the first normal level transition.
+Distributed defaults now say `Expansion = 3` and `MaxPlayerLevel = 85` (#172); level-85 progression
+beyond the first transition and release defaults remain unfinished. Plan 31 proves only the first
+normal level transition.
 
 Other races/classes and exact starter profiles, all other map/terrain/transport variants, social
 and economy systems, parties/instances/PvP, new resources/talents and broad world/encounter content
