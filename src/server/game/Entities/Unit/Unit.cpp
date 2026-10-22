@@ -2170,7 +2170,7 @@ void Unit::DealDamageShieldDamage(Unit* victim)
         Unit::DealDamageMods(this, damage, &absorb);
 
         /// @todo: Move this to a packet handler
-        WorldPacket data(SMSG_SPELLDAMAGESHIELD, (8 + 8 + 4 + 4 + 4 + 4));
+        WorldPacket data(SMSG_SPELLDAMAGESHIELD, (8 + 8 + 4 + 4 + 4 + 4 + 4));
         data << victim->GetGUID();
         data << GetGUID();
         data << uint32(i_spellProto->Id);
@@ -2178,6 +2178,7 @@ void Unit::DealDamageShieldDamage(Unit* victim)
         int32 overkill = int32(damage) - int32(GetHealth());
         data << uint32(overkill > 0 ? overkill : 0); // Overkill
         data << uint32(i_spellProto->GetSchoolMask());
+        data << uint32(absorb);                  // Absorbed by the shield target (Cata field)
         victim->SendMessageToSet(&data, true);
 
         Unit::DealDamage(victim, this, damage, 0, SPELL_DIRECT_DAMAGE, i_spellProto->GetSchoolMask(), i_spellProto, true);
