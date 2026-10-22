@@ -4,6 +4,25 @@ Reference for `run --auto-login` in `apps/cata/run_real_client_authentication.py
 describes focus acquisition and input delivery for the isolated client. Successful login and
 character selection do not prove that the world loading screen has dismissed.
 
+## Human in-world testing (policy from 2026-10-22)
+
+The harness automates only launching the isolated client and getting a character into the world.
+**All in-world testing is done by a human and signed off by a human.** Scripted in-world scenarios
+(movement, combat, casting, vendor, trainer, quests, level-up, geometry) cost far more agent time
+than they returned and are retired; their `--mode` values are no longer accepted. The sections
+below that describe them are historical.
+
+- Reach the world with `--mode map-insertion-object-bootstrap` (seeded character) or
+  `--mode character-creation` (client-created character), then `run --auto-login --hand-off`.
+  `--hand-off` leaves the client in-world after the automated milestone; closing the client (or
+  Ctrl-C) ends the run and the normal teardown stops the owned servers.
+- Agents prepare the stack, state exactly what the human should check in-world, and stop. Do not
+  drive in-world input, add new in-world automation, or claim an in-world acceptance result.
+- An issue's in-world acceptance is satisfied only by a human sign-off comment on the issue
+  (what was tested, build/commit, pass/fail). Server logs and packet captures from the session are
+  supporting evidence, not a sign-off.
+- Deterministic checks (unit/codec tests, `apps/cata` checkers) still run as before.
+
 ## Build and run budget
 
 Default to one server build and one isolated client acceptance run per completed change. Finish
@@ -224,8 +243,9 @@ mode's protocol marker. `observed` means the loop finished, including timeout; i
 prove world entry. The `finally` block closes the owned client and servers even after a
 successful run. For a longer interactive observation, increase both limits.
 
-`--mode in-world-control-bootstrap` is the mode that seeds a character and drives it to world
-entry, as opposed to the auth-only modes.
+`--mode map-insertion-object-bootstrap` seeds a character and stops at world entry; add
+`run --hand-off` to keep the client open for the human tester. The in-world modes described below
+are retired (see "Human in-world testing").
 
 `--mode run-speed-change` also seeds a saved Sprint aura in the disposable character database.
 Its synthetic 60-second duration lets normal aura expiry restore run speed after world entry.
@@ -383,9 +403,9 @@ python3 apps/cata/run_real_client_authentication.py prepare --manifest "$M" \
   --personal-bottle "/mnt/f79365ff-6a68-45da-925e-b9ddc6d5da6c/Blizzard Games/Battle.NET" \
   --migration "$PWD/data/sql/updates/pending_db_auth/rev_1786964293354831242.sql" \
   --display ":0" --xauthority "/home/trolloks/.Xauthority" \
-  --mode in-world-control-bootstrap
+  --mode map-insertion-object-bootstrap
 python3 apps/cata/run_real_client_authentication.py run --manifest "$M" \
-  --auto-login --stability-seconds 8 --timeout 110
+  --auto-login --stability-seconds 8 --timeout 110 --hand-off
 ```
 
 `var/build-plan7` is the build tree the harness uses — not `var/build`, which is not

@@ -5292,6 +5292,13 @@ def run_client(args: argparse.Namespace) -> None:
             time.sleep(0.5)
         capture_runtime(generation)
         capture_owned_window(generation)
+        if args.hand_off:
+            print("handed off: test in-world, then close the client (or Ctrl-C) to end the run")
+            try:
+                while launcher.poll() is None or find_wine_processes(Path(paths["wine_prefix"])):
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                pass
         if generation["mode"] in CHARACTER_MODES:
             generation["stability_seconds"] = args.stability_seconds if character_hold_started is not None else 0
         raw = Path(paths["raw_evidence"])
@@ -11361,16 +11368,11 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--display", required=True)
     prepare_parser.add_argument("--xauthority", type=Path)
     prepare_parser.add_argument(
+        # Automation stops at world entry; in-world behaviour is tested and signed off by a human
+        # (plan/client-automation.md, "Human in-world testing"). The scripted in-world modes are retired.
         "--mode", choices=(
-            "no-login", "authentication", "character-screen", CHARACTER_CREATION_MODE, MAGE_COMBAT_MODE,
-            MAGE_FOLLOWUP_MODE, MAGE_NEGATIVE_MODE, QUEST_KILL_MODE,
-            POPULATED_MODE,
-            CHARACTER_SELECTION_MODE,
-            INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE, IN_WORLD_CONTROL_MODE, BASIC_MOVEMENT_MODE,
-            RUN_SPEED_MODE, GROUND_MOVEMENT_MODE, JUMP_FALL_LAND_MODE, WALK_RUN_MODE_SWITCH_MODE,
-            BASIC_SPELL_CAST_MODE, TARGET_TARGETED_SPELL_CAST_MODE, CHAT_MESSAGE_MODE,
-            INVALID_TARGET_SPELL_CAST_MODE, LEVEL_UP_MODE, PLAN32_GEOMETRY_MODE, VENDOR_TRADE_MODE,
-            VENDOR_NEGATIVE_MODE, TRAINER_MODE,
+            "no-login", "authentication", "character-screen", CHARACTER_CREATION_MODE, POPULATED_MODE,
+            CHARACTER_SELECTION_MODE, INITIAL_POST_LOAD_PACKETS_MODE, MAP_INSERTION_MODE,
         ), default="authentication",
     )
     prepare_parser.add_argument("--minimum-free-gib", type=int, default=25)
@@ -11380,6 +11382,10 @@ def parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--no-login-seconds", type=int, default=20)
     run_parser.add_argument("--stability-seconds", type=stability_seconds, default=10)
     run_parser.add_argument("--auto-login", action="store_true")
+    run_parser.add_argument(
+        "--hand-off", action="store_true",
+        help="after the automated milestone, leave the client in-world for a human tester; closing it ends the run",
+    )
     verify_parser = subcommands.add_parser("verify")
     verify_parser.add_argument("--manifest", type=Path, required=True)
     verify_parser.add_argument("--confirm-expected-screen", action="store_true")
