@@ -29,6 +29,13 @@ Protocol fixtures under `apps/cata/fixtures/` that pin wire layouts are the exce
 the legitimate reference for those, because it is a Cata-specific format AC has no prior version
 of, not an AC-versus-TC representation choice.
 
+## Real-client acceptance is human
+
+The client harness only launches the client and gets into the world (`run --hand-off`). All
+in-world testing is done and signed off by a human, recorded as a sign-off comment on the issue.
+Agents must not script in-world input or report an in-world acceptance result; they prepare the
+stack, list what the human should check, and stop. See `plan/client-automation.md`.
+
 ## GM commands for test setup
 
 GM commands are the quickest way to reach a client-testing state that would otherwise take a long
