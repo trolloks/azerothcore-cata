@@ -24,6 +24,7 @@
 #include "LootMgr.h"
 #include "SpawnData.h"
 #include "Unit.h"
+#include <algorithm>
 #include <list>
 
 #define MAX_AGGRO_RESET_TIME 10 // in seconds
@@ -293,9 +294,14 @@ typedef std::unordered_map<uint32, CreatureTemplate> CreatureTemplateContainer;
 #pragma pack(push, 1)
 #endif
 
-// 4.3.4 creature base stats are not imported yet, so the stat tables keep the three WotLK columns and
-// Cataclysm creatures fall back to the WotLK row until those columns land.
+// 4.3.4 creature base stats are not imported yet, so the stat tables keep the three WotLK columns;
+// clamp a Cataclysm template to the WotLK row until those columns land.
 constexpr uint8 MAX_CREATURE_EXPANSIONS = 3;
+
+inline uint8 CreatureStatExpansion(uint8 expansion)
+{
+    return std::min<uint8>(expansion, MAX_CREATURE_EXPANSIONS - 1);
+}
 
 // Defines base stats for creatures (used to calculate HP/mana/armor/attackpower/rangedattackpower/all damage).
 struct CreatureBaseStats
@@ -316,7 +322,7 @@ struct CreatureBaseStats
 
     uint32 GenerateHealth(CreatureTemplate const* info) const
     {
-        return uint32(std::ceil(BaseHealth[info->expansion] * info->ModHealth));
+        return uint32(std::ceil(BaseHealth[CreatureStatExpansion(info->expansion)] * info->ModHealth));
     }
 
     uint32 GenerateMana(CreatureTemplate const* info) const
@@ -335,7 +341,7 @@ struct CreatureBaseStats
 
     float GenerateBaseDamage(CreatureTemplate const* info) const
     {
-        return BaseDamage[info->expansion];
+        return BaseDamage[CreatureStatExpansion(info->expansion)];
     }
 
     static CreatureBaseStats const* GetBaseStats(uint8 level, uint8 unitClass);

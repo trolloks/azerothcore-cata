@@ -514,7 +514,7 @@ int32 SpellEffectInfo::CalcValue(WorldObject const* caster, int32 const* bp, Uni
                 CreatureTemplate const* cInfo = casterUnit->ToCreature()->GetCreatureTemplate();
 
                 CreatureBaseStats const* pCBS = sObjectMgr->GetCreatureBaseStats(casterUnit->GetLevel(), casterUnit->getClass());
-                uint8 statExpansion = std::min<uint8>(cInfo->expansion, MAX_CREATURE_EXPANSIONS - 1);
+                uint8 statExpansion = CreatureStatExpansion(cInfo->expansion);
                 float CBSPowerCreature = pCBS->BaseDamage[statExpansion];
                 CreatureBaseStats const* spellCBS = sObjectMgr->GetCreatureBaseStats(_spellInfo->SpellLevel, casterUnit->getClass());
                 float CBSPowerSpell = spellCBS->BaseDamage[statExpansion];
