@@ -2345,9 +2345,11 @@ void Player::RemoveFromGroup(Group* group, ObjectGuid guid, RemoveMethod method 
     }
 }
 
-void Player::SendLogXPGain(uint32 GivenXP, Unit* victim, uint32 BonusXP, bool recruitAFriend, float /*group_rate*/)
+void Player::SendLogXPGain(uint32 GivenXP, Unit* victim, uint32 BonusXP, bool recruitAFriend, float group_rate)
 {
-    WorldPacket data(SMSG_LOG_XPGAIN, 22); // guess size?
+    // 4.3.4 SMSG_LOG_XP_GAIN: guid, original XP, reason byte, then amount and group bonus only
+    // for a kill, then the recruit-a-friend bonus type (pin Player.cpp/GiveXP).
+    WorldPacket data(SMSG_LOG_XPGAIN, 22);
     data << (victim ? victim->GetGUID() : ObjectGuid::Empty);   // guid
     data << uint32(GivenXP + BonusXP);                          // given experience
     data << uint8(victim ? 0 : 1);                              // 00-kill_xp type, 01-non_kill_xp type
@@ -2355,9 +2357,7 @@ void Player::SendLogXPGain(uint32 GivenXP, Unit* victim, uint32 BonusXP, bool re
     if (victim)
     {
         data << uint32(GivenXP);                            // experience without bonus
-
-        // should use group_rate here but can't figure out how
-        data << float(1);                                   // 1 - none 0 - 100% group bonus output
+        data << float(group_rate);                          // 1 - none 0 - 100% group bonus output
     }
 
     data << uint8(recruitAFriend ? 1 : 0);                  // does the GivenXP include a RaF bonus?

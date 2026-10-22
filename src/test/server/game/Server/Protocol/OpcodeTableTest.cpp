@@ -135,3 +135,30 @@ TEST(OpcodeTableTest, UsesCataclysmChatOpcodeValues)
     EXPECT_STREQ(addonGuild->Name, "CMSG_MESSAGECHAT_ADDON_GUILD");
     EXPECT_EQ(addonGuild->Status, STATUS_LOGGEDIN);
 }
+
+// Opcodes that 4.3.4 renamed must carry the Cata value, not the 3.3.5a one; the server writes the
+// raw enum value, so a stale value sends the packet under an opcode build 15595 does not know
+// (issue #168). Several of these paths are covered by closed plans (#102, #136, #137, #138).
+TEST(OpcodeTableTest, UsesCataclysmValuesForRenamedServerOpcodes)
+{
+    EXPECT_EQ(uint16(SMSG_LEVELUP_INFO), 0x0435);            // SMSG_LEVEL_UP_INFO
+    EXPECT_EQ(uint16(SMSG_LOG_XPGAIN), 0x4514);              // SMSG_LOG_XP_GAIN
+    EXPECT_EQ(uint16(SMSG_QUESTUPDATE_ADD_KILL), 0x0D27);    // SMSG_QUEST_UPDATE_ADD_CREDIT
+    EXPECT_EQ(uint16(SMSG_QUESTUPDATE_FAILEDTIMER), 0x6427); // SMSG_QUEST_UPDATE_FAILED_TIMER
+    EXPECT_EQ(uint16(SMSG_QUESTUPDATE_ADD_PVP_KILL), 0x4416);// SMSG_QUEST_UPDATE_ADD_PVP_CREDIT
+    EXPECT_EQ(uint16(SMSG_PERIODICAURALOG), 0x0416);         // SMSG_PERIODIC_AURA_LOG
+    EXPECT_EQ(uint16(SMSG_SPELLENERGIZELOG), 0x0414);        // SMSG_SPELL_ENERGIZE_LOG
+    EXPECT_EQ(uint16(SMSG_SPELLDAMAGESHIELD), 0x2927);       // SMSG_SPELL_DAMAGE_SHIELD
+    EXPECT_EQ(uint16(SMSG_SPELLDISPELLOG), 0x4516);          // SMSG_SPELL_DISPEL_LOG
+    EXPECT_EQ(uint16(SMSG_SPELLLOGMISS), 0x0625);            // SMSG_SPELL_MISS_LOG
+    EXPECT_EQ(uint16(SMSG_STANDSTATE_UPDATE), 0x6F04);       // SMSG_STAND_STATE_UPDATE
+    EXPECT_EQ(uint16(SMSG_SUPERCEDED_SPELL), 0x35B0);        // SMSG_SUPERCEDED_SPELLS
+    EXPECT_EQ(uint16(SMSG_REMOVED_SPELL), 0x4804);           // SMSG_UNLEARNED_SPELLS
+    EXPECT_EQ(uint16(SMSG_CHAR_DELETE), 0x0304);             // SMSG_DELETE_CHAR
+
+    OpcodeTable table;
+    table.Initialize();
+
+    ASSERT_NE(table[SMSG_LEVELUP_INFO], nullptr);
+    EXPECT_STREQ(table[SMSG_LEVELUP_INFO]->Name, "SMSG_LEVELUP_INFO");
+}
