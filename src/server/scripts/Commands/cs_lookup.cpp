@@ -22,6 +22,7 @@
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "Player.h"
+#include "RaceMgr.h"
 #include "RBAC.h"
 #include "ReputationMgr.h"
 #include "SharedDefines.h"
@@ -1672,7 +1673,7 @@ public:
                         pclass = gpd->Class;
                     }
 
-                    if (plevel > 0 && prace > 0 && prace <= RACE_DRAENEI && pclass > 0 && pclass <= CLASS_DRUID)
+                    if (plevel > 0 && prace > 0 && (sRaceMgr->GetPlayableRaceMask() & (1u << (prace - 1))) && pclass > 0 && pclass <= CLASS_DRUID)
                     {
                         handler->PSendSysMessage("  {} (GUID {}) - {} - {} - {}{}", name, guid, EnumUtils::ToTitle(Races(prace)), EnumUtils::ToTitle(Classes(pclass)), plevel, (online ? " - [ONLINE]" : ""));
                     }
