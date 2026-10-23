@@ -1323,11 +1323,17 @@ def issue97_world_seed_sql() -> str:
         f"`PhaseId`) VALUES ({ISSUE97_PHASED_GO_GUID},{ISSUE97_GO_ENTRY},0,12,12,-9072,-34,89.7,0,0,0,0,1,300,255,1,"
         f"{ISSUE97_PHASE_ID});"
     )
+    # The Plan 24 acceptance rows are seeded here, not shipped as live data (#170).
+    phase_area = (
+        "DELETE FROM `phase_area` WHERE (`AreaId`=12 AND `PhaseId`=125) OR (`AreaId`=1519 AND `PhaseId`=367);"
+        "INSERT INTO `phase_area` (`AreaId`,`PhaseId`) VALUES "
+        f"(12,{ISSUE97_PHASE_ID}),(1519,367);"
+    )
     return (
         f"DELETE FROM `creature` WHERE `id` IN ({ISSUE97_CREATURE_ENTRY},{ISSUE97_CONTROL_CREATURE_ENTRY},11260) "
         f"AND `guid` IN ({ISSUE97_PHASED_CREATURE_GUID},{ISSUE97_CONTROL_CREATURE_GUID});"
         f"DELETE FROM `gameobject` WHERE `id` IN ({ISSUE97_GO_ENTRY},21008) "
-        f"AND `guid`={ISSUE97_PHASED_GO_GUID};" + creature + gameobject
+        f"AND `guid`={ISSUE97_PHASED_GO_GUID};" + creature + gameobject + phase_area
     )
 
 
@@ -10021,6 +10027,9 @@ four Completed: COP_GET_CHARACTERS result=TRUE
     seed_sql = populated_character_seed_sql()
     assert "INSERT INTO `characters`" in seed_sql and "`order`,`innTriggerId`" in seed_sql
     assert "INSERT INTO `characters` VALUES" not in seed_sql
+    # #170: the Plan 24 acceptance rows must be seeded here, never shipped as live phase_area data.
+    issue97_seed = issue97_world_seed_sql()
+    assert "INSERT INTO `phase_area`" in issue97_seed and "(12,125),(1519,367)" in issue97_seed
     assert replace_config("# Key = old\nOther=1\n", {"Key": "new"}) == "Key = new\nOther=1\n"
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
