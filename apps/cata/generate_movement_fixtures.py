@@ -107,6 +107,9 @@ def main():
         "MovementStartStrafeRight", "MovementStartTurnLeft", "MovementStartTurnRight", "MovementStop",
         "MovementStopStrafe", "MovementStopTurn", "MovementSetRunMode", "MovementSetWalkMode",
         "MovementSetFacing", "MovementFallLand", "MovementJump",
+        "MovementSetPitch", "MovementStartAscend", "MovementStartDescend", "MovementStartPitchDown",
+        "MovementStartPitchUp", "MovementStartSwim", "MovementStopAscend", "MovementStopPitch",
+        "MovementStopSwim", "MoveChngTransport", "MovementFallReset",
     ):
         body = re.search(r"\b" + name + r"\[\]\s*=\s*\{(.*?)\};", source, re.S).group(1)
         sequences[name] = re.findall(r"\bMSE\w+", body)
@@ -125,7 +128,9 @@ def main():
     }
     for sample in samples.values():
         sample.update({"Counter": 0x10203040, "ExtraElement": 10.5})
-    print(json.dumps({name: {packet: encode(sequence, sample, packet in {"MovementUpdate", "MovementUpdateRunSpeed"})
+    samples["sparse_rebroadcast"] = dict(samples["sparse"])
+    print(json.dumps({name: {packet: encode(sequence, sample,
+                            packet in {"MovementUpdate", "MovementUpdateRunSpeed"} or name == "sparse_rebroadcast")
                             for packet, sequence in sequences.items()}
                       for name, sample in samples.items()}, indent=2))
 

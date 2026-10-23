@@ -380,13 +380,18 @@ void WorldSession::HandleMovementOpcodes(WorldPacket& recvData)
 
     /* extract packet */
     // Cata bit-packs the mover guid into the same generic sequence as the rest of the movement
-    // fields for these opcodes, so unlike the legacy WotLK path there is no separate leading guid.
-    bool usesBitPackedCodec = opcode == MSG_MOVE_HEARTBEAT || WorldPackets::Movement::GetGroundMovementSequence(opcode) != nullptr;
+    // fields. Every opcode registered on this handler has a sequence; an unknown one is dropped
+    // instead of being read with the 3.3.5a layout (issue #186).
+    if (opcode != MSG_MOVE_HEARTBEAT && !WorldPackets::Movement::GetMovementSequence(opcode))
+    {
+        LOG_ERROR("network.opcode", "HandleMovementOpcodes: no Cataclysm movement sequence for opcode {}",
+            GetOpcodeNameForLogging(static_cast<OpcodeClient>(opcode)));
+        recvData.rfinish();
+        return;
+    }
+
     MovementInfo movementInfo;
-    if (usesBitPackedCodec)
-        ReadMovementInfo(recvData, &movementInfo);
-    else
-        recvData >> movementInfo.guid.ReadAsPacked();
+    ReadMovementInfo(recvData, &movementInfo);
     ObjectGuid guid = movementInfo.guid;
 
     // prevent tampered movement data
@@ -402,9 +407,6 @@ void WorldSession::HandleMovementOpcodes(WorldPacket& recvData)
         recvData.rfinish();                     // prevent warnings spam
         return;
     }
-
-    if (!usesBitPackedCodec)
-        ReadMovementInfo(recvData, &movementInfo);
 
     if (!ProcessMovementInfo(movementInfo, mover, plrMover, recvData))
     {
@@ -423,7 +425,7 @@ void WorldSession::HandleMovementOpcodes(WorldPacket& recvData)
         LOG_DEBUG("network", "Accepted Cataclysm movement heartbeat after movement validation: x={}, y={}, z={}, o={}",
             movementInfo.pos.GetPositionX(), movementInfo.pos.GetPositionY(), movementInfo.pos.GetPositionZ(),
             movementInfo.pos.GetOrientation());
-    else if (WorldPackets::Movement::GetGroundMovementSequence(opcode))
+    else if (WorldPackets::Movement::GetMovementSequence(opcode))
         LOG_DEBUG("network", "Accepted Cataclysm ground movement {} after movement validation: x={}, y={}, z={}, o={}",
             GetOpcodeNameForLogging(static_cast<OpcodeClient>(opcode)), movementInfo.pos.GetPositionX(),
             movementInfo.pos.GetPositionY(), movementInfo.pos.GetPositionZ(), movementInfo.pos.GetOrientation());

@@ -1091,7 +1091,7 @@ void WorldSession::ReadMovementInfo(WorldPacket& data, MovementInfo* mi)
     if (data.GetOpcode() == MSG_MOVE_HEARTBEAT)
         WorldPackets::Movement::ReadHeartbeat(data, *mi);
     else if (WorldPackets::Movement::MovementStatusElements const* sequence =
-        WorldPackets::Movement::GetGroundMovementSequence(data.GetOpcode()))
+        WorldPackets::Movement::GetMovementSequence(data.GetOpcode()))
         WorldPackets::Movement::ReadGroundMovement(data, *mi, sequence);
     else
     {
@@ -1222,7 +1222,7 @@ void WorldSession::WriteMovementInfo(WorldPacket* data, MovementInfo* mi)
     }
 
     if (WorldPackets::Movement::MovementStatusElements const* sequence =
-        WorldPackets::Movement::GetGroundMovementSequence(data->GetOpcode()))
+        WorldPackets::Movement::GetMovementSequence(data->GetOpcode()))
     {
         WorldPackets::Movement::WriteGroundMovement(*data, *mi, sequence);
         return;

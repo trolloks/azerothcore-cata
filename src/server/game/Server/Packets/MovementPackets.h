@@ -20,7 +20,7 @@ namespace WorldPackets
     {
         // Generic bit-packed field tokens shared by every MSG_MOVE_* ground-movement opcode.
         // Each opcode transmits the same fields in its own Blizzard-obfuscated order; see the
-        // per-opcode sequences in MovementPackets.cpp and GetGroundMovementSequence().
+        // per-opcode sequences in MovementPackets.cpp and GetMovementSequence().
         enum MovementStatusElements : uint8
         {
             MSEHasGuidByte0, MSEHasGuidByte1, MSEHasGuidByte2, MSEHasGuidByte3,
@@ -74,7 +74,7 @@ namespace WorldPackets
         uint16 ExtraMovementFlagsToClient(uint16 flags);
         void ReadHeartbeat(WorldPacket& packet, MovementInfo& info);
         void WriteMovementUpdate(WorldPacket& packet, MovementInfo const& info);
-        MovementStatusElements const* GetGroundMovementSequence(uint16 opcode);
+        MovementStatusElements const* GetMovementSequence(uint16 opcode);
         void ReadGroundMovement(WorldPacket& packet, MovementInfo& info, MovementStatusElements const* sequence,
             uint32* counter = nullptr);
         void WriteGroundMovement(WorldPacket& packet, MovementInfo const& info, MovementStatusElements const* sequence,
