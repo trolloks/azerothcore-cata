@@ -51,7 +51,7 @@ TEST(ChatPacketFormatTest, EmoteAfkDndCarryNoLanguageField)
 TEST(ChatPacketFormatTest, SayCarriesLanguageBeforeMessage)
 {
     std::string const message = "hello";
-    WorldPacket packet(uint16(CMSG_MESSAGECHAT_SAY));
+    WorldPacket packet{ uint16(CMSG_MESSAGECHAT_SAY) };
     packet << uint32(LANG_COMMON);
     WriteLengthPrefixedString(packet, message);
 
@@ -69,7 +69,7 @@ TEST(ChatPacketFormatTest, WhisperCarriesReceiverLengthBeforeMessageLength)
 {
     std::string const receiver = "Tester";
     std::string const message = "hello";
-    WorldPacket packet(uint16(CMSG_MESSAGECHAT_WHISPER));
+    WorldPacket packet{ uint16(CMSG_MESSAGECHAT_WHISPER) };
     packet << uint32(LANG_COMMON);
     packet.WriteBits(receiver.size(), 10);
     packet.WriteBits(message.size(), 9);
