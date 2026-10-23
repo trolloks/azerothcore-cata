@@ -1649,7 +1649,9 @@ void Map::SendInitSelf(Player* player)
     LOG_INFO("maps", "Creating player data for himself {}", player->GetGUID().ToString());
 
     WorldPacket packet;
-    UpdateData data;
+    // 4.3.4 prefixes SMSG_UPDATE_OBJECT with the map id; the default UpdateData leaves it 0,
+    // which makes the client load map 0 (Stormwind) instead of the character's map (e.g. Kezan).
+    UpdateData data(player->GetMapId());
 
     // attach to player data current transport data
     if (Transport* transport = player->GetTransport())
