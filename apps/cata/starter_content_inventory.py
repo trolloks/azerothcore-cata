@@ -58,7 +58,7 @@ def zone_creature_entries(container, user, password, schema, zone, map_id) -> se
     if not zone_col or not entry_col:
         return set()
     rows = query(container, user, password, schema,
-                 f"SELECT DISTINCT {entry_col} FROM creature WHERE {zone_col}={zone} AND map={map_id}")
+                 f"SELECT DISTINCT {entry_col} FROM creature WHERE ({zone_col}={zone} OR areaId={zone}) AND map={map_id}")
     return {int(r[0]) for r in rows if r and r[0].isdigit()}
 
 
@@ -73,7 +73,7 @@ def creature_loot_ids(container, user, password, schema, zone, map_id) -> set[in
     rows = query(container, user, password, schema,
                  f"SELECT DISTINCT ct.lootid FROM creature c "
                  f"JOIN creature_template ct ON ct.entry=c.{entry_col} "
-                 f"WHERE c.zoneId={zone} AND c.map={map_id} AND ct.lootid<>0")
+                 f"WHERE (c.zoneId={zone} OR c.areaId={zone}) AND c.map={map_id} AND ct.lootid<>0")
     return {int(r[0]) for r in rows if r and r[0].isdigit() and int(r[0]) > 0}
 
 
@@ -85,7 +85,7 @@ def gameobject_loot_ids(container, user, password, schema, zone, map_id) -> set[
     rows = query(container, user, password, schema,
                  f"SELECT DISTINCT gt.Data1 FROM gameobject g "
                  f"JOIN gameobject_template gt ON gt.entry=g.id "
-                 f"WHERE g.zoneId={zone} AND g.map={map_id} AND gt.type IN (3,25) AND gt.Data1<>0")
+                 f"WHERE (g.zoneId={zone} OR g.areaId={zone}) AND g.map={map_id} AND gt.type IN (3,25) AND gt.Data1<>0")
     return {int(r[0]) for r in rows if r and r[0].isdigit() and int(r[0]) > 0}
 
 
@@ -97,7 +97,7 @@ def zone_gameobject_entries(container, user, password, schema, zone, map_id) -> 
     if not zone_col:
         return set()
     rows = query(container, user, password, schema,
-                 f"SELECT DISTINCT id FROM gameobject WHERE {zone_col}={zone} AND map={map_id}")
+                 f"SELECT DISTINCT id FROM gameobject WHERE ({zone_col}={zone} OR areaId={zone}) AND map={map_id}")
     return {int(r[0]) for r in rows if r and r[0].isdigit()}
 
 
@@ -109,7 +109,7 @@ def zone_guids(container, user, password, schema, table, zone, map_id) -> set[in
     if not zone_col:
         return set()
     rows = query(container, user, password, schema,
-                 f"SELECT guid FROM {table} WHERE {zone_col}={zone} AND map={map_id}")
+                 f"SELECT guid FROM {table} WHERE ({zone_col}={zone} OR areaId={zone}) AND map={map_id}")
     return {int(r[0]) for r in rows if r and r[0].isdigit()}
 
 
@@ -122,9 +122,9 @@ def inventory(container, user, password, schema, zone, map_id) -> dict[str, int]
         "quests": scalar(container, user, password, schema,
                          f"SELECT COUNT(*) FROM quest_template WHERE {sort_col}={zone}"),
         "creatures": scalar(container, user, password, schema,
-                            f"SELECT COUNT(*) FROM creature WHERE zoneId={zone} AND map={map_id}"),
+                            f"SELECT COUNT(*) FROM creature WHERE (zoneId={zone} OR areaId={zone}) AND map={map_id}"),
         "gameobjects": scalar(container, user, password, schema,
-                              f"SELECT COUNT(*) FROM gameobject WHERE zoneId={zone} AND map={map_id}"),
+                              f"SELECT COUNT(*) FROM gameobject WHERE (zoneId={zone} OR areaId={zone}) AND map={map_id}"),
     }
 
     creature_entries = zone_creature_entries(container, user, password, schema, zone, map_id)
