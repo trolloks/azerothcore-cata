@@ -377,7 +377,7 @@ class spell_madrigosa_activate_barrier : public SpellScript
             go->SetGoState(GO_STATE_READY);
             if (Map* map = go->GetMap())
                 map->DoForAllPlayers([&](Player* player) {
-                    UpdateData data;
+                    UpdateData data(map->GetId());
                     WorldPacket pkt;
                     go->BuildValuesUpdateBlockForPlayer(&data, player);
                     data.BuildPacket(pkt);
@@ -404,7 +404,7 @@ class spell_madrigosa_deactivate_barrier : public SpellScript
             go->SetGoState(GO_STATE_ACTIVE);
             if (Map* map = go->GetMap())
                 map->DoForAllPlayers([&](Player* player) {
-                    UpdateData data;
+                    UpdateData data(map->GetId());
                     WorldPacket pkt;
                     go->BuildValuesUpdateBlockForPlayer(&data, player);
                     data.BuildPacket(pkt);

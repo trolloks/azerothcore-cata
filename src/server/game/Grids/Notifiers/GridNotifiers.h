@@ -48,9 +48,8 @@ namespace Acore
         UpdateData i_data;
 
         VisibleNotifier(Player& player, bool gobjOnly) :
-            i_player(player), i_visibleNow(player.m_newVisible), i_gobjOnly(gobjOnly)
+            i_player(player), i_visibleNow(player.m_newVisible), i_gobjOnly(gobjOnly), i_data(player.GetMapId())
         {
-            i_data.SetMap(player.GetMapId());
             i_visibleNow.clear();
         }
 
