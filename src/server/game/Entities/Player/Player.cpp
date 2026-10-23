@@ -14814,6 +14814,7 @@ void Player::BuildPlayerTalentsInfoData(WorldPacket* data)
 
     for (uint32 specIdx = 0; specIdx < m_specsCount; ++specIdx)
     {
+        *data << uint32(GetPrimaryTalentTree(specIdx));     // primary talent tree (TalentTab.dbc)
         uint8 talentIdCount = 0;
         std::size_t pos = data->wpos();
         *data << uint8(talentIdCount);                      // [PH], talentIdCount
@@ -15827,6 +15828,49 @@ uint8 Player::GetMostPointsTalentTree() const
             maxCount = specPoints[i];
         }
     return maxIndex;
+}
+
+uint32 Player::GetPrimaryTalentTree(uint8 spec) const
+{
+    if (spec >= MAX_TALENT_SPECS)
+        return 0;
+
+    uint32 specPoints[3] = { 0, 0, 0 };
+    PlayerTalentMap const& talentMap = GetTalentMap();
+    for (PlayerTalentMap::const_iterator itr = talentMap.begin(); itr != talentMap.end(); ++itr)
+    {
+        if (itr->second->State == PLAYERSPELL_REMOVED || !itr->second->IsInSpec(spec))
+            continue;
+
+        TalentEntry const* talentInfo = sTalentStore.LookupEntry(itr->second->talentID);
+        if (!talentInfo)
+            continue;
+
+        TalentTabEntry const* tab = sTalentTabStore.LookupEntry(talentInfo->TalentTab);
+        if (!tab || tab->tabpage >= 3)
+            continue;
+
+        for (uint8 rank = 0; rank < MAX_TALENT_RANK; ++rank)
+            if (talentInfo->RankID[rank] && itr->first == talentInfo->RankID[rank])
+            {
+                specPoints[tab->tabpage] += rank + 1;
+                break;
+            }
+    }
+
+    uint8 maxPage = 0;
+    uint32 maxPoints = specPoints[0];
+    for (uint8 i = 1; i < 3; ++i)
+        if (specPoints[i] > maxPoints)
+        {
+            maxPage = i;
+            maxPoints = specPoints[i];
+        }
+
+    if (!maxPoints)
+        return 0;
+
+    return GetTalentTabPages(getClass())[maxPage];
 }
 
 void Player::SetReputation(uint32 factionentry, float value)
