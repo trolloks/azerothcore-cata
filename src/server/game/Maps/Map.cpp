@@ -387,7 +387,7 @@ bool Map::AddToMap(Transport* obj, bool /*checkTransport*/)
     {
         if (itr->GetSource()->IsInWorld() && itr->GetSource()->GetTransport() != obj)
         {
-            UpdateData data;
+            UpdateData data(GetId());
             obj->BuildCreateUpdateBlockForPlayer(&data, itr->GetSource());
             WorldPacket packet;
             data.BuildPacket(packet);
@@ -766,7 +766,7 @@ void Map::RemoveFromMap(Transport* obj, bool remove)
     Map::PlayerList const& players = GetPlayers();
     if (!players.IsEmpty())
     {
-        UpdateData data;
+        UpdateData data(GetId());
         obj->BuildOutOfRangeUpdateBlock(&data);
         WorldPacket packet;
         data.BuildPacket(packet);
@@ -1698,7 +1698,7 @@ void Map::SendInitTransports(Player* player)
         return;
 
     // Hack to send out transports
-    UpdateData transData;
+    UpdateData transData(GetId());
     for (TransportsContainer::const_iterator itr = _transports.begin(); itr != _transports.end(); ++itr)
         if (*itr != player->GetTransport() && (!sToCloud9Sidecar->ClusterModeEnabled() || player->InSamePhase(*itr)))
             (*itr)->BuildCreateUpdateBlockForPlayer(&transData, player);
@@ -1717,7 +1717,7 @@ void Map::SendRemoveTransports(Player* player)
         return;
 
     // Hack to send out transports
-    UpdateData transData;
+    UpdateData transData(player->GetMapId());
     for (TransportsContainer::const_iterator itr = _transports.begin(); itr != _transports.end(); ++itr)
         if (*itr != player->GetTransport())
             (*itr)->BuildOutOfRangeUpdateBlock(&transData);
