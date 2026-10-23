@@ -1773,6 +1773,7 @@ public:
     void LoadActions(PreparedQueryResult result);
     void GetTalentTreePoints(uint8 (&specPoints)[3]) const;
     [[nodiscard]] uint8 GetMostPointsTalentTree() const;
+    [[nodiscard]] uint32 GetPrimaryTalentTree(uint8 spec) const;
     bool HasTankSpec();
     bool HasMeleeSpec();
     bool HasCasterSpec();
