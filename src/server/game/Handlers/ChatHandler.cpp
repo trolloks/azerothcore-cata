@@ -84,9 +84,6 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recvData)
             return;
     }
 
-    uint32 lang;
-    recvData >> lang;
-
     if (type >= MAX_CHAT_MSG_TYPE)
     {
         LOG_ERROR("network.opcode", "CHAT: Wrong message type received: {}", type);
@@ -94,43 +91,51 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recvData)
         return;
     }
 
-    if (lang == LANG_UNIVERSAL && type != CHAT_MSG_AFK && type != CHAT_MSG_DND)
-    {
-        LOG_ERROR("entities.player.cheat", "CMSG_MESSAGECHAT: Possible hacking-attempt: {} tried to send a message in universal language", GetPlayerInfo());
-        ChatHandler(this).SendNotification(LANG_UNKNOWN_LANGUAGE);
-        recvData.rfinish();
-        return;
-    }
-
     Player* sender = GetPlayer();
 
-    // prevent talking at unknown language (cheating)
-    LanguageDesc const* langDesc = GetLanguageDescByID(lang);
-    if (!langDesc)
+    // Cata build 15595 sends no language field for emote, AFK and DND; reading one there
+    // consumes the first bits of the message and garbles it (issue #169).
+    uint32 lang = LANG_UNIVERSAL;
+    if (type != CHAT_MSG_EMOTE && type != CHAT_MSG_AFK && type != CHAT_MSG_DND)
     {
-        ChatHandler(this).SendNotification(LANG_UNKNOWN_LANGUAGE);
-        recvData.rfinish();
-        return;
-    }
+        recvData >> lang;
 
-    if (langDesc->skill_id != 0 && !sender->HasSkill(langDesc->skill_id))
-    {
-        // also check SPELL_AURA_COMPREHEND_LANGUAGE (client offers option to speak in that language)
-        bool foundAura = false;
-        for (auto const& auraEff : sender->GetAuraEffectsByType(SPELL_AURA_COMPREHEND_LANGUAGE))
+        if (lang == LANG_UNIVERSAL)
         {
-            if (auraEff->GetMiscValue() == int32(lang))
-            {
-                foundAura = true;
-                break;
-            }
-        }
-
-        if (!foundAura)
-        {
-            ChatHandler(this).SendNotification(LANG_NOT_LEARNED_LANGUAGE);
+            LOG_ERROR("entities.player.cheat", "CMSG_MESSAGECHAT: Possible hacking-attempt: {} tried to send a message in universal language", GetPlayerInfo());
+            ChatHandler(this).SendNotification(LANG_UNKNOWN_LANGUAGE);
             recvData.rfinish();
             return;
+        }
+
+        // prevent talking at unknown language (cheating)
+        LanguageDesc const* langDesc = GetLanguageDescByID(lang);
+        if (!langDesc)
+        {
+            ChatHandler(this).SendNotification(LANG_UNKNOWN_LANGUAGE);
+            recvData.rfinish();
+            return;
+        }
+
+        if (langDesc->skill_id != 0 && !sender->HasSkill(langDesc->skill_id))
+        {
+            // also check SPELL_AURA_COMPREHEND_LANGUAGE (client offers option to speak in that language)
+            bool foundAura = false;
+            for (auto const& auraEff : sender->GetAuraEffectsByType(SPELL_AURA_COMPREHEND_LANGUAGE))
+            {
+                if (auraEff->GetMiscValue() == int32(lang))
+                {
+                    foundAura = true;
+                    break;
+                }
+            }
+
+            if (!foundAura)
+            {
+                ChatHandler(this).SendNotification(LANG_NOT_LEARNED_LANGUAGE);
+                recvData.rfinish();
+                return;
+            }
         }
     }
 
