@@ -510,7 +510,7 @@ void GameObject::Update(uint32 diff)
                                     SetGoState(GO_STATE_ACTIVE);
                                     ReplaceAllGameObjectFlags(GO_FLAG_NODESPAWN);
 
-                                    UpdateData udata;
+                                    UpdateData udata(caster->ToPlayer()->GetMapId());
                                     WorldPacket packet;
                                     BuildValuesUpdateBlockForPlayer(&udata, caster->ToPlayer());
                                     udata.BuildPacket(packet);

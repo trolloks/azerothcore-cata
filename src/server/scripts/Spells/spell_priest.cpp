@@ -471,7 +471,7 @@ class spell_pri_lightwell_renew : public AuraScript
             if (!IsLightwellEntry(controlled->GetEntry()))
                 continue;
 
-            UpdateData data;
+            UpdateData data(player->GetMapId());
             WorldPacket packet;
             controlled->BuildValuesUpdateBlockForPlayer(&data, player);
             data.BuildPacket(packet);

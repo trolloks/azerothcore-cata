@@ -133,7 +133,7 @@ void WorldSession::HandleMoveWorldportAck()
         {
             // Client was never told to destroy its own transport
             // Destroy it now or it keeps a phantom copy of the transport on the new map
-            UpdateData transData;
+            UpdateData transData(_player->GetMapId());
             t->BuildOutOfRangeUpdateBlock(&transData);
             WorldPacket packet;
             transData.BuildPacket(packet);

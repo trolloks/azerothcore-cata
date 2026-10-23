@@ -175,7 +175,7 @@ uint32 MotionTransport::HandleFirstDepartureSync(uint32 diff)
                 if (!player->InSamePhase(this))
                     continue;
 
-                UpdateData transData;
+                UpdateData transData(player->GetMapId());
                 this->BuildCreateUpdateBlockForPlayer(&transData, player);
 
                 WorldPacket packet;

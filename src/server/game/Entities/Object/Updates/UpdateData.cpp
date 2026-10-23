@@ -23,7 +23,7 @@
 #include "World.h"
 #include "WorldPacket.h"
 
-UpdateData::UpdateData() : m_blockCount(0)
+UpdateData::UpdateData(uint16 map) : m_map(map), m_blockCount(0)
 {
     m_outOfRangeGUIDs.reserve(15);
 }
