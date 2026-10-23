@@ -37,5 +37,5 @@
       "member_phase_ids": [171, 172]
     }
   },
-  "notes": "Records read directly from the pinned build-15595 Phase.dbc/PhaseXPhaseGroup.dbc extracted per apps/cata/fixtures/plan22-client-extraction.json; re-extracted three independent times with identical sha256, confirming stability. phase_area (data/sql/updates/pending_db_world/rev_1789504651422747395.sql) reuses these same ids."
+  "notes": "Records read directly from the pinned build-15595 Phase.dbc/PhaseXPhaseGroup.dbc extracted per apps/cata/fixtures/plan22-client-extraction.json; re-extracted three independent times with identical sha256, confirming stability. The `phase_area` rows for these ids are seeded into the isolated run schema by `issue97_world_seed_sql()`; they are not live world data (#170)."
 }
