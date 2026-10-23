@@ -164,6 +164,16 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             report[table], _ = import_table(container, user, password, target, source, table,
                                             "entry", entries, dry_run)
 
+    script_names: set[str] = set()
+    for table, entries in (("creature_template", new_creatures),
+                           ("gameobject_template", new_gameobjects)):
+        if entries:
+            script_names.update(fetch(container, user, password,
+                                      f"SELECT DISTINCT ScriptName FROM {source}.{table} "
+                                      f"WHERE entry IN ({','.join(entries)}) AND ScriptName<>''"))
+    if script_names:
+        report["script_names"] = sorted(script_names)
+
     model_columns = [c for c in ("modelid1", "modelid2", "modelid3", "modelid4")
                      if c in {name for name, _ in columns(container, user, password,
                                                           source, "creature_template")}]
@@ -220,6 +230,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         if dry_run:
             report[table + "_sql"] = sql
 
+    new_addon_guids: set[str] = set()
     for table, spawn_table, entries in (("creature_addon", "creature", creature_entries),
                                         ("gameobject_addon", "gameobject", gameobject_entries)):
         if not entries or not table_exists(container, user, password, source, table):
@@ -239,10 +250,17 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                f"WHERE s.id IN ({ids}) AND s.map={map_id} AND (s.zoneId={zone} OR s.areaId={zone}) "
                f"AND EXISTS (SELECT 1 FROM {target}.{spawn_table} t WHERE t.guid=a.guid+{GUID_OFFSET})")
         if not dry_run:
+            before = set(fetch(container, user, password,
+                               f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
             run(container, user, password, sql)
+            if table == "creature_addon":
+                after = set(fetch(container, user, password,
+                                  f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
+                new_addon_guids = after - before
 
     # Template addons carry the interaction bytes/auras; creature spell-click
     # rows keep the NPC's spell-click flag alive in the loader.
+    new_template_addons: set[str] = set()
     if (creature_entries
             and table_exists(container, user, password, source, "creature_template_addon")):
         present = set(fetch(container, user, password,
@@ -265,9 +283,17 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                    f"WHERE a.entry IN ({','.join(candidates)})")
             if dry_run:
                 report["creature_template_addon"] = 0
+                new_template_addons: set[str] = set()
             else:
+                before = set(fetch(container, user, password,
+                                   f"SELECT entry FROM {target}.creature_template_addon "
+                                   f"WHERE entry IN ({','.join(candidates)})"))
                 rows = run(container, user, password, sql + "; SELECT ROW_COUNT()")
                 report["creature_template_addon"] = int(rows[-1][0]) if rows else 0
+                after = set(fetch(container, user, password,
+                                  f"SELECT entry FROM {target}.creature_template_addon "
+                                  f"WHERE entry IN ({','.join(candidates)})"))
+                new_template_addons = after - before
     if creature_entries and table_exists(container, user, password, source, "npc_spellclick_spells"):
         present = set(fetch(container, user, password,
                             f"SELECT DISTINCT npc_entry FROM {target}.npc_spellclick_spells "
@@ -307,18 +333,24 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         names = ",".join(quote(c) for c in waypoint_columns)
         imported_paths = 0
         for path_id, consumers in sorted(path_targets.items()):
-            satisfied = True
-            for consumer_table, key in consumers:
-                key_column = "guid" if consumer_table == "creature_addon" else "entry"
-                rows = run(container, user, password,
-                           f"SELECT path_id FROM {target}.{consumer_table} "
-                           f"WHERE {key_column}={key} LIMIT 1")
-                current = rows[0][0] if rows else "0"
-                if (not current or not current.isdigit() or int(current) == 0
-                        or scalar(container, user, password,
-                                  f"SELECT COUNT(*) FROM {target}.waypoint_data WHERE id={current}") == 0):
-                    satisfied = False
-                    break
+            is_new = any(
+                (consumer_table == "creature_addon" and key in new_addon_guids)
+                or (consumer_table == "creature_template_addon" and key in new_template_addons)
+                for consumer_table, key in consumers)
+            satisfied = not is_new
+            if satisfied:
+                for consumer_table, key in consumers:
+                    key_column = "guid" if consumer_table == "creature_addon" else "entry"
+                    rows = run(container, user, password,
+                               f"SELECT path_id FROM {target}.{consumer_table} "
+                               f"WHERE {key_column}={key} LIMIT 1")
+                    current = rows[0][0] if rows else "0"
+                    if (not current or not current.isdigit() or int(current) == 0
+                            or scalar(container, user, password,
+                                      f"SELECT COUNT(*) FROM {target}.waypoint_data "
+                                      f"WHERE id={current}") == 0):
+                        satisfied = False
+                        break
             if satisfied:
                 continue
             target_path = str(scalar(container, user, password,
