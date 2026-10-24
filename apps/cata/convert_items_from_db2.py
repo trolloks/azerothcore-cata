@@ -6,7 +6,8 @@ from the ItemArmor*/ItemDamage* tables (item_derived_stats.py). Without it, or f
 underived (block, second damage, scaling value, disenchant), the schema default is kept and the output
 header lists them so the gap stays visible.
 
-Prints DELETE + INSERT SQL for the given item IDs to stdout; it never touches a database.
+Prints DELETE + INSERT SQL for the given item IDs to stdout (--insert-only: a plain INSERT for new ids);
+it never touches a database.
 """
 
 import argparse
@@ -101,19 +102,20 @@ def convert(item_rows, sparse_rows, item_ids, tables=None):
     return rows
 
 
-def to_sql(rows, build, derived=False):
+def to_sql(rows, build, derived=False, insert_only=False):
     columns = list(rows[0]) + ["VerifiedBuild"]
     ids = ",".join(str(row["entry"]) for row in rows)
     lines = [f"-- Also reset to default: {RESET_NOTE}. Apply only to ids not already in item_template.",
              f"-- {'Derived: ' + ', '.join(DERIVED) + '. ' if derived else 'Not derived (no --dbc-dir): '
                   + ', '.join(DERIVED) + '. '}"
              f"Left at schema default: {', '.join(UNRESOLVED)}",
-             "START TRANSACTION;",
-             f"DELETE FROM `item_template` WHERE `entry` IN ({ids});",
+             *([] if insert_only else ["START TRANSACTION;",
+                                       f"DELETE FROM `item_template` WHERE `entry` IN ({ids});"]),
              f"INSERT INTO `item_template` ({','.join(f'`{c}`' for c in columns)}) VALUES"]
     values = [f"({','.join(sql_value(row[c]) for c in columns[:-1])},{build})" for row in rows]
     lines.append(",\n".join(values) + ";")
-    lines.append("COMMIT;")
+    if not insert_only:
+        lines.append("COMMIT;")
     return "\n".join(lines) + "\n"
 
 
@@ -125,6 +127,7 @@ def self_test():
     assert rows[0]["name"] == "Bob's Vest" and "'Bob''s Vest'" in sql
     sparse[1]["ItemStatType0"], sparse[1]["ItemStatValue0"] = -1, 5
     assert convert(item, sparse, [1])[0]["stat_type1"] == 0 == convert(item, sparse, [1])[0]["stat_value1"]
+    assert "DELETE" not in to_sql(rows, 15595, insert_only=True)
     assert sql.count("DELETE FROM") == 1 and "VALUES" in sql and sql.rstrip().endswith("COMMIT;")
     sparse[1]["Flags"] = -2147483648
     assert convert(item, sparse, [1])[0]["Flags"] == 2147483648
@@ -160,6 +163,8 @@ def main():
     parser.add_argument("item_sparse_db2", nargs="?", type=argparse.FileType("rb"))
     parser.add_argument("item_ids", nargs="*", type=int)
     parser.add_argument("--build", type=int, default=15595)
+    parser.add_argument("--insert-only", action="store_true",
+                        help="plain INSERT for brand-new ids (the SQL linter forbids DELETE on item_template)")
     parser.add_argument("--dbc-dir", help="directory with the ItemArmor*/ItemDamage*/ArmorLocation .dbc files")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
@@ -170,7 +175,7 @@ def main():
     tables = load_tables(args.dbc_dir) if args.dbc_dir else None
     rows = convert(item_records(args.item_db2.read()), sparse_records(args.item_sparse_db2.read()),
                    sorted(set(args.item_ids)), tables)
-    sys.stdout.write(to_sql(rows, args.build, bool(tables)))
+    sys.stdout.write(to_sql(rows, args.build, bool(tables), args.insert_only))
 
 
 if __name__ == "__main__":
