@@ -200,6 +200,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                     f"VALUES {','.join(values)}")
             report["creature_template_model"] = len(values)
 
+    new_spawn_guids: dict[str, set[str]] = {"creature": set(), "gameobject": set()}
+
     def import_spawns(table, id_column, entries):
         if not entries:
             return 0, ""
@@ -223,7 +225,12 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                f"AND ABS(t.position_z-s.position_z)<1)")
         if dry_run:
             return 0, sql
+        before = set(fetch(container, user, password,
+                           f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
         rows = run(container, user, password, sql + "; SELECT ROW_COUNT()")
+        after = set(fetch(container, user, password,
+                          f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
+        new_spawn_guids[table] = after - before
         return int(rows[-1][0]) if rows else 0, sql
 
     for table, id_column, entries in (("creature", "id", creature_entries),
@@ -237,6 +244,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
     for table, spawn_table, entries in (("creature_addon", "creature", creature_entries),
                                         ("gameobject_addon", "gameobject", gameobject_entries)):
         if not entries or not table_exists(container, user, password, source, table):
+            continue
+        if not dry_run and not new_spawn_guids[spawn_table]:
             continue
         ids = ",".join(sorted(entries))
         target_names = {name for name, _ in columns(container, user, password, target, table)}
@@ -253,7 +262,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                f"WHERE s.id IN ({ids}) AND s.map={map_id} AND (s.zoneId={zone} OR s.areaId={zone}) "
                f"AND EXISTS (SELECT 1 FROM {target}.{spawn_table} t WHERE t.guid=a.guid+{GUID_OFFSET} "
                f"AND t.id=s.id AND t.map=s.map AND t.position_x=s.position_x "
-               f"AND t.position_y=s.position_y AND t.position_z=s.position_z)")
+               f"AND t.position_y=s.position_y AND t.position_z=s.position_z) "
+               f"AND a.guid+{GUID_OFFSET} IN ({','.join(sorted(new_spawn_guids[spawn_table])) or '0'})")
         if not dry_run:
             before = set(fetch(container, user, password,
                                f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
@@ -343,21 +353,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         for path_id, consumers in sorted(path_targets.items()):
             repair = []
             for consumer_table, key in consumers:
-                key_column = "guid" if consumer_table == "creature_addon" else "entry"
                 if key in (new_addon_guids if consumer_table == "creature_addon" else new_template_addons):
-                    repair.append((consumer_table, key))
-                    continue
-                if consumer_table == "creature_template_addon":
-                    continue  # native template addon: a path_id of 0 is a valid AC value
-                # A previously imported addon (shifted GUID) whose path never landed.
-                rows = run(container, user, password,
-                           f"SELECT path_id FROM {target}.{consumer_table} "
-                           f"WHERE {key_column}={key} LIMIT 1")
-                current = rows[0][0] if rows else "0"
-                if (not current.isdigit() or int(current) == 0
-                        or scalar(container, user, password,
-                                  f"SELECT COUNT(*) FROM {target}.waypoint_data "
-                                  f"WHERE id={current}") == 0):
                     repair.append((consumer_table, key))
             if not repair:
                 continue
@@ -380,7 +376,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
 
     # Source GUID -> target GUID, for scripts that target a specific spawn. Matching
     # is done in SQL (no float round-trip) on entry, map and position: the shifted
-    # GUID counts as imported only when that row really is the source spawn, and a
+    # GUID counts as imported only when inserted by this run, and a
     # native spawn at the same position is the fallback.
     def match_spawns(table, entries):
         rows = run(container, user, password,
@@ -391,7 +387,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                    f"GROUP BY s.guid, s.id")
         imported, native = {}, {}
         for guid, entry, is_imported, native_guid in rows:
-            if is_imported == "1":
+            if is_imported == "1" and str(int(guid) + GUID_OFFSET) in new_spawn_guids[table]:
                 imported[guid] = entry
             else:
                 native[guid] = native_guid
