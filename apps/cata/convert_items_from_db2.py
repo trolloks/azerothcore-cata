@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Convert native Cataclysm Item.db2 + Item-sparse.db2 rows into AC item_template SQL (#210, slice 1).
+"""Convert native Cataclysm Item.db2 + Item-sparse.db2 rows into AC item_template SQL (#210).
 
-Structural fields only. The 4.3.4 client stores no per-item armor, damage, durability or block values;
-those derive from the ItemArmor*/ItemDamage* tables and are not computed here. The columns left at their
-schema default are listed in the output header so the gap stays visible (slice 2).
+The 4.3.4 client stores no per-item armor, weapon damage or durability; with --dbc-dir these are derived
+from the ItemArmor*/ItemDamage* tables (item_derived_stats.py). Without it, or for the columns that stay
+underived (block, second damage, scaling value, disenchant), the schema default is kept and the output
+header lists them so the gap stays visible.
 
 Prints DELETE + INSERT SQL for the given item IDs to stdout; it never touches a database.
 """
@@ -13,6 +14,7 @@ import sys
 
 from audit_native_item_sparse import db2_records as sparse_records
 from audit_native_items import db2_records as item_records
+from item_derived_stats import effective_armor, load_tables, max_durability, weapon_damage
 
 SIMPLE = {  # AC column <- Item-sparse field
     "Quality": "Quality", "Flags": "Flags", "FlagsExtra": "Flags2", "BuyCount": "BuyCount",
@@ -47,8 +49,9 @@ for i in range(3):
     SIMPLE[f"socketContent_{i + 1}"] = f"SocketContent{i}"
 
 UNSIGNED = ["requiredspell", "startquest", "lockid", "itemset", "area"]
-UNRESOLVED = ["armor", "block", "MaxDurability", "dmg_min1", "dmg_max1", "dmg_type1", "dmg_min2",
-              "dmg_max2", "dmg_type2", "ScalingStatValue", "RequiredDisenchantSkill", "DisenchantID"]
+DERIVED = ["armor", "MaxDurability", "dmg_min1", "dmg_max1", "dmg_type1"]
+UNRESOLVED = ["block", "dmg_min2", "dmg_max2", "dmg_type2", "ScalingStatValue", "RequiredDisenchantSkill",
+              "DisenchantID"]
 # A DELETE + INSERT resets these AC-owned columns, so only run it for ids absent from item_template.
 RESET_NOTE = ("ScriptName, FoodType, flagsCustom, minMoneyLoot, maxMoneyLoot, spellppmRate_*, *_res, "
               "StatScalingFactor/ItemStatAllocation (scaling items lose their stats)")
@@ -62,7 +65,17 @@ def sql_value(value):
     return str(value)
 
 
-def convert(item_rows, sparse_rows, item_ids):
+def derive(row, sparse, tables):
+    """Fill armor, durability and weapon damage at the item's base level (no owner scaling)."""
+    args = (row["class"], row["subclass"], row["InventoryType"], row["Quality"], row["ItemLevel"])
+    row["armor"] = effective_armor(tables, *args)
+    row["MaxDurability"] = max_durability(*args)
+    damage = weapon_damage(tables, *args, row["FlagsExtra"], row["delay"], sparse["StatScalingFactor"],
+                           sparse["ArmorDamageModifier"])
+    row["dmg_min1"], row["dmg_max1"], row["dmg_type1"] = (*damage, sparse["DamageType"]) if damage else (0, 0, 0)
+
+
+def convert(item_rows, sparse_rows, item_ids, tables=None):
     rows = []
     for item_id in item_ids:
         if item_id not in item_rows or item_id not in sparse_rows:
@@ -82,16 +95,19 @@ def convert(item_rows, sparse_rows, item_ids):
         for i in range(1, 11):  # the client marks an empty stat slot -1; AC uses 0
             if row[f"stat_type{i}"] < 0:
                 row[f"stat_type{i}"] = row[f"stat_value{i}"] = 0
+        if tables:
+            derive(row, sparse, tables)
         rows.append(row)
     return rows
 
 
-def to_sql(rows, build):
+def to_sql(rows, build, derived=False):
     columns = list(rows[0]) + ["VerifiedBuild"]
     ids = ",".join(str(row["entry"]) for row in rows)
     lines = [f"-- Also reset to default: {RESET_NOTE}. Apply only to ids not already in item_template.",
-             f"-- Unresolved (derived from ItemArmor*/ItemDamage*, left at schema default): "
-             f"{', '.join(UNRESOLVED)}",
+             f"-- {'Derived: ' + ', '.join(DERIVED) + '. ' if derived else 'Not derived (no --dbc-dir): '
+                  + ', '.join(DERIVED) + '. '}"
+             f"Left at schema default: {', '.join(UNRESOLVED)}",
              "START TRANSACTION;",
              f"DELETE FROM `item_template` WHERE `entry` IN ({ids});",
              f"INSERT INTO `item_template` ({','.join(f'`{c}`' for c in columns)}) VALUES"]
@@ -124,6 +140,17 @@ def self_test():
         raise AssertionError("expected KeyError for a missing item")
     except KeyError:
         pass
+    flat = {name: {5: (5,) + (2.0,) * 7 + (5,)} for name in ("ItemArmorQuality", "ItemDamageRanged")}
+    flat["ItemArmorTotal"] = {5: (5, 5, 10.0, 20.0, 30.0, 40.0)}
+    flat["ArmorLocation"] = {7: (7, 0.5, 0.5, 0.5, 0.5, 0.5), 5: (5, 1.0, 1.0, 1.0, 1.0, 1.0)}
+    assert effective_armor(flat, 4, 1, 20, 1, 5) == int(2.0 * 10.0 * 1.0 + 0.5)  # robe uses the chest row
+    assert effective_armor(flat, 4, 2, 7, 1, 5) == int(2.0 * 20.0 * 0.5 + 0.5)
+    shirt = {"ItemLevel": 5, "StatScalingFactor": 0.0, "ArmorDamageModifier": 0.0, "DamageType": 0}
+    mixed = convert(item, {1: {**sparse[1], **shirt}}, [1], flat)  # an armor first row must keep the damage columns
+    assert {"dmg_min1", "dmg_max1", "dmg_type1"} <= set(mixed[0])
+    low, high = weapon_damage(flat, 2, 18, 26, 1, 5, 0, 2000, 0.0, 0.0)
+    assert (low, high) == (4.0, 4.0)  # delay 2000ms * dps 2.0 / 1000
+    assert max_durability(4, 1, 5, 1, 40) == 5 * int(23.0 * 1.0 * 1.0 + 0.5)
     print("convert_items_from_db2 self-test PASS.")
 
 
@@ -133,15 +160,17 @@ def main():
     parser.add_argument("item_sparse_db2", nargs="?", type=argparse.FileType("rb"))
     parser.add_argument("item_ids", nargs="*", type=int)
     parser.add_argument("--build", type=int, default=15595)
+    parser.add_argument("--dbc-dir", help="directory with the ItemArmor*/ItemDamage*/ArmorLocation .dbc files")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
         return self_test()
     if not (args.item_db2 and args.item_sparse_db2 and args.item_ids):
         parser.error("item_db2, item_sparse_db2 and at least one item id are required")
+    tables = load_tables(args.dbc_dir) if args.dbc_dir else None
     rows = convert(item_records(args.item_db2.read()), sparse_records(args.item_sparse_db2.read()),
-                   sorted(set(args.item_ids)))
-    sys.stdout.write(to_sql(rows, args.build))
+                   sorted(set(args.item_ids)), tables)
+    sys.stdout.write(to_sql(rows, args.build, bool(tables)))
 
 
 if __name__ == "__main__":
