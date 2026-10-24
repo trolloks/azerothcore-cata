@@ -46,8 +46,12 @@ for i in range(3):
     SIMPLE[f"socketColor_{i + 1}"] = f"SocketColor{i}"
     SIMPLE[f"socketContent_{i + 1}"] = f"SocketContent{i}"
 
+UNSIGNED = ["requiredspell", "startquest", "lockid", "itemset", "area"]
 UNRESOLVED = ["armor", "block", "MaxDurability", "dmg_min1", "dmg_max1", "dmg_type1", "dmg_min2",
               "dmg_max2", "dmg_type2", "ScalingStatValue", "RequiredDisenchantSkill", "DisenchantID"]
+# A DELETE + INSERT resets these AC-owned columns, so only run it for ids absent from item_template.
+RESET_NOTE = ("ScriptName, FoodType, flagsCustom, minMoneyLoot, maxMoneyLoot, spellppmRate_*, *_res, "
+              "StatScalingFactor/ItemStatAllocation (scaling items lose their stats)")
 
 
 def sql_value(value):
@@ -68,6 +72,13 @@ def convert(item_rows, sparse_rows, item_ids):
                "SoundOverrideSubclass": item["SoundOverrideSubclassID"], "name": sparse["Display"],
                "displayid": item["DisplayInfoID"], "description": sparse["Description"]}
         row.update({ac: sparse[field] for ac, field in SIMPLE.items()})
+        for flags in ("Flags", "FlagsExtra"):  # bit 31 reads back negative from the signed parser
+            row[flags] &= 0xFFFFFFFF
+        if item["ClassID"] != 4:  # AC subtracts this from armor; on Cata weapons it is a damage modifier
+            row["ArmorDamageModifier"] = 0
+        for column in UNSIGNED:
+            if row[column] < 0:
+                raise ValueError(f"item {item_id}: {column}={row[column]} does not fit an unsigned column")
         for i in range(1, 11):  # the client marks an empty stat slot -1; AC uses 0
             if row[f"stat_type{i}"] < 0:
                 row[f"stat_type{i}"] = row[f"stat_value{i}"] = 0
@@ -78,12 +89,15 @@ def convert(item_rows, sparse_rows, item_ids):
 def to_sql(rows, build):
     columns = list(rows[0]) + ["VerifiedBuild"]
     ids = ",".join(str(row["entry"]) for row in rows)
-    lines = [f"-- Unresolved (derived from ItemArmor*/ItemDamage*, left at schema default): "
+    lines = [f"-- Also reset to default: {RESET_NOTE}. Apply only to ids not already in item_template.",
+             f"-- Unresolved (derived from ItemArmor*/ItemDamage*, left at schema default): "
              f"{', '.join(UNRESOLVED)}",
+             "START TRANSACTION;",
              f"DELETE FROM `item_template` WHERE `entry` IN ({ids});",
              f"INSERT INTO `item_template` ({','.join(f'`{c}`' for c in columns)}) VALUES"]
     values = [f"({','.join(sql_value(row[c]) for c in columns[:-1])},{build})" for row in rows]
     lines.append(",\n".join(values) + ";")
+    lines.append("COMMIT;")
     return "\n".join(lines) + "\n"
 
 
@@ -95,7 +109,16 @@ def self_test():
     assert rows[0]["name"] == "Bob's Vest" and "'Bob''s Vest'" in sql
     sparse[1]["ItemStatType0"], sparse[1]["ItemStatValue0"] = -1, 5
     assert convert(item, sparse, [1])[0]["stat_type1"] == 0 == convert(item, sparse, [1])[0]["stat_value1"]
-    assert sql.count("DELETE FROM") == 1 and "VALUES" in sql and sql.rstrip().endswith(";")
+    assert sql.count("DELETE FROM") == 1 and "VALUES" in sql and sql.rstrip().endswith("COMMIT;")
+    sparse[1]["Flags"] = -2147483648
+    assert convert(item, sparse, [1])[0]["Flags"] == 2147483648
+    sparse[1]["LockID"] = -1
+    try:
+        convert(item, sparse, [1])
+        raise AssertionError("expected a negative unsigned value to be rejected")
+    except ValueError:
+        pass
+    sparse[1]["LockID"] = 0
     try:
         convert(item, sparse, [2])
         raise AssertionError("expected KeyError for a missing item")
