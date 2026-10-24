@@ -250,7 +250,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                f"SELECT a.guid+{GUID_OFFSET},{selected} FROM {source}.{table} a "
                f"JOIN {source}.{spawn_table} s ON s.guid=a.guid "
                f"WHERE s.id IN ({ids}) AND s.map={map_id} AND (s.zoneId={zone} OR s.areaId={zone}) "
-               f"AND EXISTS (SELECT 1 FROM {target}.{spawn_table} t WHERE t.guid=a.guid+{GUID_OFFSET})")
+               f"AND EXISTS (SELECT 1 FROM {target}.{spawn_table} t WHERE t.guid=a.guid+{GUID_OFFSET} "
+               f"AND t.id=s.id AND t.position_x=s.position_x AND t.position_y=s.position_y)")
         if not dry_run:
             before = set(fetch(container, user, password,
                                f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
@@ -316,7 +317,9 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                                  f"WHERE c.id IN ({creature_ids}) AND c.map={map_id} "
                                  f"AND (c.zoneId={zone} OR c.areaId={zone}) AND ca.waypointPathId<>0 "
                                  f"AND EXISTS (SELECT 1 FROM {target}.creature_addon ta "
-                                 f"WHERE ta.guid=ca.guid+{GUID_OFFSET})"):
+                                 f"JOIN {target}.creature t ON t.guid=ta.guid "
+                                 f"WHERE ta.guid=ca.guid+{GUID_OFFSET} AND t.id=c.id "
+                                 f"AND t.position_x=c.position_x AND t.position_y=c.position_y)"):
             path_targets.setdefault(path_id, []).append(
                 ("creature_addon", str(int(guid) + GUID_OFFSET)))
     if (creature_entries
@@ -335,31 +338,28 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         names = ",".join(quote(c) for c in waypoint_columns)
         imported_paths = 0
         for path_id, consumers in sorted(path_targets.items()):
-            is_new = any(
-                (consumer_table == "creature_addon" and key in new_addon_guids)
-                or (consumer_table == "creature_template_addon" and key in new_template_addons)
-                for consumer_table, key in consumers)
-            satisfied = not is_new
-            if satisfied:
-                for consumer_table, key in consumers:
-                    key_column = "guid" if consumer_table == "creature_addon" else "entry"
-                    rows = run(container, user, password,
-                               f"SELECT path_id FROM {target}.{consumer_table} "
-                               f"WHERE {key_column}={key} LIMIT 1")
-                    current = rows[0][0] if rows else "0"
-                    if (not current or not current.isdigit() or int(current) == 0
-                            or scalar(container, user, password,
-                                      f"SELECT COUNT(*) FROM {target}.waypoint_data "
-                                      f"WHERE id={current}") == 0):
-                        satisfied = False
-                        break
-            if satisfied:
+            repair = []
+            for consumer_table, key in consumers:
+                key_column = "guid" if consumer_table == "creature_addon" else "entry"
+                if key in (new_addon_guids if consumer_table == "creature_addon" else new_template_addons):
+                    repair.append((consumer_table, key))
+                    continue
+                rows = run(container, user, password,
+                           f"SELECT path_id FROM {target}.{consumer_table} "
+                           f"WHERE {key_column}={key} LIMIT 1")
+                current = rows[0][0] if rows else "0"
+                if (not current.isdigit() or int(current) == 0
+                        or scalar(container, user, password,
+                                  f"SELECT COUNT(*) FROM {target}.waypoint_data "
+                                  f"WHERE id={current}") == 0):
+                    repair.append((consumer_table, key))
+            if not repair:
                 continue
             target_path = str(scalar(container, user, password,
                                      f"SELECT IFNULL(MAX(id),0)+1 FROM {target}.waypoint_data"))
             if not dry_run:
                 grouped: dict[str, list[str]] = {}
-                for consumer_table, key in consumers:
+                for consumer_table, key in repair:
                     grouped.setdefault(consumer_table, []).append(key)
                 for consumer_table, keys in grouped.items():
                     key_column = "guid" if consumer_table == "creature_addon" else "entry"
@@ -384,7 +384,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         for guid, entry, position_x, position_y in source_spawns:
             guid_owner[guid] = entry
             imported = fetch(container, user, password,
-                             f"SELECT guid FROM {target}.creature WHERE guid={int(guid) + GUID_OFFSET}")
+                             f"SELECT guid FROM {target}.creature WHERE guid={int(guid) + GUID_OFFSET} "
+                             f"AND id={entry} AND position_x={position_x} AND position_y={position_y}")
             if imported:
                 source_guids.append(guid)
                 guid_map.append((0, int(guid), int(imported[0])))
@@ -404,7 +405,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                                f"AND (zoneId={zone} OR areaId={zone})")
         for guid, entry, position_x, position_y in source_go_spawns:
             imported = fetch(container, user, password,
-                             f"SELECT guid FROM {target}.gameobject WHERE guid={int(guid) + GUID_OFFSET}")
+                             f"SELECT guid FROM {target}.gameobject WHERE guid={int(guid) + GUID_OFFSET} "
+                             f"AND id={entry} AND position_x={position_x} AND position_y={position_y}")
             if imported:
                 guid_map.append((1, int(guid), int(imported[0])))
             else:
@@ -745,7 +747,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             elif column == "ConditionValue3":
                 selected.append("CASE WHEN c.ConditionTypeOrReference=31 THEN "
                                 "IF(c.ConditionValue1=3, IFNULL(mc3.dst_guid, c.ConditionValue3), "
-                                "IFNULL(mg3.dst_guid, c.ConditionValue3)) "
+                                "IF(c.ConditionValue1=5, IFNULL(mg3.dst_guid, c.ConditionValue3), "
+                                "c.ConditionValue3)) "
                                 "ELSE c.ConditionValue3 END")
             else:
                 selected.append(f"c.{quote(column)}")
@@ -761,7 +764,10 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                 f"SELECT {select_conditions(columns_, shift)} FROM {source}.conditions c "
                 f"LEFT JOIN {target}.{map_table} mc3 ON mc3.kind=0 AND mc3.src_guid=c.ConditionValue3 "
                 f"LEFT JOIN {target}.{map_table} mg3 ON mg3.kind=1 AND mg3.src_guid=c.ConditionValue3 "
-                f"WHERE {where}")
+                f"WHERE {where} AND NOT EXISTS (SELECT 1 FROM {target}.conditions t "
+                f"WHERE t.SourceTypeOrReferenceId=c.SourceTypeOrReferenceId "
+                f"AND t.SourceGroup=c.SourceGroup AND t.SourceId=c.SourceId "
+                f"AND t.SourceEntry=c.SourceEntry-({shift}))")
         imported_conditions += scalar(container, user, password,
                                       f"SELECT COUNT(*) FROM {source}.conditions WHERE {where}")
     if imported_conditions:
