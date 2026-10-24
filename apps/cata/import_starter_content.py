@@ -16,6 +16,7 @@ run-owned disposable database.
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 
@@ -57,6 +58,18 @@ def common_columns(container, user, password, target, source, table, include_aut
     return [name for name, auto in target_cols if name in source_names and (include_auto or not auto)]
 
 
+WARNINGS: list[str] = []  # INSERT IGNORE truncations and dropped values, reported by main()
+
+
+def insert_count(container, user, password, sql):
+    """Run an INSERT IGNORE and return its row count; its warnings go to WARNINGS, not into the void."""
+    # SELECT ROW_COUNT() would clear the diagnostics, so capture the count first and print it last.
+    rows = run(container, user, password,
+               sql + "; GET DIAGNOSTICS @insert_count = ROW_COUNT; SHOW WARNINGS; SELECT @insert_count")
+    WARNINGS.extend(" ".join(row) for row in rows[:-1] if row[0] in ("Warning", "Error"))
+    return int(rows[-1][0]) if rows else 0
+
+
 def quote(name):
     return f"`{name}`"
 
@@ -73,8 +86,7 @@ def import_table(container, user, password, target, source, table, where_col, id
     )
     if dry_run:
         return 0, sql
-    rows = run(container, user, password, sql + "; SELECT ROW_COUNT()")
-    return (int(rows[-1][0]) if rows else 0), sql
+    return insert_count(container, user, password, sql), sql
 
 
 GUID_OFFSET = 10_000_000
@@ -227,11 +239,11 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             return 0, sql
         before = set(fetch(container, user, password,
                            f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
-        rows = run(container, user, password, sql + "; SELECT ROW_COUNT()")
+        count = insert_count(container, user, password, sql)
         after = set(fetch(container, user, password,
                           f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
         new_spawn_guids[table] = after - before
-        return int(rows[-1][0]) if rows else 0, sql
+        return count, sql
 
     for table, id_column, entries in (("creature", "id", creature_entries),
                                       ("gameobject", "id", gameobject_entries)):
@@ -818,6 +830,9 @@ def main():
     parser.add_argument("--map", type=int, default=0)
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
+    for name in (args.source, args.target):  # spliced into SQL unquoted
+        if not re.fullmatch(r"\w+", name):
+            parser.error(f"invalid schema name: {name!r}")
     c, u, p, src, dst = args.container, args.user, args.password, args.source, args.target
 
     existing = {r[0] for r in run(c, u, p, f"SELECT ID FROM {dst}.quest_template") if r}
@@ -844,8 +859,10 @@ def main():
         race_ids = ",".join(missing)
         rows = run(c, u, p,
                    f"UPDATE {dst}.quest_template q JOIN {src}.quest_template_addon a ON a.ID=q.ID "
-                   f"SET q.AllowableRaces=a.AllowableRaces, q.TimeAllowed=a.TimeAllowed "
-                   f"WHERE q.ID IN ({race_ids}) AND q.AllowableRaces=0 AND a.AllowableRaces<>0; "
+                   f"SET q.AllowableRaces=IF(q.AllowableRaces=0, a.AllowableRaces, q.AllowableRaces), "
+                   f"q.TimeAllowed=IF(q.TimeAllowed=0, a.TimeAllowed, q.TimeAllowed) "
+                   f"WHERE q.ID IN ({race_ids}) AND ((q.AllowableRaces=0 AND a.AllowableRaces<>0) "
+                   f"OR (q.TimeAllowed=0 AND a.TimeAllowed<>0)); "
                    f"SELECT ROW_COUNT()")
         report["race_time_rows"] = int(rows[-1][0]) if rows else 0
 
@@ -888,6 +905,8 @@ def main():
                                                     closure_quests, not args.apply)
 
     status = 0
+    if WARNINGS:
+        report["insert_warnings"] = sorted(set(WARNINGS))[:20]
     if args.apply:
         # Gate: the imported zone must pass the #202 relation checker. Item
         # references stay open (TDB 434 has no item data) and are reported only.
