@@ -251,7 +251,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                f"JOIN {source}.{spawn_table} s ON s.guid=a.guid "
                f"WHERE s.id IN ({ids}) AND s.map={map_id} AND (s.zoneId={zone} OR s.areaId={zone}) "
                f"AND EXISTS (SELECT 1 FROM {target}.{spawn_table} t WHERE t.guid=a.guid+{GUID_OFFSET} "
-               f"AND t.id=s.id AND t.position_x=s.position_x AND t.position_y=s.position_y)")
+               f"AND t.id=s.id AND t.map=s.map AND t.position_x=s.position_x "
+               f"AND t.position_y=s.position_y)")
         if not dry_run:
             before = set(fetch(container, user, password,
                                f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
@@ -318,7 +319,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                                  f"AND (c.zoneId={zone} OR c.areaId={zone}) AND ca.waypointPathId<>0 "
                                  f"AND EXISTS (SELECT 1 FROM {target}.creature_addon ta "
                                  f"JOIN {target}.creature t ON t.guid=ta.guid "
-                                 f"WHERE ta.guid=ca.guid+{GUID_OFFSET} AND t.id=c.id "
+                                 f"WHERE ta.guid=ca.guid+{GUID_OFFSET} AND t.id=c.id AND t.map=c.map "
                                  f"AND t.position_x=c.position_x AND t.position_y=c.position_y)"):
             path_targets.setdefault(path_id, []).append(
                 ("creature_addon", str(int(guid) + GUID_OFFSET)))
@@ -344,6 +345,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                 if key in (new_addon_guids if consumer_table == "creature_addon" else new_template_addons):
                     repair.append((consumer_table, key))
                     continue
+                if consumer_table == "creature_template_addon":
+                    continue  # native template addon: a path_id of 0 is a valid AC value
                 rows = run(container, user, password,
                            f"SELECT path_id FROM {target}.{consumer_table} "
                            f"WHERE {key_column}={key} LIMIT 1")
@@ -372,49 +375,43 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             imported_paths += 1
         report["waypoint_data"] = imported_paths
 
-    # Source GUID -> target GUID, for scripts that target a specific spawn.
+    # Source GUID -> target GUID, for scripts that target a specific spawn. Matching
+    # is done in SQL (no float round-trip) on entry, map and position: the shifted
+    # GUID counts as imported only when that row really is the source spawn, and a
+    # native spawn at the same position is the fallback.
+    def match_spawns(table, entries):
+        rows = run(container, user, password,
+                   f"SELECT s.guid, s.id, MAX(t.guid=s.guid+{GUID_OFFSET}), MIN(t.guid) "
+                   f"FROM {source}.{table} s JOIN {target}.{table} t ON t.id=s.id AND t.map=s.map "
+                   f"AND t.position_x=s.position_x AND t.position_y=s.position_y "
+                   f"WHERE s.id IN ({entries}) AND s.map={map_id} AND (s.zoneId={zone} OR s.areaId={zone}) "
+                   f"GROUP BY s.guid, s.id")
+        imported, native = {}, {}
+        for guid, entry, is_imported, native_guid in rows:
+            if is_imported == "1":
+                imported[guid] = entry
+            else:
+                native[guid] = native_guid
+        return imported, native
+
     guid_map: list[tuple[int, int, int]] = []
     guid_owner: dict[str, str] = {}
     source_guids: list[str] = []
+    script_go_candidates: list[str] = []
     if creature_entries:
-        source_spawns = run(container, user, password,
-                            f"SELECT guid, id, position_x, position_y FROM {source}.creature "
-                            f"WHERE id IN ({creature_ids}) AND map={map_id} "
-                            f"AND (zoneId={zone} OR areaId={zone})")
-        for guid, entry, position_x, position_y in source_spawns:
-            guid_owner[guid] = entry
-            imported = fetch(container, user, password,
-                             f"SELECT guid FROM {target}.creature WHERE guid={int(guid) + GUID_OFFSET} "
-                             f"AND id={entry} AND position_x={position_x} AND position_y={position_y}")
-            if imported:
-                source_guids.append(guid)
-                guid_map.append((0, int(guid), int(imported[0])))
-            else:
-                native = run(container, user, password,
-                             f"SELECT guid FROM {target}.creature WHERE id={entry} AND map={map_id} "
-                             f"AND position_x={position_x} AND position_y={position_y} LIMIT 1")
-                if native:
-                    guid_map.append((0, int(guid), int(native[0][0])))
+        imported, native = match_spawns("creature", creature_ids)
+        guid_owner.update(imported)
+        source_guids = list(imported)
+        guid_map += [(0, int(g), int(g) + GUID_OFFSET) for g in imported]
+        guid_map += [(0, int(g), int(n)) for g, n in native.items()]
     source_go_guids = fetch(container, user, password,
                             f"SELECT guid FROM {source}.gameobject WHERE id IN ({gameobject_ids}) "
                             f"AND map={map_id} AND (zoneId={zone} OR areaId={zone})")
     if gameobject_entries:
-        source_go_spawns = run(container, user, password,
-                               f"SELECT guid, id, position_x, position_y FROM {source}.gameobject "
-                               f"WHERE id IN ({gameobject_ids}) AND map={map_id} "
-                               f"AND (zoneId={zone} OR areaId={zone})")
-        for guid, entry, position_x, position_y in source_go_spawns:
-            imported = fetch(container, user, password,
-                             f"SELECT guid FROM {target}.gameobject WHERE guid={int(guid) + GUID_OFFSET} "
-                             f"AND id={entry} AND position_x={position_x} AND position_y={position_y}")
-            if imported:
-                guid_map.append((1, int(guid), int(imported[0])))
-            else:
-                native = run(container, user, password,
-                             f"SELECT guid FROM {target}.gameobject WHERE id={entry} AND map={map_id} "
-                             f"AND position_x={position_x} AND position_y={position_y} LIMIT 1")
-                if native:
-                    guid_map.append((1, int(guid), int(native[0][0])))
+        imported, native = match_spawns("gameobject", gameobject_ids)
+        script_go_candidates = list(imported)
+        guid_map += [(1, int(g), int(g) + GUID_OFFSET) for g in imported]
+        guid_map += [(1, int(g), int(n)) for g, n in native.items()]
 
     map_table = "_plan203_guid_map"
     if not dry_run:
@@ -520,11 +517,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         negative = ",".join(str(-int(guid)) for guid in script_guids)
         script_filters.append((f"source_type=0 AND entryorguid IN ({negative})", GUID_OFFSET))
     script_go_guids = []
-    if source_go_guids:
-        imported = set(fetch(container, user, password,
-                             f"SELECT guid-{GUID_OFFSET} FROM {target}.gameobject "
-                             f"WHERE guid >= {GUID_OFFSET} AND guid-{GUID_OFFSET} IN "
-                             f"({','.join(source_go_guids)})"))
+    if script_go_candidates:
+        imported = script_go_candidates
         shifted = ",".join(str(-(int(guid) + GUID_OFFSET)) for guid in imported) or "0"
         present = set(fetch(container, user, password,
                             f"SELECT DISTINCT entryorguid FROM {target}.smart_scripts "
@@ -846,8 +840,8 @@ def main():
         report["applied"][table] = count
         report["sql"][table] = sql
 
-    if args.apply and candidates:
-        race_ids = ",".join(candidates)
+    if args.apply and missing:
+        race_ids = ",".join(missing)
         rows = run(c, u, p,
                    f"UPDATE {dst}.quest_template q JOIN {src}.quest_template_addon a ON a.ID=q.ID "
                    f"SET q.AllowableRaces=a.AllowableRaces, q.TimeAllowed=a.TimeAllowed "
