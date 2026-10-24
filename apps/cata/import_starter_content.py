@@ -90,6 +90,9 @@ def import_table(container, user, password, target, source, table, where_col, id
 
 
 GUID_OFFSET = 10_000_000
+# Movement path ids (waypoint_data.id) are source id + PATH_OFFSET so replay is deterministic and pending SQL can
+# carry fixed ids. TDB path ids top out at 5.3M and native AC data at 53M, so the shifted range is free.
+PATH_OFFSET = 100_000_000
 
 
 def fetch(container, user, password, sql):
@@ -422,8 +425,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                     repair.append((consumer_table, key))
             if not repair:
                 continue
-            target_path = str(scalar(container, user, password,
-                                     f"SELECT IFNULL(MAX(id),0)+1 FROM {target}.waypoint_data"))
+            target_path = str(int(path_id) + PATH_OFFSET)
             if not dry_run:
                 grouped: dict[str, list[str]] = {}
                 for consumer_table, key in repair:
