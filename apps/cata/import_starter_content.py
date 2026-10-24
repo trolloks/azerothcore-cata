@@ -19,6 +19,8 @@ import json
 import subprocess
 import sys
 
+from starter_content_inventory import check_relations
+
 
 def run(container, user, password, sql):
     result = subprocess.run(
@@ -885,9 +887,18 @@ def main():
         report["imported_closure"] = import_closure(c, u, p, dst, src, args.zone, args.map,
                                                     closure_quests, not args.apply)
 
-    if not args.apply:
+    status = 0
+    if args.apply:
+        # Gate: the imported zone must pass the #202 relation checker. Item
+        # references stay open (TDB 434 has no item data) and are reported only.
+        problems = check_relations(c, u, p, dst, args.zone, args.map)
+        report["unresolved_items"] = [x for x in problems if x["kind"] == "quest_item"]
+        report["dangling"] = [x for x in problems if x["kind"] != "quest_item"]
+        status = 1 if report["dangling"] else 0
+    else:
         report["mode"] = "dry-run"
     print(json.dumps(report, indent=2, default=str))
+    return status
 
 
 if __name__ == "__main__":
