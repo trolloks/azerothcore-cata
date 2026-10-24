@@ -7,6 +7,8 @@ and ObjectMgr FillMaxDurability (Shauren), evaluated at the item's base item lev
 
 import struct
 
+# Known ceiling: TC computes in float32 and this module in double, so a value exactly on a .5 boundary can differ
+# by 1 (for example max damage with StatScalingFactor 0.7). Round through struct "<f" per step if that matters.
 ITEM_CLASS_WEAPON, ITEM_CLASS_ARMOR = 2, 4
 ARMOR_SHIELD, ARMOR_CLOTH, ARMOR_PLATE = 6, 1, 4
 WEAPON_BOW, WEAPON_GUN, WEAPON_THROWN, WEAPON_CROSSBOW, WEAPON_WAND = 2, 3, 16, 18, 19
