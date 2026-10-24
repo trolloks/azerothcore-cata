@@ -235,7 +235,9 @@ static bool LoadDBC_assert_print(uint32 fsize, uint32 rsize, std::string const& 
 }
 
 template<class T>
-inline void LoadDBC(uint32& availableDbcLocales, StoreProblemList& errors, DBCStorage<T>& storage, std::string const& dbcPath, std::string const& filename, char const* dbTable = nullptr)
+inline void LoadDBC(uint32& availableDbcLocales, StoreProblemList& errors, DBCStorage<T>& storage,
+                    std::string const& dbcPath, std::string const& filename, char const* dbTable = nullptr,
+                    char const* dbFormat = nullptr)
 {
     // compatibility format and C++ structure sizes
     ASSERT(DBCFileLoader::GetFormatRecordSize(storage.GetFormat()) == sizeof(T) || LoadDBC_assert_print(DBCFileLoader::GetFormatRecordSize(storage.GetFormat()), sizeof(T), filename));
@@ -248,7 +250,7 @@ inline void LoadDBC(uint32& availableDbcLocales, StoreProblemList& errors, DBCSt
     {
         for (uint8 i = 0; i < TOTAL_LOCALES; ++i)
         {
-            if (!(availableDbcLocales & (1 << i)))
+            if (!(availableDbcLocales & (1 << i)) || !IsLocaleRegistered(LocaleConstant(i)))
                 continue;
 
             std::string localizedName(dbcPath);
@@ -262,7 +264,7 @@ inline void LoadDBC(uint32& availableDbcLocales, StoreProblemList& errors, DBCSt
     }
 
     if (dbTable)
-        storage.LoadFromDB(dbTable, storage.GetFormat());
+        storage.LoadFromDB(dbTable, dbFormat ? dbFormat : storage.GetFormat());
 
     if (storage.GetNumRows())
         existDBData = true;
@@ -293,6 +295,8 @@ void LoadDBCStores(std::string const& dataPath)
     uint32 availableDbcLocales = 0xFFFFFFFF;
 
 #define LOAD_DBC(store, file, dbtable) LoadDBC(availableDbcLocales, bad_dbc_files, store, dbcPath, file, dbtable)
+#define LOAD_GT_DBC(store, file, dbtable) \
+    LoadDBC(availableDbcLocales, bad_dbc_files, store, dbcPath, file, dbtable, GtDatabasefmt)
 
     LOAD_DBC(sAreaTableStore,                       "AreaTable.dbc",                        "areatable_dbc");
     LOAD_DBC(sAchievementStore,                     "Achievement.dbc",                      "achievement_dbc");
@@ -334,18 +338,19 @@ void LoadDBCStores(std::string const& dataPath)
     LOAD_DBC(sGemPropertiesStore,                   "GemProperties.dbc",                    "gemproperties_dbc");
     LOAD_DBC(sGlyphPropertiesStore,                 "GlyphProperties.dbc",                  "glyphproperties_dbc");
     LOAD_DBC(sGlyphSlotStore,                       "GlyphSlot.dbc",                        "glyphslot_dbc");
-    LOAD_DBC(sGtBarberShopCostBaseStore,            "gtBarberShopCostBase.dbc",             "gtbarbershopcostbase_dbc");
-    LOAD_DBC(sGtCombatRatingsStore,                 "gtCombatRatings.dbc",                  "gtcombatratings_dbc");
-    LOAD_DBC(sGtChanceToMeleeCritBaseStore,         "gtChanceToMeleeCritBase.dbc",          "gtchancetomeleecritbase_dbc");
-    LOAD_DBC(sGtChanceToMeleeCritStore,             "gtChanceToMeleeCrit.dbc",              "gtchancetomeleecrit_dbc");
-    LOAD_DBC(sGtChanceToSpellCritBaseStore,         "gtChanceToSpellCritBase.dbc",          "gtchancetospellcritbase_dbc");
-    LOAD_DBC(sGtChanceToSpellCritStore,             "gtChanceToSpellCrit.dbc",              "gtchancetospellcrit_dbc");
-    LOAD_DBC(sGtNPCManaCostScalerStore,             "gtNPCManaCostScaler.dbc",              "gtnpcmanacostscaler_dbc");
+    LOAD_GT_DBC(sGtBarberShopCostBaseStore,         "gtBarberShopCostBase.dbc",             "gtbarbershopcostbase_dbc");
+    LOAD_GT_DBC(sGtCombatRatingsStore,              "gtCombatRatings.dbc",                  "gtcombatratings_dbc");
+    LOAD_GT_DBC(sGtChanceToMeleeCritBaseStore,      "gtChanceToMeleeCritBase.dbc",          "gtchancetomeleecritbase_dbc");
+    LOAD_GT_DBC(sGtChanceToMeleeCritStore,          "gtChanceToMeleeCrit.dbc",              "gtchancetomeleecrit_dbc");
+    LOAD_GT_DBC(sGtChanceToSpellCritBaseStore,      "gtChanceToSpellCritBase.dbc",          "gtchancetospellcritbase_dbc");
+    LOAD_GT_DBC(sGtChanceToSpellCritStore,          "gtChanceToSpellCrit.dbc",              "gtchancetospellcrit_dbc");
+    LOAD_GT_DBC(sGtNPCManaCostScalerStore,          "gtNPCManaCostScaler.dbc",              "gtnpcmanacostscaler_dbc");
     LOAD_DBC(sGtOCTClassCombatRatingScalarStore,    "gtOCTClassCombatRatingScalar.dbc",     "gtoctclasscombatratingscalar_dbc");
-    //LOAD_DBC(sGtOCTRegenHPStore,                  "gtOCTRegenHP.dbc",                     "gtoctregenhp_dbc");       -- real Cata 4.3.4 file has 1 field (matches upstream TC, which also disables this load for build 15595); GtOCTRegenHPfmt is unconverted WotLK layout
-    //LOAD_DBC(sGtOCTRegenMPStore,                  "gtOCTRegenMP.dbc",                     "gtoctregenmp_dbc");       -- not used currently
-    //LOAD_DBC(sGtRegenHPPerSptStore,               "gtRegenHPPerSpt.dbc",                  "gtregenhpperspt_dbc");    -- table doesn't exist in Cata (Spirit no longer regenerates health); upstream TC has no equivalent for Cata
-    LOAD_DBC(sGtRegenMPPerSptStore,                 "gtRegenMPPerSpt.dbc",                  "gtregenmpperspt_dbc");
+    // Cataclysm does not use the legacy health-regeneration stores.
+    //LOAD_GT_DBC(sGtOCTRegenHPStore,                "gtOCTRegenHP.dbc",                     "gtoctregenhp_dbc");
+    //LOAD_DBC(sGtOCTRegenMPStore,                  "gtOCTRegenMP.dbc",                     "gtoctregenmp_dbc");
+    //LOAD_GT_DBC(sGtRegenHPPerSptStore,             "gtRegenHPPerSpt.dbc",                  "gtregenhpperspt_dbc");
+    LOAD_GT_DBC(sGtRegenMPPerSptStore,              "gtRegenMPPerSpt.dbc",                  "gtregenmpperspt_dbc");
     LOAD_DBC(sHolidaysStore,                        "Holidays.dbc",                         "holidays_dbc");
     LOAD_DBC(sItemStore,                            "Item.db2",                             "item_dbc"); // Cata: Item.dbc replaced by WDB2-format Item.db2 (rich per-item fields moved to Item-sparse.db2, unused here)
     LOAD_DBC(sItemBagFamilyStore,                   "ItemBagFamily.dbc",                    "itembagfamily_dbc");
@@ -429,6 +434,7 @@ void LoadDBCStores(std::string const& dataPath)
     LOAD_DBC(sWorldMapOverlayStore,                 "WorldMapOverlay.dbc",                  "worldmapoverlay_dbc");
 
 #undef LOAD_DBC
+#undef LOAD_GT_DBC
 
     sSpellStore.LoadFromDB("spell_cata_dbc", SpellEntryfmt);
     sSpellEffectStore.LoadFromDB("spelleffect_dbc", SpellEffectEntryfmt);
