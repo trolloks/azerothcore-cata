@@ -6,7 +6,8 @@ from the ItemArmor*/ItemDamage* tables (item_derived_stats.py). Without it, or f
 underived (block, second damage, scaling value, disenchant), the schema default is kept and the output
 header lists them so the gap stays visible.
 
-Prints DELETE + INSERT SQL for the given item IDs to stdout; it never touches a database.
+Prints DELETE + INSERT SQL for the given item IDs to stdout (--insert-only: a plain INSERT for new ids);
+it never touches a database.
 """
 
 import argparse

@@ -2,7 +2,8 @@
 -- items that TDB 434 carries no item data for (#210, #203).
 -- Source: Item.db2 + Item-sparse.db2 (build 15595) via
 --   apps/cata/convert_items_from_db2.py --dbc-dir <dbc> --insert-only <Item.db2> <Item-sparse.db2> <ids>
--- Armor, MaxDurability and weapon damage are derived from the client ItemArmor*/ItemDamage* tables.
+-- Armor and weapon damage are derived from the client ItemArmor*/ItemDamage* tables; MaxDurability from
+-- TrinityCore-Cata's FillMaxDurability formula.
 -- Not derived (schema default): block, second damage, ScalingStatValue, RequiredDisenchantSkill, DisenchantID.
 -- Items 57393 and 57394 lose their StatScalingFactor (follow-up in #210).
 
