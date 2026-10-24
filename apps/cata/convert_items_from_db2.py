@@ -6,11 +6,16 @@ from the ItemArmor*/ItemDamage* tables (item_derived_stats.py). Without it, or f
 underived (block, second damage, scaling value, disenchant), the schema default is kept and the output
 header lists them so the gap stays visible.
 
+Item ids come from the command line or, for any zone, from an import_starter_content.py JSON report
+(--ids-from-report): its closure.missing_items lists the item ids the zone's quests reference that
+item_template lacks.
+
 Prints DELETE + INSERT SQL for the given item IDs to stdout (--insert-only: a plain INSERT for new ids);
 it never touches a database.
 """
 
 import argparse
+import json
 import sys
 
 from audit_native_item_sparse import db2_records as sparse_records
@@ -119,6 +124,21 @@ def to_sql(rows, build, derived=False, insert_only=False):
     return "\n".join(lines) + "\n"
 
 
+def report_item_ids(handle):
+    """Item ids from an import report; log text (even with braces) may precede the JSON object."""
+    text = handle.read()
+    decoder = json.JSONDecoder()
+    for start in (i for i, char in enumerate(text) if char == "{"):
+        try:
+            report, _ = decoder.raw_decode(text, start)
+        except ValueError:
+            continue
+        if isinstance(report, dict):
+            closure = report.get("closure") or {}
+            return sorted(int(item) for item in closure.get("missing_items") or [])
+    raise ValueError("no JSON report object found")
+
+
 def self_test():
     item = {1: {"ClassID": 4, "SubclassID": 1, "SoundOverrideSubclassID": -1, "DisplayInfoID": 9}}
     sparse = {1: {"Display": "Bob's Vest", "Description": "", **{field: 0 for field in SIMPLE.values()}}}
@@ -154,6 +174,17 @@ def self_test():
     low, high = weapon_damage(flat, 2, 18, 26, 1, 5, 0, 2000, 0.0, 0.0)
     assert (low, high) == (4.0, 4.0)  # delay 2000ms * dps 2.0 / 1000
     assert max_durability(4, 1, 5, 1, 40) == 5 * int(23.0 * 1.0 * 1.0 + 0.5)
+    import io
+    assert report_item_ids(io.StringIO('log\n{"closure": {"missing_items": ["58363", "52558"]}}')) == [52558, 58363]
+    assert report_item_ids(io.StringIO('{"zone": 12}')) == []
+    assert report_item_ids(io.StringIO('opts={x} log\n{"closure": {"missing_items": ["7"]}}')) == [7]
+    assert report_item_ids(io.StringIO('{"closure": null}')) == []
+    for bad in ("no json", '{"closure": {"missing_items": ["abc"]}}'):
+        try:
+            report_item_ids(io.StringIO(bad))
+            raise AssertionError("expected a bad report to be rejected")
+        except ValueError:
+            pass
     print("convert_items_from_db2 self-test PASS.")
 
 
@@ -165,16 +196,24 @@ def main():
     parser.add_argument("--build", type=int, default=15595)
     parser.add_argument("--insert-only", action="store_true",
                         help="plain INSERT for brand-new ids (the SQL linter forbids DELETE on item_template)")
+    parser.add_argument("--ids-from-report", type=argparse.FileType("r"),
+                        help="import_starter_content.py JSON report; its closure.missing_items are converted")
     parser.add_argument("--dbc-dir", help="directory with the ItemArmor*/ItemDamage*/ArmorLocation .dbc files")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
         return self_test()
-    if not (args.item_db2 and args.item_sparse_db2 and args.item_ids):
-        parser.error("item_db2, item_sparse_db2 and at least one item id are required")
+    try:
+        report_ids = report_item_ids(args.ids_from_report) if args.ids_from_report else []
+    except ValueError as error:
+        parser.error(f"--ids-from-report: {error}")
+    item_ids = sorted(set(args.item_ids) | set(report_ids))
+    if not (args.item_db2 and args.item_sparse_db2 and item_ids):
+        parser.error("item_db2, item_sparse_db2 and at least one item id (or a report with missing items) "
+                     "are required")
     tables = load_tables(args.dbc_dir) if args.dbc_dir else None
     rows = convert(item_records(args.item_db2.read()), sparse_records(args.item_sparse_db2.read()),
-                   sorted(set(args.item_ids)), tables)
+                   item_ids, tables)
     sys.stdout.write(to_sql(rows, args.build, bool(tables), args.insert_only))
 
 
