@@ -125,9 +125,18 @@ def to_sql(rows, build, derived=False, insert_only=False):
 
 
 def report_item_ids(handle):
+    """Item ids from an import report; log text (even with braces) may precede the JSON object."""
     text = handle.read()
-    closure = json.loads(text[text.index("{"):]).get("closure", {})  # tolerate log lines before the JSON
-    return sorted(int(item) for item in closure.get("missing_items", []))
+    decoder = json.JSONDecoder()
+    for start in (i for i, char in enumerate(text) if char == "{"):
+        try:
+            report, _ = decoder.raw_decode(text, start)
+        except ValueError:
+            continue
+        if isinstance(report, dict):
+            closure = report.get("closure") or {}
+            return sorted(int(item) for item in closure.get("missing_items") or [])
+    raise ValueError("no JSON report object found")
 
 
 def self_test():
@@ -168,6 +177,14 @@ def self_test():
     import io
     assert report_item_ids(io.StringIO('log\n{"closure": {"missing_items": ["58363", "52558"]}}')) == [52558, 58363]
     assert report_item_ids(io.StringIO('{"zone": 12}')) == []
+    assert report_item_ids(io.StringIO('opts={x} log\n{"closure": {"missing_items": ["7"]}}')) == [7]
+    assert report_item_ids(io.StringIO('{"closure": null}')) == []
+    for bad in ("no json", '{"closure": {"missing_items": ["abc"]}}'):
+        try:
+            report_item_ids(io.StringIO(bad))
+            raise AssertionError("expected a bad report to be rejected")
+        except ValueError:
+            pass
     print("convert_items_from_db2 self-test PASS.")
 
 
@@ -186,7 +203,11 @@ def main():
     args = parser.parse_args()
     if args.self_test:
         return self_test()
-    item_ids = sorted(set(args.item_ids) | set(report_item_ids(args.ids_from_report) if args.ids_from_report else ()))
+    try:
+        report_ids = report_item_ids(args.ids_from_report) if args.ids_from_report else []
+    except ValueError as error:
+        parser.error(f"--ids-from-report: {error}")
+    item_ids = sorted(set(args.item_ids) | set(report_ids))
     if not (args.item_db2 and args.item_sparse_db2 and item_ids):
         parser.error("item_db2, item_sparse_db2 and at least one item id (or a report with missing items) "
                      "are required")
