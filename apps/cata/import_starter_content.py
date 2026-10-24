@@ -649,7 +649,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             mapped_owner = guid_owner.get(owner[1:], "") if owner.startswith("-") else owner
             if mapped_owner:
                 text_groups.add((mapped_owner, group))
-    for timed_id in sorted(handled_timed):
+    for timed_id in sorted(imported_timed):
         for group, in run(container, user, password,
                           f"SELECT action_param1 FROM {source}.smart_scripts "
                           f"WHERE source_type=9 AND entryorguid={timed_id} AND action_type=1"):
@@ -678,7 +678,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         path_ids.update(fetch(container, user, password,
                               f"SELECT DISTINCT action_param2 FROM {source}.smart_scripts "
                               f"WHERE {where} AND action_type=53 AND action_param2<>0"))
-    for timed_id in sorted(handled_timed):
+    for timed_id in sorted(imported_timed):
         path_ids.update(fetch(container, user, password,
                               f"SELECT DISTINCT action_param2 FROM {source}.smart_scripts "
                               f"WHERE source_type=9 AND entryorguid={timed_id} "
@@ -791,7 +791,10 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             f"SELECT {select_conditions(columns_, 0)} FROM {source}.conditions c "
             f"LEFT JOIN {target}.{map_table} mc3 ON mc3.kind=0 AND mc3.src_guid=c.ConditionValue3 "
             f"LEFT JOIN {target}.{map_table} mg3 ON mg3.kind=1 AND mg3.src_guid=c.ConditionValue3 "
-            f"WHERE SourceTypeOrReferenceId IN ({negative_ids})")
+            f"WHERE SourceTypeOrReferenceId IN ({negative_ids}) "
+            f"AND NOT (c.ConditionTypeOrReference=31 AND c.ConditionValue3<>0 AND "
+            f"((c.ConditionValue1=3 AND mc3.dst_guid IS NULL) OR "
+            f"(c.ConditionValue1=5 AND mg3.dst_guid IS NULL)))")
         imported_condition_refs += len(new)
         referenced_conditions.update(
             fetch(container, user, password,
