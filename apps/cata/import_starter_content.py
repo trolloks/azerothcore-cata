@@ -347,6 +347,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                     continue
                 if consumer_table == "creature_template_addon":
                     continue  # native template addon: a path_id of 0 is a valid AC value
+                # A previously imported addon (shifted GUID) whose path never landed.
                 rows = run(container, user, password,
                            f"SELECT path_id FROM {target}.{consumer_table} "
                            f"WHERE {key_column}={key} LIMIT 1")
@@ -532,18 +533,10 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
     # Discovery covers every source creature script, not only the rows inserted
     # on this run, so text/waypoint dependencies of preserved scripts are still
     # filled when they are missing.
-    all_creature_filters: list[tuple[str, int]] = []
-    if creature_entries:
-        all_creature_filters.append((f"source_type=0 AND entryorguid IN ({creature_ids})", 0))
-    if source_guids:
-        negative = ",".join(str(-int(guid)) for guid in source_guids)
-        all_creature_filters.append((f"source_type=0 AND entryorguid IN ({negative})", GUID_OFFSET))
-    all_source_filters = list(all_creature_filters)
-    if gameobject_entries:
-        all_source_filters.append((f"source_type=1 AND entryorguid IN ({gameobject_ids})", 0))
-    if source_go_guids:
-        negative = ",".join(str(-int(guid)) for guid in source_go_guids)
-        all_source_filters.append((f"source_type=1 AND entryorguid IN ({negative})", GUID_OFFSET))
+    # Dependencies are traversed only from script blocks this run accepts; a block
+    # the target already has is native and keeps its own text, lists and paths.
+    all_source_filters = list(script_filters)
+    all_creature_filters = [f for f in script_filters if f[0].startswith("source_type=0")]
 
     def insert_scripts(where, shift):
         columns_ = common_columns(container, user, password, target, source, "smart_scripts")
@@ -563,7 +556,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             f"SELECT {','.join(selected)} FROM {source}.smart_scripts s "
             f"LEFT JOIN {target}.{map_table} mc ON mc.kind=0 AND mc.src_guid=s.target_param1 "
             f"LEFT JOIN {target}.{map_table} mg ON mg.kind=1 AND mg.src_guid=s.target_param1 "
-            f"WHERE {where}")
+            f"WHERE {where} AND NOT (s.target_type=10 AND s.target_param1<>0 AND mc.dst_guid IS NULL) "
+            f"AND NOT (s.target_type=14 AND s.target_param1<>0 AND mg.dst_guid IS NULL)")
 
     imported_scripts = 0
     for where, shift in script_filters:
@@ -579,6 +573,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         scripted_gameobjects = set(fetch(container, user, password,
                                          f"SELECT DISTINCT entryorguid FROM {target}.smart_scripts "
                                          f"WHERE source_type=1 AND entryorguid IN ({gameobject_ids})"))
+        scripted_creatures &= script_creatures
+        scripted_gameobjects &= script_gameobjects
         if scripted_creatures:
             run(container, user, password,
                 f"UPDATE {target}.creature_template SET AIName='SmartAI' "
@@ -758,7 +754,10 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                 f"SELECT {select_conditions(columns_, shift)} FROM {source}.conditions c "
                 f"LEFT JOIN {target}.{map_table} mc3 ON mc3.kind=0 AND mc3.src_guid=c.ConditionValue3 "
                 f"LEFT JOIN {target}.{map_table} mg3 ON mg3.kind=1 AND mg3.src_guid=c.ConditionValue3 "
-                f"WHERE {where} AND NOT EXISTS (SELECT 1 FROM {target}.conditions t "
+                f"WHERE {where} AND NOT (c.ConditionTypeOrReference=31 AND c.ConditionValue3<>0 AND "
+                f"((c.ConditionValue1=3 AND mc3.dst_guid IS NULL) OR "
+                f"(c.ConditionValue1=5 AND mg3.dst_guid IS NULL))) "
+                f"AND NOT EXISTS (SELECT 1 FROM {target}.conditions t "
                 f"WHERE t.SourceTypeOrReferenceId=c.SourceTypeOrReferenceId "
                 f"AND t.SourceGroup=c.SourceGroup AND t.SourceId=c.SourceId "
                 f"AND t.SourceEntry=c.SourceEntry-({shift}))")
@@ -832,7 +831,7 @@ def main():
                        ("creature_queststarter", "quest"), ("creature_questender", "quest"),
                        ("gameobject_queststarter", "quest"), ("gameobject_questender", "quest")):
         if table_exists(c, u, p, src, table):
-            tables.append((table, key, candidates))
+            tables.append((table, key, missing))
     for table, key, ids in tables:
         if not ids:
             continue
