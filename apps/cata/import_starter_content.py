@@ -387,8 +387,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                 container, user, password, target, source, "npc_spellclick_spells",
                 "npc_entry", candidates, dry_run)
 
-    # Movement paths referenced by creature and template addons. Colliding path
-    # ids are reallocated above the target max and the addon rows are updated.
+    # Movement paths referenced by creature and template addons. Each source path lands at
+    # source id + PATH_OFFSET; the addon rows this run inserted are pointed at it.
     path_targets: dict[str, list[tuple[str, str]]] = {}
     if creature_entries and table_exists(container, user, password, source, "creature_addon"):
         for guid, path_id in run(container, user, password,
@@ -426,6 +426,18 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             if not repair:
                 continue
             target_path = str(int(path_id) + PATH_OFFSET)
+            occupied = scalar(container, user, password,
+                              f"SELECT COUNT(*) FROM {target}.waypoint_data WHERE id={target_path}")
+            if occupied:  # only an identical block from an earlier run of this importer may sit there
+                same = scalar(container, user, password,
+                              f"SELECT COUNT(*) FROM {source}.waypoint_data w JOIN {target}.waypoint_data t "
+                              f"ON t.id={target_path} AND t.point=w.point AND t.position_x=w.position_x "
+                              f"AND t.position_y=w.position_y AND t.position_z=w.position_z WHERE w.id={path_id}")
+                total = scalar(container, user, password,
+                               f"SELECT COUNT(*) FROM {source}.waypoint_data WHERE id={path_id}")
+                if occupied != total or same != total:
+                    raise RuntimeError(f"waypoint_data id {target_path} is occupied by a different path "
+                                       f"({occupied} rows, source path {path_id} has {total})")
             if not dry_run:
                 grouped: dict[str, list[str]] = {}
                 for consumer_table, key in repair:
