@@ -7,7 +7,8 @@ re-runnable; the SQL linter exempts creature_template, gameobject_template, item
 from both). The importer never modifies native rows, so the tool refuses to emit if a row that exists in both
 schemas differs.
 
-Prints SQL to stdout, or to --out. Never writes to a database.
+The file assumes the default SQL mode and a utf8mb4 client (the AC updater's). Tables with new rows must not
+have ENUM, SET, JSON or TIMESTAMP columns. Prints SQL to stdout, or to --out. Never writes to a database.
 """
 
 import argparse
@@ -21,6 +22,9 @@ SPAWN = {"creature", "gameobject"}
 SKIP = {"_plan203_guid_map"}
 NUMERIC = {"tinyint", "smallint", "mediumint", "int", "bigint", "double", "decimal"}
 IDENT = re.compile(r"\w+")
+# Not lossless as text (ENUM/SET index 0, typed JSON) or session-dependent (TIMESTAMP time zone); the world database
+# only has them in tables an import never touches, so a table with new rows is refused instead of guessed at.
+UNSAFE_TYPES = {"enum", "set", "json", "timestamp"}
 CHUNK = 500
 
 
@@ -56,6 +60,13 @@ def unbatch(value):
     return value.replace("\\\\", "\\")
 
 
+def same_row(kinds, names, left, right):
+    """Null-safe equality of the named columns; text is compared as binary (the collation hides case/accents)."""
+    return " AND ".join(
+        f"{left}.`{n}` <=> {right}.`{n}`" if kinds[n] in NUMERIC | {"float"}
+        else f"BINARY {left}.`{n}` <=> BINARY {right}.`{n}`" for n in names)
+
+
 def join_on(keys):
     return " AND ".join(f"b.`{k}` <=> a.`{k}`" for k in keys)
 
@@ -87,10 +98,7 @@ def emit_table(c, u, p, base, after, table):
         raise SystemExit(f"{table}: missing in the baseline; cannot diff safely")
     shared = [name for name, _ in cols if name in base_cols]
     if keys:
-        kinds = dict(cols)
-        same = " AND ".join(  # text is compared as binary: the column collation would hide case and accents
-            f"a.`{n}` <=> b.`{n}`" if kinds[n] in NUMERIC | {"float"} else f"BINARY a.`{n}` <=> BINARY b.`{n}`"
-            for n in shared)
+        same = same_row(dict(cols), shared, "a", "b")
         gone = scalar(c, u, p, f"SELECT COUNT(*) FROM {base}.`{table}` b WHERE NOT EXISTS "
                                f"(SELECT 1 FROM {after}.`{table}` a WHERE {join_on(keys)})")
         if gone:
@@ -100,16 +108,27 @@ def emit_table(c, u, p, base, after, table):
         if changed:
             raise SystemExit(f"{table}: {changed} rows that exist in the baseline differ; the import must not "
                              f"modify native rows")
-    else:  # duplicates and NULL keys cannot be replayed safely without a primary key
-        count = f"SELECT COUNT(*) FROM {{}}.`{table}`"
-        if scalar(c, u, p, count.format(after)) != scalar(c, u, p, count.format(base)):
-            raise SystemExit(f"{table}: has no primary key and its row count changed; refusing to diff")
+    else:  # no primary key: new rows cannot be replayed safely, so the contents must be identical
+        same = same_row(dict(cols), shared, "x", "y")
+
+        def unmatched(left, right):
+            return scalar(c, u, p, f"SELECT COUNT(*) FROM {left}.`{table}` x WHERE NOT EXISTS "
+                                   f"(SELECT 1 FROM {right}.`{table}` y WHERE {same})")
+
+        total_rows = scalar(c, u, p, f"SELECT COUNT(*) FROM {after}.`{table}`")
+        if (total_rows != scalar(c, u, p, f"SELECT COUNT(*) FROM {base}.`{table}`")
+                or unmatched(after, base) or unmatched(base, after)):
+            raise SystemExit(f"{table}: has no primary key and its contents changed; refusing to diff")
         return ""
     new_from = (f"FROM {after}.`{table}` a WHERE NOT EXISTS "
                 f"(SELECT 1 FROM {base}.`{table}` b WHERE {join_on(keys)})")
     total = scalar(c, u, p, f"SELECT COUNT(*) {new_from}")
     if not total:
         return ""
+    unsafe = [name for name, kind in cols if kind in UNSAFE_TYPES]
+    if unsafe:
+        raise SystemExit(f"{table}: new rows with {', '.join(unsafe)} (enum/set/json/timestamp) cannot be "
+                         f"emitted exactly")
     values = ",".join(literal(name, kind) for name, kind in cols)
     kinds = dict(cols)
     key_exprs = ("CAST(a.`guid` AS CHAR),CAST(a.`id` AS CHAR)" if table in SPAWN
@@ -137,6 +156,7 @@ def main():
     parser.add_argument("--after", required=True, help="schema after the import")
     parser.add_argument("--header", default="", help="comment lines written at the top of the file")
     parser.add_argument("--out", help="write here instead of stdout")
+    parser.add_argument("--tables", help="comma-separated tables to compare (default: all); for checks")
     args = parser.parse_args()
     for name in (args.baseline, args.after):
         if not re.fullmatch(r"\w+", name):
@@ -150,6 +170,8 @@ def main():
                if row[0] not in SKIP and row[0] not in tables]
     if missing:
         raise SystemExit(f"tables only in the baseline: {', '.join(missing)}")
+    if args.tables:  # after the baseline-only check, which must see every table
+        tables = [t for t in args.tables.split(",") if t in tables]
     parts = [emit_table(c, u, p, args.baseline, args.after, table) for table in tables]
     body = "\n\n".join(part for part in parts if part)
     header = "".join(f"-- {line}\n" for line in args.header.splitlines()) + ("\n" if args.header else "")
