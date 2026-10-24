@@ -19,7 +19,8 @@ from import_starter_content import run, scalar
 NO_DELETE = {"creature_template", "gameobject_template", "item_template", "quest_template"}
 SPAWN = {"creature", "gameobject"}
 SKIP = {"_plan203_guid_map"}
-NUMERIC = {"tinyint", "smallint", "mediumint", "int", "bigint", "float", "double", "decimal"}
+NUMERIC = {"tinyint", "smallint", "mediumint", "int", "bigint", "double", "decimal"}
+IDENT = re.compile(r"\w+")
 CHUNK = 500
 
 
@@ -38,8 +39,13 @@ def primary_key(c, u, p, schema, table):
 def literal(column, kind):
     if kind in NUMERIC:
         return f"IFNULL(CAST(a.`{column}` AS CHAR),'NULL')"
+    if kind == "float":  # CAST(float AS CHAR) keeps ~6 digits; use the exact double text when that loses any
+        return (f"IFNULL(IF(CAST(CAST(a.`{column}` AS CHAR) AS FLOAT)=a.`{column}`,CAST(a.`{column}` AS CHAR),"
+                f"CAST(a.`{column}`+0e0 AS CHAR)),'NULL')")
+    if kind == "bit":
+        return f"IFNULL(CAST(a.`{column}`+0 AS CHAR),'NULL')"
     if kind in ("blob", "tinyblob", "mediumblob", "longblob", "binary", "varbinary"):
-        return f"IFNULL(CONCAT('0x',HEX(a.`{column}`)),'NULL')"
+        return f"IFNULL(CONCAT(\"X'\",HEX(a.`{column}`),\"'\"),'NULL')"
     # mysql -B shows tab/newline as \\t/\\n text and doubles backslashes (undone in unbatch()); keep the
     # literal on one line by escaping the control characters ourselves.
     return (f"REPLACE(REPLACE(REPLACE(QUOTE(a.`{column}`),CHAR(10),'\\\\n'),CHAR(13),'\\\\r'),"
@@ -70,21 +76,35 @@ def delete_sql(table, keys, rows):
 
 def emit_table(c, u, p, base, after, table):
     """Return the SQL for one table, "" when it has no new rows; raise if a shared row differs."""
+    if not IDENT.fullmatch(table):
+        raise SystemExit(f"unsafe table name {table!r}")
     keys = primary_key(c, u, p, after, table)
     cols = table_columns(c, u, p, after, table)
+    if any(not IDENT.fullmatch(name) for name, _ in cols):
+        raise SystemExit(f"{table}: unsafe column name")
     base_cols = {name for name, _ in table_columns(c, u, p, base, table)}
     if not base_cols:
         raise SystemExit(f"{table}: missing in the baseline; cannot diff safely")
     shared = [name for name, _ in cols if name in base_cols]
     if keys:
-        same = " AND ".join(f"a.`{n}` <=> b.`{n}`" for n in shared)
+        kinds = dict(cols)
+        same = " AND ".join(  # text is compared as binary: the column collation would hide case and accents
+            f"a.`{n}` <=> b.`{n}`" if kinds[n] in NUMERIC | {"float"} else f"BINARY a.`{n}` <=> BINARY b.`{n}`"
+            for n in shared)
+        gone = scalar(c, u, p, f"SELECT COUNT(*) FROM {base}.`{table}` b WHERE NOT EXISTS "
+                               f"(SELECT 1 FROM {after}.`{table}` a WHERE {join_on(keys)})")
+        if gone:
+            raise SystemExit(f"{table}: {gone} baseline rows are missing after the import")
         changed = scalar(c, u, p, f"SELECT COUNT(*) FROM {after}.`{table}` a JOIN {base}.`{table}` b ON "
                                   f"{join_on(keys)} WHERE NOT ({same})")
         if changed:
             raise SystemExit(f"{table}: {changed} rows that exist in the baseline differ; the import must not "
                              f"modify native rows")
-    else:  # no primary key: a row is new when no baseline row matches on every column
-        keys = [name for name, _ in cols]
+    else:  # duplicates and NULL keys cannot be replayed safely without a primary key
+        count = f"SELECT COUNT(*) FROM {{}}.`{table}`"
+        if scalar(c, u, p, count.format(after)) != scalar(c, u, p, count.format(base)):
+            raise SystemExit(f"{table}: has no primary key and its row count changed; refusing to diff")
+        return ""
     new_from = (f"FROM {after}.`{table}` a WHERE NOT EXISTS "
                 f"(SELECT 1 FROM {base}.`{table}` b WHERE {join_on(keys)})")
     total = scalar(c, u, p, f"SELECT COUNT(*) {new_from}")
@@ -125,12 +145,17 @@ def main():
     tables = [row[0] for row in run(c, u, p, f"SELECT TABLE_NAME FROM information_schema.tables WHERE "
                                              f"TABLE_SCHEMA='{args.after}' AND TABLE_TYPE='BASE TABLE' "
                                              f"ORDER BY TABLE_NAME") if row[0] not in SKIP]
+    missing = [row[0] for row in run(c, u, p, f"SELECT TABLE_NAME FROM information_schema.tables WHERE "
+                                               f"TABLE_SCHEMA='{args.baseline}' AND TABLE_TYPE='BASE TABLE'")
+               if row[0] not in SKIP and row[0] not in tables]
+    if missing:
+        raise SystemExit(f"tables only in the baseline: {', '.join(missing)}")
     parts = [emit_table(c, u, p, args.baseline, args.after, table) for table in tables]
     body = "\n\n".join(part for part in parts if part)
     header = "".join(f"-- {line}\n" for line in args.header.splitlines()) + ("\n" if args.header else "")
     text = header + body + "\n"
     if args.out:
-        with open(args.out, "w") as handle:
+        with open(args.out, "w", encoding="utf-8") as handle:
             handle.write(text)
     else:
         sys.stdout.write(text)

@@ -25,12 +25,14 @@ from starter_content_inventory import check_relations
 
 def run(container, user, password, sql):
     result = subprocess.run(
-        ["docker", "exec", container, "mysql", f"-u{user}", f"-p{password}", "-N", "-B", "-e", sql],
-        capture_output=True, text=True, check=False,
+        ["docker", "exec", container, "mysql", f"-u{user}", f"-p{password}", "--default-character-set=utf8mb4",
+         "-N", "-B", "-e", sql],
+        capture_output=True, text=True, encoding="utf-8", check=False,
     )
     if result.returncode:
         raise RuntimeError(f"query failed: {sql}\n{result.stderr.strip()}")
-    return [line.split("\t") for line in result.stdout.splitlines() if line]
+    # split on "\n" only: splitlines() also breaks on VT, FF, U+0085, U+2028 inside text values
+    return [line.split("\t") for line in result.stdout.split("\n") if line]
 
 
 def scalar(container, user, password, sql):
