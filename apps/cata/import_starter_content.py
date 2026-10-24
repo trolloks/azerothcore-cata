@@ -285,6 +285,59 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                                   f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
                 new_addon_guids = after - before
 
+    # Spawn-linked rows follow only the spawns this run inserted: game events, formations (both ends
+    # imported) and a report of the link types that are not imported yet.
+    imported = {t: ",".join(sorted(new_spawn_guids[t])) for t in ("creature", "gameobject")}
+    sources = {t: ",".join(str(int(g) - GUID_OFFSET) for g in sorted(new_spawn_guids[t])) for t in imported}
+    if not dry_run:
+        for kind in ("creature", "gameobject"):
+            table = f"game_event_{kind}"
+            if imported[kind] and table_exists(container, user, password, source, table):
+                count = insert_count(
+                    container, user, password,
+                    f"INSERT IGNORE INTO {target}.{table} (`eventEntry`,`guid`) "
+                    f"SELECT g.eventEntry, g.guid+{GUID_OFFSET} FROM {source}.{table} g "
+                    f"WHERE g.guid IN ({sources[kind]}) AND EXISTS "
+                    f"(SELECT 1 FROM {target}.game_event e WHERE e.eventEntry=ABS(g.eventEntry))")
+                if count:
+                    report[table] = count
+        if imported["creature"] and table_exists(container, user, password, source, "creature_formations"):
+            count = insert_count(
+                container, user, password,
+                f"INSERT IGNORE INTO {target}.creature_formations "
+                f"(`leaderGUID`,`memberGUID`,`dist`,`angle`,`groupAI`,`point_1`,`point_2`) "
+                f"SELECT f.LeaderGUID+{GUID_OFFSET}, f.MemberGUID+{GUID_OFFSET}, f.FollowDistance, "
+                f"f.FollowAngle, f.GroupAI, "
+                # AC tests point_1 first, so an inversion point that is the only one set moves there.
+                f"IF(f.InversionPoint1 > 0, f.InversionPoint1, GREATEST(f.InversionPoint2, 0)), "
+                f"IF(f.InversionPoint1 > 0, GREATEST(f.InversionPoint2, 0), 0) "
+                f"FROM {source}.creature_formations f "
+                f"WHERE f.LeaderGUID IN ({sources['creature']}) AND f.MemberGUID IN ({sources['creature']})")
+            if count:
+                report["creature_formations"] = count
+    unsupported = {}
+    if table_exists(container, user, password, source, "linked_respawn"):
+        # linkType: 0 creature->creature, 1 creature->gameobject, 2 gameobject->gameobject, 3 gameobject->creature
+        keys = {"creature": ((0, 1), (0, 3)), "gameobject": ((2, 3), (1, 2))}  # (guid types, linkedGuid types)
+        conditions = [f"(l.linkType IN ({','.join(map(str, own))}) AND l.guid IN ({sources[kind]})) "
+                      f"OR (l.linkType IN ({','.join(map(str, linked))}) AND l.linkedGuid IN ({sources[kind]}))"
+                      for kind, (own, linked) in keys.items() if imported[kind]]
+        if conditions:
+            count = scalar(container, user, password,
+                           f"SELECT COUNT(*) FROM {source}.linked_respawn l WHERE {' OR '.join(conditions)}")
+            if count:
+                unsupported["linked_respawn"] = count
+    if imported["creature"] or imported["gameobject"]:
+        if table_exists(container, user, password, source, "pool_members"):
+            count = sum(scalar(container, user, password,
+                               f"SELECT COUNT(*) FROM {source}.pool_members WHERE type={flag} "
+                               f"AND spawnId IN ({sources[kind]})")
+                        for kind, flag in (("creature", 0), ("gameobject", 1)) if imported[kind])
+            if count:
+                unsupported["pool_members"] = count
+    if unsupported:
+        report["unsupported_spawn_links"] = unsupported
+
     # Template addons carry the interaction bytes/auras; creature spell-click
     # rows keep the NPC's spell-click flag alive in the loader.
     new_template_addons: set[str] = set()
