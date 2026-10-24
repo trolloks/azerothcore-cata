@@ -80,6 +80,18 @@ children as a dependency checklist and keep it open until all children close and
 completion predicate passes. Sub-issues use the same numbered-plan branch workflow as any other
 plan; they do not get their own `plan/NN-*.md` stub unless promoted to a standalone plan.
 
+Splitting also applies below the issue level. A large, intricate change (a 900-line import pipeline, a
+packet family, a schema port) is where mistakes hide, because one review cannot hold it all.
+Land it as small slices, each with its own commit, check and peer review, rather than one big PR:
+
+- Cut along data or responsibility seams (one table family, one packet, one zone), not by line count.
+  Each slice must be runnable and verifiable alone.
+- Verify every slice on a clean, disposable baseline and record the counts, so a later slice cannot
+  silently change an earlier one. Keep the baseline reproducible: a run dump, or a documented rebuild.
+- Get an independent review (a second model or a human) per slice, before stacking the next one. #209's
+  single-pass review found three high-severity native-row overwrite bugs that its own Elwynn replay missed.
+- Record accepted deferrals as issues (`Parent: #NN`) instead of leaving them in a WIP PR body.
+
 ## Database safety
 
 Never point conversion work, tests, or client smoke runs at an existing database. Treat existing
