@@ -219,7 +219,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                f"AND (s.zoneId={zone} OR s.areaId={zone}) "
                f"AND NOT EXISTS (SELECT 1 FROM {target}.{table} t WHERE t.guid=s.guid+{GUID_OFFSET}) "
                f"AND NOT EXISTS (SELECT 1 FROM {target}.{table} t WHERE t.{id_column}=s.{id_column} "
-               f"AND t.map=s.map AND t.position_x=s.position_x AND t.position_y=s.position_y)")
+               f"AND t.map=s.map AND t.position_x=s.position_x AND t.position_y=s.position_y "
+               f"AND ABS(t.position_z-s.position_z)<1)")
         if dry_run:
             return 0, sql
         rows = run(container, user, password, sql + "; SELECT ROW_COUNT()")
@@ -252,7 +253,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                f"WHERE s.id IN ({ids}) AND s.map={map_id} AND (s.zoneId={zone} OR s.areaId={zone}) "
                f"AND EXISTS (SELECT 1 FROM {target}.{spawn_table} t WHERE t.guid=a.guid+{GUID_OFFSET} "
                f"AND t.id=s.id AND t.map=s.map AND t.position_x=s.position_x "
-               f"AND t.position_y=s.position_y)")
+               f"AND t.position_y=s.position_y AND t.position_z=s.position_z)")
         if not dry_run:
             before = set(fetch(container, user, password,
                                f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
@@ -320,7 +321,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                                  f"AND EXISTS (SELECT 1 FROM {target}.creature_addon ta "
                                  f"JOIN {target}.creature t ON t.guid=ta.guid "
                                  f"WHERE ta.guid=ca.guid+{GUID_OFFSET} AND t.id=c.id AND t.map=c.map "
-                                 f"AND t.position_x=c.position_x AND t.position_y=c.position_y)"):
+                                 f"AND t.position_x=c.position_x AND t.position_y=c.position_y "
+                                 f"AND t.position_z=c.position_z)"):
             path_targets.setdefault(path_id, []).append(
                 ("creature_addon", str(int(guid) + GUID_OFFSET)))
     if (creature_entries
@@ -384,7 +386,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         rows = run(container, user, password,
                    f"SELECT s.guid, s.id, MAX(t.guid=s.guid+{GUID_OFFSET}), MIN(t.guid) "
                    f"FROM {source}.{table} s JOIN {target}.{table} t ON t.id=s.id AND t.map=s.map "
-                   f"AND t.position_x=s.position_x AND t.position_y=s.position_y "
+                   f"AND t.position_x=s.position_x AND t.position_y=s.position_y AND ABS(t.position_z-s.position_z)<1 "
                    f"WHERE s.id IN ({entries}) AND s.map={map_id} AND (s.zoneId={zone} OR s.areaId={zone}) "
                    f"GROUP BY s.guid, s.id")
         imported, native = {}, {}
@@ -573,8 +575,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         scripted_gameobjects = set(fetch(container, user, password,
                                          f"SELECT DISTINCT entryorguid FROM {target}.smart_scripts "
                                          f"WHERE source_type=1 AND entryorguid IN ({gameobject_ids})"))
-        scripted_creatures &= script_creatures
-        scripted_gameobjects &= script_gameobjects
+        scripted_creatures &= script_creatures & set(new_creatures)
+        scripted_gameobjects &= script_gameobjects & set(new_gameobjects)
         if scripted_creatures:
             run(container, user, password,
                 f"UPDATE {target}.creature_template SET AIName='SmartAI' "
