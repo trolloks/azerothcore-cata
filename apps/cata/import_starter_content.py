@@ -63,10 +63,11 @@ WARNINGS: list[str] = []  # INSERT IGNORE truncations and dropped values, report
 
 def insert_count(container, user, password, sql):
     """Run an INSERT IGNORE and return its row count; its warnings go to WARNINGS, not into the void."""
-    rows = run(container, user, password, sql + "; SELECT ROW_COUNT(); SHOW WARNINGS")
-    count = int(rows[0][0]) if rows else 0
-    WARNINGS.extend(" ".join(row) for row in rows[1:] if row[0] in ("Warning", "Error"))
-    return count
+    # SELECT ROW_COUNT() would clear the diagnostics, so capture the count first and print it last.
+    rows = run(container, user, password,
+               sql + "; GET DIAGNOSTICS @insert_count = ROW_COUNT; SHOW WARNINGS; SELECT @insert_count")
+    WARNINGS.extend(" ".join(row) for row in rows[:-1] if row[0] in ("Warning", "Error"))
+    return int(rows[-1][0]) if rows else 0
 
 
 def quote(name):
