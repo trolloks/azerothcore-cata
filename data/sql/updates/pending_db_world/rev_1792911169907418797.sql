@@ -1495,7 +1495,7 @@ INSERT INTO `smart_scripts` (`entryorguid`,`source_type`,`id`,`link`,`event_type
 (240,0,0,1,62,0,100,0,11611,0,0,0,0,0,11,78854,0,0,0,0,0,7,0,0,0,0,0,0,0,0,'On gossip action 0 from menu 11611 selected - Self: Cast spell Force Stormwind Charger (78854) on Action invoker // '),
 (240,0,1,0,61,0,100,0,0,0,0,0,0,0,72,0,0,0,0,0,0,7,0,0,0,0,0,0,0,0,' Linked - Action invoker: Close gossip // '),
 (299,0,0,1,1,0,20,0,30000,600000,120000,600000,0,0,4,1018,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Young Wolf - Out of Combat - Play Sound 1018'),
-(299,0,1,0,61,0,20,0,30000,600000,120000,600000,0,0,5,393,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Young Wolf - Out of Combat - Play Emote 393'),
+(299,0,1,0,61,0,20,0,0,0,0,0,0,0,5,393,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Young Wolf - Out of Combat - Play Emote 393'),
 (299,0,2,0,11,0,100,1,0,0,0,0,0,0,11,71764,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Young Wolf - On Respawn - Cast \'Diseased\' (No Repeat)'),
 (951,0,0,0,11,0,100,0,0,0,0,0,0,0,53,0,279895,1,0,0,0,0,0,0,0,0,0,0,0,0,'On Respawn - Self: Start path #279895, walk, repeat, Passive // '),
 (42937,0,0,0,4,0,25,1,0,0,0,0,0,0,1,0,0,1,0,0,0,7,0,0,0,0,0,0,0,0,'Blackrock Invader - On Aggro - Say Line 0 (No Repeat)'),
