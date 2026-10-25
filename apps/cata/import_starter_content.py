@@ -526,6 +526,11 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         report["creature_loot_template"], _ = import_table(container, user, password, target, source,
                                                           "creature_loot_template", "Entry",
                                                           loot_ids, dry_run)
+        if not dry_run:  # fill-only: a native template without a loot link cannot use the loot imported for it
+            run(container, user, password,
+                f"UPDATE {target}.creature_template t JOIN {source}.creature_template s ON s.entry=t.entry "
+                f"SET t.lootid=s.lootid WHERE t.entry IN ({creature_ids}) AND t.lootid=0 "
+                f"AND s.lootid IN ({','.join(loot_ids)})")
     if gameobject_loot:
         report["gameobject_loot_template"], _ = import_table(container, user, password, target, source,
                                                             "gameobject_loot_template", "Entry",
@@ -568,7 +573,13 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
     source_creature_scripts = set(fetch(container, user, password,
                                         f"SELECT DISTINCT entryorguid FROM {source}.smart_scripts "
                                         f"WHERE source_type=0 AND entryorguid IN ({creature_ids})"))
+    # A native template bound to another AI or a registered C++ script keeps it: the AI selector prefers
+    # ScriptName, so SmartAI rows for it would never run.
+    native_ai = set(fetch(container, user, password,
+                          f"SELECT entry FROM {target}.creature_template WHERE entry IN ({creature_ids}) "
+                          f"AND (ScriptName<>'' OR AIName NOT IN ('','SmartAI'))")) - set(new_creatures)
     script_creatures = {e for e in creature_entries if e in source_creature_scripts
+                        and e not in native_ai
                         and e not in set(fetch(container, user, password,
                                                f"SELECT DISTINCT entryorguid FROM {target}.smart_scripts "
                                                f"WHERE source_type=0 AND entryorguid IN ({creature_ids})"))}
@@ -652,7 +663,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         scripted_gameobjects = set(fetch(container, user, password,
                                          f"SELECT DISTINCT entryorguid FROM {target}.smart_scripts "
                                          f"WHERE source_type=1 AND entryorguid IN ({gameobject_ids})"))
-        scripted_creatures &= script_creatures & set(new_creatures)
+        scripted_creatures &= script_creatures  # fill-only: AIName is set where it is still empty
         scripted_gameobjects &= script_gameobjects & set(new_gameobjects)
         if scripted_creatures:
             run(container, user, password,
@@ -935,6 +946,18 @@ def main():
                    f"SELECT ROW_COUNT()")
         report["race_time_rows"] = int(rows[-1][0]) if rows else 0
 
+        # Chain links into quests outside the target (class-quest chains of other landings) would make the
+        # loader log an error and ignore the link anyway; clear them and report what was cleared.
+        cleared = []
+        for column in ("PrevQuestID", "NextQuestID"):
+            dangling = (f"a.ID IN ({race_ids}) AND a.{column}<>0 AND NOT EXISTS "
+                        f"(SELECT 1 FROM {dst}.quest_template q WHERE q.ID=ABS(a.{column}))")
+            cleared += [f"{row[0]}.{column}={row[1]}" for row in run(
+                c, u, p, f"SELECT a.ID, a.{column} FROM {dst}.quest_template_addon a WHERE {dangling}")]
+            run(c, u, p, f"UPDATE {dst}.quest_template_addon a SET a.{column}=0 WHERE {dangling}")
+        if cleared:
+            report["cleared_quest_links"] = cleared
+
     zone_quests = [r[0] for r in run(c, u, p,
                                        f"SELECT ID FROM {dst}.quest_template WHERE QuestSortID={args.zone}")]
     closure_quests = sorted(set(zone_quests) | set(missing))
@@ -980,8 +1003,9 @@ def main():
         # Gate: the imported zone must pass the #202 relation checker. Item
         # references stay open (TDB 434 has no item data) and are reported only.
         problems = check_relations(c, u, p, dst, args.zone, args.map)
-        report["unresolved_items"] = [x for x in problems if x["kind"] == "quest_item"]
-        report["dangling"] = [x for x in problems if x["kind"] != "quest_item"]
+        item_kinds = ("quest_item", "loot_item")
+        report["unresolved_items"] = [x for x in problems if x["kind"] in item_kinds]
+        report["dangling"] = [x for x in problems if x["kind"] not in item_kinds]
         status = 1 if report["dangling"] else 0
     else:
         report["mode"] = "dry-run"

@@ -309,6 +309,12 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
         for entry in entries:
             if str(entry) not in present:
                 problems.append({"kind": label + "_template_missing", "id": str(entry)})
+        if item_entries:  # the loot validator drops rows whose item is unknown
+            for item, in query(container, user, password, schema,
+                               f"SELECT DISTINCT Item FROM {table} WHERE Entry IN ({joined}) AND Reference=0 "
+                               f"AND Item>0"):
+                if item not in item_entries:
+                    problems.append({"kind": "loot_item", "id": item, "from": label})
         refs = {r[0] for r in query(container, user, password, schema,
                                     f"SELECT DISTINCT Reference FROM {table} WHERE Entry IN ({joined}) AND Reference<>0") if r}
         if refs and not table_exists(container, user, password, schema, "reference_loot_template"):
