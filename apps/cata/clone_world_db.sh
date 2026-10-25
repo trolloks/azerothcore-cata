@@ -13,6 +13,10 @@ PASSWORD=${PASSWORD:-plan175ro}
 
 mysql() { docker exec -i "$CONTAINER" mysql -uroot -p"$PASSWORD" "$@" 2> >(grep -v 'Using a password' >&2); }
 
+[[ $SRC != "$DST" ]] || { echo "source and target must differ" >&2; exit 2; }
+TABLES=$(mysql -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE TABLE_SCHEMA='$SRC' AND TABLE_TYPE='BASE TABLE'")
+[[ $TABLES -gt 0 ]] || { echo "source schema $SRC has no tables" >&2; exit 2; }
+
 mysql -e "DROP DATABASE IF EXISTS \`$DST\`; CREATE DATABASE \`$DST\`"
 {
   echo "SET foreign_key_checks=0, unique_checks=0;"
