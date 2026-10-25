@@ -365,6 +365,14 @@ def check_loader_relations(container, user, password, schema, creatures, gameobj
     if set(script_cols) <= cols("smart_scripts"):
         for row in query(container, user, password, schema, f"SELECT {','.join(script_cols)} FROM smart_scripts"):
             scripts.setdefault((row[0], row[1]), []).append(dict(zip(script_cols, row)))
+    if quests and {"npcflag"} <= cols("creature_template") and table_exists(
+            container, user, password, schema, "creature_queststarter"):
+        quest_list = ",".join(sorted(quests))  # a giver without the QUESTGIVER bit never offers its quests
+        for entry, in query(container, user, password, schema,
+                            f"SELECT DISTINCT t.entry FROM creature_template t WHERE (t.npcflag&2)=0 AND t.entry IN "
+                            f"(SELECT id FROM creature_queststarter WHERE quest IN ({quest_list}) "
+                            f"UNION SELECT id FROM creature_questender WHERE quest IN ({quest_list}))"):
+            problems.append({"kind": "quest_giver_flag", "id": entry})
     link_cols = {"event_type", "event_param1", "event_param2", "event_param3", "event_param4"}
     if script_keys and link_cols <= cols("smart_scripts"):
         for owner, source_type, script_id in query(
