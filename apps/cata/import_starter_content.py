@@ -91,9 +91,9 @@ def import_table(container, user, password, target, source, table, where_col, id
     return insert_count(container, user, password, sql), sql
 
 
-# SmartAI actions AC's SmartAIMgr rejects as unsupported on this core (16, 119, 120, 127..130, 133); rows using them
+# SmartAI actions AC's SmartAIMgr rejects as unsupported on this core (16, 85, 119, 120, 127..130, 133); rows using them
 # are dropped at import so the landing carries no script the loader would only log and skip.
-UNSUPPORTED_SMART_ACTIONS = (16, 119, 120, 127, 128, 129, 130, 133)
+UNSUPPORTED_SMART_ACTIONS = (16, 85, 119, 120, 127, 128, 129, 130, 133)
 GUID_OFFSET = 10_000_000
 # Movement path ids (waypoint_data.id) are source id + PATH_OFFSET so replay is deterministic and pending SQL can
 # carry fixed ids. TDB path ids top out at 5.3M and native AC data at 53M, so the shifted range is free.
@@ -216,6 +216,61 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             for row in run(container, user, password,
                            f"SELECT {selected} FROM {source}.{table} WHERE entry IN ({','.join(sorted(batch))})"):
                 entries.update(value for value in row if int(value) > 0)
+    # Scripts this run will import (entries without a native script) can summon creatures and gameobjects, directly
+    # or through timed action lists; those templates must exist too. Follow them until nothing new appears.
+    seen_lists: set[str] = set()
+    while True:
+        grew = False
+        for source_type, entries in (("0", creature_entries), ("1", gameobject_entries)):
+            owned = ",".join(sorted(entries)) or "0"
+            native = set(fetch(container, user, password,
+                               f"SELECT DISTINCT entryorguid FROM {target}.smart_scripts "
+                               f"WHERE source_type={source_type} AND entryorguid IN ({owned})"))
+            scripted = [e for e in entries if e not in native]
+            if not scripted:
+                continue
+            clauses = [f"(source_type={source_type} AND entryorguid IN ({','.join(sorted(scripted))}))"]
+            if seen_lists:
+                clauses.append(f"(source_type=9 AND entryorguid IN ({','.join(sorted(seen_lists))}))")
+            for action, *params in run(container, user, password,
+                                       f"SELECT action_type,action_param1,action_param2,action_param3,action_param4,"
+                                       f"action_param5,action_param6 FROM {source}.smart_scripts "
+                                       f"WHERE {' OR '.join(clauses)}"):
+                action, params = int(action), [int(v) for v in params]
+                found_creatures = {str(params[0])} if action in (12, 33, 36) and params[0] > 0 else set()
+                found_objects = {str(params[0])} if action == 50 and params[0] > 0 else set()
+                lists = set()
+                if action == 80 and params[0] > 0:
+                    lists.add(str(params[0]))
+                elif action == 87:
+                    lists.update(str(v) for v in params if v > 0)
+                elif action == 88 and params[0] > 0 and params[1] >= params[0]:
+                    lists.update(fetch(container, user, password,
+                                       f"SELECT DISTINCT entryorguid FROM {source}.smart_scripts WHERE source_type=9 "
+                                       f"AND entryorguid BETWEEN {params[0]} AND {params[1]}"))
+                found_creatures -= creature_entries
+                found_objects -= gameobject_entries
+                if found_creatures or found_objects or lists - seen_lists:
+                    grew = True
+                creature_entries.update(found_creatures)
+                gameobject_entries.update(found_objects)
+                seen_lists.update(lists)
+        if not grew:
+            break
+        # newly added templates may themselves reference templates (difficulty, kill credit, linked objects)
+        for table, entries, known, selected in (
+            ("creature_template", creature_entries, known_creatures,
+             "difficulty_entry_1,difficulty_entry_2,difficulty_entry_3,KillCredit1,KillCredit2"),
+            ("gameobject_template", gameobject_entries, known_gameobjects,
+             "CASE type WHEN 1 THEN Data3 WHEN 3 THEN Data7 WHEN 8 THEN Data2 WHEN 10 THEN Data12 ELSE 0 END"),
+        ):
+            handled = set(known)
+            while entries - handled:
+                batch = entries - handled
+                handled.update(batch)
+                for row in run(container, user, password,
+                               f"SELECT {selected} FROM {source}.{table} WHERE entry IN ({','.join(sorted(batch))})"):
+                    entries.update(value for value in row if int(value) > 0)
     creature_ids = ",".join(sorted(creature_entries)) or "0"
     gameobject_ids = ",".join(sorted(gameobject_entries)) or "0"
     new_creatures = sorted(creature_entries - known_creatures)
@@ -324,6 +379,11 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         after = set(fetch(container, user, password,
                           f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
         new_spawn_guids[table] = after - before
+        if table == "creature" and not {"MovementType", "wander_distance"} - target_names:
+            # The loader resets an unknown MovementType (TDB has 3) and an idle spawn's wander distance; store that.
+            run(container, user, password,
+                f"UPDATE {target}.creature SET MovementType=0, wander_distance=0 WHERE guid>={GUID_OFFSET} "
+                f"AND (MovementType>=3 OR (MovementType=0 AND wander_distance<>0))")
         return count, sql
 
     for table, id_column, entries in (("creature", "id", creature_entries),
