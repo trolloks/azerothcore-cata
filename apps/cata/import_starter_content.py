@@ -740,6 +740,9 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         for column in columns_:
             if shift and column == "entryorguid":
                 selected.append(f"(s.{quote(column)} - {shift})")
+            elif column.startswith("event_param") and column[len("event_param"):].isdigit():
+                # TC keeps a copy of the parent's event params on a LINK event (61); AC rejects the row unless 0
+                selected.append(f"IF(s.event_type=61, 0, s.{quote(column)})")
             elif column == "target_param1":
                 selected.append("CASE WHEN s.target_type=10 THEN IFNULL(mc.dst_guid, s.target_param1) "
                                 "WHEN s.target_type=14 THEN IFNULL(mg.dst_guid, s.target_param1) "

@@ -365,6 +365,14 @@ def check_loader_relations(container, user, password, schema, creatures, gameobj
     if set(script_cols) <= cols("smart_scripts"):
         for row in query(container, user, password, schema, f"SELECT {','.join(script_cols)} FROM smart_scripts"):
             scripts.setdefault((row[0], row[1]), []).append(dict(zip(script_cols, row)))
+    link_cols = {"event_type", "event_param1", "event_param2", "event_param3", "event_param4"}
+    if script_keys and link_cols <= cols("smart_scripts"):
+        for owner, source_type, script_id in query(
+                container, user, password, schema,
+                "SELECT entryorguid, source_type, id FROM smart_scripts WHERE event_type=61 AND "
+                "(event_param1<>0 OR event_param2<>0 OR event_param3<>0 OR event_param4<>0)"):
+            if (owner, source_type) in script_keys:
+                problems.append({"kind": "smart_link_event_params", "id": f"{owner}.{source_type}.{script_id}"})
     pending_keys = [(key, key) for key in script_keys]
     visited = set()
     visited_contexts = set()
