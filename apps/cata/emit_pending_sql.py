@@ -5,7 +5,8 @@ Compares a baseline AC world schema with the imported one in the run-owned dispo
 for every table, the rows whose primary key is new, as `DELETE ... ; INSERT ...` (the DELETE keeps the file
 re-runnable; the SQL linter exempts creature_template, gameobject_template, item_template and quest_template
 from both). The importer never modifies native rows, so the tool refuses to emit if a row that exists in both
-schemas differs.
+schemas differs, except the fill-only columns in FILL (a native template's empty AIName or lootid), which become
+guarded UPDATEs.
 
 The file assumes the default SQL mode and a utf8mb4 client (the AC updater's). Tables with new rows must not
 have ENUM, SET, JSON or TIMESTAMP columns. Prints SQL to stdout, or to --out. Never writes to a database.
@@ -26,6 +27,10 @@ IDENT = re.compile(r"\w+")
 # only has them in tables an import never touches, so a table with new rows is refused instead of guessed at.
 UNSAFE_TYPES = {"enum", "set", "json", "timestamp"}
 CHUNK = 500
+# Native template columns the import may fill (never overwrite): column -> the value that counts as empty.
+# They are emitted as guarded UPDATEs; any other difference in a shared row still refuses.
+FILL = {"creature_template": {"AIName": "''", "lootid": "0"}, "gameobject_template": {"AIName": "''"}}
+FILL_AI = {"creature_template": "SmartAI", "gameobject_template": "SmartGameObjectAI"}
 
 
 def table_columns(c, u, p, schema, table):
@@ -73,6 +78,9 @@ def join_on(keys):
 
 def delete_sql(table, keys, rows):
     """rows: list of tuples of key values (strings, already SQL literals)."""
+    if table == "smart_scripts":  # a script is replaced as a whole (entryorguid, source_type) block
+        blocks = ",".join(sorted({f"({row[0]},{row[1]})" for row in rows}))
+        return f"DELETE FROM `{table}` WHERE (`entryorguid`, `source_type`) IN ({blocks});"
     if table in SPAWN:
         # The linter wants both `id` and `guid`; rows[...] holds (guid, id) for spawns.
         guids = ",".join(guid for guid, _ in rows)
@@ -96,7 +104,9 @@ def emit_table(c, u, p, base, after, table):
     base_cols = {name for name, _ in table_columns(c, u, p, base, table)}
     if not base_cols:
         raise SystemExit(f"{table}: missing in the baseline; cannot diff safely")
-    shared = [name for name, _ in cols if name in base_cols]
+    fill = FILL.get(table, {})
+    shared = [name for name, _ in cols if name in base_cols and name not in fill]
+    fill_sql = ""
     if keys:
         same = same_row(dict(cols), shared, "a", "b")
         gone = scalar(c, u, p, f"SELECT COUNT(*) FROM {base}.`{table}` b WHERE NOT EXISTS "
@@ -108,6 +118,7 @@ def emit_table(c, u, p, base, after, table):
         if changed:
             raise SystemExit(f"{table}: {changed} rows that exist in the baseline differ; the import must not "
                              f"modify native rows")
+        fill_sql = emit_fill(c, u, p, base, after, table, keys, fill)
     else:  # no primary key: new rows cannot be replayed safely, so the contents must be identical
         same = same_row(dict(cols), shared, "x", "y")
 
@@ -124,7 +135,12 @@ def emit_table(c, u, p, base, after, table):
                 f"(SELECT 1 FROM {base}.`{table}` b WHERE {join_on(keys)})")
     total = scalar(c, u, p, f"SELECT COUNT(*) {new_from}")
     if not total:
-        return ""
+        return fill_sql
+    if table == "smart_scripts":  # the block DELETE would drop native rows of a partly-new block
+        partial = scalar(c, u, p, f"SELECT COUNT(*) FROM {base}.`{table}` b WHERE EXISTS (SELECT 1 {new_from} "
+                                  f"AND a.`entryorguid`=b.`entryorguid` AND a.`source_type`=b.`source_type`)")
+        if partial:
+            raise SystemExit(f"{table}: {partial} native rows share a block with new rows; refusing a block delete")
     unsafe = [name for name, kind in cols if kind in UNSAFE_TYPES]
     if unsafe:
         raise SystemExit(f"{table}: new rows with {', '.join(unsafe)} (enum/set/json/timestamp) cannot be "
@@ -136,15 +152,56 @@ def emit_table(c, u, p, base, after, table):
     order = ",".join(f"a.`{k}`" for k in keys)
     out = [f"-- {table}: {total} rows"]
     names = ",".join(f"`{name}`" for name, _ in cols)
+    if table == "smart_scripts":  # one DELETE for all blocks: a per-chunk one would drop rows an earlier chunk added
+        blocks = run(c, u, p, f"SELECT DISTINCT a.`entryorguid`, a.`source_type` {new_from} "
+                              f"ORDER BY a.`entryorguid`, a.`source_type`")
+        out.append(delete_sql(table, keys, blocks))
     for offset in range(0, total, CHUNK):
         page = f"{new_from} ORDER BY {order} LIMIT {CHUNK} OFFSET {offset}"
         rows = [[unbatch(cell) for cell in row] for row in run(
             c, u, p, f"SELECT CONCAT('(',CONCAT_WS(',',{values}),')'), {key_exprs} {page}")]
-        if table not in NO_DELETE:
+        if table not in NO_DELETE and table != "smart_scripts":
             out.append(delete_sql(table, keys, [tuple(r[1:]) for r in rows]))
         out.append(f"INSERT INTO `{table}` ({names}) VALUES")
         out.append(",\n".join(r[0] for r in rows) + ";")
+    if fill_sql:
+        out.append(fill_sql)
     return "\n".join(out)
+
+
+def emit_fill(c, u, p, base, after, table, keys, fill):
+    """Guarded UPDATEs for the columns of native rows the import filled; refuse any other change to them."""
+    out = []
+    key = keys[0]
+    for column, empty in fill.items():
+        same = same_row({column: "int" if column == "lootid" else "varchar"}, [column], "a", "b")
+        pair = (f"FROM {after}.`{table}` a JOIN {base}.`{table}` b ON {join_on(keys)} "
+                f"WHERE NOT ({same})")
+        guard = f"`{column}`={empty}"  # the emitted file stays linter-friendly; the checks below are exact
+        if column == "AIName":
+            allowed = (
+                f"(BINARY b.`{column}` <=> BINARY {empty} OR b.`{column}` IS NULL) "
+                f"AND (BINARY a.`{column}` <=> BINARY '{FILL_AI[table]}')")
+        else:
+            allowed = (f"(b.`{column}` <=> {empty}) AND a.`{column}` IS NOT NULL AND a.`{column}`>0 "
+                       f"AND EXISTS (SELECT 1 FROM {after}.creature_loot_template l WHERE l.Entry=a.`{column}`)")
+        bad = scalar(c, u, p, f"SELECT COUNT(*) {pair} AND NOT ({allowed})")
+        if bad:
+            raise SystemExit(f"{table}: {bad} rows changed `{column}` away from its empty value")
+        if column == "lootid":
+            for entry, value in run(c, u, p, f"SELECT a.`{key}`, a.`{column}` {pair} ORDER BY a.`{key}`"):
+                out.append(f"UPDATE `{table}` SET `{column}`={value} WHERE `{key}`={entry} AND {guard};")
+        else:
+            value = FILL_AI[table]
+            entries = fetch_column(c, u, p, f"SELECT a.`{key}` {pair} ORDER BY a.`{key}`")
+            if entries:
+                out.append(f"UPDATE `{table}` SET `{column}`='{value}' WHERE `{key}` IN ({','.join(entries)}) "
+                           f"AND {guard};")
+    return "\n".join(out)
+
+
+def fetch_column(c, u, p, sql):
+    return [row[0] for row in run(c, u, p, sql)]
 
 
 def main():
