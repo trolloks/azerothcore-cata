@@ -612,6 +612,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
 
     guid_map: list[tuple[int, int, int]] = []
     guid_owner: dict[str, str] = {}
+    go_guid_owner: dict[str, str] = {}
     source_guids: list[str] = []
     script_go_candidates: list[str] = []
     if creature_entries:
@@ -626,6 +627,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
     if gameobject_entries:
         imported, native = match_spawns("gameobject", gameobject_ids)
         script_go_candidates = list(imported)
+        go_guid_owner.update(imported)
         guid_map += [(1, int(g), int(g) + GUID_OFFSET) for g in imported]
         guid_map += [(1, int(g), int(n)) for g, n in native.items()]
 
@@ -832,6 +834,17 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         imported_scripts += scalar(container, user, password,
                                    f"SELECT COUNT(*) FROM {source}.smart_scripts WHERE {where}")
 
+    def guid_script_owners(guids, owner_map, source_type):
+        """Entries whose imported GUID script landed, for the AI-name fill (a GUID script needs SmartAI on the template)."""
+        if not guids:
+            return set()
+        present = set(fetch(container, user, password,
+                            f"SELECT DISTINCT entryorguid FROM {target}.smart_scripts "
+                            f"WHERE source_type={source_type} AND entryorguid IN "
+                            f"({','.join(str(-(int(guid) + GUID_OFFSET)) for guid in guids)})"))
+        return {owner_map[str(-int(owner) - GUID_OFFSET)] for owner in present
+                if str(-int(owner) - GUID_OFFSET) in owner_map}
+
     if not dry_run:
         scripted_creatures = set(fetch(container, user, password,
                                        f"SELECT DISTINCT entryorguid FROM {target}.smart_scripts "
@@ -841,6 +854,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                                          f"WHERE source_type=1 AND entryorguid IN ({gameobject_ids})"))
         scripted_creatures &= script_creatures  # fill-only: AIName is set where it is still empty
         scripted_gameobjects &= script_gameobjects
+        scripted_creatures |= guid_script_owners(script_guids, guid_owner, 0) - native_ai
+        scripted_gameobjects |= guid_script_owners(script_go_guids, go_guid_owner, 1) - native_go_ai
         if scripted_creatures:
             run(container, user, password,
                 f"UPDATE {target}.creature_template SET AIName='SmartAI' "

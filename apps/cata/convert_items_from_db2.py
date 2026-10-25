@@ -4,7 +4,9 @@
 The 4.3.4 client stores no per-item armor, weapon damage or durability; with --dbc-dir these are derived
 from the ItemArmor*/ItemDamage* tables (item_derived_stats.py). Without it, or for the columns that stay
 underived (block, second damage, scaling value, disenchant), the schema default is kept and the output
-header lists them so the gap stays visible.
+header lists them so the gap stays visible. Cata-only stat types are translated where AC has a column:
+50 extra armor -> armor, 51-56 resistances -> *_res; 49 mastery has no AC counterpart and is dropped
+rather than left for the loader to reinterpret as mana.
 
 Item ids come from the command line or, for any zone, from an import_starter_content.py JSON report
 (--ids-from-report): its closure.missing_items lists the item ids the zone's quests reference that
@@ -58,8 +60,13 @@ UNSIGNED = ["requiredspell", "startquest", "lockid", "itemset", "area"]
 DERIVED = ["armor", "MaxDurability", "dmg_min1", "dmg_max1", "dmg_type1"]
 UNRESOLVED = ["block", "dmg_min2", "dmg_max2", "dmg_type2", "ScalingStatValue", "RequiredDisenchantSkill",
               "DisenchantID"]
+# Cata stat types above AC's highest ItemModType (48) that have their own item_template column. Mastery (49)
+# has no AC counterpart and is dropped instead of passed through, where the loader would zero the type and
+# apply the value as mana.
+RESISTANCES = {51: "fire_res", 52: "frost_res", 53: "holy_res", 54: "shadow_res", 55: "nature_res",
+               56: "arcane_res"}
 # A DELETE + INSERT resets these AC-owned columns, so only run it for ids absent from item_template.
-RESET_NOTE = ("ScriptName, FoodType, flagsCustom, minMoneyLoot, maxMoneyLoot, spellppmRate_*, *_res, "
+RESET_NOTE = ("ScriptName, FoodType, flagsCustom, minMoneyLoot, maxMoneyLoot, spellppmRate_*, "
               "StatScalingFactor/ItemStatAllocation (scaling items lose their stats)")
 
 
@@ -101,8 +108,21 @@ def convert(item_rows, sparse_rows, item_ids, tables=None):
         for i in range(1, 11):  # the client marks an empty stat slot -1; AC uses 0
             if row[f"stat_type{i}"] < 0:
                 row[f"stat_type{i}"] = row[f"stat_value{i}"] = 0
+        for column in RESISTANCES.values():
+            row[column] = 0
         if tables:
             derive(row, sparse, tables)
+        else:
+            row["armor"] = 0
+        for i in range(1, 11):
+            stat_type, value = row[f"stat_type{i}"], row[f"stat_value{i}"]
+            if stat_type in RESISTANCES:
+                row[RESISTANCES[stat_type]] += value
+            elif stat_type == 50:  # extra armor
+                row["armor"] += value
+            elif stat_type != 49 and stat_type <= 56:
+                continue
+            row[f"stat_type{i}"] = row[f"stat_value{i}"] = 0
         rows.append(row)
     return rows
 
@@ -147,6 +167,11 @@ def self_test():
     assert rows[0]["name"] == "Bob's Vest" and "'Bob''s Vest'" in sql
     sparse[1]["ItemStatType0"], sparse[1]["ItemStatValue0"] = -1, 5
     assert convert(item, sparse, [1])[0]["stat_type1"] == 0 == convert(item, sparse, [1])[0]["stat_value1"]
+    sparse[1].update({"ItemStatType0": 51, "ItemStatValue0": 18, "ItemStatType1": 56, "ItemStatValue1": 18,
+                      "ItemStatType2": 50, "ItemStatValue2": 7, "ItemStatType3": 49, "ItemStatValue3": 5})
+    translated = convert(item, sparse, [1])[0]
+    assert (translated["fire_res"], translated["arcane_res"], translated["armor"]) == (18, 18, 7)
+    assert [translated[f"stat_type{i}"] for i in range(1, 5)] == [0, 0, 0, 0]
     assert "DELETE" not in to_sql(rows, 15595, insert_only=True)
     assert sql.count("DELETE FROM") == 1 and "VALUES" in sql and sql.rstrip().endswith("COMMIT;")
     sparse[1]["Flags"] = -2147483648
