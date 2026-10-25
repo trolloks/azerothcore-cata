@@ -30,7 +30,7 @@ CHUNK = 500
 # Native template columns the import may fill (never overwrite): column -> the value that counts as empty.
 # They are emitted as guarded UPDATEs; any other difference in a shared row still refuses.
 FILL = {"creature_template": {"AIName": "''", "lootid": "0"}, "gameobject_template": {"AIName": "''"}}
-FILL_AI = ("SmartAI", "SmartGameObjectAI")
+FILL_AI = {"creature_template": "SmartAI", "gameobject_template": "SmartGameObjectAI"}
 
 
 def table_columns(c, u, p, schema, table):
@@ -152,11 +152,15 @@ def emit_table(c, u, p, base, after, table):
     order = ",".join(f"a.`{k}`" for k in keys)
     out = [f"-- {table}: {total} rows"]
     names = ",".join(f"`{name}`" for name, _ in cols)
+    if table == "smart_scripts":  # one DELETE for all blocks: a per-chunk one would drop rows an earlier chunk added
+        blocks = run(c, u, p, f"SELECT DISTINCT a.`entryorguid`, a.`source_type` {new_from} "
+                              f"ORDER BY a.`entryorguid`, a.`source_type`")
+        out.append(delete_sql(table, keys, blocks))
     for offset in range(0, total, CHUNK):
         page = f"{new_from} ORDER BY {order} LIMIT {CHUNK} OFFSET {offset}"
         rows = [[unbatch(cell) for cell in row] for row in run(
             c, u, p, f"SELECT CONCAT('(',CONCAT_WS(',',{values}),')'), {key_exprs} {page}")]
-        if table not in NO_DELETE:
+        if table not in NO_DELETE and table != "smart_scripts":
             out.append(delete_sql(table, keys, [tuple(r[1:]) for r in rows]))
         out.append(f"INSERT INTO `{table}` ({names}) VALUES")
         out.append(",\n".join(r[0] for r in rows) + ";")
@@ -170,21 +174,29 @@ def emit_fill(c, u, p, base, after, table, keys, fill):
     out = []
     key = keys[0]
     for column, empty in fill.items():
-        pair = f"FROM {after}.`{table}` a JOIN {base}.`{table}` b ON {join_on(keys)} WHERE NOT (a.`{column}` <=> b.`{column}`)"
-        allowed = f"b.`{column}`={empty}" + (
-            " AND a.`AIName` IN (" + ",".join(f"'{v}'" for v in FILL_AI) + ")" if column == "AIName" else "")
+        same = same_row({column: "int" if column == "lootid" else "varchar"}, [column], "a", "b")
+        pair = (f"FROM {after}.`{table}` a JOIN {base}.`{table}` b ON {join_on(keys)} "
+                f"WHERE NOT ({same})")
+        guard = f"`{column}`={empty}"  # the emitted file stays linter-friendly; the checks below are exact
+        if column == "AIName":
+            allowed = (
+                f"(BINARY b.`{column}` <=> BINARY {empty} OR b.`{column}` IS NULL) "
+                f"AND (BINARY a.`{column}` <=> BINARY '{FILL_AI[table]}')")
+        else:
+            allowed = (f"(b.`{column}` <=> {empty}) AND a.`{column}` IS NOT NULL AND a.`{column}`>0 "
+                       f"AND EXISTS (SELECT 1 FROM {after}.creature_loot_template l WHERE l.Entry=a.`{column}`)")
         bad = scalar(c, u, p, f"SELECT COUNT(*) {pair} AND NOT ({allowed})")
         if bad:
             raise SystemExit(f"{table}: {bad} rows changed `{column}` away from its empty value")
         if column == "lootid":
             for entry, value in run(c, u, p, f"SELECT a.`{key}`, a.`{column}` {pair} ORDER BY a.`{key}`"):
-                out.append(f"UPDATE `{table}` SET `{column}`={value} WHERE `{key}`={entry} AND `{column}`={empty};")
+                out.append(f"UPDATE `{table}` SET `{column}`={value} WHERE `{key}`={entry} AND {guard};")
         else:
-            for value in fetch_column(c, u, p, f"SELECT DISTINCT a.`{column}` {pair}"):
-                entries = fetch_column(c, u, p, f"SELECT a.`{key}` {pair} AND a.`{column}`='{value}' "
-                                                f"ORDER BY a.`{key}`")
+            value = FILL_AI[table]
+            entries = fetch_column(c, u, p, f"SELECT a.`{key}` {pair} ORDER BY a.`{key}`")
+            if entries:
                 out.append(f"UPDATE `{table}` SET `{column}`='{value}' WHERE `{key}` IN ({','.join(entries)}) "
-                           f"AND `{column}`={empty};")
+                           f"AND {guard};")
     return "\n".join(out)
 
 

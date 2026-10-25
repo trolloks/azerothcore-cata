@@ -62,7 +62,7 @@ def zone_creature_entries(container, user, password, schema, zone, map_id) -> se
     return {int(r[0]) for r in rows if r and r[0].isdigit()}
 
 
-def creature_loot_ids(container, user, password, schema, zone, map_id) -> set[int]:
+def creature_loot_ids(container, user, password, schema, zone, map_id, column="lootid") -> set[int]:
     if not (table_exists(container, user, password, schema, "creature")
             and table_exists(container, user, password, schema, "creature_template")):
         return set()
@@ -71,9 +71,9 @@ def creature_loot_ids(container, user, password, schema, zone, map_id) -> set[in
     if not entry_col:
         return set()
     rows = query(container, user, password, schema,
-                 f"SELECT DISTINCT ct.lootid FROM creature c "
+                 f"SELECT DISTINCT ct.{column} FROM creature c "
                  f"JOIN creature_template ct ON ct.entry=c.{entry_col} "
-                 f"WHERE (c.zoneId={zone} OR c.areaId={zone}) AND c.map={map_id} AND ct.lootid<>0")
+                 f"WHERE (c.zoneId={zone} OR c.areaId={zone}) AND c.map={map_id} AND ct.{column}<>0")
     return {int(r[0]) for r in rows if r and r[0].isdigit() and int(r[0]) > 0}
 
 
@@ -213,7 +213,8 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
     item_cols = [f"RequiredItemId{i}" for i in range(1, 7) if f"RequiredItemId{i}" in quest_cols]
     reward_cols = [f"RewardItem{i}" for i in range(1, 5) if f"RewardItem{i}" in quest_cols]
     choice_cols = [f"RewardChoiceItemID{i}" for i in range(1, 7) if f"RewardChoiceItemID{i}" in quest_cols]
-    wanted = ["ID"] + objective_cols + item_cols + reward_cols + choice_cols
+    start_cols = [c for c in ["StartItem"] + [f"ItemDrop{i}" for i in range(1, 5)] if c in quest_cols]
+    wanted = ["ID"] + objective_cols + item_cols + reward_cols + choice_cols + start_cols
     rows = query(container, user, password, schema,
                  f"SELECT {','.join(wanted)} FROM quest_template WHERE {sort_col}={zone}")
     zone_quests = {row[0] for row in rows}
@@ -222,7 +223,8 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
     gameobject_entries = {r[0] for r in query(container, user, password, schema,
                                               "SELECT entry FROM gameobject_template") if r}
     item_entries = set()
-    if table_exists(container, user, password, schema, "item_template"):
+    has_items = table_exists(container, user, password, schema, "item_template")
+    if has_items:
         item_entries = {r[0] for r in query(container, user, password, schema,
                                             "SELECT entry FROM item_template") if r}
 
@@ -236,11 +238,11 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
             if value < 0 and str(-value) not in gameobject_entries:
                 problems.append({"kind": "quest_objective_gameobject", "quest": quest, "id": str(-value)})
             offset += 1
-        for _ in item_cols + reward_cols + choice_cols:
+        for _ in item_cols + reward_cols + choice_cols + start_cols:
             value = int(row[offset])
             # TDB 434 has no item_template (the items come from Item-sparse.db2); the AC side
             # can validate items, the TDB side cannot without loading the DB2.
-            if item_entries and value > 0 and str(value) not in item_entries:
+            if has_items and value > 0 and str(value) not in item_entries:
                 problems.append({"kind": "quest_item", "quest": quest, "id": str(value)})
             offset += 1
 
@@ -248,6 +250,20 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
     zone_gos = zone_gameobject_entries(container, user, password, schema, zone, map_id)
     all_quests = {r[0] for r in query(container, user, password, schema,
                                       "SELECT ID FROM quest_template") if r}
+    if zone_quests:
+        joined = ",".join(sorted(zone_quests))
+        links = [("quest_template", "RewardNextQuest")]
+        if table_exists(container, user, password, schema, "quest_template_addon"):
+            links += [("quest_template_addon", column)
+                      for column in ("PrevQuestID", "NextQuestID", "BreadcrumbForQuestId")
+                      if column in columns(container, user, password, schema, "quest_template_addon")]
+        for table, column in links:
+            if column not in columns(container, user, password, schema, table):
+                continue
+            for quest, value in query(container, user, password, schema,
+                                      f"SELECT ID, {column} FROM {table} WHERE ID IN ({joined}) AND {column}<>0"):
+                if str(abs(int(value))) not in all_quests:
+                    problems.append({"kind": "quest_link", "quest": quest, "id": value, "from": column})
     for table, column, label in (
         ("creature_queststarter", "id", "quest_starter_creature"),
         ("creature_questender", "id", "quest_ender_creature"),
@@ -294,6 +310,10 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
     for table, entries, label in (
         ("creature_loot_template", creature_loot_ids(container, user, password, schema, zone, map_id),
          "creature_loot"),
+        ("pickpocketing_loot_template",
+         creature_loot_ids(container, user, password, schema, zone, map_id, "pickpocketloot"), "pickpocket_loot"),
+        ("skinning_loot_template",
+         creature_loot_ids(container, user, password, schema, zone, map_id, "skinloot"), "skinning_loot"),
         ("gameobject_loot_template", gameobject_loot_ids(container, user, password, schema, zone, map_id),
          "gameobject_loot"),
     ):
@@ -309,7 +329,7 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
         for entry in entries:
             if str(entry) not in present:
                 problems.append({"kind": label + "_template_missing", "id": str(entry)})
-        if item_entries:  # the loot validator drops rows whose item is unknown
+        if has_items:  # the loot validator drops rows whose item is unknown
             for item, in query(container, user, password, schema,
                                f"SELECT DISTINCT Item FROM {table} WHERE Entry IN ({joined}) AND Reference=0 "
                                f"AND Item>0"):
@@ -343,6 +363,12 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
             if current in visited:
                 continue
             visited.add(current)
+            if has_items:
+                for item, in query(container, user, password, schema,
+                                   f"SELECT DISTINCT Item FROM reference_loot_template WHERE Entry={current} "
+                                   f"AND Reference=0 AND Item>0"):
+                    if item not in item_entries:
+                        problems.append({"kind": "loot_item", "id": item, "from": current})
             for nested in graph.get(current, set()):
                 if nested not in known_refs:
                     problems.append({"kind": "reference_loot_nested", "id": nested, "from": current})
