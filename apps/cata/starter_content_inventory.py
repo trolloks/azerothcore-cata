@@ -373,6 +373,16 @@ def check_loader_relations(container, user, password, schema, creatures, gameobj
                             f"(SELECT id FROM creature_queststarter WHERE quest IN ({quest_list}) "
                             f"UNION SELECT id FROM creature_questender WHERE quest IN ({quest_list}))"):
             problems.append({"kind": "quest_giver_flag", "id": entry})
+    if script_keys and {"action_type", "target_type", "target_param1"} <= cols("smart_scripts"):
+        # AC's SmartAIMgr skips rows with unsupported actions or params on no-param targets
+        for owner, source_type, script_id, kind in query(
+                container, user, password, schema,
+                "SELECT entryorguid, source_type, id, IF(action_type IN (16,119,120,127,128,129,130,133), "
+                "'smart_unsupported_action', 'smart_unused_target_param') FROM smart_scripts WHERE "
+                "action_type IN (16,119,120,127,128,129,130,133) OR (target_type IN (0,1,2) AND "
+                "(target_param1<>0 OR target_param2<>0 OR target_param3<>0 OR target_param4<>0))"):
+            if (owner, source_type) in script_keys:
+                problems.append({"kind": kind, "id": f"{owner}.{source_type}.{script_id}"})
     link_cols = {"event_type", "event_param1", "event_param2", "event_param3", "event_param4"}
     if script_keys and link_cols <= cols("smart_scripts"):
         for owner, source_type, script_id in query(
