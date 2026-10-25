@@ -29,7 +29,8 @@ UNSAFE_TYPES = {"enum", "set", "json", "timestamp"}
 CHUNK = 500
 # Native template columns the import may fill (never overwrite): column -> the value that counts as empty.
 # They are emitted as guarded UPDATEs; any other difference in a shared row still refuses.
-FILL = {"creature_template": {"AIName": "''", "lootid": "0"}, "gameobject_template": {"AIName": "''"}}
+FILL = {"creature_template": {"AIName": "''", "lootid": "0", "npcflag": "0"},
+        "gameobject_template": {"AIName": "''"}}
 FILL_AI = {"creature_template": "SmartAI", "gameobject_template": "SmartGameObjectAI"}
 
 
@@ -174,11 +175,14 @@ def emit_fill(c, u, p, base, after, table, keys, fill):
     out = []
     key = keys[0]
     for column, empty in fill.items():
-        same = same_row({column: "int" if column == "lootid" else "varchar"}, [column], "a", "b")
+        same = same_row({column: "varchar" if column == "AIName" else "int"}, [column], "a", "b")
         pair = (f"FROM {after}.`{table}` a JOIN {base}.`{table}` b ON {join_on(keys)} "
                 f"WHERE NOT ({same})")
         guard = f"`{column}`={empty}"  # the emitted file stays linter-friendly; the checks below are exact
-        if column == "AIName":
+        if column == "npcflag":  # only the QUESTGIVER bit (2) may be added
+            guard = f"`{column}`&2=0"
+            allowed = f"(b.`{column}`&2)=0 AND a.`{column}`=(b.`{column}`|2)"
+        elif column == "AIName":
             allowed = (
                 f"(BINARY b.`{column}` <=> BINARY {empty} OR b.`{column}` IS NULL) "
                 f"AND (BINARY a.`{column}` <=> BINARY '{FILL_AI[table]}')")
@@ -188,7 +192,12 @@ def emit_fill(c, u, p, base, after, table, keys, fill):
         bad = scalar(c, u, p, f"SELECT COUNT(*) {pair} AND NOT ({allowed})")
         if bad:
             raise SystemExit(f"{table}: {bad} rows changed `{column}` away from its empty value")
-        if column == "lootid":
+        if column == "npcflag":
+            entries = fetch_column(c, u, p, f"SELECT a.`{key}` {pair} ORDER BY a.`{key}`")
+            if entries:
+                out.append(f"UPDATE `{table}` SET `{column}`=`{column}`|2 WHERE `{key}` IN ({','.join(entries)}) "
+                           f"AND {guard};")
+        elif column == "lootid":
             for entry, value in run(c, u, p, f"SELECT a.`{key}`, a.`{column}` {pair} ORDER BY a.`{key}`"):
                 out.append(f"UPDATE `{table}` SET `{column}`={value} WHERE `{key}`={entry} AND {guard};")
         else:

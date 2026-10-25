@@ -784,6 +784,13 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                 f"WHERE entry IN ({','.join(sorted(scripted_gameobjects))}) "
                 f"AND (AIName='' OR AIName IS NULL)")
 
+    if not dry_run:  # fill-only: a native giver the source flags as QUESTGIVER (2) needs the bit for its quests
+        run(container, user, password,
+            f"UPDATE {target}.creature_template t JOIN {source}.creature_template s ON s.entry=t.entry "
+            f"SET t.npcflag=t.npcflag|2 WHERE (s.npcflag&2)<>0 AND (t.npcflag&2)=0 AND t.entry IN "
+            f"(SELECT id FROM {target}.creature_queststarter WHERE quest IN ({quest_ids}) "
+            f"UNION SELECT id FROM {target}.creature_questender WHERE quest IN ({quest_ids}))")
+
     def timed_references(where, owners=None):
         found: set[str] = set()
         for row in run(container, user, password,
