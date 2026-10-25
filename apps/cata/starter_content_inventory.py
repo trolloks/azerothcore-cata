@@ -12,8 +12,10 @@ starter/ender, loot reference or SmartAI link makes it exit non-zero.
 
 import argparse
 import json
+import re
 import subprocess
 import sys
+from pathlib import Path
 
 
 def query(container: str, user: str, password: str, schema: str, sql: str) -> list[list[str]]:
@@ -58,7 +60,8 @@ def zone_creature_entries(container, user, password, schema, zone, map_id) -> se
     if not zone_col or not entry_col:
         return set()
     rows = query(container, user, password, schema,
-                 f"SELECT DISTINCT {entry_col} FROM creature WHERE ({zone_col}={zone} OR areaId={zone}) AND map={map_id}")
+                 f"SELECT DISTINCT {entry_col} FROM creature "
+                 f"WHERE ({zone_col}={zone} OR areaId={zone}) AND map={map_id}")
     return {int(r[0]) for r in rows if r and r[0].isdigit()}
 
 
@@ -124,7 +127,8 @@ def inventory(container, user, password, schema, zone, map_id) -> dict[str, int]
         "creatures": scalar(container, user, password, schema,
                             f"SELECT COUNT(*) FROM creature WHERE (zoneId={zone} OR areaId={zone}) AND map={map_id}"),
         "gameobjects": scalar(container, user, password, schema,
-                              f"SELECT COUNT(*) FROM gameobject WHERE (zoneId={zone} OR areaId={zone}) AND map={map_id}"),
+                              f"SELECT COUNT(*) FROM gameobject "
+                              f"WHERE (zoneId={zone} OR areaId={zone}) AND map={map_id}"),
     }
 
     creature_entries = zone_creature_entries(container, user, password, schema, zone, map_id)
@@ -201,6 +205,322 @@ def inventory(container, user, password, schema, zone, map_id) -> dict[str, int]
     return result
 
 
+def registered_script_names() -> set[str]:
+    """Read the same source registrations used by the importer's ScriptName filter."""
+    registered = "\n".join(path.read_text(errors="replace")
+                           for path in (Path(__file__).resolve().parents[2] / "src/server/scripts").rglob("*.cpp"))
+    registered = re.sub(r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/',
+                        lambda m: m[0] if m[0].startswith('"') else "", registered, flags=re.S)
+    names = set(re.findall(r'\bRegister\w*AI(?:WithFactory)?\s*\(\s*(\w+)', registered))
+    names.update(re.findall(r'\b(?:Creature|GameObject)Script\s*\(\s*"([^"\\]+)"', registered))
+    names.update(re.findall(r'\bConditionScript\s*\(\s*"([^"\\]+)"', registered))
+    return names
+
+
+def check_loader_relations(container, user, password, schema, creatures, gameobjects, creature_guids, go_guids,
+                           quests, loot_entries) -> list[dict[str, str]]:
+    """Check SQL-backed loader dependencies in the imported closure; client stores are not SQL tables."""
+    problems = []
+    metadata = {}
+    known = {}
+
+    def cols(table):
+        if table not in metadata:
+            metadata[table] = (columns(container, user, password, schema, table)
+                               if table_exists(container, user, password, schema, table) else set())
+        return metadata[table]
+
+    def ids(table, key):
+        if (table, key) not in known:
+            known[table, key] = ({r[0] for r in query(container, user, password, schema,
+                                                    f"SELECT DISTINCT {key} FROM {table}")}
+                                 if key in cols(table) else None)
+        return known[table, key]
+
+    def check(kind, value, table, key, owner, optional=True):
+        values = ids(table, key)
+        if values is not None and (not optional or value != "0") and value not in values:
+            problems.append({"kind": kind, "id": value, "from": owner})
+
+    def scope(key, values):
+        return f"s.{key} IN ({','.join(map(str, sorted(values)))})" if values else "0"
+
+    def relation(table, key, column, target, target_key, where, kind, match=None, optional=True):
+        if not {key, column} <= cols(table) or target_key not in cols(target):
+            return
+        match = match or f"t.{target_key}=s.{column}"
+        nonzero = f" AND s.{column}<>0" if optional else ""
+        for owner, value in query(container, user, password, schema,
+                                   f"SELECT DISTINCT s.{key}, s.{column} FROM {table} s WHERE ({where}){nonzero} "
+                                   f"AND NOT EXISTS (SELECT 1 FROM {target} t WHERE {match})"):
+            problems.append({"kind": kind, "id": value, "from": f"{table}.{owner}.{column}"})
+
+    creature_scope = scope("entry", creatures)
+    go_scope = scope("entry", gameobjects)
+    for column in ("difficulty_entry_1", "difficulty_entry_2", "difficulty_entry_3", "KillCredit1", "KillCredit2"):
+        relation("creature_template", "entry", column, "creature_template", "entry", creature_scope,
+                 "creature_template_reference")
+    relation("creature_template", "entry", "entry", "creature_template_model", "CreatureID", creature_scope,
+             "creature_model_missing", optional=False)
+    relation("creature_template_model", "CreatureID", "CreatureID", "creature_template", "entry",
+             scope("CreatureID", creatures), "creature_model_owner", optional=False)
+    relation("creature_template_model", "CreatureID", "CreatureDisplayID", "creature_model_info", "DisplayID",
+             scope("CreatureID", creatures), "creature_model_info_missing", optional=False)
+    model_ids = set()
+    if {"CreatureID", "CreatureDisplayID"} <= cols("creature_template_model"):
+        model_ids = {r[0] for r in query(container, user, password, schema,
+                                        "SELECT CreatureDisplayID FROM creature_template_model s WHERE "
+                                        + scope("CreatureID", creatures))}
+    # Follow alternate genders too: ChooseCreatureModelRandomGender reads their model-info rows at runtime.
+    pending = model_ids.copy()
+    while pending and {"DisplayID", "DisplayID_Other_Gender"} <= cols("creature_model_info"):
+        batch, pending = pending, set()
+        for display, other in query(container, user, password, schema,
+                                     "SELECT DisplayID, DisplayID_Other_Gender FROM creature_model_info s WHERE "
+                                     + scope("DisplayID", batch)):
+            check("creature_model_other_gender", other, "creature_model_info", "DisplayID", display)
+            if other != "0" and other not in model_ids:
+                model_ids.add(other)
+                pending.add(other)
+
+    path_ids = set()
+    for table, key, owners, target, target_key in (
+        ("creature_template_addon", "entry", creatures, "creature_template", "entry"),
+        ("creature_addon", "guid", creature_guids, "creature", "guid"),
+        ("gameobject_addon", "guid", go_guids, "gameobject", "guid"),
+        ("npc_spellclick_spells", "npc_entry", creatures, "creature_template", "entry"),
+    ):
+        relation(table, key, key, target, target_key, scope(key, owners), table + "_owner", optional=False)
+        if table.startswith("creature_") and "addon" in table:
+            relation(table, key, "path_id", "waypoint_data", "id", scope(key, owners), "creature_addon_path")
+            if {key, "path_id"} <= cols(table):
+                path_ids.update(r[0] for r in query(container, user, password, schema,
+                                f"SELECT path_id FROM {table} s WHERE {scope(key, owners)} AND path_id<>0"))
+    relation("waypoint_data", "id", "action", "waypoint_scripts", "id", scope("id", path_ids),
+             "waypoint_script")
+    if {"id", "equipment_id"} <= cols("creature") and "ID" in cols("creature_equip_template"):
+        relation("creature", "guid", "equipment_id", "creature_equip_template", "CreatureID",
+                 scope("guid", creature_guids), "creature_equipment",
+                 "t.CreatureID=s.id AND (s.equipment_id=-1 OR t.ID=s.equipment_id)")
+    for table, owners, spawn_table in (("game_event_creature", creature_guids, "creature"),
+                                       ("game_event_gameobject", go_guids, "gameobject")):
+        relation(table, "guid", "guid", spawn_table, "guid", scope("guid", owners),
+                 table + "_spawn", optional=False)
+        relation(table, "guid", "eventEntry", "game_event", "eventEntry", scope("guid", owners),
+                 table + "_event", "t.eventEntry=ABS(s.eventEntry)", optional=False)
+    formation_scope = f"{scope('leaderGUID', creature_guids)} OR {scope('memberGUID', creature_guids)}"
+    for column in ("leaderGUID", "memberGUID"):
+        if {"leaderGUID", "memberGUID"} <= cols("creature_formations"):
+            relation("creature_formations", "memberGUID", column, "creature", "guid", formation_scope,
+                     "formation_spawn", optional=False)
+    for table in ("quest_template_addon", "quest_offer_reward", "quest_request_items"):
+        relation(table, "ID", "ID", "quest_template", "ID", scope("ID", quests),
+                 "quest_companion_owner", optional=False)
+    if "type" in cols("gameobject_template"):
+        for go_type, column in ((1, "Data3"), (3, "Data7"), (8, "Data2"), (10, "Data12")):
+            relation("gameobject_template", "entry", column, "gameobject_template", "entry",
+                     f"{go_scope} AND s.type={go_type}", "gameobject_linked_trap")
+        relation("gameobject_template", "entry", "Data7", "page_text", "ID",
+                 f"{go_scope} AND s.type=10", "gameobject_page")
+    relation("creature_equip_template", "CreatureID", "CreatureID", "creature_template", "entry",
+             scope("CreatureID", creatures), "creature_equipment_owner", optional=False)
+    page_ids = set()
+    if {"entry", "type", "Data7"} <= cols("gameobject_template"):
+        page_ids = {r[0] for r in query(container, user, password, schema,
+                                       "SELECT Data7 FROM gameobject_template s WHERE " + go_scope
+                                       + " AND type=10 AND Data7<>0")}
+    pending_pages = page_ids.copy()
+    while pending_pages and {"ID", "NextPageID"} <= cols("page_text"):
+        batch, pending_pages = pending_pages, set()
+        for page, next_page in query(container, user, password, schema,
+                                      "SELECT ID, NextPageID FROM page_text s WHERE " + scope("ID", batch)):
+            check("page_next", next_page, "page_text", "ID", page)
+            if next_page != "0" and next_page not in page_ids:
+                page_ids.add(next_page)
+                pending_pages.add(next_page)
+    relation("creature_text", "CreatureID", "BroadcastTextId", "broadcast_text", "ID",
+             scope("CreatureID", creatures), "creature_text_broadcast")
+
+    registrations = None
+    for table, key, owners in (("creature_template", "entry", creatures),
+                                ("gameobject_template", "entry", gameobjects),
+                                ("creature", "guid", creature_guids), ("gameobject", "guid", go_guids)):
+        if not owners or not {key, "ScriptName"} <= cols(table):
+            continue
+        for owner, name in query(container, user, password, schema,
+                                 f"SELECT {key}, ScriptName FROM {table} s WHERE {scope(key, owners)} "
+                                 "AND ScriptName<>''"):
+            if registrations is None:
+                registrations = registered_script_names()
+            if name not in registrations:
+                problems.append({"kind": "script_name", "id": name, "from": f"{table}.{owner}"})
+
+    script_keys = {(str(e), "0") for e in creatures} | {(str(-g), "0") for g in creature_guids}
+    script_keys |= {(str(e), "1") for e in gameobjects} | {(str(-g), "1") for g in go_guids}
+    script_cols = (["entryorguid", "source_type", "id", "link", "event_type"]
+                   + [f"event_param{i}" for i in range(1, 5)] + ["action_type"]
+                   + [f"action_param{i}" for i in range(1, 7)] + ["target_type"]
+                   + [f"target_param{i}" for i in range(1, 3)])
+    scripts = {}
+    if set(script_cols) <= cols("smart_scripts"):
+        for row in query(container, user, password, schema, f"SELECT {','.join(script_cols)} FROM smart_scripts"):
+            scripts.setdefault((row[0], row[1]), []).append(dict(zip(script_cols, row)))
+    pending_keys = [(key, key) for key in script_keys]
+    visited = set()
+    visited_contexts = set()
+    while pending_keys:
+        key, root = pending_keys.pop()
+        if (key, root) in visited_contexts:
+            continue
+        visited_contexts.add((key, root))
+        visited.add(key)
+        events = {r["id"]: r["event_type"] for r in scripts.get(root, [])}
+        for r in scripts.get(key, []):
+            owner = f"smart_scripts.{key[0]}.{key[1]}.{r['id']}"
+            action, event, target = (int(r[c]) for c in ("action_type", "event_type", "target_type"))
+            # Timed lists coerce event_type to UPDATE_OOC; their stored event parameters are timers.
+            if key[1] != "9":
+                for types, param, table, target_key in (
+                    ((5,), 4, "creature_template", "entry"),
+                    ((17, 35, 42, 82, 107), 1, "creature_template", "entry"),
+                    ((19, 20), 1, "quest_template", "ID"),
+                    ((46,), 1, "areatrigger", "entry"),
+                    ((68, 69), 1, "game_event", "eventEntry"),
+                    ((75,), 1, "creature", "guid"), ((75,), 2, "creature_template", "entry"),
+                    ((76,), 1, "gameobject", "guid"), ((76,), 2, "gameobject_template", "entry"),
+                ):
+                    if event in types:
+                        check("smartai_event_reference", r[f"event_param{param}"], table, target_key, owner)
+            for types, param, table, target_key, optional in (
+                ((3, 43), 1, "creature_template", "entry", True),
+                ((12, 33, 36), 1, "creature_template", "entry", False),
+                ((6, 7, 15, 26), 1, "quest_template", "ID", False),
+                ((50,), 1, "gameobject_template", "entry", False),
+                ((53,), 2, "waypoints", "entry", False),
+                ((53,), 4, "quest_template", "ID", True),
+                ((55,), 2, "quest_template", "ID", True),
+                ((111, 112), 1, "game_event", "eventEntry", False),
+                ((131, 132), 1, "spawn_group_template", "groupId", False),
+            ):
+                if action in types:
+                    check("smartai_action_reference", r[f"action_param{param}"], table, target_key, owner, optional)
+            if action != 58:  # INSTALL_AI_TEMPLATE bypasses target validation.
+                for types, param, table in (((9, 11, 204), 1, "creature_template"),
+                                            ((10, 206), 2, "creature_template"),
+                                            ((13, 15), 1, "gameobject_template"),
+                                            ((14,), 2, "gameobject_template")):
+                    if target in types:
+                        check("smartai_target_reference", r[f"target_param{param}"], table, "entry", owner)
+                if target == 207 and r["target_param1"] in ("1", "2"):
+                    table = "creature_template" if r["target_param1"] == "1" else "gameobject_template"
+                    check("smartai_target_reference", r["target_param2"], table, "entry", owner)
+            # FindLinkedEvent searches the calling owner's events, even for a timed-list action.
+            if (key[1] == "9" and r["link"] not in ("0", r["id"])
+                    and events.get(r["link"]) != "61"):
+                problems.append({"kind": "smartai_link", "id": r["link"],
+                                 "from": f"{owner}.owner.{root[0]}.{root[1]}"})
+            if action in (80, 87, 88):
+                if action == 80:
+                    lists = [r["action_param1"]]
+                elif action == 87:
+                    lists = [r[f"action_param{i}"] for i in range(1, 7) if r[f"action_param{i}"] != "0"]
+                else:
+                    lists = (str(i) for i in range(int(r["action_param1"]), int(r["action_param2"]) + 1))
+                for value in lists:
+                    if (value, "9") not in scripts:
+                        problems.append({"kind": "smartai_timed_list", "id": value, "from": owner})
+                    else:
+                        pending_keys.append(((value, "9"), root))
+            equip_id = (int(r["action_param1"]) + 128) % 256 - 128
+            if action == 71 and key[1] == "0" and equip_id != 0:
+                if {"CreatureID", "ID"} <= cols("creature_equip_template"):
+                    match = "" if equip_id == -1 else f" AND ID={equip_id}"
+                    equipment = query(container, user, password, schema,
+                                      "SELECT ID FROM creature_equip_template "
+                                      f"WHERE CreatureID={key[0]}{match}")
+                    if not equipment:
+                        problems.append({"kind": "smartai_equipment", "id": r["action_param1"], "from": owner})
+            if action in (1, 84) and key[1] == "0" and target not in (9, 11, 19):
+                entry = key[0]
+                if event == 52:
+                    entry = r["event_param2"]
+                elif int(entry) < 0 and {"guid", "id"} <= cols("creature"):
+                    spawn = query(container, user, password, schema,
+                                  f"SELECT id FROM creature WHERE guid={-int(entry)}")
+                    entry = spawn[0][0] if spawn else "0"
+                if {"CreatureID", "GroupID"} <= cols("creature_text"):
+                    text = query(container, user, password, schema,
+                                 f"SELECT GroupID FROM creature_text WHERE CreatureID={entry} "
+                                 f"AND GroupID={int(r['action_param1']) & 255}")
+                    if not text:
+                        problems.append({"kind": "smartai_text", "id": r["action_param1"], "from": owner})
+
+    condition_cols = ["SourceTypeOrReferenceId", "SourceGroup", "SourceEntry", "SourceId",
+                      "ConditionTypeOrReference", "ConditionValue1", "ConditionValue2", "ConditionValue3", "ScriptName"]
+    conditions = []
+    if set(condition_cols) <= cols("conditions"):
+        conditions = [dict(zip(condition_cols, row)) for row in
+                      query(container, user, password, schema, f"SELECT {','.join(condition_cols)} FROM conditions")]
+    templates = {}
+    pending = []
+    for r in conditions:
+        source, group, entry, source_id = (r[c] for c in condition_cols[:4])
+        if int(source) < 0:
+            templates.setdefault(str(-int(source)), []).append(r)
+        elif ((source == "19" and entry in quests)
+              or (source == "22" and (entry, source_id) in visited)
+              or (source in loot_entries and group in loot_entries[source])):
+            pending.append(r)
+    visited_refs = set()
+    while pending:
+        r = pending.pop()
+        owner = ".".join(r[c] for c in condition_cols[:5])
+        kind, v1, v2, v3 = (int(r[c]) for c in condition_cols[4:8])
+        if r["ScriptName"]:
+            if registrations is None:
+                registrations = registered_script_names()
+            if r["ScriptName"] not in registrations:
+                problems.append({"kind": "script_name", "id": r["ScriptName"], "from": owner})
+        source, group, entry = (r[c] for c in condition_cols[:3])
+        if source == "19" and kind >= 0:
+            check("condition_source_quest", entry, "quest_template", "ID", owner, optional=False)
+        if source in loot_entries:
+            table = {"1": "creature", "4": "gameobject", "8": "pickpocketing",
+                     "10": "reference", "11": "skinning"}[source] + "_loot_template"
+            if {"Entry", "Item", "Reference"} <= cols(table):
+                loot = query(container, user, password, schema,
+                             f"SELECT Reference FROM {table} WHERE Entry={group} AND Item={entry}")
+                if kind >= 0 and not any(row[0] != "0" for row in loot):
+                    check("condition_source_item", entry, "item_template", "entry", owner, optional=False)
+                if not loot:
+                    problems.append({"kind": "condition_source_loot", "id": entry, "from": owner})
+        if kind < 0:
+            ref = str(-kind)
+            if ref not in templates:
+                problems.append({"kind": "condition_reference", "id": ref, "from": owner})
+            elif ref not in visited_refs:
+                visited_refs.add(ref)
+                pending.extend(templates[ref])
+            continue
+        for types, table, key in (((2, 3), "item_template", "entry"),
+                                  ((8, 9, 14, 28, 43, 48, 101), "quest_template", "ID"),
+                                  ((12,), "game_event", "eventEntry"),
+                                  ((29,), "creature_template", "entry"),
+                                  ((30,), "gameobject_template", "entry")):
+            if kind in types:
+                check("condition_value_reference", str(v1), table, key, owner, optional=False)
+        if kind == 31 and v1 in (3, 5):
+            table = "creature" if v1 == 3 else "gameobject"
+            check("condition_object_entry", str(v2), table + "_template", "entry", owner)
+            if v3 > (1 if v1 == 3 else 0):
+                check("condition_object_guid", str(v3), table, "guid", owner, optional=False)
+                if v2 and {"id", "guid"} <= cols(table):
+                    spawn = query(container, user, password, schema, f"SELECT id FROM {table} WHERE guid={v3}")
+                    if spawn and spawn[0][0] != str(v2):
+                        problems.append({"kind": "condition_object_entry_guid", "id": str(v3), "from": owner})
+    return problems
+
+
 def check_relations(container, user, password, schema, zone, map_id) -> list[dict[str, str]]:
     """Return dangling relations for the zone's quests and spawns."""
     problems: list[dict[str, str]] = []
@@ -264,6 +584,12 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
                                       f"SELECT ID, {column} FROM {table} WHERE ID IN ({joined}) AND {column}<>0"):
                 if str(abs(int(value))) not in all_quests:
                     problems.append({"kind": "quest_link", "quest": quest, "id": value, "from": column})
+    for row in rows:
+        for value in row[1:1 + len(objective_cols)]:
+            if int(value) > 0:
+                zone_creatures.add(int(value))
+            elif int(value) < 0:
+                zone_gos.add(-int(value))
     for table, column, label in (
         ("creature_queststarter", "id", "quest_starter_creature"),
         ("creature_questender", "id", "quest_ender_creature"),
@@ -283,10 +609,35 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
             spawn_entries = zone_creatures if "creature" in table else zone_gos
             if entry_id not in spawn_entries and quest not in zone_quests:
                 continue
+            if entry_id is not None:
+                spawn_entries.add(entry_id)
             if entry not in source:
                 problems.append({"kind": label, "quest": quest, "id": entry})
             if quest not in all_quests:
                 problems.append({"kind": label + "_quest", "quest": quest, "id": entry})
+
+    # Difficulty/credit and linked-trap templates can have no spawn in this zone.
+    for table, entries, references in (
+        ("creature_template", zone_creatures,
+         ["difficulty_entry_1", "difficulty_entry_2", "difficulty_entry_3", "KillCredit1", "KillCredit2"]),
+        ("gameobject_template", zone_gos, ["Data3", "Data7", "Data2", "Data12"]),
+    ):
+        available = columns(container, user, password, schema, table)
+        references = [column for column in references if column in available]
+        handled = set()
+        while entries - handled and references:
+            batch = entries - handled
+            handled.update(batch)
+            selected = references if table == "creature_template" else ["type"] + references
+            for row in query(container, user, password, schema,
+                              f"SELECT {','.join(selected)} FROM {table} WHERE entry IN "
+                              f"({','.join(map(str, sorted(batch)))})"):
+                if table == "gameobject_template":
+                    trap_column = {1: "Data3", 3: "Data7", 8: "Data2", 10: "Data12"}.get(int(row[0]))
+                    values = [row[1 + references.index(trap_column)]] if trap_column in references else []
+                else:
+                    values = row
+                entries.update(int(value) for value in values if int(value) > 0)
 
     zone_creature_guids = zone_guids(container, user, password, schema, "creature", zone, map_id)
     zone_go_guids = zone_guids(container, user, password, schema, "gameobject", zone, map_id)
@@ -307,16 +658,24 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
                 problems.append({"kind": "gameobject_template_missing", "id": str(entry)})
 
     direct_refs: set[str] = set()
-    for table, entries, label in (
-        ("creature_loot_template", creature_loot_ids(container, user, password, schema, zone, map_id),
-         "creature_loot"),
-        ("pickpocketing_loot_template",
-         creature_loot_ids(container, user, password, schema, zone, map_id, "pickpocketloot"), "pickpocket_loot"),
-        ("skinning_loot_template",
-         creature_loot_ids(container, user, password, schema, zone, map_id, "skinloot"), "skinning_loot"),
-        ("gameobject_loot_template", gameobject_loot_ids(container, user, password, schema, zone, map_id),
-         "gameobject_loot"),
+    loot_entries = {}
+    loot_specs = []
+    for table, template, owners, column, label, source_type in (
+        ("creature_loot_template", "creature_template", zone_creatures, "lootid", "creature_loot", "1"),
+        ("pickpocketing_loot_template", "creature_template", zone_creatures,
+         "pickpocketloot", "pickpocket_loot", "8"),
+        ("skinning_loot_template", "creature_template", zone_creatures, "skinloot", "skinning_loot", "11"),
+        ("gameobject_loot_template", "gameobject_template", zone_gos, "Data1", "gameobject_loot", "4"),
     ):
+        entries = set()
+        if owners and column in columns(container, user, password, schema, template):
+            where = " AND type IN (3,25)" if template == "gameobject_template" else ""
+            entries = {int(r[0]) for r in query(container, user, password, schema,
+                        f"SELECT DISTINCT {column} FROM {template} WHERE entry IN "
+                        f"({','.join(map(str, sorted(owners)))}) AND {column}<>0{where}")}
+        loot_entries[source_type] = {str(e) for e in entries}
+        loot_specs.append((table, entries, label))
+    for table, entries, label in loot_specs:
         if not entries:
             continue
         if not table_exists(container, user, password, schema, table):
@@ -331,12 +690,12 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
                 problems.append({"kind": label + "_template_missing", "id": str(entry)})
         if has_items:  # the loot validator drops rows whose item is unknown
             for item, in query(container, user, password, schema,
-                               f"SELECT DISTINCT Item FROM {table} WHERE Entry IN ({joined}) AND Reference=0 "
-                               f"AND Item>0"):
+                               f"SELECT DISTINCT Item FROM {table} WHERE Entry IN ({joined}) AND Reference=0"):
                 if item not in item_entries:
                     problems.append({"kind": "loot_item", "id": item, "from": label})
         refs = {r[0] for r in query(container, user, password, schema,
-                                    f"SELECT DISTINCT Reference FROM {table} WHERE Entry IN ({joined}) AND Reference<>0") if r}
+                                    f"SELECT DISTINCT ABS(Reference) FROM {table} WHERE Entry IN ({joined}) "
+                                    f"AND Reference<>0") if r}
         if refs and not table_exists(container, user, password, schema, "reference_loot_template"):
             problems.append({"kind": label + "_reference_table_missing", "id": "reference_loot_template"})
             continue
@@ -354,7 +713,7 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
         known_refs = {r[0] for r in query(container, user, password, schema,
                                           "SELECT Entry FROM reference_loot_template") if r}
         for entry, ref in query(container, user, password, schema,
-                                "SELECT Entry, Reference FROM reference_loot_template WHERE Reference<>0"):
+                                "SELECT Entry, ABS(Reference) FROM reference_loot_template WHERE Reference<>0"):
             graph.setdefault(entry, set()).add(ref)
         stack = list(direct_refs)
         visited: set[str] = set()
@@ -366,7 +725,7 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
             if has_items:
                 for item, in query(container, user, password, schema,
                                    f"SELECT DISTINCT Item FROM reference_loot_template WHERE Entry={current} "
-                                   f"AND Reference=0 AND Item>0"):
+                                   f"AND Reference=0"):
                     if item not in item_entries:
                         problems.append({"kind": "loot_item", "id": item, "from": current})
             for nested in graph.get(current, set()):
@@ -374,6 +733,8 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
                     problems.append({"kind": "reference_loot_nested", "id": nested, "from": current})
                 else:
                     stack.append(nested)
+
+    loot_entries["10"] = visited if direct_refs else set()
 
     if table_exists(container, user, password, schema, "smart_scripts") and (creature_keys or go_keys):
         parts = []
@@ -403,6 +764,8 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
                 problems.append({"kind": "smartai_link", "guid": guid, "source_type": source_type,
                                  "event": event_id, "link": link})
 
+    problems.extend(check_loader_relations(container, user, password, schema, zone_creatures, zone_gos,
+                                            zone_creature_guids, zone_go_guids, zone_quests, loot_entries))
     return problems
 
 

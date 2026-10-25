@@ -19,9 +19,8 @@ import json
 import re
 import subprocess
 import sys
-from pathlib import Path
 
-from starter_content_inventory import check_relations
+from starter_content_inventory import check_relations, registered_script_names
 
 
 def run(container, user, password, sql):
@@ -79,8 +78,8 @@ def quote(name):
 
 def import_table(container, user, password, target, source, table, where_col, ids, dry_run):
     common = common_columns(container, user, password, target, source, table)
-    if not common:
-        return 0, f"-- no common columns for {table}"
+    if not common or where_col not in common:
+        return 0, f"-- no compatible key {where_col} for {table}"
     id_list = ",".join(str(i) for i in ids)
     cols = ",".join(quote(c) for c in common)
     sql = (
@@ -92,7 +91,6 @@ def import_table(container, user, password, target, source, table, where_col, id
     return insert_count(container, user, password, sql), sql
 
 
-REPO = Path(__file__).resolve().parents[2]
 GUID_OFFSET = 10_000_000
 # Movement path ids (waypoint_data.id) are source id + PATH_OFFSET so replay is deterministic and pending SQL can
 # carry fixed ids. TDB path ids top out at 5.3M and native AC data at 53M, so the shifted range is free.
@@ -101,6 +99,34 @@ PATH_OFFSET = 100_000_000
 
 def fetch(container, user, password, sql):
     return [r[0] for r in run(container, user, password, sql) if r]
+
+
+def import_missing_rows(container, user, password, target, source, table, key, ids, dry_run, next_column=None):
+    """Fill missing IDs and follow native links in preference to source links."""
+    if not all(table_exists(container, user, password, database, table) for database in (source, target)):
+        return 0
+    table_columns = {database: {name for name, _ in columns(container, user, password, database, table)}
+                     for database in (source, target)}
+    if any(key not in names for names in table_columns.values()):
+        return 0
+    present = set(fetch(container, user, password, f"SELECT {key} FROM {target}.{table}"))
+    pending = set(ids)
+    handled = set()
+    count = 0
+    while pending - handled:
+        batch = pending - handled
+        handled.update(batch)
+        missing = sorted(batch - present)
+        if missing:
+            inserted, _ = import_table(container, user, password, target, source, table, key, missing, dry_run)
+            count += inserted
+        if next_column:
+            for database, entries in ((target, sorted(batch & present)), (source, missing)):
+                if entries and next_column in table_columns[database]:
+                    pending.update(fetch(container, user, password,
+                                         f"SELECT {next_column} FROM {database}.{table} "
+                                         f"WHERE {key} IN ({','.join(entries)}) AND {next_column}<>0"))
+    return count
 
 
 def import_closure(container, user, password, target, source, zone, map_id, quests, dry_run):
@@ -155,7 +181,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             f"AND (c.zoneId={zone} OR c.areaId={zone}) WHERE lt.Item IN ({items})"))
         creature_entries.update(fetch(container, user, password,
             f"SELECT DISTINCT ct.entry FROM {source}.reference_loot_template rt "
-            f"JOIN {source}.creature_loot_template lt ON lt.Reference = rt.Entry "
+            f"JOIN {source}.creature_loot_template lt ON ABS(lt.Reference) = rt.Entry "
             f"JOIN {source}.creature_template ct ON ct.lootid = lt.Entry "
             f"JOIN {source}.creature c ON c.id = ct.entry AND c.map={map_id} "
             f"AND (c.zoneId={zone} OR c.areaId={zone}) WHERE rt.Item IN ({items})"))
@@ -166,7 +192,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             f"AND (g.zoneId={zone} OR g.areaId={zone}) WHERE lt.Item IN ({items})"))
         gameobject_entries.update(fetch(container, user, password,
             f"SELECT DISTINCT gt.entry FROM {source}.reference_loot_template rt "
-            f"JOIN {source}.gameobject_loot_template lt ON lt.Reference = rt.Entry "
+            f"JOIN {source}.gameobject_loot_template lt ON ABS(lt.Reference) = rt.Entry "
             f"JOIN {source}.gameobject_template gt ON gt.Data1 = lt.Entry AND gt.type IN (3,25) "
             f"JOIN {source}.gameobject g ON g.id = gt.entry AND g.map={map_id} "
             f"AND (g.zoneId={zone} OR g.areaId={zone}) WHERE rt.Item IN ({items})"))
@@ -210,13 +236,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
     if script_names:
         report["script_names"] = sorted(script_names)
         # A ScriptName with no C++ registration is a startup error and hides the template's SmartAI.
-        registered = "\n".join(path.read_text(errors="replace")
-                               for path in (REPO / "src/server/scripts").rglob("*.cpp"))
-        # Keep string literals while removing comments, so commented-out registrations do not count.
-        registered = re.sub(r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/',
-                            lambda m: m[0] if m[0].startswith('"') else "", registered, flags=re.S)
-        registered_names = set(re.findall(r'\bRegister\w*AI(?:WithFactory)?\s*\(\s*(\w+)', registered))
-        registered_names.update(re.findall(r'\b(?:Creature|GameObject)Script\s*\(\s*"([^"\\]+)"', registered))
+        registered_names = registered_script_names()
         unregistered = sorted(script_names - registered_names)
         if unregistered:
             report["stripped_script_names"] = unregistered
@@ -233,6 +253,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
     model_columns = [c for c in ("modelid1", "modelid2", "modelid3", "modelid4")
                      if c in {name for name, _ in columns(container, user, password,
                                                           source, "creature_template")}]
+    proposed_displays = set()
     if model_columns and creature_entries:
         modelled = set(fetch(container, user, password,
                              f"SELECT DISTINCT CreatureID FROM {target}.creature_template_model "
@@ -245,6 +266,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                 continue
             for idx, model in enumerate(row[1:-1]):
                 if model and model != "0":
+                    proposed_displays.add(model)
                     values.append(f"({row[0]},{idx},{model},1,1,{row[-1] or 0})")
         if values:
             if not dry_run:
@@ -253,6 +275,20 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                     f"(CreatureID,Idx,CreatureDisplayID,DisplayScale,Probability,VerifiedBuild) "
                     f"VALUES {','.join(values)}")
             report["creature_template_model"] = len(values)
+
+    # Creature creation needs model info; alternate genders can reference further model-info rows.
+    if creature_entries and table_exists(container, user, password, target, "creature_template_model"):
+        displays = proposed_displays | set(fetch(container, user, password,
+                             f"SELECT DISTINCT CreatureDisplayID FROM {target}.creature_template_model "
+                             f"WHERE CreatureID IN ({creature_ids})"))
+        report["creature_model_info"] = import_missing_rows(
+            container, user, password, target, source, "creature_model_info", "DisplayID", displays, dry_run,
+            "DisplayID_Other_Gender")
+    if (creature_entries and table_exists(container, user, password, source, "creature_equip_template")
+            and table_exists(container, user, password, target, "creature_equip_template")):
+        report["creature_equip_template"], _ = import_table(
+            container, user, password, target, source, "creature_equip_template", "CreatureID",
+            sorted(creature_entries), dry_run)
 
     new_spawn_guids: dict[str, set[str]] = {"creature": set(), "gameobject": set()}
 
@@ -589,15 +625,15 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             report[table], _ = import_table(container, user, password, target, source, table, "Entry", entries, dry_run)
             loot_blocks.append((table, entries))
             refs.update(fetch(container, user, password,
-                              f"SELECT DISTINCT Reference FROM {source}.{table} "
+                              f"SELECT DISTINCT ABS(Reference) FROM {source}.{table} "
                               f"WHERE Entry IN ({','.join(entries)}) AND Reference<>0"))
     if loot_ids:
         refs.update(fetch(container, user, password,
-                          f"SELECT DISTINCT Reference FROM {source}.creature_loot_template "
+                          f"SELECT DISTINCT ABS(Reference) FROM {source}.creature_loot_template "
                           f"WHERE Entry IN ({','.join(loot_ids)}) AND Reference<>0"))
     if gameobject_loot:
         refs.update(fetch(container, user, password,
-                          f"SELECT DISTINCT Reference FROM {source}.gameobject_loot_template "
+                          f"SELECT DISTINCT ABS(Reference) FROM {source}.gameobject_loot_template "
                           f"WHERE Entry IN ({','.join(gameobject_loot)}) AND Reference<>0"))
     imported_refs: set[str] = set()
     inserted_refs: set[str] = set()
@@ -615,7 +651,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                          "Entry", new, dry_run)
         inserted_refs.update(new)
         refs.update(fetch(container, user, password,
-                          f"SELECT DISTINCT Reference FROM {source}.reference_loot_template "
+                          f"SELECT DISTINCT ABS(Reference) FROM {source}.reference_loot_template "
                           f"WHERE Entry IN ({','.join(new)}) AND Reference<>0"))
     if inserted_refs:
         report["reference_loot_template"] = len(inserted_refs)
@@ -961,6 +997,18 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                   f"WHERE SourceTypeOrReferenceId IN ({negative_ids}) AND ConditionTypeOrReference<0"))
     if imported_condition_refs:
         report["condition_reference_templates"] = imported_condition_refs
+
+    for table, key, owner_table, selected, where, next_column in (
+        ("broadcast_text", "ID", "creature_text", "BroadcastTextId",
+         f"CreatureID IN ({creature_ids}) AND BroadcastTextId<>0", None),
+        ("page_text", "ID", "gameobject_template", "Data7",
+         f"entry IN ({gameobject_ids}) AND type=10 AND Data7<>0", "NextPageID"),
+    ):
+        if selected not in {name for name, _ in columns(container, user, password, target, owner_table)}:
+            continue
+        pending = fetch(container, user, password, f"SELECT {selected} FROM {target}.{owner_table} WHERE {where}")
+        report[table] = import_missing_rows(container, user, password, target, source, table, key,
+                                            pending, dry_run, next_column)
 
     if not dry_run:
         run(container, user, password, f"DROP TABLE IF EXISTS {target}.{map_table}")
