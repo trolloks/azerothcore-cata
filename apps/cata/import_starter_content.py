@@ -91,6 +91,9 @@ def import_table(container, user, password, target, source, table, where_col, id
     return insert_count(container, user, password, sql), sql
 
 
+# SmartAI actions AC's SmartAIMgr rejects as unsupported on this core (16, 119, 120, 127..130, 133); rows using them
+# are dropped at import so the landing carries no script the loader would only log and skip.
+UNSUPPORTED_SMART_ACTIONS = (16, 119, 120, 127, 128, 129, 130, 133)
 GUID_OFFSET = 10_000_000
 # Movement path ids (waypoint_data.id) are source id + PATH_OFFSET so replay is deterministic and pending SQL can
 # carry fixed ids. TDB path ids top out at 5.3M and native AC data at 53M, so the shifted range is free.
@@ -743,8 +746,12 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             elif column.startswith("event_param") and column[len("event_param"):].isdigit():
                 # TC keeps a copy of the parent's event params on a LINK event (61); AC rejects the row unless 0
                 selected.append(f"IF(s.event_type=61, 0, s.{quote(column)})")
+            elif column in ("target_param2", "target_param3", "target_param4"):
+                # NONE/SELF/VICTIM take no params in AC; TC data may keep e.g. a max distance there
+                selected.append(f"IF(s.target_type IN (0,1,2), 0, s.{quote(column)})")
             elif column == "target_param1":
-                selected.append("CASE WHEN s.target_type=10 THEN IFNULL(mc.dst_guid, s.target_param1) "
+                selected.append("CASE WHEN s.target_type IN (0,1,2) THEN 0 "
+                                "WHEN s.target_type=10 THEN IFNULL(mc.dst_guid, s.target_param1) "
                                 "WHEN s.target_type=14 THEN IFNULL(mg.dst_guid, s.target_param1) "
                                 "ELSE s.target_param1 END")
             else:
@@ -754,7 +761,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             f"SELECT {','.join(selected)} FROM {source}.smart_scripts s "
             f"LEFT JOIN {target}.{map_table} mc ON mc.kind=0 AND mc.src_guid=s.target_param1 "
             f"LEFT JOIN {target}.{map_table} mg ON mg.kind=1 AND mg.src_guid=s.target_param1 "
-            f"WHERE {where} AND NOT (s.target_type=10 AND s.target_param1<>0 AND mc.dst_guid IS NULL) "
+            f"WHERE {where} AND s.action_type NOT IN {UNSUPPORTED_SMART_ACTIONS} "
+            f"AND NOT (s.target_type=10 AND s.target_param1<>0 AND mc.dst_guid IS NULL) "
             f"AND NOT (s.target_type=14 AND s.target_param1<>0 AND mg.dst_guid IS NULL)")
 
     imported_scripts = 0
@@ -1035,9 +1043,14 @@ def main():
     parser.add_argument("--target", default="acore_world")
     parser.add_argument("--zone", type=int, default=12)
     parser.add_argument("--map", type=int, default=0)
+    parser.add_argument("--skip-quests", default="",
+                        help="comma-separated quest ids to leave out, e.g. quests that need items the client data "
+                             "lacks or an objective template TDB has no row for (reported as skipped_quests)")
+    parser.add_argument("--baseline", help="schema before the import; dangling relations it already had (native "
+                                           "gaps, e.g. a quest objective TDB has no template for) do not fail the gate")
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
-    for name in (args.source, args.target):  # spliced into SQL unquoted
+    for name in (args.source, args.target, args.baseline or "x"):  # spliced into SQL unquoted
         if not re.fullmatch(r"\w+", name):
             parser.error(f"invalid schema name: {name!r}")
     c, u, p, src, dst = args.container, args.user, args.password, args.source, args.target
@@ -1045,8 +1058,13 @@ def main():
     existing = {r[0] for r in run(c, u, p, f"SELECT ID FROM {dst}.quest_template") if r}
     candidates = [r[0] for r in run(c, u, p,
                   f"SELECT ID FROM {src}.quest_template WHERE QuestSortID={args.zone} ORDER BY ID") if r]
-    missing = [q for q in candidates if q not in existing]
+    skipped = set(args.skip_quests.split(",")) - {""}
+    if not all(q.isdigit() for q in skipped):
+        parser.error("--skip-quests takes comma-separated quest ids")
+    missing = [q for q in candidates if q not in existing and q not in skipped]
     report = {"zone": args.zone, "candidates": len(candidates), "missing": len(missing), "applied": {}, "sql": {}}
+    if skipped:
+        report["skipped_quests"] = sorted(skipped & set(candidates), key=int)
 
     tables = [("quest_template", "ID", missing)]
     for table, key in (("quest_offer_reward", "ID"), ("quest_request_items", "ID"),
@@ -1145,6 +1163,12 @@ def main():
             report["closure"]["missing_items"] = sorted(set(report["closure"]["missing_items"]) |
                                                        {x["id"] for x in report["unresolved_items"]})
         report["dangling"] = [x for x in problems if x["kind"] not in item_kinds]
+        if args.baseline:
+            native = {json.dumps(x, sort_keys=True)
+                      for x in check_relations(c, u, p, args.baseline, args.zone, args.map)}
+            report["preexisting_dangling"] = [x for x in report["dangling"]
+                                              if json.dumps(x, sort_keys=True) in native]
+            report["dangling"] = [x for x in report["dangling"] if x not in report["preexisting_dangling"]]
         status = 1 if report["dangling"] else 0
     else:
         report["mode"] = "dry-run"
