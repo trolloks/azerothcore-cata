@@ -956,11 +956,17 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                 f"(SELECT g.guid FROM {target}.gameobject g WHERE g.id=t.entry))))")
 
     if not dry_run:  # fill-only: a native giver the source flags as QUESTGIVER (2) needs the bit for its quests
+        givers = (f"(SELECT id FROM {target}.creature_queststarter WHERE quest IN ({quest_ids}) "
+                  f"UNION SELECT id FROM {target}.creature_questender WHERE quest IN ({quest_ids}))")
         run(container, user, password,
             f"UPDATE {target}.creature_template t JOIN {source}.creature_template s ON s.entry=t.entry "
-            f"SET t.npcflag=t.npcflag|2 WHERE (s.npcflag&2)<>0 AND (t.npcflag&2)=0 AND t.entry IN "
-            f"(SELECT id FROM {target}.creature_queststarter WHERE quest IN ({quest_ids}) "
-            f"UNION SELECT id FROM {target}.creature_questender WHERE quest IN ({quest_ids}))")
+            f"SET t.npcflag=t.npcflag|2 WHERE (s.npcflag&2)<>0 AND (t.npcflag&2)=0 AND t.entry IN {givers}")
+        # difficulty rows are separate templates; mirror the bit or the loader reports a npcflag mismatch
+        run(container, user, password,
+            f"UPDATE {target}.creature_template d "
+            f"JOIN {target}.creature_template t ON d.entry IN (t.difficulty_entry_1,t.difficulty_entry_2,"
+            f"t.difficulty_entry_3) "
+            f"SET d.npcflag=d.npcflag|2 WHERE (t.npcflag&2)<>0 AND (d.npcflag&2)=0 AND t.entry IN {givers}")
 
     def timed_references(where, owners=None):
         found: set[str] = set()
