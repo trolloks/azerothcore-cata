@@ -2,6 +2,7 @@
 
 import re
 import sqlite3
+import struct
 import unittest
 from unittest.mock import patch
 
@@ -262,30 +263,84 @@ class ImportDependenciesTest(unittest.TestCase):
 
 
 class TdbQuestGapsTests(unittest.TestCase):
+    def database(self):
+        db = sqlite3.connect(":memory:")
+        for schema in ("tdb_world", "target"):
+            db.execute(f"ATTACH DATABASE ':memory:' AS {schema}")
+            for table, columns in (
+                ("creature", "guid,id,map,zoneId,areaId"), ("gameobject", "guid,id,map,zoneId,areaId"),
+                ("creature_template", "entry,KillCredit1,KillCredit2"),
+                ("smart_scripts", "entryorguid,source_type,action_type,action_param1"),
+                ("creature_summon_groups", "entry"), ("spelleffect_dbc", "Effect,EffectMiscValue"),
+                ("creature_queststarter", "id,quest"), ("creature_questender", "id,quest"),
+            ):
+                db.execute(f"CREATE TABLE {schema}.{table} ({','.join(c + ' INTEGER' for c in columns.split(','))})")
+        columns = [f"RequiredItemId{i}" for i in range(1, 7)] + land_zone.OBJECTIVES
+        db.execute("CREATE TABLE tdb_world.quest_template (ID INTEGER,"
+                   + ",".join(c + " INTEGER DEFAULT 0" for c in columns) + ")")
+        return db
+
     def test_silverpine_source_gaps_only_skip_selected_quests(self):
         starters = [27065, 27097, 27098, 27099, 27180, 27193, 27194, 27290]
         enders = [27056, 27096, 27097, 27098, 27099, 27180, 27181, 27193, 27195]
         items = {26995: 60742, 27082: 60793, 27180: 60862}
         givers = set(starters + enders) - {27290}  # Outside this import's todo list.
         selected = sorted(givers | set(items) | {27547, 27587, 27601})
-        with sqlite3.connect(":memory:") as db:
-            db.execute("ATTACH DATABASE ':memory:' AS tdb_world")
-            columns = ",".join(f"RequiredItemId{i} INTEGER" for i in range(1, 7))
-            db.execute(f"CREATE TABLE tdb_world.quest_template (ID INTEGER,{columns})")
-            db.executemany("INSERT INTO tdb_world.quest_template VALUES (?,?,?,?,?,?,?)",
+        with self.database() as db:
+            db.executemany("INSERT INTO tdb_world.quest_template "
+                           "(ID,RequiredItemId1,RequiredItemId2,RequiredItemId3,"
+                           "RequiredItemId4,RequiredItemId5,RequiredItemId6) "
+                           "VALUES (?,?,?,?,?,?,?)",
                            [(q, 0, 0, 0, 0, 0, items.get(q, 0)) for q in selected + [27290]])
             for table, quests in (("creature_queststarter", starters), ("creature_questender", enders)):
-                db.execute(f"CREATE TABLE tdb_world.{table} (id INTEGER,quest INTEGER)")
                 db.executemany(f"INSERT INTO tdb_world.{table} VALUES (44365,?)", [(q,) for q in quests])
-            with patch.object(land_zone, "run", side_effect=lambda c, u, p, sql:
-                              [[str(value) for value in row] for row in db.execute(sql)]):
-                reasons = land_zone.tdb_quest_gaps("", "", "", list(map(str, selected)))
-                self.assertEqual(land_zone.tdb_quest_gaps("", "", "", []), {})
+            with patch.object(land_zone, "spell_effects", return_value=({}, {})), \
+                    patch.object(land_zone, "run", side_effect=lambda c, u, p, sql:
+                                 [[str(value) for value in row] for row in db.execute(sql)]):
+                reasons = land_zone.tdb_quest_gaps("", "", "", list(map(str, selected)), "target", 1, 0, "dbc")
+                self.assertEqual(land_zone.tdb_quest_gaps("", "", "", [], "target", 1, 0, "dbc"), {})
         expected = {str(q): [f"required item {item} has no source in TDB"] for q, item in items.items()}
         for quest in givers:
             expected.setdefault(str(quest), []).append("quest giver 44365 has no spawn or summon in TDB")
         self.assertEqual(reasons, expected)
         self.assertEqual(len(reasons["27180"]), 2)  # Both gaps, with no duplicate starter/ender reason.
+
+    def test_spell_credit_effects_do_not_change_default_summon_closure(self):
+        rows = []
+        for effect, entry in ((28, 100), (90, 101), (134, 102), (56, 103)):
+            row = [0] * 26
+            row[1], row[12], row[24] = effect, entry, entry + 1000
+            rows.append(struct.pack("<26I", *row))
+        data = b"WDBC" + struct.pack("<4I", len(rows), 26, 104, 0) + b"".join(rows)
+        with patch.object(importer.Path, "read_bytes", return_value=data):
+            self.assertEqual(importer.spell_effects("dbc")[0], {1100: {"100"}})
+            self.assertEqual(importer.spell_effects("dbc", (28, 56, 90, 134))[0],
+                             {1100: {"100"}, 1101: {"101"}, 1102: {"102"}, 1103: {"103"}})
+
+    def test_objective_gaps_account_for_spawns_summons_and_local_credit(self):
+        selected = [str(q) for q in range(101, 117)]
+        with self.database() as db:
+            db.executemany("INSERT INTO tdb_world.quest_template (ID,RequiredNpcOrGo1,RequiredNpcOrGo2) VALUES (?,?,?)",
+                           [(int(q), int(q), int(q)) for q in selected[:14]]
+                           + [(115, -500, 0), (116, 0, 0), (999, 999, 0)])
+            db.executemany("INSERT INTO tdb_world.creature VALUES (?,?,?,?,?)",
+                           [(1, 102, 0, 1, 1), (2, 206, 0, 1, 1), (3, 208, 0, 2, 2),
+                            (4, 209, 0, 1, 1), (5, 213, 0, 1, 1)])
+            db.execute("INSERT INTO target.creature VALUES (6,103,0,1,1)")
+            db.executemany("INSERT INTO tdb_world.smart_scripts VALUES (?,?,?,?)",
+                           [(1, 0, 12, 104), (206, 0, 33, 106), (-999, 0, 33, 107),
+                            (208, 0, 33, 108), (-4, 0, 33, 109), (500, 9, 33, 112)])
+            db.execute("INSERT INTO tdb_world.creature_summon_groups VALUES (110)")
+            db.execute("INSERT INTO tdb_world.spelleffect_dbc VALUES (28,111)")
+            db.execute("INSERT INTO tdb_world.creature_template VALUES (213,113,0)")
+            db.execute("INSERT INTO tdb_world.gameobject VALUES (7,214,0,1,1)")
+            db.execute("INSERT INTO tdb_world.smart_scripts VALUES (-7,1,33,114)")
+            with patch.object(land_zone, "spell_effects", return_value=({10: {"105"}}, {})), \
+                    patch.object(land_zone, "run", side_effect=lambda c, u, p, sql:
+                                 [[str(value) for value in row] for row in db.execute(sql)]):
+                reasons = land_zone.tdb_quest_gaps("", "", "", selected, "target", 1, 0, "dbc")
+        self.assertEqual(reasons, {q: [f"objective creature {q} has no spawn or summon in TDB"]
+                                   for q in ("101", "107", "108")})
 
 
 if __name__ == "__main__":
