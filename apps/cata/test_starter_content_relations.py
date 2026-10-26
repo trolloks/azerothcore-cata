@@ -1,10 +1,12 @@
 """Offline loader-reference checks: python3 apps/cata/test_starter_content_relations.py."""
 
 import re
+import sqlite3
 import unittest
 from unittest.mock import patch
 
 import import_starter_content as importer
+import land_zone
 import starter_content_inventory as inventory
 
 
@@ -257,6 +259,33 @@ class ImportDependenciesTest(unittest.TestCase):
             count, sql = importer.import_table("", "", "", "target", "source", "page_text", "entry", ["1"], False)
             self.assertEqual(count, 0)
             self.assertTrue(sql.startswith("-- no compatible key"))
+
+
+class TdbQuestGapsTests(unittest.TestCase):
+    def test_silverpine_source_gaps_only_skip_selected_quests(self):
+        starters = [27065, 27097, 27098, 27099, 27180, 27193, 27194, 27290]
+        enders = [27056, 27096, 27097, 27098, 27099, 27180, 27181, 27193, 27195]
+        items = {26995: 60742, 27082: 60793, 27180: 60862}
+        givers = set(starters + enders) - {27290}  # Outside this import's todo list.
+        selected = sorted(givers | set(items) | {27547, 27587, 27601})
+        with sqlite3.connect(":memory:") as db:
+            db.execute("ATTACH DATABASE ':memory:' AS tdb_world")
+            columns = ",".join(f"RequiredItemId{i} INTEGER" for i in range(1, 7))
+            db.execute(f"CREATE TABLE tdb_world.quest_template (ID INTEGER,{columns})")
+            db.executemany("INSERT INTO tdb_world.quest_template VALUES (?,?,?,?,?,?,?)",
+                           [(q, 0, 0, 0, 0, 0, items.get(q, 0)) for q in selected + [27290]])
+            for table, quests in (("creature_queststarter", starters), ("creature_questender", enders)):
+                db.execute(f"CREATE TABLE tdb_world.{table} (id INTEGER,quest INTEGER)")
+                db.executemany(f"INSERT INTO tdb_world.{table} VALUES (44365,?)", [(q,) for q in quests])
+            with patch.object(land_zone, "run", side_effect=lambda c, u, p, sql:
+                              [[str(value) for value in row] for row in db.execute(sql)]):
+                reasons = land_zone.tdb_quest_gaps("", "", "", list(map(str, selected)))
+                self.assertEqual(land_zone.tdb_quest_gaps("", "", "", []), {})
+        expected = {str(q): [f"required item {item} has no source in TDB"] for q, item in items.items()}
+        for quest in givers:
+            expected.setdefault(str(quest), []).append("quest giver 44365 has no spawn or summon in TDB")
+        self.assertEqual(reasons, expected)
+        self.assertEqual(len(reasons["27180"]), 2)  # Both gaps, with no duplicate starter/ender reason.
 
 
 if __name__ == "__main__":
