@@ -262,6 +262,56 @@ class ImportDependenciesTest(unittest.TestCase):
             self.assertTrue(sql.startswith("-- no compatible key"))
 
 
+class SpawnImportTests(unittest.TestCase):
+    def test_matching_uses_half_metre_3d_distance_and_preserves_other_spawns(self):
+        with sqlite3.connect(":memory:") as db:
+            for table in ("creature", "gameobject"):
+                db.execute(f"CREATE TABLE {table} (guid,id,map,phaseMask,position_x,position_y,position_z)")
+                db.execute(f"INSERT INTO {table} VALUES (82140,16330,530,1,7978.05,-6554.13,59.2672)")
+                for label, values, matches in (
+                    ("native Ghostlands spawn", (82145, 16330, 530, 1, 7978.06, -6554.13, 59.2672), True),
+                    ("boundary", (2, 16330, 530, 1, 7978.55, -6554.13, 59.2672), True),
+                    ("separate spawn", (2, 16330, 530, 1, 7978.56, -6554.13, 59.2672), False),
+                    ("vertical distance", (2, 16330, 530, 1, 7978.05, -6554.13, 60), False),
+                    ("diagonal distance", (2, 16330, 530, 1, 7978.45, -6553.73, 59.2672), False),
+                    ("other entry", (2, 1, 530, 1, 7978.05, -6554.13, 59.2672), False),
+                    ("other map", (2, 16330, 0, 1, 7978.05, -6554.13, 59.2672), False),
+                    ("other phase", (2, 16330, 530, 2, 7978.05, -6554.13, 59.2672), False),
+                ):
+                    with self.subTest(table=table, case=label):
+                        db.execute(f"DELETE FROM {table} WHERE guid<>82140")
+                        db.execute(f"INSERT INTO {table} VALUES (?,?,?,?,?,?,?)", values)
+                        match = importer.spawn_match()
+                        self.assertEqual(db.execute(
+                            f"SELECT t.guid FROM {table} s JOIN {table} t ON {match} "
+                            "WHERE s.guid=82140 AND t.guid<>82140").fetchall(),
+                            [(values[0],)] if matches else [])
+                        self.assertEqual(db.execute(
+                            f"SELECT s.guid FROM {table} s WHERE s.guid=82140 AND NOT EXISTS "
+                            f"(SELECT 1 FROM {table} t WHERE t.guid<>82140 AND {match})").fetchall(),
+                            [] if matches else [(82140,)])
+
+    def test_scope_includes_out_of_zone_givers_on_same_map(self):
+        with sqlite3.connect(":memory:") as db:
+            db.execute("ATTACH DATABASE ':memory:' AS tdb_world")
+            for table in ("creature", "gameobject"):
+                db.execute(f"CREATE TABLE tdb_world.{table} (guid,id,map,zoneId,areaId)")
+                for relation in ("queststarter", "questender"):
+                    db.execute(f"CREATE TABLE tdb_world.{table}_{relation} (id,quest)")
+                db.executemany(f"INSERT INTO tdb_world.{table} VALUES (?,?,?,?,?)", [
+                    (200628, 207325, 530, 3487, 3487), (2, 20, 530, 3433, 3433),
+                    (3, 30, 530, 3487, 3487), (4, 207325, 0, 3487, 3487),
+                    (5, 50, 530, 3487, 3487), (6, 60, 530, 3487, 3487)])
+                db.execute(f"INSERT INTO tdb_world.{table}_queststarter VALUES (207325,28560)")
+                db.execute(f"INSERT INTO tdb_world.{table}_questender VALUES (50,28560)")
+                db.execute(f"INSERT INTO tdb_world.{table}_queststarter VALUES (60,999)")
+                for alias in ("s", "o", "c"):
+                    scope = importer.spawn_scope("tdb_world", table, alias, 3433, 530, "28560")
+                    self.assertEqual(db.execute(
+                        f"SELECT {alias}.guid FROM tdb_world.{table} {alias} WHERE {scope}").fetchall(),
+                        [(200628,), (2,), (5,)])
+
+
 class TdbQuestGapsTests(unittest.TestCase):
     def database(self):
         db = sqlite3.connect(":memory:")
