@@ -956,11 +956,17 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                 f"(SELECT g.guid FROM {target}.gameobject g WHERE g.id=t.entry))))")
 
     if not dry_run:  # fill-only: a native giver the source flags as QUESTGIVER (2) needs the bit for its quests
+        givers = (f"(SELECT id FROM {target}.creature_queststarter WHERE quest IN ({quest_ids}) "
+                  f"UNION SELECT id FROM {target}.creature_questender WHERE quest IN ({quest_ids}))")
         run(container, user, password,
             f"UPDATE {target}.creature_template t JOIN {source}.creature_template s ON s.entry=t.entry "
-            f"SET t.npcflag=t.npcflag|2 WHERE (s.npcflag&2)<>0 AND (t.npcflag&2)=0 AND t.entry IN "
-            f"(SELECT id FROM {target}.creature_queststarter WHERE quest IN ({quest_ids}) "
-            f"UNION SELECT id FROM {target}.creature_questender WHERE quest IN ({quest_ids}))")
+            f"SET t.npcflag=t.npcflag|2 WHERE (s.npcflag&2)<>0 AND (t.npcflag&2)=0 AND t.entry IN {givers}")
+        # difficulty rows are separate templates; mirror the bit or the loader reports a npcflag mismatch
+        run(container, user, password,
+            f"UPDATE {target}.creature_template d "
+            f"JOIN {target}.creature_template t ON d.entry IN (t.difficulty_entry_1,t.difficulty_entry_2,"
+            f"t.difficulty_entry_3) "
+            f"SET d.npcflag=d.npcflag|2 WHERE (t.npcflag&2)<>0 AND (d.npcflag&2)=0 AND t.entry IN {givers}")
 
     def timed_references(where, owners=None):
         found: set[str] = set()
@@ -1293,6 +1299,22 @@ def main():
             c, u, p, f"SELECT q.ID, q.RewardNextQuest FROM {dst}.quest_template q WHERE {dangling}")]
         run(c, u, p, f"UPDATE {dst}.quest_template q LEFT JOIN {dst}.quest_template n ON n.ID=q.RewardNextQuest "
                      f"SET q.RewardNextQuest=0 WHERE q.ID IN ({race_ids}) AND q.RewardNextQuest<>0 AND n.ID IS NULL")
+        # RewardNextQuest is a client hint; register it as a real alternative prerequisite when the next
+        # quest already has one and does not point back here. An open target stays open, and a breadcrumb
+        # never gets NextQuestID (the loader rejects that pairing).
+        mirror = run(c, u, p,
+                     f"SELECT a.ID, q.RewardNextQuest FROM {dst}.quest_template_addon a "
+                     f"JOIN {dst}.quest_template q ON q.ID=a.ID "
+                     f"LEFT JOIN {dst}.quest_template_addon n ON n.ID=q.RewardNextQuest "
+                     f"WHERE q.ID IN ({race_ids}) AND q.RewardNextQuest<>0 AND a.NextQuestID=0 "
+                     f"AND a.BreadcrumbForQuestId=0 AND COALESCE(n.PrevQuestID,0)<>q.ID "
+                     f"AND (n.PrevQuestID<>0 OR EXISTS (SELECT 1 FROM {dst}.quest_template_addon p "
+                     f"WHERE p.NextQuestID=q.RewardNextQuest))")
+        for quest, next_quest in mirror:
+            run(c, u, p, f"UPDATE {dst}.quest_template_addon SET NextQuestID={int(next_quest)} "
+                         f"WHERE ID={int(quest)} AND NextQuestID=0")
+        if mirror:
+            report["next_quest_rows"] = len(mirror)
         if cleared:
             report["cleared_quest_links"] = cleared
 
