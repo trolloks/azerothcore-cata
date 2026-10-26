@@ -143,6 +143,14 @@ def main():
                 skip.add(quest)
                 reasons.setdefault(quest, []).append(f"{table} {entry} missing")
 
+    # TDB quests with no turn-in can never be rewarded: the server needs an involved giver.
+    for (quest,) in run(c, u, p, f"SELECT q.ID FROM tdb_world.quest_template q "
+                                 f"WHERE q.ID IN ({','.join(todo) or '0'}) "
+                                 f"AND NOT EXISTS (SELECT 1 FROM tdb_world.creature_questender e WHERE e.quest=q.ID) "
+                                 f"AND NOT EXISTS (SELECT 1 FROM tdb_world.gameobject_questender e WHERE e.quest=q.ID)"):
+        skip.add(quest)
+        reasons.setdefault(quest, []).append("no turn-in in TDB")
+
     # Dry runs find the quest items; items the client DB2 lacks take their quests out, repeat until stable.
     item_ids, absent = set(), set()
     for _ in range(6):

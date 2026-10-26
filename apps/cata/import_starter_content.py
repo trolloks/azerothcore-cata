@@ -1299,6 +1299,16 @@ def main():
             c, u, p, f"SELECT q.ID, q.RewardNextQuest FROM {dst}.quest_template q WHERE {dangling}")]
         run(c, u, p, f"UPDATE {dst}.quest_template q LEFT JOIN {dst}.quest_template n ON n.ID=q.RewardNextQuest "
                      f"SET q.RewardNextQuest=0 WHERE q.ID IN ({race_ids}) AND q.RewardNextQuest<>0 AND n.ID IS NULL")
+        # RewardNextQuest is a client hint; register it as a real alternative prerequisite when the next
+        # quest does not already point back at this one (breadcrumbs).
+        mirrored = run(c, u, p,
+                       f"UPDATE {dst}.quest_template_addon a JOIN {dst}.quest_template q ON q.ID=a.ID "
+                       f"LEFT JOIN {dst}.quest_template_addon n ON n.ID=q.RewardNextQuest "
+                       f"SET a.NextQuestID=q.RewardNextQuest WHERE q.ID IN ({race_ids}) "
+                       f"AND q.RewardNextQuest<>0 AND a.NextQuestID=0 AND COALESCE(n.PrevQuestID,0)<>q.ID; "
+                       f"SELECT ROW_COUNT()")
+        if mirrored:
+            report["next_quest_rows"] = int(mirrored[-1][0])
         if cleared:
             report["cleared_quest_links"] = cleared
 
