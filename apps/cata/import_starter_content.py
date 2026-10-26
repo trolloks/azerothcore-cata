@@ -816,6 +816,9 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                                 "WHEN s.target_type=10 THEN IFNULL(mc.dst_guid, s.target_param1) "
                                 "WHEN s.target_type=14 THEN IFNULL(mg.dst_guid, s.target_param1) "
                                 "ELSE s.target_param1 END")
+            elif column == "action_param3":
+                # TC 4.3.4 reads TALK's third param as a nonzero true value; AC validates it as a strict boolean
+                selected.append("IF(s.action_type=1 AND s.action_param3<>0, 1, s.action_param3)")
             else:
                 selected.append(f"s.{quote(column)}")
         run(container, user, password,
@@ -828,11 +831,27 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             f"AND NOT (s.target_type=14 AND s.target_param1<>0 AND mg.dst_guid IS NULL)")
 
     imported_scripts = 0
+    imported_owners = set()
     for where, shift in script_filters:
         if not dry_run:
             insert_scripts(where, shift)
         imported_scripts += scalar(container, user, password,
                                    f"SELECT COUNT(*) FROM {source}.smart_scripts WHERE {where}")
+        for owner, source_type in run(container, user, password,
+                                      f"SELECT DISTINCT entryorguid,source_type FROM {source}.smart_scripts "
+                                      f"WHERE {where}"):
+            imported_owners.add((int(owner) - shift, int(source_type)))
+
+    if not dry_run and imported_owners:
+        # Dropping a row (unsupported action, missing target mapping) can leave another row's link pointing at an
+        # event id that no longer exists; keep the action and clear the dead link. Scoped to the scripts imported
+        # above so native rows keep whatever links they had.
+        owners = ",".join(f"({owner},{source_type})" for owner, source_type in sorted(imported_owners))
+        run(container, user, password,
+            f"UPDATE {target}.smart_scripts s LEFT JOIN {target}.smart_scripts l "
+            f"ON l.entryorguid=s.entryorguid AND l.source_type=s.source_type AND l.id=s.link "
+            f"SET s.link=0 WHERE s.link<>0 AND l.id IS NULL "
+            f"AND (s.entryorguid,s.source_type) IN ({owners})")
 
     def guid_script_owners(guids, owner_map, source_type):
         """Entries whose imported GUID script landed, for the AI-name fill (a GUID script needs SmartAI on the template)."""
@@ -866,6 +885,20 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                 f"UPDATE {target}.gameobject_template SET AIName='SmartGameObjectAI' "
                 f"WHERE entry IN ({','.join(sorted(scripted_gameobjects))}) "
                 f"AND (AIName='' OR AIName IS NULL)")
+        if new_creatures:  # a new template copied TDB's AIName; drop it when no imported script can run
+            run(container, user, password,
+                f"UPDATE {target}.creature_template t SET t.AIName='' "
+                f"WHERE t.entry IN ({','.join(new_creatures)}) AND t.AIName='SmartAI' "
+                f"AND NOT EXISTS (SELECT 1 FROM {target}.smart_scripts s WHERE s.source_type=0 "
+                f"AND (s.entryorguid=t.entry OR (s.entryorguid<0 AND -s.entryorguid IN "
+                f"(SELECT c.guid FROM {target}.creature c WHERE c.id=t.entry))))")
+        if new_gameobjects:
+            run(container, user, password,
+                f"UPDATE {target}.gameobject_template t SET t.AIName='' "
+                f"WHERE t.entry IN ({','.join(new_gameobjects)}) AND t.AIName='SmartGameObjectAI' "
+                f"AND NOT EXISTS (SELECT 1 FROM {target}.smart_scripts s WHERE s.source_type=1 "
+                f"AND (s.entryorguid=t.entry OR (s.entryorguid<0 AND -s.entryorguid IN "
+                f"(SELECT g.guid FROM {target}.gameobject g WHERE g.id=t.entry))))")
 
     if not dry_run:  # fill-only: a native giver the source flags as QUESTGIVER (2) needs the bit for its quests
         run(container, user, password,
