@@ -25,6 +25,21 @@ from pathlib import Path
 from starter_content_inventory import check_relations, registered_script_names, zone_quest_candidates
 
 
+def spawn_match():
+    """Same template, map and phase within 0.5 m in 3D; shared by import and GUID remapping."""
+    return ("t.id=s.id AND t.map=s.map AND t.phaseMask=s.phaseMask "
+            "AND (t.position_x-s.position_x)*(t.position_x-s.position_x) "
+            "+ (t.position_y-s.position_y)*(t.position_y-s.position_y) "
+            "+ (t.position_z-s.position_z)*(t.position_z-s.position_z)<=0.25")
+
+
+def spawn_scope(source, table, alias, zone, map_id, quest_ids):
+    """Include out-of-zone quest givers on this map, such as city notice boards."""
+    return (f"{alias}.map={map_id} AND ({alias}.zoneId={zone} OR {alias}.areaId={zone} "
+            f"OR {alias}.id IN (SELECT id FROM {source}.{table}_queststarter WHERE quest IN ({quest_ids}) "
+            f"UNION SELECT id FROM {source}.{table}_questender WHERE quest IN ({quest_ids})))")
+
+
 def spell_effects(dbc_dir, creature_effects=(28,)):
     """Return (creature entries by spell for the requested effects, trigger spells by spell) from SpellEffect.dbc."""
     if not dbc_dir:
@@ -255,11 +270,11 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                 continue
             clauses = [f"(source_type={source_type} AND entryorguid IN ({','.join(sorted(scripted))}))"]
             spawn = "creature" if source_type == "0" else "gameobject"
-            # Spawn-level scripts of this zone's candidate templates are imported with their spawns; their
+            # Spawn-level scripts of candidate templates are imported with their spawns; their
             # summons/targets need templates too, even though the spawns themselves are matched later.
             clauses.append(f"(source_type={source_type} AND entryorguid IN "
                            f"(SELECT -o.guid FROM {source}.{spawn} o WHERE o.id IN ({','.join(sorted(entries))}) "
-                           f"AND o.map={map_id} AND (o.zoneId={zone} OR o.areaId={zone})))")
+                           f"AND {spawn_scope(source, spawn, 'o', zone, map_id, quest_ids)}))")
             if seen_lists:
                 clauses.append(f"(source_type=9 AND entryorguid IN ({','.join(sorted(seen_lists))}))")
             for row in run(container, user, password,
@@ -420,12 +435,9 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         selected = ",".join(f"s.{quote(source_col)}" for _target_col, source_col in mapping)
         sql = (f"INSERT IGNORE INTO {target}.{table} (`guid`,{names}) "
                f"SELECT s.guid+{GUID_OFFSET},{selected} FROM {source}.{table} s "
-               f"WHERE s.{id_column} IN ({ids}) AND s.map={map_id} "
-               f"AND (s.zoneId={zone} OR s.areaId={zone}) "
+               f"WHERE s.{id_column} IN ({ids}) AND {spawn_scope(source, table, 's', zone, map_id, quest_ids)} "
                f"AND NOT EXISTS (SELECT 1 FROM {target}.{table} t WHERE t.guid=s.guid+{GUID_OFFSET}) "
-               f"AND NOT EXISTS (SELECT 1 FROM {target}.{table} t WHERE t.{id_column}=s.{id_column} "
-               f"AND t.map=s.map AND t.position_x=s.position_x AND t.position_y=s.position_y "
-               f"AND ABS(t.position_z-s.position_z)<1)")
+               f"AND NOT EXISTS (SELECT 1 FROM {target}.{table} t WHERE {spawn_match()})")
         if dry_run:
             return 0, sql
         before = set(fetch(container, user, password,
@@ -467,7 +479,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         sql = (f"INSERT IGNORE INTO {target}.{table} (`guid`,{names}) "
                f"SELECT a.guid+{GUID_OFFSET},{selected} FROM {source}.{table} a "
                f"JOIN {source}.{spawn_table} s ON s.guid=a.guid "
-               f"WHERE s.id IN ({ids}) AND s.map={map_id} AND (s.zoneId={zone} OR s.areaId={zone}) "
+               f"WHERE s.id IN ({ids}) AND {spawn_scope(source, spawn_table, 's', zone, map_id, quest_ids)} "
                f"AND EXISTS (SELECT 1 FROM {target}.{spawn_table} t WHERE t.guid=a.guid+{GUID_OFFSET} "
                f"AND t.id=s.id AND t.map=s.map AND t.position_x=s.position_x "
                f"AND t.position_y=s.position_y AND t.position_z=s.position_z) "
@@ -587,8 +599,9 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         for guid, path_id in run(container, user, password,
                                  f"SELECT ca.guid, ca.waypointPathId FROM {source}.creature_addon ca "
                                  f"JOIN {source}.creature c ON c.guid=ca.guid "
-                                 f"WHERE c.id IN ({creature_ids}) AND c.map={map_id} "
-                                 f"AND (c.zoneId={zone} OR c.areaId={zone}) AND ca.waypointPathId<>0 "
+                                 f"WHERE c.id IN ({creature_ids}) "
+                                 f"AND {spawn_scope(source, 'creature', 'c', zone, map_id, quest_ids)} "
+                                 f"AND ca.waypointPathId<>0 "
                                  f"AND EXISTS (SELECT 1 FROM {target}.creature_addon ta "
                                  f"JOIN {target}.creature t ON t.guid=ta.guid "
                                  f"WHERE ta.guid=ca.guid+{GUID_OFFSET} AND t.id=c.id AND t.map=c.map "
@@ -653,9 +666,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
     def match_spawns(table, entries):
         rows = run(container, user, password,
                    f"SELECT s.guid, s.id, MAX(t.guid=s.guid+{GUID_OFFSET}), MIN(t.guid) "
-                   f"FROM {source}.{table} s JOIN {target}.{table} t ON t.id=s.id AND t.map=s.map "
-                   f"AND t.position_x=s.position_x AND t.position_y=s.position_y AND ABS(t.position_z-s.position_z)<1 "
-                   f"WHERE s.id IN ({entries}) AND s.map={map_id} AND (s.zoneId={zone} OR s.areaId={zone}) "
+                   f"FROM {source}.{table} s JOIN {target}.{table} t ON {spawn_match()} "
+                   f"WHERE s.id IN ({entries}) AND {spawn_scope(source, table, 's', zone, map_id, quest_ids)} "
                    f"GROUP BY s.guid, s.id")
         imported, native = {}, {}
         for guid, entry, is_imported, native_guid in rows:
@@ -677,8 +689,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         guid_map += [(0, int(g), int(g) + GUID_OFFSET) for g in imported]
         guid_map += [(0, int(g), int(n)) for g, n in native.items()]
     source_go_guids = fetch(container, user, password,
-                            f"SELECT guid FROM {source}.gameobject WHERE id IN ({gameobject_ids}) "
-                            f"AND map={map_id} AND (zoneId={zone} OR areaId={zone})")
+                            f"SELECT s.guid FROM {source}.gameobject s WHERE s.id IN ({gameobject_ids}) "
+                            f"AND {spawn_scope(source, 'gameobject', 's', zone, map_id, quest_ids)}")
     if gameobject_entries:
         imported, native = match_spawns("gameobject", gameobject_ids)
         script_go_candidates = list(imported)
