@@ -155,7 +155,7 @@ def import_missing_rows(container, user, password, target, source, table, key, i
 
 
 def import_closure(container, user, password, target, source, zone, map_id, quests, dry_run,
-                   dbc_dir=None):
+                   dbc_dir=None, drop_items=()):
     """Import templates, spawns, loot and scripts the imported quests reference.
 
     Dependents are reconciled for every referenced entry, not only the entries
@@ -776,6 +776,13 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
     if inserted_refs:
         report["reference_loot_template"] = len(inserted_refs)
         loot_blocks.append(("reference_loot_template", sorted(inserted_refs)))
+    if drop_items and not dry_run:  # the client store has no row and the target cannot get one
+        items = ",".join(drop_items)
+        for table, entries in loot_blocks:
+            if entries:
+                run(container, user, password,
+                    f"DELETE FROM {target}.{table} WHERE Entry IN ({','.join(entries)}) "
+                    f"AND Reference=0 AND Item IN ({items})")
     if not dry_run:
         # Include unspawned template dependencies too; the zone checker only sees zone spawns.
         missing_items = set()
@@ -1237,6 +1244,8 @@ def main():
     parser.add_argument("--baseline", help="schema before the import; dangling relations it already had (native "
                                            "gaps, e.g. a quest objective TDB has no template for) do not fail the gate")
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--drop-items", default="",
+                        help="comma-separated item ids the client store lacks; imported loot rows for them are dropped")
     args = parser.parse_args()
     for name in (args.source, args.target, args.baseline or "x"):  # spliced into SQL unquoted
         if not re.fullmatch(r"\w+", name):
@@ -1254,6 +1263,9 @@ def main():
     skipped = set(args.skip_quests.split(",")) - {""}
     if not all(q.isdigit() for q in skipped):
         parser.error("--skip-quests takes comma-separated quest ids")
+    drop_items = args.drop_items.split(",") if args.drop_items else []
+    if not all(item.isdigit() for item in drop_items):
+        parser.error("--drop-items takes comma-separated item ids")
     missing = [q for q in candidates if q not in existing and q not in skipped]
     report = {"zone": args.zone, "candidates": len(candidates), "missing": len(missing), "applied": {}, "sql": {}}
     if skipped:
@@ -1355,7 +1367,7 @@ def main():
                     closure["missing_starter_creatures"].add(entry)
         report["closure"] = {k: sorted(v) for k, v in closure.items()}
         report["imported_closure"] = import_closure(c, u, p, dst, src, args.zone, args.map,
-                                                    closure_quests, not args.apply, args.dbc_dir)
+                                                    closure_quests, not args.apply, args.dbc_dir, drop_items)
         report["closure"]["missing_items"] = sorted(set(report["closure"]["missing_items"]) |
                                                    set(report["imported_closure"].get("missing_items", [])))
 
