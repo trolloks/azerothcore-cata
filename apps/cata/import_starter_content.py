@@ -698,13 +698,26 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                 f"INSERT INTO {target}.{map_table} VALUES "
                 + ",".join(f"({kind},{src},{dst})" for kind, src, dst in guid_map))
 
-    loot_ids = sorted({r[1] for r in run(container, user, password,
-                                         f"SELECT entry, lootid FROM {source}.creature_template "
-                                         f"WHERE entry IN ({creature_ids}) AND lootid<>0")})
+    # A native template keeps its own loot/Data1 pointer: importing the source block for it would only leave an
+    # orphan loot entry the loader reports as useless. New templates take the source value.
+    existing_creatures = set(fetch(container, user, password,
+                                   f"SELECT entry FROM {target}.creature_template WHERE entry IN ({creature_ids})"))
+    loot_ids = sorted({r[0] for r in run(container, user, password,
+                                         f"SELECT DISTINCT lootid FROM {target}.creature_template "
+                                         f"WHERE entry IN ({creature_ids}) AND lootid<>0")}
+                      | {r[1] for r in run(container, user, password,
+                                           f"SELECT entry, lootid FROM {source}.creature_template "
+                                           f"WHERE entry IN ({creature_ids}) AND lootid<>0")
+                         if r[0] not in existing_creatures})
+    existing_gos = set(fetch(container, user, password,
+                             f"SELECT entry FROM {target}.gameobject_template WHERE entry IN ({gameobject_ids})"))
     gameobject_loot = sorted({r[0] for r in run(container, user, password,
-                                                f"SELECT Data1 FROM {source}.gameobject_template "
-                                                f"WHERE entry IN ({gameobject_ids}) AND type IN (3,25) "
-                                                f"AND Data1<>0")})
+                                                f"SELECT Data1 FROM {target}.gameobject_template "
+                                                f"WHERE entry IN ({gameobject_ids}) AND type IN (3,25) AND Data1<>0")}
+                             | {r[1] for r in run(container, user, password,
+                                                  f"SELECT entry, Data1 FROM {source}.gameobject_template "
+                                                  f"WHERE entry IN ({gameobject_ids}) AND type IN (3,25) AND Data1<>0")
+                                if r[0] not in existing_gos})
     if loot_ids:
         present = set(fetch(container, user, password,
                             f"SELECT DISTINCT Entry FROM {target}.creature_loot_template "
@@ -881,6 +894,10 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             elif column == "action_param3":
                 # TC 4.3.4 reads TALK's third param as a nonzero true value; AC validates it as a strict boolean
                 selected.append("IF(s.action_type=1 AND s.action_param3<>0, 1, s.action_param3)")
+            elif column == "action_type":
+                # SELF_CAST makes each target cast on itself; INVOKER_CAST is equivalent only for target 7.
+                # AC rejects 85, so translate this timed-list case to 134.
+                selected.append("IF(s.source_type=9 AND s.action_type=85 AND s.target_type=7, 134, s.action_type)")
             else:
                 selected.append(f"s.{quote(column)}")
         run(container, user, password,
@@ -888,7 +905,8 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             f"SELECT {','.join(selected)} FROM {source}.smart_scripts s "
             f"LEFT JOIN {target}.{map_table} mc ON mc.kind=0 AND mc.src_guid=s.target_param1 "
             f"LEFT JOIN {target}.{map_table} mg ON mg.kind=1 AND mg.src_guid=s.target_param1 "
-            f"WHERE {where} AND s.action_type NOT IN {UNSUPPORTED_SMART_ACTIONS} "
+            f"WHERE {where} AND (s.action_type NOT IN {UNSUPPORTED_SMART_ACTIONS} "
+            f"OR (s.source_type=9 AND s.action_type=85 AND s.target_type=7)) "
             f"AND NOT (s.target_type=10 AND s.target_param1<>0 AND mc.dst_guid IS NULL) "
             f"AND NOT (s.target_type=14 AND s.target_param1<>0 AND mg.dst_guid IS NULL)")
 

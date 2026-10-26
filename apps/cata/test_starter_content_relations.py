@@ -88,6 +88,21 @@ class LoaderRelationsTest(unittest.TestCase):
         problems = self.audit([script(action_type=88, action_param1=500, action_param2=501), rows[1]])
         self.assertIn(("smartai_timed_list", "501"), {(p["kind"], p["id"]) for p in problems})
 
+    def test_empty_timed_list_is_a_relation_problem(self):
+        problems = self.audit([script(action_type=80, action_param1=500)])
+        self.assertEqual(problems, [{"kind": "smartai_timed_list", "id": "500",
+                                     "from": "smart_scripts.100.0.0"}])
+
+    def test_rejected_nested_timed_list_is_a_relation_problem(self):
+        rows = [script(action_type=80, action_param1=500),
+                script(entryorguid=500, source_type=9, action_type=80, action_param1=501),
+                script(entryorguid=501, source_type=9, action_type=85, target_type=7)]
+        answers = [("'smart_unsupported_action', 'smart_unused_target_param'",
+                    [["501", "9", "0", "smart_unsupported_action"]])]
+        problems = self.audit(rows, answers=answers)
+        self.assertEqual(problems, [{"kind": "smart_unsupported_action", "id": "501.9.0"}])
+        self.assertFalse(any("source_type<>9" in q for q in self.queries))
+
     def test_timed_links_use_each_calling_owners_events(self):
         rows = [script(action_type=80, action_param1=500), script(id=5, event_type=61),
                 script(entryorguid=-10, action_type=80, action_param1=500),
