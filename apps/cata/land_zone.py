@@ -22,7 +22,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from import_starter_content import run, scalar
+from import_starter_content import run, scalar, spell_effects
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -93,8 +93,8 @@ def quests_using(c, u, p, source, quests, items):
                                        f"AND ({clause})")}
 
 
-def tdb_quest_gaps(c, u, p, quests):
-    """Known source gaps audited against TDB 434.22011 (2022-01-09), not inferred from absent spawns alone."""
+def tdb_quest_gaps(c, u, p, quests, target, zone, map_id, dbc_dir):
+    """Source gaps in TDB 434.22011 (2022-01-09), accounting for summons and objective credit sources."""
     reasons = {}
     if not quests:
         return reasons
@@ -110,6 +110,31 @@ def tdb_quest_gaps(c, u, p, quests):
             reason = "quest giver 44365 has no spawn or summon in TDB"
             if reason not in reasons.setdefault(quest, []):
                 reasons[quest].append(reason)
+    # Credit markers need no physical spawn when a local creature/object or a spell grants the credit.
+    effects, _ = spell_effects(dbc_dir, (28, 56, 90, 134))  # Summon, summon pet, kill credit, kill credit 2.
+    available = {entry for entries in effects.values() for entry in entries}
+    available.update(row[0] for row in run(c, u, p,
+        f"SELECT id FROM tdb_world.creature UNION SELECT id FROM {target}.creature "
+        "UNION SELECT action_param1 FROM tdb_world.smart_scripts WHERE action_type=12 "
+        "UNION SELECT entry FROM tdb_world.creature_summon_groups "
+        "UNION SELECT EffectMiscValue FROM tdb_world.spelleffect_dbc WHERE Effect IN (28,56,90,134) "
+        "UNION SELECT action_param1 FROM tdb_world.smart_scripts WHERE source_type=9 AND action_type=33"))
+    for schema in ("tdb_world", target):
+        for source_type, table in ((0, "creature"), (1, "gameobject")):
+            available.update(row[0] for row in run(c, u, p,
+                f"SELECT DISTINCT s.action_param1 FROM {schema}.smart_scripts s JOIN {schema}.{table} o "
+                "ON (s.entryorguid=o.id OR s.entryorguid=-o.guid) "
+                f"WHERE s.source_type={source_type} AND s.action_type=33 AND o.map={map_id} "
+                f"AND (o.zoneId={zone} OR o.areaId={zone})"))
+        for column in ("KillCredit1", "KillCredit2"):
+            available.update(row[0] for row in run(c, u, p,
+                f"SELECT t.{column} FROM {schema}.creature_template t JOIN {schema}.creature o ON o.id=t.entry "
+                f"WHERE o.map={map_id} AND (o.zoneId={zone} OR o.areaId={zone})"))
+    for quest, *objectives in run(c, u, p, f"SELECT ID,{','.join(OBJECTIVES)} FROM tdb_world.quest_template "
+                                         f"WHERE ID IN ({','.join(quests)})"):
+        for entry in sorted(set(objectives) - available, key=int):
+            if int(entry) > 0:
+                reasons.setdefault(quest, []).append(f"objective creature {entry} has no spawn or summon in TDB")
     return reasons
 
 
@@ -154,7 +179,7 @@ def main():
     summary = {"zone": args.zone, "quest_sorts": sorts, "candidates": len(candidates),
                "already_native": len(candidates) - len(todo)}
 
-    reasons = tdb_quest_gaps(c, u, p, todo)
+    reasons = tdb_quest_gaps(c, u, p, todo, args.base, args.zone, args.map, args.dbc_dir)
     skip = set(reasons)
     # Quests whose objective has no template in TDB or AC cannot land.
     for quest, *objectives in run(c, u, p, f"SELECT ID,{','.join(OBJECTIVES)} FROM tdb_world.quest_template "

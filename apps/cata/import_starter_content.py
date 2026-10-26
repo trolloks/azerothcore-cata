@@ -25,8 +25,8 @@ from pathlib import Path
 from starter_content_inventory import check_relations, registered_script_names, zone_quest_candidates
 
 
-def spell_effects(dbc_dir):
-    """Return (summoned creature entries by spell, trigger spells by spell) from 4.3.4 SpellEffect.dbc."""
+def spell_effects(dbc_dir, creature_effects=(28,)):
+    """Return (creature entries by spell for the requested effects, trigger spells by spell) from SpellEffect.dbc."""
     if not dbc_dir:
         return {}, {}
     data = (Path(dbc_dir) / "SpellEffect.dbc").read_bytes()
@@ -38,7 +38,7 @@ def spell_effects(dbc_dir):
     summoned, triggers = {}, {}
     for i in range(records):
         row = struct.unpack_from(f"<{fields}I", data, 20 + i * record_size)
-        if row[1] == 28 and row[12] > 0:  # SPELL_EFFECT_SUMMON, EffectMiscValue
+        if row[1] in creature_effects and row[12] > 0:  # Effect type, EffectMiscValue
             summoned.setdefault(row[24], set()).add(str(row[12]))
         if row[21] > 0:  # EffectTriggerSpell
             triggers.setdefault(row[24], set()).add(row[21])
