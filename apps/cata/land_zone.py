@@ -17,6 +17,7 @@ separate steps.
 import argparse
 import json
 import re
+import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -30,6 +31,21 @@ ITEM_COLUMNS = ([f"RequiredItemId{i}" for i in range(1, 7)] + [f"RewardItem{i}" 
                 + [f"RewardChoiceItemID{i}" for i in range(1, 7)] + ["StartItem"]
                 + [f"ItemDrop{i}" for i in range(1, 5)])
 OBJECTIVES = [f"RequiredNpcOrGo{i}" for i in range(1, 5)]
+
+
+def quest_sorts(dbc_dir, zone):
+    """The zone id plus its subzone ids: TDB may sort a zone's quests under either."""
+    data = (Path(dbc_dir) / "AreaTable.dbc").read_bytes()
+    if data[:4] != b"WDBC":
+        raise SystemExit(f"AreaTable.dbc in {dbc_dir} is not a WDBC file")
+    records, _, record_size, _ = struct.unpack_from("<4I", data, 4)
+    subzones = set()
+    for i in range(records):
+        area, _continent, parent = struct.unpack_from("<3I", data, 20 + i * record_size)
+        if parent == zone:
+            subzones.add(area)
+    return sorted(subzones | {zone})
+
 
 
 def sh(args, **kwargs):
@@ -77,9 +93,10 @@ def quests_using(c, u, p, source, quests, items):
                                        f"AND ({clause})")}
 
 
-def importer(args, target, baseline, skip, apply):
+def importer(args, target, baseline, skip, apply, sorts):
     command = [sys.executable, str(HERE / "import_starter_content.py"), "--target", target, "--baseline", baseline,
-               "--zone", str(args.zone), "--map", str(args.map), "--skip-quests", ",".join(sorted(skip, key=int))]
+               "--zone", str(args.zone), "--map", str(args.map), "--skip-quests", ",".join(sorted(skip, key=int)),
+               "--quest-sorts", ",".join(map(str, sorts)), "--dbc-dir", args.dbc_dir]
     result = sh(command + (["--apply"] if apply else []))
     try:
         return json.loads(result.stdout)
@@ -105,13 +122,15 @@ def main():
         if not re.fullmatch(r"\w+", name):
             parser.error(f"invalid schema name {name!r}")
     c, u, p = args.container, "root", args.password
+    sorts = quest_sorts(args.dbc_dir, args.zone)
 
     clone(args.golden, [args.base, args.clean])
-    candidates = [r[0] for r in run(c, u, p, f"SELECT ID FROM tdb_world.quest_template "
-                                             f"WHERE QuestSortID={args.zone} ORDER BY ID")]
+    from starter_content_inventory import zone_quest_candidates
+    candidates = zone_quest_candidates(c, u, p, "tdb_world", sorts, args.zone, args.map)
     native = {r[0] for r in run(c, u, p, f"SELECT ID FROM {args.base}.quest_template")}
     todo = [q for q in candidates if q not in native]
-    summary = {"zone": args.zone, "candidates": len(candidates), "already_native": len(candidates) - len(todo)}
+    summary = {"zone": args.zone, "quest_sorts": sorts, "candidates": len(candidates),
+               "already_native": len(candidates) - len(todo)}
 
     # Quests whose objective has no template in TDB or AC cannot land.
     skip, reasons = set(), {}
@@ -127,7 +146,7 @@ def main():
     # Dry runs find the quest items; items the client DB2 lacks take their quests out, repeat until stable.
     item_ids, absent = set(), set()
     for _ in range(6):
-        report = importer(args, args.clean, args.base, skip, apply=False)
+        report = importer(args, args.clean, args.base, skip, False, sorts)
         needed = set(report["closure"]["missing_items"]) - item_ids
         sql, lacking = convert_items(needed, args.dbc_dir)
         item_ids |= needed - set(lacking)
@@ -149,7 +168,7 @@ def main():
         mysql_file(c, args.password, schema, item_file)
 
     # Apply, then add the loot items the import brought in; items the client DB2 lacks stay reported.
-    report = importer(args, args.clean, args.base, skip, apply=True)
+    report = importer(args, args.clean, args.base, skip, True, sorts)
     extra = {x["id"] for x in report["unresolved_items"]} - absent
     if extra:
         sql, lacking = convert_items(extra, args.dbc_dir)
@@ -161,7 +180,7 @@ def main():
             tmp.unlink()
         item_ids |= extra - set(lacking)
         item_file.write_text(convert_items(item_ids, args.dbc_dir)[0], encoding="utf-8")
-        report = importer(args, args.clean, args.base, skip, apply=True)
+        report = importer(args, args.clean, args.base, skip, True, sorts)
     summary["dangling"] = report["dangling"]
     summary["preexisting_dangling"] = report.get("preexisting_dangling", [])
     summary["items_absent_from_client_db2"] = sorted(absent, key=int)
@@ -187,7 +206,7 @@ def main():
     again = sh([sys.executable, str(HERE / "emit_pending_sql.py"), "--baseline", args.replay, "--after", args.clean])
     summary["replay_diff_bytes"] = len(again.stdout.strip()) if again.returncode == 0 else -1
     from starter_content_inventory import check_relations
-    summary["relation_problems"] = check_relations(c, u, p, args.replay, args.zone, args.map)
+    summary["relation_problems"] = check_relations(c, u, p, args.replay, args.zone, args.map, sorts, candidates)
     summary["files"] = {"items": item_file.name, "landing": landing_file.name,
                         "landing_bytes": landing_file.stat().st_size}
     print(json.dumps(summary, indent=2))

@@ -4,7 +4,9 @@
 The 4.3.4 client stores no per-item armor, weapon damage or durability; with --dbc-dir these are derived
 from the ItemArmor*/ItemDamage* tables (item_derived_stats.py). Without it, or for the columns that stay
 underived (block, second damage, scaling value, disenchant), the schema default is kept and the output
-header lists them so the gap stays visible. Cata-only stat types are translated where AC has a column:
+header lists them so the gap stays visible. Item page text is not converted: the pages are world data, and
+TDB 434 lacks Cata's later pages (a reference would be dangling). Cata-only stat types are translated where AC
+has a column:
 50 extra armor -> armor, 51-56 resistances -> *_res; 49 mastery has no AC counterpart and is dropped
 rather than left for the loader to reinterpret as mana.
 
@@ -34,7 +36,7 @@ SIMPLE = {  # AC column <- Item-sparse field
     "RequiredReputationFaction": "RequiredReputationFaction",
     "RequiredReputationRank": "RequiredReputationRank", "maxcount": "MaxCount", "stackable": "Stackable",
     "ContainerSlots": "ContainerSlots", "ScalingStatDistribution": "ScalingStatDistribution",
-    "delay": "Delay", "RangedModRange": "RangedModRange", "bonding": "Bonding", "PageText": "PageText",
+    "delay": "Delay", "RangedModRange": "RangedModRange", "bonding": "Bonding",
     "LanguageID": "LanguageID", "PageMaterial": "PageMaterial", "startquest": "StartQuest",
     "lockid": "LockID", "Material": "Material", "sheath": "SheatheType",
     "RandomProperty": "RandomProperty", "RandomSuffix": "RandomSuffix", "itemset": "ItemSet",
@@ -59,7 +61,7 @@ for i in range(3):
 UNSIGNED = ["requiredspell", "startquest", "lockid", "itemset", "area"]
 DERIVED = ["armor", "MaxDurability", "dmg_min1", "dmg_max1", "dmg_type1"]
 UNRESOLVED = ["block", "dmg_min2", "dmg_max2", "dmg_type2", "ScalingStatValue", "RequiredDisenchantSkill",
-              "DisenchantID"]
+              "DisenchantID", "PageText"]
 # Cata stat types above AC's highest ItemModType (48) that have their own item_template column. Mastery (49)
 # has no AC counterpart and is dropped instead of passed through, where the loader would zero the type and
 # apply the value as mana.
