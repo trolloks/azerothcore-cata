@@ -195,6 +195,8 @@ def main():
         item_sql = convert_items(item_ids, args.dbc_dir)[0]
         if item_sql:
             item_file.write_text(item_sql, encoding="utf-8")
+        if lacking:  # the drop list grew after the first import: rebuild clean and import once with all of it
+            clone(args.base, [args.clean])
         report = importer(args, args.clean, args.base, skip, True, sorts, drop_items=absent)
     summary["dangling"] = report["dangling"]
     summary["preexisting_dangling"] = report.get("preexisting_dangling", [])
