@@ -17,10 +17,32 @@ run-owned disposable database.
 import argparse
 import json
 import re
+import struct
 import subprocess
 import sys
+from pathlib import Path
 
-from starter_content_inventory import check_relations, registered_script_names
+from starter_content_inventory import check_relations, registered_script_names, zone_quest_candidates
+
+
+def spell_effects(dbc_dir):
+    """Return (summoned creature entries by spell, trigger spells by spell) from 4.3.4 SpellEffect.dbc."""
+    if not dbc_dir:
+        return {}, {}
+    data = (Path(dbc_dir) / "SpellEffect.dbc").read_bytes()
+    if data[:4] != b"WDBC":
+        raise SystemExit(f"SpellEffect.dbc in {dbc_dir} is not a WDBC file")
+    records, fields, record_size, _ = struct.unpack_from("<4I", data, 4)
+    if fields < 26:  # ID..EffectMiscValue..EffectTriggerSpell..SpellID, EffectIndex
+        raise SystemExit("SpellEffect.dbc has an unexpected layout")
+    summoned, triggers = {}, {}
+    for i in range(records):
+        row = struct.unpack_from(f"<{fields}I", data, 20 + i * record_size)
+        if row[1] == 28 and row[12] > 0:  # SPELL_EFFECT_SUMMON, EffectMiscValue
+            summoned.setdefault(row[24], set()).add(str(row[12]))
+        if row[21] > 0:  # EffectTriggerSpell
+            triggers.setdefault(row[24], set()).add(row[21])
+    return summoned, triggers
 
 
 def run(container, user, password, sql):
@@ -132,7 +154,8 @@ def import_missing_rows(container, user, password, target, source, table, key, i
     return count
 
 
-def import_closure(container, user, password, target, source, zone, map_id, quests, dry_run):
+def import_closure(container, user, password, target, source, zone, map_id, quests, dry_run,
+                   dbc_dir=None):
     """Import templates, spawns, loot and scripts the imported quests reference.
 
     Dependents are reconciled for every referenced entry, not only the entries
@@ -148,6 +171,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
     report = {}
     if not quests:
         return report
+    summoned, triggers = spell_effects(dbc_dir)
     quest_ids = ",".join(quests)
 
     creature_entries, gameobject_entries = set(), set()
@@ -230,15 +254,46 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             if not scripted:
                 continue
             clauses = [f"(source_type={source_type} AND entryorguid IN ({','.join(sorted(scripted))}))"]
+            spawn = "creature" if source_type == "0" else "gameobject"
+            # Spawn-level scripts of this zone's candidate templates are imported with their spawns; their
+            # summons/targets need templates too, even though the spawns themselves are matched later.
+            clauses.append(f"(source_type={source_type} AND entryorguid IN "
+                           f"(SELECT -o.guid FROM {source}.{spawn} o WHERE o.id IN ({','.join(sorted(entries))}) "
+                           f"AND o.map={map_id} AND (o.zoneId={zone} OR o.areaId={zone})))")
             if seen_lists:
                 clauses.append(f"(source_type=9 AND entryorguid IN ({','.join(sorted(seen_lists))}))")
-            for action, *params in run(container, user, password,
-                                       f"SELECT action_type,action_param1,action_param2,action_param3,action_param4,"
-                                       f"action_param5,action_param6 FROM {source}.smart_scripts "
-                                       f"WHERE {' OR '.join(clauses)}"):
-                action, params = int(action), [int(v) for v in params]
+            for row in run(container, user, password,
+                           f"SELECT action_type,action_param1,action_param2,action_param3,action_param4,"
+                           f"action_param5,action_param6,target_type,target_param1,target_param2,"
+                           f"target_param3 FROM {source}.smart_scripts "
+                           f"WHERE {' OR '.join(clauses)}"):
+                action, params = int(row[0]), [int(v) for v in row[1:7]]
+                target_type, target_params = int(row[7]), [int(v) for v in row[8:11]]
                 found_creatures = {str(params[0])} if action in (12, 33, 36) and params[0] > 0 else set()
                 found_objects = {str(params[0])} if action == 50 and params[0] > 0 else set()
+                if target_type in (9, 11, 204) and target_params[0] > 0:
+                    found_creatures.add(str(target_params[0]))
+                elif target_type in (10, 206) and target_params[1] > 0:
+                    found_creatures.add(str(target_params[1]))
+                elif target_type in (13, 15) and target_params[0] > 0:
+                    found_objects.add(str(target_params[0]))
+                elif target_type == 14 and target_params[1] > 0:
+                    found_objects.add(str(target_params[1]))
+                elif target_type in (19,) and target_params[0] > 0:
+                    found_creatures.add(str(target_params[0]))
+                elif target_type == 20 and target_params[0] > 0:
+                    found_objects.add(str(target_params[0]))
+                elif target_type == 207 and target_params[0] in (1, 2) and target_params[1] > 0:
+                    (found_creatures if target_params[0] == 1 else found_objects).add(str(target_params[1]))
+                if action == 11 and params[0] > 0:  # CAST can summon through the spell's effects (and their triggers)
+                    queue, seen_spells = [params[0]], set()
+                    while queue:
+                        spell = queue.pop()
+                        if spell in seen_spells:
+                            continue
+                        seen_spells.add(spell)
+                        found_creatures.update(summoned.get(spell, ()))
+                        queue.extend(triggers.get(spell, ()))
                 lists = set()
                 if action == 80 and params[0] > 0:
                     lists.add(str(params[0]))
@@ -964,18 +1019,24 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
 
     text_groups: set[tuple[str, str]] = set()
     for where, _shift in all_creature_filters:
-        for owner, group in run(container, user, password,
-                                f"SELECT entryorguid, action_param1 FROM {source}.smart_scripts "
-                                f"WHERE {where} AND action_type=1"):
+        for owner, group, target_type, target_param1 in run(
+                container, user, password,
+                f"SELECT entryorguid, action_param1, target_type, target_param1 FROM {source}.smart_scripts "
+                f"WHERE {where} AND action_type=1"):
             mapped_owner = guid_owner.get(owner[1:], "") if owner.startswith("-") else owner
             if mapped_owner:
                 text_groups.add((mapped_owner, group))
+            if int(target_type) in (9, 11, 19, 204) and int(target_param1) > 0:
+                text_groups.add((target_param1, group))
     for timed_id in sorted(imported_timed):
-        for group, in run(container, user, password,
-                          f"SELECT action_param1 FROM {source}.smart_scripts "
-                          f"WHERE source_type=9 AND entryorguid={timed_id} AND action_type=1"):
+        for group, target_type, target_param1 in run(
+                container, user, password,
+                f"SELECT action_param1, target_type, target_param1 FROM {source}.smart_scripts "
+                f"WHERE source_type=9 AND entryorguid={timed_id} AND action_type=1"):
             for owner in timed_owners.get(timed_id, set()):
                 text_groups.add((owner, group))
+            if int(target_type) in (9, 11, 19, 204) and int(target_param1) > 0:
+                text_groups.add((target_param1, group))
     if text_groups:
         creature_list = ",".join(sorted({owner for owner, _group in text_groups}))
         present_text = {(row[0], row[1]) for row in
@@ -1124,17 +1185,26 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
     if imported_condition_refs:
         report["condition_reference_templates"] = imported_condition_refs
 
+    page_items = set(item_ids)
+    item_columns = [f"RewardItem{i}" for i in range(1, 5)] + [f"RewardChoiceItemID{i}" for i in range(1, 7)]
+    item_columns += ["StartItem"] + [f"ItemDrop{i}" for i in range(1, 5)]
+    for row in run(container, user, password,
+                   f"SELECT {','.join(item_columns)} FROM {source}.quest_template WHERE ID IN ({quest_ids})"):
+        page_items.update(value for value in row if value and value != "0")
     for table, key, owner_table, selected, where, next_column in (
         ("broadcast_text", "ID", "creature_text", "BroadcastTextId",
          f"CreatureID IN ({creature_ids}) AND BroadcastTextId<>0", None),
         ("page_text", "ID", "gameobject_template", "Data7",
          f"entry IN ({gameobject_ids}) AND type=10 AND Data7<>0", "NextPageID"),
+        ("page_text", "ID", "item_template", "PageText",
+         f"entry IN ({','.join(sorted(page_items)) or '0'}) AND PageText<>0", "NextPageID"),
     ):
         if selected not in {name for name, _ in columns(container, user, password, target, owner_table)}:
             continue
         pending = fetch(container, user, password, f"SELECT {selected} FROM {target}.{owner_table} WHERE {where}")
         report[table] = import_missing_rows(container, user, password, target, source, table, key,
                                             pending, dry_run, next_column)
+
 
     if not dry_run:
         run(container, user, password, f"DROP TABLE IF EXISTS {target}.{map_table}")
@@ -1150,7 +1220,11 @@ def main():
     parser.add_argument("--source", default="tdb_world")
     parser.add_argument("--target", default="acore_world")
     parser.add_argument("--zone", type=int, default=12)
+    parser.add_argument("--quest-sorts", default="",
+                        help="comma-separated quest sort ids for the zone (the zone id plus its subzones); defaults "
+                             "to --zone")
     parser.add_argument("--map", type=int, default=0)
+    parser.add_argument("--dbc-dir", help="directory with the client DBCs (SpellEffect.dbc for summon closure)")
     parser.add_argument("--skip-quests", default="",
                         help="comma-separated quest ids to leave out, e.g. quests that need items the client data "
                              "lacks or an objective template TDB has no row for (reported as skipped_quests)")
@@ -1164,8 +1238,13 @@ def main():
     c, u, p, src, dst = args.container, args.user, args.password, args.source, args.target
 
     existing = {r[0] for r in run(c, u, p, f"SELECT ID FROM {dst}.quest_template") if r}
-    candidates = [r[0] for r in run(c, u, p,
-                  f"SELECT ID FROM {src}.quest_template WHERE QuestSortID={args.zone} ORDER BY ID") if r]
+    try:
+        sorts = {args.zone} | ({int(value) for value in args.quest_sorts.split(",") if value}
+                               if args.quest_sorts else set())
+    except ValueError:
+        parser.error("--quest-sorts takes comma-separated quest sort ids")
+    sort_ids = ",".join(str(value) for value in sorted(sorts))
+    candidates = zone_quest_candidates(c, u, p, src, sorted(sorts), args.zone, args.map)
     skipped = set(args.skip_quests.split(",")) - {""}
     if not all(q.isdigit() for q in skipped):
         parser.error("--skip-quests takes comma-separated quest ids")
@@ -1218,7 +1297,7 @@ def main():
             report["cleared_quest_links"] = cleared
 
     zone_quests = [r[0] for r in run(c, u, p,
-                                       f"SELECT ID FROM {dst}.quest_template WHERE QuestSortID={args.zone}")]
+                                       f"SELECT ID FROM {dst}.quest_template WHERE QuestSortID IN ({sort_ids})")]
     closure_quests = sorted(set(zone_quests) | set(missing))
     if closure_quests:
         closure_ids = ",".join(closure_quests)
@@ -1254,7 +1333,7 @@ def main():
                     closure["missing_starter_creatures"].add(entry)
         report["closure"] = {k: sorted(v) for k, v in closure.items()}
         report["imported_closure"] = import_closure(c, u, p, dst, src, args.zone, args.map,
-                                                    closure_quests, not args.apply)
+                                                    closure_quests, not args.apply, args.dbc_dir)
         report["closure"]["missing_items"] = sorted(set(report["closure"]["missing_items"]) |
                                                    set(report["imported_closure"].get("missing_items", [])))
 
@@ -1264,7 +1343,7 @@ def main():
     if args.apply:
         # Gate: the imported zone must pass the #202 relation checker. Item
         # references stay open (TDB 434 has no item data) and are reported only.
-        problems = check_relations(c, u, p, dst, args.zone, args.map)
+        problems = check_relations(c, u, p, dst, args.zone, args.map, sorted(sorts), candidates)
         item_kinds = ("quest_item", "loot_item")
         report["unresolved_items"] = [x for x in problems if x["kind"] in item_kinds]
         if "closure" in report:
@@ -1273,7 +1352,7 @@ def main():
         report["dangling"] = [x for x in problems if x["kind"] not in item_kinds]
         if args.baseline:
             native = {json.dumps(x, sort_keys=True)
-                      for x in check_relations(c, u, p, args.baseline, args.zone, args.map)}
+                      for x in check_relations(c, u, p, args.baseline, args.zone, args.map, sorted(sorts), candidates)}
             report["preexisting_dangling"] = [x for x in report["dangling"]
                                               if json.dumps(x, sort_keys=True) in native]
             report["dangling"] = [x for x in report["dangling"] if x not in report["preexisting_dangling"]]

@@ -431,9 +431,9 @@ def check_loader_relations(container, user, password, schema, creatures, gameobj
                 if action in types:
                     check("smartai_action_reference", r[f"action_param{param}"], table, target_key, owner, optional)
             if action != 58:  # INSTALL_AI_TEMPLATE bypasses target validation.
-                for types, param, table in (((9, 11, 204), 1, "creature_template"),
+                for types, param, table in (((9, 11, 19, 204), 1, "creature_template"),
                                             ((10, 206), 2, "creature_template"),
-                                            ((13, 15), 1, "gameobject_template"),
+                                            ((13, 15, 20), 1, "gameobject_template"),
                                             ((14,), 2, "gameobject_template")):
                     if target in types:
                         check("smartai_target_reference", r[f"target_param{param}"], table, "entry", owner)
@@ -547,8 +547,27 @@ def check_loader_relations(container, user, password, schema, creatures, gameobj
     return problems
 
 
-def check_relations(container, user, password, schema, zone, map_id) -> list[dict[str, str]]:
-    """Return dangling relations for the zone's quests and spawns."""
+def zone_quest_candidates(container, user, password, schema, sorts, zone, map_id) -> list[str]:
+    """Quest ids sorted under the zone's sorts plus class-sorted quests that start inside the zone."""
+    sort_ids = ",".join(str(value) for value in sorts)
+    ids = {r[0] for r in query(container, user, password, schema,
+                               f"SELECT ID FROM {schema}.quest_template WHERE QuestSortID IN ({sort_ids})")}
+    for starter, spawn in (("creature_queststarter", "creature"), ("gameobject_queststarter", "gameobject")):
+        if not (table_exists(container, user, password, schema, starter)
+                and table_exists(container, user, password, schema, spawn)):
+            continue
+        ids.update(r[0] for r in query(container, user, password, schema,
+                                       f"SELECT DISTINCT q.ID FROM {schema}.quest_template q "
+                                       f"JOIN {schema}.{starter} s ON s.quest=q.ID "
+                                       f"JOIN {schema}.{spawn} o ON o.id=s.id "
+                                       f"WHERE q.QuestSortID<0 AND o.map={map_id} "
+                                       f"AND (o.zoneId={zone} OR o.areaId={zone})"))
+    return sorted(ids, key=int)
+
+
+def check_relations(container, user, password, schema, zone, map_id, quest_sorts=None,
+                    extra_quests=None) -> list[dict[str, str]]:
+    """Return dangling relations for the zone's quests and spawns (quest_sorts defaults to the zone id)."""
     problems: list[dict[str, str]] = []
     if not table_exists(container, user, password, schema, "quest_template"):
         return [{"kind": "quest_template_missing", "id": schema}]
@@ -561,8 +580,11 @@ def check_relations(container, user, password, schema, zone, map_id) -> list[dic
     choice_cols = [f"RewardChoiceItemID{i}" for i in range(1, 7) if f"RewardChoiceItemID{i}" in quest_cols]
     start_cols = [c for c in ["StartItem"] + [f"ItemDrop{i}" for i in range(1, 5)] if c in quest_cols]
     wanted = ["ID"] + objective_cols + item_cols + reward_cols + choice_cols + start_cols
+    where = f"{sort_col} IN ({','.join(str(value) for value in (quest_sorts or [zone]))})"
+    if extra_quests:
+        where += f" OR ID IN ({','.join(str(value) for value in extra_quests)})"
     rows = query(container, user, password, schema,
-                 f"SELECT {','.join(wanted)} FROM quest_template WHERE {sort_col}={zone}")
+                 f"SELECT {','.join(wanted)} FROM quest_template WHERE {where}")
     zone_quests = {row[0] for row in rows}
     creature_entries = {r[0] for r in query(container, user, password, schema,
                                             "SELECT entry FROM creature_template") if r}
