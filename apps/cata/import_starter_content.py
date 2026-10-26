@@ -1300,15 +1300,21 @@ def main():
         run(c, u, p, f"UPDATE {dst}.quest_template q LEFT JOIN {dst}.quest_template n ON n.ID=q.RewardNextQuest "
                      f"SET q.RewardNextQuest=0 WHERE q.ID IN ({race_ids}) AND q.RewardNextQuest<>0 AND n.ID IS NULL")
         # RewardNextQuest is a client hint; register it as a real alternative prerequisite when the next
-        # quest does not already point back at this one (breadcrumbs).
-        mirrored = run(c, u, p,
-                       f"UPDATE {dst}.quest_template_addon a JOIN {dst}.quest_template q ON q.ID=a.ID "
-                       f"LEFT JOIN {dst}.quest_template_addon n ON n.ID=q.RewardNextQuest "
-                       f"SET a.NextQuestID=q.RewardNextQuest WHERE q.ID IN ({race_ids}) "
-                       f"AND q.RewardNextQuest<>0 AND a.NextQuestID=0 AND COALESCE(n.PrevQuestID,0)<>q.ID; "
-                       f"SELECT ROW_COUNT()")
-        if mirrored:
-            report["next_quest_rows"] = int(mirrored[-1][0])
+        # quest already has one and does not point back here. An open target stays open, and a breadcrumb
+        # never gets NextQuestID (the loader rejects that pairing).
+        mirror = run(c, u, p,
+                     f"SELECT a.ID, q.RewardNextQuest FROM {dst}.quest_template_addon a "
+                     f"JOIN {dst}.quest_template q ON q.ID=a.ID "
+                     f"LEFT JOIN {dst}.quest_template_addon n ON n.ID=q.RewardNextQuest "
+                     f"WHERE q.ID IN ({race_ids}) AND q.RewardNextQuest<>0 AND a.NextQuestID=0 "
+                     f"AND a.BreadcrumbForQuestId=0 AND COALESCE(n.PrevQuestID,0)<>q.ID "
+                     f"AND (n.PrevQuestID<>0 OR EXISTS (SELECT 1 FROM {dst}.quest_template_addon p "
+                     f"WHERE p.NextQuestID=q.RewardNextQuest))")
+        for quest, next_quest in mirror:
+            run(c, u, p, f"UPDATE {dst}.quest_template_addon SET NextQuestID={int(next_quest)} "
+                         f"WHERE ID={int(quest)} AND NextQuestID=0")
+        if mirror:
+            report["next_quest_rows"] = len(mirror)
         if cleared:
             report["cleared_quest_links"] = cleared
 
