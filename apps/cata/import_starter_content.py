@@ -25,6 +25,17 @@ from pathlib import Path
 from starter_content_inventory import check_relations, registered_script_names, zone_quest_candidates
 
 
+# SmartEvent union sizes in SmartScriptMgr.h, as selected by CheckUnusedEventParams; others use all six.
+SMART_EVENT_PARAM_COUNTS = {
+    0: (4, 6, 7, 21, 25, 30, 36, 37, 41, 43, 47, 48, 49, 50, 51, 54, 61, 63, 65, 73),
+    1: (29, 42, 44, 46, 59, 64, 66, 68, 69, 70, 71),
+    2: (27, 28, 39, 40, 52, 55, 56, 57, 58, 62, 108, 109),
+    3: (11, 13, 15, 17, 19, 20, 22, 34, 35, 45, 72, 82, 107),
+    4: (5, 8, 14, 23, 24, 31, 38, 75, 76, 77),
+    5: (10, 16, 26, 101, 102, 103, 104),
+}
+
+
 def spawn_match():
     """Same template, map and phase within 0.5 m in 3D; shared by import and GUID remapping."""
     return ("t.id=s.id AND t.map=s.map AND t.phaseMask=s.phaseMask "
@@ -419,6 +430,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             sorted(creature_entries), dry_run)
 
     new_spawn_guids: dict[str, set[str]] = {"creature": set(), "gameobject": set()}
+    report["phase_normalized"] = {"creature": 0, "gameobject": 0}
 
     def import_spawns(table, id_column, entries):
         if not entries:
@@ -446,6 +458,14 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         after = set(fetch(container, user, password,
                           f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
         new_spawn_guids[table] = after - before
+        if "PhaseId" in target_names and new_spawn_guids[table]:
+            undefined = "PhaseId<>0"
+            if table_exists(container, user, password, target, "phase_area"):
+                undefined += f" AND PhaseId NOT IN (SELECT PhaseId FROM {target}.phase_area)"
+            rows = run(container, user, password,
+                       f"UPDATE {target}.{table} SET PhaseId=0 "
+                       f"WHERE guid IN ({','.join(sorted(new_spawn_guids[table]))}) AND {undefined}; SELECT ROW_COUNT()")
+            report["phase_normalized"][table] = int(rows[-1][0]) if rows else 0
         if table == "creature" and not {"MovementType", "wander_distance"} - target_names:
             # The loader resets an unknown MovementType (TDB has 3) and an idle spawn's wander distance; store that.
             run(container, user, password,
@@ -893,8 +913,10 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             if shift and column == "entryorguid":
                 selected.append(f"(s.{quote(column)} - {shift})")
             elif column.startswith("event_param") and column[len("event_param"):].isdigit():
-                # TC keeps a copy of the parent's event params on a LINK event (61); AC rejects the row unless 0
-                selected.append(f"IF(s.event_type=61, 0, s.{quote(column)})")
+                unused = ",".join(str(event) for count, events in SMART_EVENT_PARAM_COUNTS.items()
+                                  if count < int(column[len("event_param"):]) for event in events)
+                # Timed action lists are forced to UPDATE_OOC by the loader, regardless of stored event_type.
+                selected.append(f"IF(s.source_type<>9 AND s.event_type IN ({unused}), 0, s.{quote(column)})")
             elif column in ("target_param2", "target_param3", "target_param4"):
                 # NONE/SELF/VICTIM take no params in AC; TC data may keep e.g. a max distance there
                 selected.append(f"IF(s.target_type IN (0,1,2), 0, s.{quote(column)})")
