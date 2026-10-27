@@ -1892,6 +1892,10 @@ public:
     // Recomputed from `phase_area` + CONDITION_SOURCE_TYPE_PHASE conditions on every area change,
     // so it naturally survives logout/login via the same area recompute the login path already does.
     [[nodiscard]] std::vector<uint32> const& GetPhases() const { return m_phases; }
+    // True when the player is in the default (unphased) world: no phases, or the default phase granted.
+    [[nodiscard]] bool IsUnphased() const;
+    // Recompute phases after a quest or aura change and refresh visibility when membership changed.
+    void RefreshPhases();
     // Returns true if membership changed and a phase-shift packet was already sent.
     bool UpdatePhasesForArea(uint32 areaId);
     void SendPhaseShift();

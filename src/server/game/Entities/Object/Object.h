@@ -45,6 +45,9 @@
 
 class ALEEventProcessor;
 
+// Client Phase.dbc "Normal": the default, unphased world (TrinityCore DEFAULT_PHASE).
+constexpr uint32 DEFAULT_PHASE = 169;
+
 enum TempSummonType
 {
     TEMPSUMMON_TIMED_OR_DEAD_DESPAWN       = 1,             // despawns after a specified time OR when the creature disappears

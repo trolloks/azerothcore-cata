@@ -1282,6 +1282,17 @@ void Player::UpdateArea(uint32 newArea)
     UpdatePhasesForArea(newArea);
 }
 
+bool Player::IsUnphased() const
+{
+    return m_phases.empty() || std::find(m_phases.begin(), m_phases.end(), DEFAULT_PHASE) != m_phases.end();
+}
+
+void Player::RefreshPhases()
+{
+    if (UpdatePhasesForArea(GetAreaId()))
+        UpdateObjectVisibility();
+}
+
 bool Player::UpdatePhasesForArea(uint32 areaId)
 {
     std::vector<uint32> newPhases;
@@ -1311,7 +1322,7 @@ void Player::SendPhaseShift()
 {
     WorldPackets::Misc::PhaseShiftChange phaseShift;
     phaseShift.Client = GetGUID();
-    phaseShift.PhaseShiftFlags = m_phases.empty() ? 0x8 /*Unphased*/ : 0x0;
+    phaseShift.PhaseShiftFlags = IsUnphased() ? 0x8 /*Unphased*/ : 0x0;
     phaseShift.Phases.assign(m_phases.begin(), m_phases.end());
     SendDirectMessage(phaseShift.Write());
 }
