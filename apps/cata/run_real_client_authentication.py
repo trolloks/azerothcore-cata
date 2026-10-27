@@ -899,8 +899,12 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def database_cache_key(image_id: str, directories: tuple[tuple[str, Path], ...]) -> str:
-    digest = hashlib.sha256(f"plan7-database-cache-v{DATABASE_CACHE_VERSION}\0{image_id}\0".encode())
+def database_cache_key(
+    image_id: str, directories: tuple[tuple[str, Path], ...], world_dump: str = "",
+) -> str:
+    digest = hashlib.sha256(
+        f"plan7-database-cache-v{DATABASE_CACHE_VERSION}\0{image_id}\0{world_dump}\0".encode()
+    )
     for label, directory in directories:
         paths = sorted(directory.glob("*.sql"))
         if not paths:
@@ -1595,6 +1599,29 @@ def import_sql_directory(
         mysql(manifest, generation, path.read_bytes(), schema)
 
 
+def import_world_dump(
+    manifest: Manifest, generation: Generation, path: Path, schema: str,
+) -> None:
+    """Replace the world schema content with a prebuilt dump (e.g. the clean TDB world)."""
+    assert_container_owned(manifest, generation, schema)
+    command = [
+        "docker", "exec", "-i", str(generation["docker"]["container"]), "mysql",
+        "-uroot", f"-p{manifest['mysql_root_password']}", "--database", schema,
+    ]
+    with tempfile.TemporaryFile(dir=manifest["root"]) as handle, path.open("rb") as source:
+        handle.write(b"SET autocommit=0;\n")
+        shutil.copyfileobj(source, handle)
+        handle.write(b"\nCOMMIT;\n")
+        handle.seek(0)
+        result = subprocess.run(
+            command, stdin=handle, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            check=False, timeout=1800,
+        )
+    if result.returncode:
+        stderr = result.stderr.decode(errors="replace").strip()
+        raise RuntimeError(f"world dump import failed with exit {result.returncode}: {stderr}")
+
+
 def apply_released_updates(
     manifest: Manifest, generation: Generation, directory: Path, schema: str,
 ) -> list[str]:
@@ -2177,11 +2204,19 @@ def preflight_prepare(args: argparse.Namespace) -> dict[str, object]:
     personal_bottle = args.personal_bottle.resolve()
     if not personal_bottle.exists():
         raise RuntimeError(f"personal Bottle baseline path is absent: {personal_bottle}")
+    world_dump = args.world_dump.resolve() if args.world_dump else None
+    if world_dump and not world_dump.is_file():
+        raise RuntimeError(f"--world-dump file is absent: {world_dump}")
+    world_dump_sha = sha256(world_dump) if world_dump else ""
     return {
         "root": str(root),
         "repo_commit": head,
         "mysql_image_id": mysql_image_id,
-        "database_cache_key": database_cache_key(mysql_image_id, DATABASE_SQL_DIRECTORIES),
+        "database_cache_key": database_cache_key(
+            mysql_image_id, DATABASE_SQL_DIRECTORIES, world_dump_sha
+        ),
+        "world_dump": str(world_dump) if world_dump else "",
+        "world_dump_sha256": world_dump_sha,
         "authserver": authserver,
         "worldserver": worldserver,
         "unit_tests": unit_tests,
@@ -2356,12 +2391,16 @@ def prepare(args: argparse.Namespace) -> None:
                     manifest, generation, REPO_ROOT / f"data/sql/updates/db_{key}", schema,
                 )
             generation["released_updates"] = released
+            if inputs.get("world_dump"):
+                import_world_dump(manifest, generation, Path(inputs["world_dump"]), world)
             dump_database_cache(manifest_path, manifest, generation, cache_key)
             generation["database_cache"] = {"key": cache_key, "result": "built"}
         # Pending migrations aren't part of the database cache key (they're not released yet, so
         # they change independently of it) and must be applied fresh every prepare, whether the
         # schemas above came from a restored cache or a fresh import.
         for key, schema in (("auth", auth), ("characters", characters), ("world", world)):
+            if key == "world" and inputs.get("world_dump"):
+                continue
             apply_released_updates(manifest, generation, REPO_ROOT / f"data/sql/updates/pending_db_{key}", schema)
         realm_count = 1 if args.mode in POPULATED_CHARACTER_MODES else 0
         mysql(
@@ -11373,6 +11412,11 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--wine-runner", type=Path, required=True)
     prepare_parser.add_argument("--personal-bottle", type=Path, required=True)
     prepare_parser.add_argument("--migration", type=Path, default=DEFAULT_MIGRATION)
+    prepare_parser.add_argument(
+        "--world-dump", type=Path,
+        help="SQL dump of a prebuilt world schema (e.g. the clean TDB world); replaces the 3.3.5a "
+             "world base and skips pending world updates",
+    )
     prepare_parser.add_argument("--display", required=True)
     prepare_parser.add_argument("--xauthority", type=Path)
     prepare_parser.add_argument(
