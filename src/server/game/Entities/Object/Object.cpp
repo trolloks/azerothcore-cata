@@ -2095,9 +2095,11 @@ bool WorldObject::IsPhaseVisibleTo(Player const* player) const
     if (player->IsGameMaster())
         return true;
 
+    bool unphased = player->IsUnphased();
     std::vector<uint32> const& playerPhases = player->GetPhases();
     for (uint32 phaseId : GetPhasesForGroup(m_spawnPhaseId))
-        if (std::find(playerPhases.begin(), playerPhases.end(), phaseId) != playerPhases.end())
+        if (std::find(playerPhases.begin(), playerPhases.end(), phaseId) != playerPhases.end()
+            || (unphased && phaseId == DEFAULT_PHASE))
             return true;
 
     return false;

@@ -419,6 +419,8 @@ void WorldSession::HandleQuestLogRemoveQuest(WorldPackets::Quest::QuestLogRemove
             _player->TakeQuestSourceItem(questId, true); // remove quest src item from player
             _player->AbandonQuest(questId); // remove all quest items player received before abandoning quest.
             _player->RemoveActiveQuest(questId);
+            // Phase conditions can depend on the active quest, so refresh after the removal.
+            _player->RefreshPhases();
             _player->RemoveTimedAchievement(ACHIEVEMENT_TIMED_TYPE_QUEST, questId);
 
             sScriptMgr->OnPlayerQuestAbandon(_player, questId);
