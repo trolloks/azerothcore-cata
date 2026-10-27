@@ -516,10 +516,12 @@ void WorldSession::HandleQuestgiverCompleteQuest(WorldPacket& recvData)
         }
         else
         {
-            if (quest->GetReqItemsCount())                  // some items required
-                _player->PlayerTalkClass->SendQuestGiverRequestItems(quest, guid, _player->CanRewardQuest(quest, false), false);
-            else                                            // no items required
+            // The 4.3.4 Complete Quest button has already confirmed the turn-in. Answering with the
+            // 3.3.5a requirements packet makes the client reopen the same window instead of rewarding.
+            if (_player->CanRewardQuest(quest, false))
                 _player->PlayerTalkClass->SendQuestGiverOfferReward(quest, guid, true);
+            else
+                _player->PlayerTalkClass->SendQuestGiverRequestItems(quest, guid, false, false);
         }
     }
 }
