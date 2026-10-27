@@ -743,10 +743,12 @@ bool Object::_LoadIntoDataField(std::string const& data, uint32 startOffset, uin
 
     std::vector<std::string_view> tokens = Acore::Tokenize(data, ' ', false);
 
-    if (tokens.size() != count)
+    // Shorter data is zero-extended: existing characters stored explored zones with the old
+    // 128-word field count, and the field later grew (Cata: 156).
+    if (tokens.size() > count)
         return false;
 
-    for (uint32 index = 0; index < count; ++index)
+    for (size_t index = 0; index < tokens.size(); ++index)
     {
         Optional<uint32> val = Acore::StringTo<uint32>(tokens[index]);
         if (!val)
