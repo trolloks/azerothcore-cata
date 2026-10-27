@@ -362,6 +362,22 @@ class SpawnImportTests(unittest.TestCase):
                             f"(SELECT 1 FROM {table} t WHERE t.guid<>82140 AND {match})").fetchall(),
                             [] if matches else [(82140,)])
 
+    def test_import_dedupes_spawns_within_a_hub(self):
+        self.assertIn("<=0.25", importer.spawn_match())
+        self.assertIn("<=10000", importer.spawn_match(importer.SPAWN_DEDUPE_RADIUS_M))
+        with sqlite3.connect(":memory:") as db:
+            db.execute("CREATE TABLE creature (guid,id,map,phaseMask,position_x,position_y,position_z)")
+            db.execute("INSERT INTO creature VALUES (79970,197,0,1,-8902.59,-162.606,82.0223)")
+            # Marshal McBride moved 26 m between the 3.3.5a and 4.3.4 databases: one spawn, not two.
+            db.execute("INSERT INTO creature VALUES (10279961,197,0,1,-8913.07,-137.406,80.9012)")
+            exact = db.execute(f"SELECT t.guid FROM creature s JOIN creature t ON {importer.spawn_match()} "
+                               "WHERE s.guid=10279961 AND t.guid<>s.guid").fetchall()
+            self.assertEqual(exact, [])
+            hub = db.execute(f"SELECT t.guid FROM creature s JOIN creature t "
+                             f"ON {importer.spawn_match(importer.SPAWN_DEDUPE_RADIUS_M)} "
+                             "WHERE s.guid=10279961 AND t.guid<>s.guid").fetchall()
+            self.assertEqual(hub, [(79970,)])
+
     def test_scope_includes_out_of_zone_givers_on_same_map(self):
         with sqlite3.connect(":memory:") as db:
             db.execute("ATTACH DATABASE ':memory:' AS tdb_world")
