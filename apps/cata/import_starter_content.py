@@ -36,12 +36,19 @@ SMART_EVENT_PARAM_COUNTS = {
 }
 
 
-def spawn_match():
-    """Same template, map and phase within 0.5 m in 3D; shared by import and GUID remapping."""
+# TDB 434 and the 3.3.5a world DB place the same NPC up to a hub apart; anything closer than this
+# is the same spawn and must not be imported a second time. GUID remapping still matches at 0.5 m.
+SPAWN_DEDUPE_RADIUS_M = 100.0
+
+
+def spawn_match(radius_m: float = 0.5):
+    """Same template, map and phase within radius_m in 3D; shared by import and GUID remapping."""
+    distance_sq = radius_m * radius_m
     return ("t.id=s.id AND t.map=s.map AND t.phaseMask=s.phaseMask "
             "AND (t.position_x-s.position_x)*(t.position_x-s.position_x) "
             "+ (t.position_y-s.position_y)*(t.position_y-s.position_y) "
-            "+ (t.position_z-s.position_z)*(t.position_z-s.position_z)<=0.25")
+            "+ (t.position_z-s.position_z)*(t.position_z-s.position_z)"
+            f"<={distance_sq:g}")
 
 
 def spawn_scope(source, table, alias, zone, map_id, quest_ids):
@@ -449,7 +456,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                f"SELECT s.guid+{GUID_OFFSET},{selected} FROM {source}.{table} s "
                f"WHERE s.{id_column} IN ({ids}) AND {spawn_scope(source, table, 's', zone, map_id, quest_ids)} "
                f"AND NOT EXISTS (SELECT 1 FROM {target}.{table} t WHERE t.guid=s.guid+{GUID_OFFSET}) "
-               f"AND NOT EXISTS (SELECT 1 FROM {target}.{table} t WHERE {spawn_match()})")
+               f"AND NOT EXISTS (SELECT 1 FROM {target}.{table} t WHERE {spawn_match(SPAWN_DEDUPE_RADIUS_M)})")
         if dry_run:
             return 0, sql
         before = set(fetch(container, user, password,
