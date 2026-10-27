@@ -1,5 +1,7 @@
 """Offline loader-reference checks: python3 apps/cata/test_starter_content_relations.py."""
 
+import ast
+import inspect
 import re
 import sqlite3
 import struct
@@ -225,6 +227,33 @@ class RelationClosureTest(unittest.TestCase):
 
 
 class ImportDependenciesTest(unittest.TestCase):
+    def test_unused_event_params_preserve_used_values_and_timed_lists(self):
+        tree = ast.parse(inspect.getsource(importer.import_closure))
+        insert = next(node for node in ast.walk(tree)
+                      if isinstance(node, ast.FunctionDef) and node.name == "insert_scripts")
+        statements = []
+        columns = [f"event_param{i}" for i in range(1, 7)]
+        scope = {**vars(importer), "container": "", "user": "", "password": "",
+                 "target": "target", "source": "source", "map_table": "guid_map",
+                 "common_columns": lambda *args: columns, "run": lambda *args: statements.append(args[-1])}
+        exec(compile(ast.Module(body=[insert], type_ignores=[]), "insert_scripts", "exec"), scope)
+        scope["insert_scripts"]("1", 0)
+        select = statements[0].split("SELECT ", 1)[1].split(" FROM ", 1)[0]
+        counts = {event: count for count, events in importer.SMART_EVENT_PARAM_COUNTS.items() for event in events}
+        with sqlite3.connect(":memory:") as db:
+            db.create_function("IF", 3, lambda condition, yes, no: yes if condition else no)
+            db.execute("CREATE TABLE s (source_type, event_type, " + ",".join(columns) + ")")
+            for source_type in (0, 1, 9):
+                for event in range(111):
+                    with self.subTest(source_type=source_type, event=event):
+                        db.execute("DELETE FROM s")
+                        db.execute("INSERT INTO s VALUES (?,?,?,?,?,?,?,?)",
+                                   (source_type, event, 101, 102, 103, 30000, 105, 106))
+                        count = 6 if source_type == 9 else counts.get(event, 6)
+                        values = (101, 102, 103, 30000, 105, 106)
+                        self.assertEqual(db.execute(f"SELECT {select} FROM s").fetchone(),
+                                         tuple(value if i < count else 0 for i, value in enumerate(values)))
+
     def test_missing_rows_follow_native_links_and_stop_cycles(self):
         inserts = []
 
@@ -263,6 +292,48 @@ class ImportDependenciesTest(unittest.TestCase):
 
 
 class SpawnImportTests(unittest.TestCase):
+    def test_only_new_spawns_with_undefined_phases_are_normalized(self):
+        tree = ast.parse(inspect.getsource(importer.import_closure))
+        insert = next(node for node in ast.walk(tree)
+                      if isinstance(node, ast.FunctionDef) and node.name == "import_spawns")
+        for table in ("creature", "gameobject"):
+            for phases in (None, (), (169,)):
+                with self.subTest(table=table, phases=phases), sqlite3.connect(":memory:") as db:
+                    db.execute("ATTACH DATABASE ':memory:' AS target")
+                    db.execute(f"CREATE TABLE target.{table} (guid,id,PhaseId)")
+                    db.executemany(f"INSERT INTO target.{table} VALUES (?,?,?)", [
+                        (1, 100, 169), (10000001, 100, 169), (10000002, 100, 236),
+                        (10000003, 100, 0), (10000004, 100, 236)])
+                    if phases is not None:
+                        db.execute("CREATE TABLE target.phase_area (PhaseId)")
+                        db.executemany("INSERT INTO target.phase_area VALUES (?)", [(p,) for p in phases])
+
+                    def run(_container, _user, _password, sql):
+                        update, select = sql.split("; ")
+                        self.assertEqual(select, "SELECT ROW_COUNT()")
+                        return [[str(db.execute(update).rowcount)]]
+
+                    report = {"phase_normalized": {table: 0}}
+                    scope = {**vars(importer), "container": "", "user": "", "password": "",
+                             "target": "target", "source": "source", "zone": 16, "map_id": 1,
+                             "quest_ids": "1", "dry_run": False, "report": report, "new_spawn_guids": {}}
+                    cols = [(c, False) for c in ("guid", "id", "PhaseId")]
+                    with patch.object(importer, "run", side_effect=run), \
+                            patch.object(importer, "columns", return_value=cols), \
+                            patch.object(importer, "common_columns", return_value=[c for c, _ in cols]), \
+                            patch.object(importer, "table_exists", return_value=phases is not None) as exists, \
+                            patch.object(importer, "insert_count", return_value=3), \
+                            patch.object(importer, "fetch", side_effect=[
+                                ["10000004"], ["10000001", "10000002", "10000003", "10000004"]]):
+                        scope.update({name: getattr(importer, name) for name in (
+                            "columns", "common_columns", "table_exists", "insert_count", "fetch")})
+                        exec(compile(ast.Module(body=[insert], type_ignores=[]), "import_spawns", "exec"), scope)
+                        self.assertEqual(scope["import_spawns"](table, "id", {"100"})[0], 3)
+                        exists.assert_called_once_with("", "", "", "target", "phase_area")
+                    self.assertEqual(report["phase_normalized"][table], 1 if phases else 2)
+                    self.assertEqual(db.execute(f"SELECT PhaseId FROM target.{table} ORDER BY guid").fetchall(),
+                                     [(169,), (169 if phases else 0,), (0,), (0,), (236,)])
+
     def test_matching_uses_half_metre_3d_distance_and_preserves_other_spawns(self):
         with sqlite3.connect(":memory:") as db:
             for table in ("creature", "gameobject"):

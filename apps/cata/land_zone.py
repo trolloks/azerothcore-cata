@@ -249,6 +249,7 @@ def main():
     summary["items_absent_from_client_db2"] = sorted(absent, key=int)
     summary["unresolved_items"] = [x for x in report["unresolved_items"] if x["id"] not in absent]
     summary["stripped_script_names"] = report["imported_closure"].get("stripped_script_names", [])
+    summary["phase_normalized"] = report["imported_closure"].get("phase_normalized", {})
     summary["cleared_quest_links"] = report.get("cleared_quest_links", [])
     summary["skipped_quests"] = {q: reasons[q] for q in sorted(skip, key=int)}
 
