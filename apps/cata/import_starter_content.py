@@ -702,6 +702,19 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                 imported[guid] = entry
             else:
                 native[guid] = native_guid
+        # A spawn the wider dedupe skipped has no 0.5 m twin; map it to the native spawn whose
+        # placement it duplicates, or its scripts and conditions are dropped with the GUID.
+        skipped = (set(fetch(container, user, password,
+                             f"SELECT s.guid FROM {source}.{table} s WHERE s.id IN ({entries}) "
+                             f"AND {spawn_scope(source, table, 's', zone, map_id, quest_ids)}"))
+                   - imported.keys() - native.keys())
+        if skipped:
+            for guid, native_guid in run(container, user, password,
+                                         f"SELECT s.guid, MIN(t.guid) FROM {source}.{table} s "
+                                         f"JOIN {target}.{table} t ON {spawn_match(SPAWN_DEDUPE_RADIUS_M)} "
+                                         f"WHERE s.guid IN ({','.join(sorted(skipped))}) AND t.guid<{GUID_OFFSET} "
+                                         f"GROUP BY s.guid"):
+                native[guid] = native_guid
         return imported, native
 
     guid_map: list[tuple[int, int, int]] = []
