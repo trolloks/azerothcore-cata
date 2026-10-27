@@ -26,7 +26,7 @@ import uuid
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MYSQL_IMAGE = "mysql:8.4"
-DATABASE_CACHE_VERSION = 1
+DATABASE_CACHE_VERSION = 2
 CLIENT_BUILD = 15595
 CLIENT_SHA256 = "0ea9cc0458cb137f4e0767e8a1896e2042480a4a22397480d7ee64c2e696192a"
 ACCOUNT = "PLAN6USER"
@@ -1603,12 +1603,14 @@ def import_world_dump(
     manifest: Manifest, generation: Generation, path: Path, schema: str,
 ) -> None:
     """Replace the world schema content with a prebuilt dump (e.g. the clean TDB world)."""
-    header = path.open("rb").read(65536)
-    if b"\nCREATE DATABASE" in header or b"\nUSE `" in header:
-        raise RuntimeError(
-            "--world-dump must describe one schema (no CREATE DATABASE/USE): "
-            "dump it without --databases"
-        )
+    with path.open("rb") as source:
+        for line in source:
+            statement = line.lstrip().lower()
+            if statement.startswith((b"use ", b"create database")):
+                raise RuntimeError(
+                    "--world-dump must describe one schema (no CREATE DATABASE/USE): "
+                    "dump it without --databases"
+                )
     mysql(
         manifest, generation,
         f"DROP DATABASE IF EXISTS `{schema}`; "
