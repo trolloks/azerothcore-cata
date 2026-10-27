@@ -1603,6 +1603,17 @@ def import_world_dump(
     manifest: Manifest, generation: Generation, path: Path, schema: str,
 ) -> None:
     """Replace the world schema content with a prebuilt dump (e.g. the clean TDB world)."""
+    header = path.open("rb").read(65536)
+    if b"\nCREATE DATABASE" in header or b"\nUSE `" in header:
+        raise RuntimeError(
+            "--world-dump must describe one schema (no CREATE DATABASE/USE): "
+            "dump it without --databases"
+        )
+    mysql(
+        manifest, generation,
+        f"DROP DATABASE IF EXISTS `{schema}`; "
+        f"CREATE DATABASE `{schema}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;",
+    )
     assert_container_owned(manifest, generation, schema)
     command = [
         "docker", "exec", "-i", str(generation["docker"]["container"]), "mysql",
@@ -2274,6 +2285,11 @@ def prepare(args: argparse.Namespace) -> None:
         latest = active_generation(manifest) if manifest["generations"] else None
         if latest is not None and latest["state"] != "reset":
             if latest["state"] == "prepared":
+                if latest["inputs"].get("world_dump_sha256", "") != inputs["world_dump_sha256"]:
+                    raise RuntimeError(
+                        "the prepared generation used a different --world-dump (or none); "
+                        "reset it or prepare a new generation"
+                    )
                 if geometry_inputs_differ(latest.get("inputs", {}), inputs):
                     raise RuntimeError(
                         "the prepared generation used different geometry inputs (collision data or "
@@ -10078,6 +10094,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         cache_key = database_cache_key("mysql-image", (("auth-base", sql_root),))
         assert cache_key == database_cache_key("mysql-image", (("auth-base", sql_root),))
         assert cache_key != database_cache_key("other-image", (("auth-base", sql_root),))
+        assert cache_key != database_cache_key("mysql-image", (("auth-base", sql_root),), "d" * 64)
+        assert cache_key == database_cache_key("mysql-image", (("auth-base", sql_root),), "")
         (sql_root / "one.sql").write_text("SELECT 2;\n")
         assert cache_key != database_cache_key("mysql-image", (("auth-base", sql_root),))
         changed_key = database_cache_key("mysql-image", (("auth-base", sql_root),))
