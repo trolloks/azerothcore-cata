@@ -886,6 +886,33 @@ namespace Acore
         uint32        i_emote_num;
         Unit const*   i_target;
     };
+
+    class SendTextEmoteBuilder
+    {
+    public:
+        SendTextEmoteBuilder(Player const& player, uint32 emoteId, uint32 soundIndex, Unit const* target)
+            : i_player(player), i_emoteId(emoteId), i_soundIndex(soundIndex), i_target(target) {}
+
+        void operator()(WorldPacket& data, LocaleConstant loc_idx)
+        {
+            std::string const name(i_target
+                ? (i_target->IsPet() ? i_target->GetName() : i_target->GetNameForLocaleIdx(loc_idx))
+                : "");
+
+            data.Initialize(SMSG_TEXT_EMOTE, 20 + name.size() + 1);
+            data << i_player.GetGUID();
+            data << uint32(i_emoteId);
+            data << uint32(i_soundIndex);
+            data << uint32(name.size() + 1);
+            data << name;
+        }
+
+    private:
+        Player const& i_player;
+        uint32        i_emoteId;
+        uint32        i_soundIndex;
+        Unit const*   i_target;
+    };
 }                                                           // namespace Acore
 
 void WorldSession::HandleTextEmoteOpcode(WorldPacket& recvData)
@@ -961,6 +988,71 @@ void WorldSession::HandleTextEmoteOpcode(WorldPacket& recvData)
     //Send scripted event call
     if (unit && unit->IsCreature() && ((Creature*)unit)->AI())
         ((Creature*)unit)->AI()->ReceiveEmote(GetPlayer(), text_emote);
+}
+
+// 4.3.4: CMSG_SEND_TEXT_EMOTE (0x2E24), ported from TrinityCore's 4.3.4 handler.
+void WorldSession::HandleSendTextEmoteOpcode(WorldPacket& recvData)
+{
+    uint32 emoteId;
+    uint32 soundIndex;
+    ObjectGuid targetGuid;
+    recvData >> emoteId;
+    recvData >> soundIndex;
+    recvData >> targetGuid;
+
+    if (!GetPlayer()->IsAlive())
+        return;
+
+    GetPlayer()->UpdateSpeakTime(Player::ChatFloodThrottle::REGULAR);
+
+    if (!GetPlayer()->CanSpeak())
+    {
+        std::string timeStr = secsToTimeString(m_muteTime - GameTime::GetGameTime().count());
+        ChatHandler(this).SendNotification(LANG_WAIT_BEFORE_SPEAKING, timeStr);
+        return;
+    }
+
+    if (GetPlayer()->IsSpectator())
+        return;
+
+    sScriptMgr->OnPlayerTextEmote(GetPlayer(), emoteId, soundIndex, targetGuid);
+
+    EmotesTextEntry const* em = sEmotesTextStore.LookupEntry(emoteId);
+    if (!em)
+        return;
+
+    uint32 emoteAnim = em->textid;
+
+    switch (emoteAnim)
+    {
+        case EMOTE_STATE_SLEEP:
+        case EMOTE_STATE_SIT:
+        case EMOTE_STATE_KNEEL:
+        case EMOTE_ONESHOT_NONE:
+            break;
+        case EMOTE_STATE_DANCE:
+            GetPlayer()->SetUInt32Value(UNIT_NPC_EMOTESTATE, emoteAnim);
+            break;
+        default:
+            // Only allow text-emotes for "dead" entities (feign death included)
+            if (GetPlayer()->HasUnitState(UNIT_STATE_DIED))
+                break;
+            GetPlayer()->HandleEmoteCommand(emoteAnim);
+            break;
+    }
+
+    Unit* unit = ObjectAccessor::GetUnit(*_player, targetGuid);
+
+    Acore::SendTextEmoteBuilder emote_builder(*GetPlayer(), emoteId, soundIndex, unit);
+    Acore::LocalizedPacketDo<Acore::SendTextEmoteBuilder> emote_do(emote_builder);
+    Acore::PlayerDistWorker<Acore::LocalizedPacketDo<Acore::SendTextEmoteBuilder>> emote_worker(
+        GetPlayer(), sWorld->getFloatConfig(CONFIG_LISTEN_RANGE_TEXTEMOTE), emote_do);
+    Cell::VisitObjects(GetPlayer(), emote_worker, sWorld->getFloatConfig(CONFIG_LISTEN_RANGE_TEXTEMOTE));
+
+    GetPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_DO_EMOTE, emoteId, 0, unit);
+
+    if (unit && unit->IsCreature() && ((Creature*)unit)->AI())
+        ((Creature*)unit)->AI()->ReceiveEmote(GetPlayer(), emoteId);
 }
 
 void WorldSession::HandleChatIgnoredOpcode(WorldPacket& recvData)

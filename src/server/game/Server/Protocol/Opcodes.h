@@ -776,6 +776,7 @@ enum OpcodeClient : uint16
     CMSG_CLEAR_HOLIDAY_BG_WIN_TIME                  = 0x51A,
     CMSG_COMMENTATOR_SKIRMISH_QUEUE_COMMAND         = 0x0025,
     TC9_CMSG_PREPARE_FOR_REDIRECT                   = 0x51F,
+    CMSG_SEND_TEXT_EMOTE                            = 0x2E24,
     CMSG_LOG_DISCONNECT                             = 0x446D,
     CMSG_LOADING_SCREEN_NOTIFY                      = 0x2422,
     CMSG_VIOLENCE_LEVEL                             = 0x7816,
