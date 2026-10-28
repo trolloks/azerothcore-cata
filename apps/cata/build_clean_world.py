@@ -175,6 +175,13 @@ def build_templates(container, user, password, target, source):
 # Client spell names: Generic Quest Invisibility 1/2/3 and its matching Detection 1/2/3.
 INVISIBILITY_DETECTION = {"49414": "49416", "49415": "49417", "60921": "60922"}
 
+# Authored starter transitions where TDB has no detection spell_area (#282). Detection 49416
+# makes a spawn carrying invisibility 49414 visible; the quest states are the authored predicate.
+STARTER_DETECTIONS = (
+    # area, detection spell, quest_start, quest_end, quest_start_status, quest_end_status
+    (5692, 49416, 0, 24959, 0, 41),  # Deathknell: Agatha visible until 24959 is rewarded
+)
+
 
 def update_count(container, user, password, sql):
     """Run an UPDATE and return its ROW_COUNT (insert_count is for INSERT statements)."""
@@ -193,6 +200,19 @@ def restore_addon_auras(container, user, password, target, source):
         f"UPDATE `{target}`.creature_template_addon a JOIN `{source}`.creature_template_addon t "
         f"ON a.entry=t.entry SET a.auras=t.auras")
     return counts
+
+
+def apply_starter_detections(container, user, password, target):
+    """Add the authored detection auras that make TDB's invisibility variants visible (#282)."""
+    applied = {}
+    for area, spell, quest_start, quest_end, start_status, end_status in STARTER_DETECTIONS:
+        applied[f"detection_{spell}_{area}"] = insert_count(
+            container, user, password,
+            f"INSERT IGNORE INTO `{target}`.spell_area "
+            f"(spell, area, quest_start, quest_end, aura_spell, racemask, gender, autocast, "
+            f"quest_start_status, quest_end_status) "
+            f"VALUES ({spell}, {area}, {quest_start}, {quest_end}, 0, 0, 2, 1, {start_status}, {end_status})")
+    return applied
 
 
 def strip_uncovered_invisibility(container, user, password, target):
@@ -279,6 +299,7 @@ def build_spawns(container, user, password, target, source):
     applied["smart_scripts"] = copy_smart_scripts(container, user, password, target, source)
     applied.update(restore_addon_auras(container, user, password, target, source))
     applied.update(import_phase_data(container, user, password, target, source))
+    applied.update(apply_starter_detections(container, user, password, target))
     applied.update(strip_uncovered_invisibility(container, user, password, target))
     applied["variants_suppressed"] = suppress_spawns(container, user, password, target)
     return applied
