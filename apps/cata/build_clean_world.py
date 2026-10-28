@@ -276,9 +276,11 @@ HOVER_AURAS = (36550, 86137, 96851, 102602, 50195)
 # Light's Vengeance vehicle and the Blood Prince Council's Ball of Flame/Dark Nucleus helpers.
 # The Sartharion drakes (npc_vesperon/npc_shadron/npc_tenebron) and the Feral Defender
 # (npc_feral_defender) are unregistered after strip_unregistered_scripts, so their scripts do not
-# run here and they are deliberately absent until the bindings are mapped. Keep this separate
-# from VALKYR_SCRIPTED, whose flight-only entries must not stay hovered.
-SCRIPTED_HOVERERS = (26668, 30810, 22917, 29308, 29310, 32857, 37127, 37952, 38332, 38369, 38451)
+# run here and they are deliberately absent until the bindings are mapped. Taldaram is out for
+# the same reason (TDB names boss_prince_taldaram, the fork registers boss_taldaram) and the
+# Light's Vengeance vehicle is out because its hover caller (npc_q24545_lich_king) is not bound
+# either. Keep this separate from VALKYR_SCRIPTED, whose flight-only entries must not stay hovered.
+SCRIPTED_HOVERERS = (26668, 30810, 22917, 29310, 32857, 37127, 38332, 38369, 38451)
 
 
 def load_valkyr_displays(dbc_dir: Path) -> tuple[int, ...]:
