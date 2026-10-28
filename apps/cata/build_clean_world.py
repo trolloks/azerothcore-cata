@@ -212,6 +212,24 @@ def build_templates(container, user, password, target, source):
         f"AND sa.entryOrGuid IS NULL "
         f"AND (a.auras IS NULL OR ({hover_template})) "
         f"AND t.entry NOT IN ({scripted})")
+    # A difficulty template inherits its base's script/aura hover, and Creature::InitEntry reads
+    # the difficulty height, so restore the source height for the variants of every protected
+    # base (the source rows carry the TDB height; the rule above only zeroed the default 1).
+    diffs = run(container, user, password,
+                f"SELECT difficulty_entry_1 FROM `{target}`.creature_template "
+                f"WHERE difficulty_entry_1<>0 AND HoverHeight<>0 "
+                f"UNION SELECT difficulty_entry_2 FROM `{target}`.creature_template "
+                f"WHERE difficulty_entry_2<>0 AND HoverHeight<>0 "
+                f"UNION SELECT difficulty_entry_3 FROM `{target}`.creature_template "
+                f"WHERE difficulty_entry_3<>0 AND HoverHeight<>0")
+    variant_ids = [row[0] for row in diffs if int(row[0])]
+    if variant_ids:
+        applied["hover_difficulty"] = update_count(
+            container, user, password,
+            f"UPDATE `{target}`.creature_template t "
+            f"JOIN `{source}`.creature_template s ON s.entry=t.entry "
+            f"SET t.HoverHeight=s.HoverHeight "
+            f"WHERE t.entry IN ({','.join(map(str, variant_ids))}) AND t.HoverHeight=0")
     applied["stripped_script_names"] = strip_unregistered_scripts(container, user, password, target)
     return applied
 
@@ -241,14 +259,12 @@ VALKYR_SCRIPTED = (24068, 31655, 28534, 26668, 30810, 34496, 34497, 35347, 35348
 # Hunter Ascendant spawns (50195). Add others when the data uses them.
 HOVER_AURAS = (36550, 86137, 96851, 102602, 50195)
 
-# Scripts that call SetHover(true) and therefore need their template height (only the height-1
-# entries matter here; non-1 heights are kept regardless): Illidan, Sartharion and his drakes,
-# Ahn'kahet Taldaram/Jedoga, Mimiron, Auriaya, the ICC Frostbinder and Blood Prince Council
-# (incl. the Ball of Flame/Dark Nucleus helpers), the Light's Vengeance vehicle and Brundir
-# (whose 10 is kept by the height rule anyway).
-SCRIPTED_HOVERERS = VALKYR_SCRIPTED + (22917, 28860, 30449, 30451, 30452, 29308, 29310, 32857,
-                                       33350, 33515, 37127, 37952, 37970, 37972, 37973, 38332,
-                                       38369, 38451)
+# Scripts that call SetHover(true) on the creature itself and therefore need its template height
+# (only the height-1 entries matter here; non-1 heights are kept regardless): Illidan, Sartharion's
+# drakes, Ahn'kahet Taldaram/Jedoga, Brundir, the ICC Frostbinder, the Light's Vengeance vehicle
+# and the Blood Prince Council's Ball of Flame/Dark Nucleus helpers.
+SCRIPTED_HOVERERS = VALKYR_SCRIPTED + (22917, 30449, 30451, 30452, 29308, 29310, 32857, 37127,
+                                       37952, 38332, 38369, 38451)
 
 
 def load_valkyr_displays(dbc_dir: Path) -> tuple[int, ...]:
