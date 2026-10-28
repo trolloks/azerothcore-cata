@@ -145,21 +145,59 @@ def derive_templates(container, user, password, target, source):
     return counts
 
 
+# TDB 434 carries TrinityCore class names for a few AIs; the fork has the same behaviour under
+# its own registration names. Map them before stripping anything (#298).
+SCRIPT_ALIASES = {
+    "npc_vesperon": "boss_sartharion_vesperon",
+    "npc_shadron": "boss_sartharion_shadron",
+    "npc_tenebron": "boss_sartharion_tenebron",
+    "npc_feral_defender": "npc_auriaya_feral_defender",
+    "boss_prince_taldaram": "boss_taldaram",
+}
+
+
 def strip_unregistered_scripts(container, user, password, target):
-    """TDB ScriptName values are TrinityCore classes; an unknown name makes the loader skip the AI."""
+    """Map known TDB aliases, strip unknown script names and report what is left.
+
+    Must run after the spawn tables are copied: the spawn-level ScriptName values live there and
+    were previously never checked because the strip ran in the template phase.
+    """
     registered = registered_script_names()
-    stripped = 0
-    for table in ("creature_template", "gameobject_template", "creature", "gameobject"):
-        names = {row[0] for row in run(container, user, password,
-                                       f"SELECT DISTINCT ScriptName FROM `{target}`.`{table}` "
-                                       f"WHERE ScriptName<>''")}
-        unknown = sorted(names - registered)
-        if unknown:
-            literals = ",".join(f"X'{name.encode().hex()}'" for name in unknown)
+    tables = ("creature_template", "gameobject_template", "creature", "gameobject")
+    for tdb_name, ac_name in SCRIPT_ALIASES.items():
+        if ac_name not in registered:
+            continue
+        literal = f"X'{tdb_name.encode().hex()}'"
+        for table in tables:
             run(container, user, password,
-                f"UPDATE `{target}`.`{table}` SET ScriptName='' "
-                f"WHERE BINARY ScriptName IN ({literals})")
-            stripped += len(unknown)
+                f"UPDATE `{target}`.`{table}` SET ScriptName='{ac_name}' "
+                f"WHERE BINARY ScriptName={literal}")
+    spawns = {}
+    for template_table, spawn_table in (("creature_template", "creature"),
+                                        ("gameobject_template", "gameobject")):
+        for name, count in run(container, user, password,
+                f"SELECT t.ScriptName, COUNT(*) FROM `{target}`.`{template_table}` t "
+                f"JOIN `{target}`.`{spawn_table}` s ON s.id=t.entry "
+                f"WHERE t.ScriptName<>'' GROUP BY t.ScriptName"):
+            spawns.setdefault(template_table, {})[name] = int(count)
+    stripped = {}
+    for table in tables:
+        names = {row[0]: int(row[1]) for row in run(
+            container, user, password,
+            f"SELECT ScriptName, COUNT(*) FROM `{target}`.`{table}` "
+            f"WHERE ScriptName<>'' GROUP BY ScriptName")}
+        unknown = sorted(set(names) - registered)
+        if not unknown:
+            continue
+        literals = ",".join(f"X'{name.encode().hex()}'" for name in unknown)
+        run(container, user, password,
+            f"UPDATE `{target}`.`{table}` SET ScriptName='' "
+            f"WHERE BINARY ScriptName IN ({literals})")
+        for name in unknown:
+            record = {"rows": names[name]}
+            if name in spawns.get(table, {}):
+                record["spawns"] = spawns[table][name]
+            stripped.setdefault(table, {})[name] = record
     return stripped
 
 
@@ -241,7 +279,6 @@ def build_templates(container, user, password, target, source):
             f"JOIN `{source}`.creature_template s ON s.entry=t.entry "
             f"SET t.HoverHeight=s.HoverHeight "
             f"WHERE t.entry IN ({','.join(map(str, variant_ids))}) AND t.HoverHeight=0")
-    applied["stripped_script_names"] = strip_unregistered_scripts(container, user, password, target)
     return applied
 
 
@@ -270,17 +307,15 @@ VALKYR_SCRIPTED = (24068, 31655, 28534, 26668, 30810, 34496, 34497, 35347, 35348
 # Hunter Ascendant spawns (50195). Add others when the data uses them.
 HOVER_AURAS = (36550, 86137, 96851, 102602, 50195)
 
-# Scripts that call SetHover(true) on the creature itself and are actually bound in the clean
-# world, so their template height is needed (only the height-1 entries matter; non-1 heights are
-# kept regardless): Svala, Illidan, Ahn'kahet Taldaram/Jedoga, Brundir, the ICC Frostbinder, the
-# Light's Vengeance vehicle and the Blood Prince Council's Ball of Flame/Dark Nucleus helpers.
-# The Sartharion drakes (npc_vesperon/npc_shadron/npc_tenebron) and the Feral Defender
-# (npc_feral_defender) are unregistered after strip_unregistered_scripts, so their scripts do not
-# run here and they are deliberately absent until the bindings are mapped. Taldaram is out for
-# the same reason (TDB names boss_prince_taldaram, the fork registers boss_taldaram) and the
-# Light's Vengeance vehicle is out because its hover caller (npc_q24545_lich_king) is not bound
-# either. Keep this separate from VALKYR_SCRIPTED, whose flight-only entries must not stay hovered.
-SCRIPTED_HOVERERS = (26668, 30810, 22917, 29310, 32857, 37127, 38332, 38369, 38451)
+# Scripts that call SetHover(true) on the creature itself and are bound in the clean world after
+# the TDB->AC aliases (#298), so their template height is needed (only the height-1 entries matter;
+# non-1 heights are kept regardless): Svala, Illidan, Ahn'kahet Taldaram/Jedoga, the Sartharion
+# drakes, Brundir, the Feral Defender, the ICC Frostbinder and the Blood Prince Council's Ball of
+# Flame/Dark Nucleus helpers. The Light's Vengeance vehicle stays out because its hover caller
+# (npc_q24545_lich_king) is not bound. Keep this separate from VALKYR_SCRIPTED, whose flight-only
+# entries must not stay hovered.
+SCRIPTED_HOVERERS = (26668, 30810, 22917, 29308, 29310, 30449, 30451, 30452, 32857, 34035, 37127,
+                     38332, 38369, 38451)
 
 
 def load_valkyr_displays(dbc_dir: Path) -> tuple[int, ...]:
@@ -429,6 +464,7 @@ def build_spawns(container, user, password, target, source):
     applied.update(apply_starter_detections(container, user, password, target))
     applied.update(strip_uncovered_invisibility(container, user, password, target))
     applied["variants_suppressed"] = suppress_spawns(container, user, password, target)
+    applied["stripped_script_names"] = strip_unregistered_scripts(container, user, password, target)
     return applied
 
 
