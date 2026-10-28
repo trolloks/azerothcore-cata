@@ -32,7 +32,8 @@ legitimate reference for a Cata-specific format AC has no prior version of.
 When the pinned TC-Cata source and TDB 434 lack data the client requires (an authored `spell_area`
 detection row, a missing spawn fix), adding it is allowed only when the row is marked as authored in
 the code that adds it, the gameplay justification (the quest flow where applicable) is recorded on
-the issue, and the human client test accepts it. Authored data is never presented as TC-Cata data.
+the issue, and the change lands under the normal deterministic checks; in-world validation is picked
+up later under the 2026-10-28 policy. Authored data is never presented as TC-Cata data.
 
 ## Real-client acceptance is human, not a merge gate
 
