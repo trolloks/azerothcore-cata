@@ -34,12 +34,14 @@ detection row, a missing spawn fix), adding it is allowed only when the row is m
 the code that adds it, the gameplay justification (the quest flow where applicable) is recorded on
 the issue, and the human client test accepts it. Authored data is never presented as TC-Cata data.
 
-## Real-client acceptance is human
+## Real-client acceptance is human, not a merge gate
 
-The client harness only launches the client and gets into the world (`run --hand-off`). All
-in-world testing is done and signed off by a human, recorded as a sign-off comment on the issue.
-Agents must not script in-world input or report an in-world acceptance result; they prepare the
-stack, list what the human should check, and stop. See `plan/client-automation.md`.
+The client harness only launches the client and gets into the world (`run --hand-off`). In-world
+testing is done by a human; agents must not script in-world input or report an in-world acceptance
+result. Human sign-off is not a merge or closure gate (revised 2026-10-28): land a change on its
+deterministic checks (importer gates, load diff, tests, review) and pick the in-world validation up
+when the issue is revisited; a finding becomes a new issue. When the client is exercised it remains
+the acceptance judge and wins over TC. See `plan/client-automation.md`.
 
 ## GM commands for test setup
 

@@ -7,20 +7,24 @@ character selection do not prove that the world loading screen has dismissed.
 ## Human in-world testing (policy from 2026-10-22)
 
 The harness automates only launching the isolated client and getting a character into the world.
-**All in-world testing is done by a human and signed off by a human.** Scripted in-world scenarios
-(movement, combat, casting, vendor, trainer, quests, level-up, geometry) cost far more agent time
-than they returned and are retired; their `--mode` values are no longer accepted. The sections
-below that describe them are historical.
+**In-world testing is done by a human; agents never script in-world input or claim an in-world
+acceptance result.** Scripted in-world scenarios (movement, combat, casting, vendor, trainer,
+quests, level-up, geometry) cost far more agent time than they returned and are retired; their
+`--mode` values are no longer accepted. The sections below that describe them are historical.
+
+Human sign-off is **not** a merge or closure gate (policy revised 2026-10-28). Land a change on its
+deterministic checks (importer gates, load diff, tests, review) and pick the in-world pass up when
+the issue is revisited; a finding becomes a new issue.
 
 - Reach the world with `--mode map-insertion-object-bootstrap` (seeded character) or
   `--mode character-creation` (client-created character), then `run --auto-login --hand-off`.
   `--hand-off` leaves the client in-world after the automated milestone; closing the client (or
   Ctrl-C) ends the run and the normal teardown stops the owned servers.
-- Agents prepare the stack, state exactly what the human should check in-world, and stop. Do not
-  drive in-world input, add new in-world automation, or claim an in-world acceptance result.
-- An issue's in-world acceptance is satisfied only by a human sign-off comment on the issue
-  (what was tested, build/commit, pass/fail). Server logs and packet captures from the session are
-  supporting evidence, not a sign-off.
+- Agents may prepare the stack and state what is worth checking in-world, but do not wait for an
+  in-world pass to land a change. Do not drive in-world input, add new in-world automation, or
+  claim an in-world acceptance result.
+- When the client is exercised, the human remains the acceptance judge; server logs and packet
+  captures are supporting evidence.
 - Deterministic checks (unit/codec tests, `apps/cata` checkers) still run as before.
 
 ## Build and run budget
