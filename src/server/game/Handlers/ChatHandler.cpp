@@ -886,6 +886,33 @@ namespace Acore
         uint32        i_emote_num;
         Unit const*   i_target;
     };
+
+    class SendTextEmoteBuilder
+    {
+    public:
+        SendTextEmoteBuilder(Player const& player, uint32 emoteId, uint32 soundIndex, Unit const* target)
+            : i_player(player), i_emoteId(emoteId), i_soundIndex(soundIndex), i_target(target) {}
+
+        void operator()(WorldPacket& data, LocaleConstant loc_idx)
+        {
+            std::string const name(i_target
+                ? (i_target->IsPet() ? i_target->GetName() : i_target->GetNameForLocaleIdx(loc_idx))
+                : "");
+
+            data.Initialize(SMSG_TEXT_EMOTE, 20 + name.size() + 1);
+            data << i_player.GetGUID();
+            data << uint32(i_emoteId);
+            data << uint32(i_soundIndex);
+            data << uint32(name.size() + 1);
+            data << name;
+        }
+
+    private:
+        Player const& i_player;
+        uint32        i_emoteId;
+        uint32        i_soundIndex;
+        Unit const*   i_target;
+    };
 }                                                           // namespace Acore
 
 void WorldSession::HandleTextEmoteOpcode(WorldPacket& recvData)
@@ -976,12 +1003,17 @@ void WorldSession::HandleSendTextEmoteOpcode(WorldPacket& recvData)
     if (!GetPlayer()->IsAlive())
         return;
 
+    GetPlayer()->UpdateSpeakTime(Player::ChatFloodThrottle::REGULAR);
+
     if (!GetPlayer()->CanSpeak())
     {
         std::string timeStr = secsToTimeString(m_muteTime - GameTime::GetGameTime().count());
         ChatHandler(this).SendNotification(LANG_WAIT_BEFORE_SPEAKING, timeStr);
         return;
     }
+
+    if (GetPlayer()->IsSpectator())
+        return;
 
     sScriptMgr->OnPlayerTextEmote(GetPlayer(), emoteId, soundIndex, targetGuid);
 
@@ -1010,15 +1042,12 @@ void WorldSession::HandleSendTextEmoteOpcode(WorldPacket& recvData)
     }
 
     Unit* unit = ObjectAccessor::GetUnit(*_player, targetGuid);
-    std::string const name = unit ? unit->GetName() : "";
 
-    WorldPacket data(SMSG_TEXT_EMOTE, 8 + 4 + 4 + 4 + name.size() + 1);
-    data << _player->GetGUID();
-    data << uint32(emoteId);
-    data << uint32(soundIndex);
-    data << uint32(name.size() + 1);
-    data << name;
-    GetPlayer()->SendMessageToSetInRange(&data, sWorld->getFloatConfig(CONFIG_LISTEN_RANGE_TEXTEMOTE), true);
+    Acore::SendTextEmoteBuilder emote_builder(*GetPlayer(), emoteId, soundIndex, unit);
+    Acore::LocalizedPacketDo<Acore::SendTextEmoteBuilder> emote_do(emote_builder);
+    Acore::PlayerDistWorker<Acore::LocalizedPacketDo<Acore::SendTextEmoteBuilder>> emote_worker(
+        GetPlayer(), sWorld->getFloatConfig(CONFIG_LISTEN_RANGE_TEXTEMOTE), emote_do);
+    Cell::VisitObjects(GetPlayer(), emote_worker, sWorld->getFloatConfig(CONFIG_LISTEN_RANGE_TEXTEMOTE));
 
     GetPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_DO_EMOTE, emoteId, 0, unit);
 
