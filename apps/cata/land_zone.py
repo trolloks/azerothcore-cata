@@ -110,14 +110,29 @@ def tdb_quest_gaps(c, u, p, quests, target, zone, map_id, dbc_dir):
             reason = "quest giver 44365 has no spawn or summon in TDB"
             if reason not in reasons.setdefault(quest, []):
                 reasons[quest].append(reason)
+    # 33889 has no spawn and only an uninvoked summon spell (63942): Secret Signal Powder casts
+    # dummy 63829 without a summon hook, so 13815/13865/13870 cannot reach him.
+    for table in ("creature_queststarter", "creature_questender"):
+        for (quest,) in run(c, u, p, f"SELECT quest FROM tdb_world.{table} "
+                                    f"WHERE id=33889 AND quest IN ({','.join(quests)})"):
+            reason = "quest giver 33889 has no reachable spawn (only uninvoked summon 63942)"
+            if reason not in reasons.setdefault(quest, []):
+                reasons[quest].append(reason)
     # Credit markers need no physical spawn when a local creature/object or a spell grants the credit.
-    effects, _ = spell_effects(dbc_dir, (28, 56, 90, 134))  # Summon, summon pet, kill credit, kill credit 2.
-    available = {entry for entries in effects.values() for entry in entries}
-    available.update(row[0] for row in run(c, u, p,
+    # Only summon effects (28/56) prove a creature exists; 90/134 are kill-credit effects and must
+    # not make an unspawned giver look reachable.
+    spawn_effects, _ = spell_effects(dbc_dir, (28, 56))
+    credit_effects, _ = spell_effects(dbc_dir, (90, 134))
+    spawn_available = {entry for entries in spawn_effects.values() for entry in entries}
+    spawn_available.update(row[0] for row in run(c, u, p,
         f"SELECT id FROM tdb_world.creature UNION SELECT id FROM {target}.creature "
         "UNION SELECT action_param1 FROM tdb_world.smart_scripts WHERE action_type=12 "
         "UNION SELECT entry FROM tdb_world.creature_summon_groups "
-        "UNION SELECT EffectMiscValue FROM tdb_world.spelleffect_dbc WHERE Effect IN (28,56,90,134) "
+        "UNION SELECT EffectMiscValue FROM tdb_world.spelleffect_dbc WHERE Effect IN (28,56)"))
+    available = set(spawn_available)
+    available.update({entry for entries in credit_effects.values() for entry in entries})
+    available.update(row[0] for row in run(c, u, p,
+        "SELECT EffectMiscValue FROM tdb_world.spelleffect_dbc WHERE Effect IN (90,134) "
         "UNION SELECT action_param1 FROM tdb_world.smart_scripts WHERE source_type=9 AND action_type=33"))
     for schema in ("tdb_world", target):
         for source_type, table in ((0, "creature"), (1, "gameobject")):
@@ -135,6 +150,33 @@ def tdb_quest_gaps(c, u, p, quests, target, zone, map_id, dbc_dir):
         for entry in sorted(set(objectives) - available, key=int):
             if int(entry) > 0:
                 reasons.setdefault(quest, []).append(f"objective creature {entry} has no spawn or summon in TDB")
+    # Several Ashenvale NPCs (Kadrak 8582, 12736, 33260, 33837, 33977, 34358, 34512, 34599, 34604)
+    # have relations in TDB 434 but no spawn, summon group, SmartAI summon or spell summon.
+    go_available = {row[0] for row in run(c, u, p,
+        f"SELECT id FROM tdb_world.gameobject UNION SELECT id FROM {target}.gameobject")}
+    # A quest only needs one reachable starter and one reachable ender; an unspawned relation
+    # (e.g. 35195 next to spawned 35198) must not reject the quest. Creature and gameobject
+    # relations are alternatives within the same role.
+    for role, tables in (("starter", (("creature_queststarter", True), ("gameobject_queststarter", False))),
+                         ("ender", (("creature_questender", True), ("gameobject_questender", False)))):
+        by_quest = {}
+        for table, is_creature in tables:
+            for quest, entry in run(c, u, p,
+                    f"SELECT quest, id FROM tdb_world.{table} WHERE quest IN ({','.join(quests)})"):
+                by_quest.setdefault(quest, []).append((entry, is_creature))
+        for quest, entries in by_quest.items():
+            if any(entry in (spawn_available if is_creature else go_available)
+                   for entry, is_creature in entries):
+                continue
+            for entry, is_creature in entries:
+                reason = (f"quest giver {entry} has no spawn or summon in TDB" if is_creature
+                          else f"quest giver gameobject {entry} has no spawn in TDB")
+                if reason not in reasons.setdefault(quest, []):
+                    reasons[quest].append(reason)
+    # 13921 is auto-accept only, has no starter relation and its predecessor 13919 is a skipped
+    # TDB gap; nothing can offer it in the client.
+    if "13921" in set(quests):
+        reasons.setdefault("13921", []).append("no acceptance route (auto-accept only)")
     return reasons
 
 

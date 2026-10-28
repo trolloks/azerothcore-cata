@@ -410,6 +410,7 @@ class TdbQuestGapsTests(unittest.TestCase):
                 ("smart_scripts", "entryorguid,source_type,action_type,action_param1"),
                 ("creature_summon_groups", "entry"), ("spelleffect_dbc", "Effect,EffectMiscValue"),
                 ("creature_queststarter", "id,quest"), ("creature_questender", "id,quest"),
+                ("gameobject_queststarter", "id,quest"), ("gameobject_questender", "id,quest"),
             ):
                 db.execute(f"CREATE TABLE {schema}.{table} ({','.join(c + ' INTEGER' for c in columns.split(','))})")
         columns = [f"RequiredItemId{i}" for i in range(1, 7)] + land_zone.OBJECTIVES
@@ -478,6 +479,69 @@ class TdbQuestGapsTests(unittest.TestCase):
                 reasons = land_zone.tdb_quest_gaps("", "", "", selected, "target", 1, 0, "dbc")
         self.assertEqual(reasons, {q: [f"objective creature {q} has no spawn or summon in TDB"]
                                    for q in ("101", "107", "108")})
+
+    def test_credit_effect_does_not_make_a_giver_reachable(self):
+        with self.database() as db:
+            db.execute("INSERT INTO tdb_world.quest_template (ID) VALUES (5000)")
+            db.execute("INSERT INTO tdb_world.creature_queststarter VALUES (500,5000)")
+
+            def effects(_dir, kinds=(28,)):
+                return ({1: {"500"}}, {}) if 90 in kinds else ({}, {})
+
+            with patch.object(land_zone, "spell_effects", side_effect=effects), \
+                    patch.object(land_zone, "run", side_effect=lambda c, u, p, sql:
+                                 [[str(value) for value in row] for row in db.execute(sql)]):
+                reasons = land_zone.tdb_quest_gaps("", "", "", ["5000"], "target", 1, 0, "dbc")
+        self.assertIn("quest giver 500 has no spawn or summon in TDB", reasons.get("5000", []))
+
+    def test_alternate_reachable_giver_keeps_quest(self):
+        with self.database() as db:
+            db.execute("INSERT INTO tdb_world.quest_template (ID) VALUES (6000)")
+            db.execute("INSERT INTO tdb_world.creature_queststarter VALUES (35195,6000)")
+            db.execute("INSERT INTO tdb_world.creature_queststarter VALUES (35198,6000)")
+            db.execute("INSERT INTO tdb_world.creature_questender VALUES (35198,6000)")
+            db.execute("INSERT INTO tdb_world.creature VALUES (1,35198,1,331,0)")
+            with patch.object(land_zone, "spell_effects", return_value=({}, {})), \
+                    patch.object(land_zone, "run", side_effect=lambda c, u, p, sql:
+                                 [[str(value) for value in row] for row in db.execute(sql)]):
+                reasons = land_zone.tdb_quest_gaps("", "", "", ["6000"], "target", 1, 0, "dbc")
+        self.assertNotIn("6000", reasons)
+
+    def test_gameobject_giver_without_spawn_is_skipped(self):
+        with self.database() as db:
+            db.execute("INSERT INTO tdb_world.quest_template (ID) VALUES (7000)")
+            db.execute("INSERT INTO tdb_world.gameobject_queststarter VALUES (900,7000)")
+            with patch.object(land_zone, "spell_effects", return_value=({}, {})), \
+                    patch.object(land_zone, "run", side_effect=lambda c, u, p, sql:
+                                 [[str(value) for value in row] for row in db.execute(sql)]):
+                reasons = land_zone.tdb_quest_gaps("", "", "", ["7000"], "target", 1, 0, "dbc")
+        self.assertIn("quest giver gameobject 900 has no spawn in TDB", reasons.get("7000", []))
+
+    def test_uninvoked_summon_giver_is_skipped(self):
+        with self.database() as db:
+            db.execute("INSERT INTO tdb_world.quest_template (ID) VALUES (13815)")
+            db.execute("INSERT INTO tdb_world.creature_queststarter VALUES (33889,13815)")
+            db.execute("INSERT INTO tdb_world.creature_questender VALUES (33889,13815)")
+            with patch.object(land_zone, "spell_effects", return_value=({}, {})), \
+                    patch.object(land_zone, "run", side_effect=lambda c, u, p, sql:
+                                 [[str(value) for value in row] for row in db.execute(sql)]):
+                reasons = land_zone.tdb_quest_gaps("", "", "", ["13815"], "target", 1, 0, "dbc")
+        self.assertIn("quest giver 33889 has no reachable spawn (only uninvoked summon 63942)",
+                      reasons.get("13815", []))
+
+    def test_db_credit_effects_feed_objectives_not_givers(self):
+        with self.database() as db:
+            db.executemany("INSERT INTO tdb_world.quest_template (ID,RequiredNpcOrGo1,RequiredNpcOrGo2) "
+                           "VALUES (?,?,?)", [(8001, 601, 0), (8002, 602, 0), (8003, 0, 0)])
+            db.executemany("INSERT INTO tdb_world.spelleffect_dbc VALUES (?,?)", [(90, 601), (134, 602)])
+            db.execute("INSERT INTO tdb_world.creature_queststarter VALUES (500,8003)")
+            with patch.object(land_zone, "spell_effects", return_value=({}, {})), \
+                    patch.object(land_zone, "run", side_effect=lambda c, u, p, sql:
+                                 [[str(value) for value in row] for row in db.execute(sql)]):
+                reasons = land_zone.tdb_quest_gaps("", "", "", ["8001", "8002", "8003"], "target", 1, 0, "dbc")
+        self.assertNotIn("8001", reasons)
+        self.assertNotIn("8002", reasons)
+        self.assertIn("quest giver 500 has no spawn or summon in TDB", reasons.get("8003", []))
 
 
 if __name__ == "__main__":
