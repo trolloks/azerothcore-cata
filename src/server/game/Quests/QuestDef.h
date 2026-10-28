@@ -36,6 +36,8 @@ class ObjectMgr;
 #define QUEST_ITEM_OBJECTIVES_COUNT 6
 #define QUEST_SOURCE_ITEM_IDS_COUNT 4
 #define QUEST_REWARD_CHOICES_COUNT 6
+#define QUEST_REWARD_CURRENCY_COUNT 4
+#define QUEST_REQUIRED_CURRENCY_COUNT 4
 #define QUEST_REWARDS_COUNT 4
 #define QUEST_DEPLINK_COUNT 10
 #define QUEST_REPUTATIONS_COUNT 5
@@ -230,6 +232,14 @@ public:
     [[nodiscard]] int32  GetZoneOrSort() const { return ZoneOrSort; }
     [[nodiscard]] uint32 GetMinLevel() const { return MinLevel; }
     [[nodiscard]] uint32 GetMaxLevel() const { return MaxLevel; }
+    [[nodiscard]] uint32 GetRequiredSpell() const { return RequiredSpell; }
+    [[nodiscard]] bool HasRequiredCurrency() const
+    {
+        for (uint32 i = 0; i < QUEST_REQUIRED_CURRENCY_COUNT; ++i)
+            if (RequiredCurrencyId[i])
+                return true;
+        return false;
+    }
     [[nodiscard]] int32  GetQuestLevel() const { return Level; }
     [[nodiscard]] uint32 GetType() const { return Type; }
     [[nodiscard]] uint32 GetRequiredClasses() const { return RequiredClasses; }
@@ -300,6 +310,11 @@ public:
     std::string ObjectiveText[QUEST_OBJECTIVES_COUNT];
     uint32 RequiredItemId[QUEST_ITEM_OBJECTIVES_COUNT];
     uint32 RequiredItemCount[QUEST_ITEM_OBJECTIVES_COUNT];
+    uint32 RequiredSpell;
+    uint32 RewardCurrencyId[QUEST_REWARD_CURRENCY_COUNT];
+    uint32 RewardCurrencyCount[QUEST_REWARD_CURRENCY_COUNT];
+    uint32 RequiredCurrencyId[QUEST_REQUIRED_CURRENCY_COUNT];
+    uint32 RequiredCurrencyCount[QUEST_REQUIRED_CURRENCY_COUNT];
     uint32 RewardReputationMask = 0;
     uint32 SoundAccept = 0;
     uint32 SoundTurnIn = 0;

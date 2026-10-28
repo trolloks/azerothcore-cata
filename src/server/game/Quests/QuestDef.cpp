@@ -42,6 +42,17 @@ Quest::Quest(Field* questRecord)
     SoundAccept = questRecord[105].Get<uint32>();
     SoundTurnIn = questRecord[106].Get<uint32>();
     RewardBonusMoney = questRecord[107].Get<uint32>();
+    RequiredSpell = questRecord[108].Get<uint32>();
+    for (uint32 i = 0; i < QUEST_REWARD_CURRENCY_COUNT; ++i)
+    {
+        RewardCurrencyId[i] = questRecord[109 + i * 2].Get<uint32>();
+        RewardCurrencyCount[i] = questRecord[110 + i * 2].Get<uint32>();
+    }
+    for (uint32 i = 0; i < QUEST_REQUIRED_CURRENCY_COUNT; ++i)
+    {
+        RequiredCurrencyId[i] = questRecord[117 + i * 2].Get<uint32>();
+        RequiredCurrencyCount[i] = questRecord[118 + i * 2].Get<uint32>();
+    }
     EmoteOnIncomplete = 0;
     EmoteOnComplete = 0;
     _reqItemsCount = 0;
@@ -450,11 +461,13 @@ void Quest::InitializeQueryData()
         queryData << uint32(RequiredItemCount[i]);
     }
 
-    queryData << uint32(0);                              // RequiredSpell
+    queryData << GetRequiredSpell();
     for (uint32 i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
         queryData << ObjectiveText[i];
-    for (uint32 i = 0; i < 8; ++i)
-        queryData << uint32(0) << uint32(0);              // reward/required currencies
+    for (uint32 i = 0; i < QUEST_REWARD_CURRENCY_COUNT; ++i)
+        queryData << RewardCurrencyId[i] << RewardCurrencyCount[i];
+    for (uint32 i = 0; i < QUEST_REQUIRED_CURRENCY_COUNT; ++i)
+        queryData << RequiredCurrencyId[i] << RequiredCurrencyCount[i];
     queryData << std::string() << std::string() << std::string() << std::string();
     queryData << SoundAccept << SoundTurnIn;
 }
