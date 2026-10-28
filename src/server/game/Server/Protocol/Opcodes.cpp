@@ -1604,6 +1604,7 @@ void OpcodeTable::Initialize()
     /*0x51F*/ DEFINE_HANDLER(TC9_CMSG_PREPARE_FOR_REDIRECT,                                         STATUS_AUTHED,     PROCESS_THREADUNSAFE,   &WorldSession::HandleTC9PrepareForRedirect);
     /*0x520*/ DEFINE_SERVER_OPCODE_HANDLER(TC9_SMSG_READY_FOR_REDIRECT, STATUS_NEVER);
     /* CATA */
+    /*0x2E24*/ DEFINE_HANDLER(CMSG_SEND_TEXT_EMOTE,                                                 STATUS_LOGGEDIN,   PROCESS_THREADSAFE,     &WorldSession::HandleSendTextEmoteOpcode                );
     /*0x446D*/ DEFINE_HANDLER(CMSG_LOG_DISCONNECT,                                                  STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_EarlyProccess                     );
     /*0x2422*/ DEFINE_HANDLER(CMSG_LOADING_SCREEN_NOTIFY,                                           STATUS_AUTHED,     PROCESS_THREADUNSAFE,   &WorldSession::HandleLoadScreenOpcode                   );
     /*0x7816*/ DEFINE_HANDLER(CMSG_VIOLENCE_LEVEL,                                                  STATUS_AUTHED,     PROCESS_INPLACE,        &WorldSession::HandleViolenceLevel                      );

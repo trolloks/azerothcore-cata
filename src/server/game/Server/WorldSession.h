@@ -998,6 +998,7 @@ public:                                                 // opcodes handlers
     void SendWrongFactionNotice();
     void SendChatRestrictedNotice(ChatRestrictionType restriction);
     void HandleTextEmoteOpcode(WorldPacket& recvPacket);
+    void HandleSendTextEmoteOpcode(WorldPacket& recvPacket);
     void HandleChatIgnoredOpcode(WorldPacket& recvPacket);
 
     void HandleReclaimCorpseOpcode(WorldPacket& recvPacket);

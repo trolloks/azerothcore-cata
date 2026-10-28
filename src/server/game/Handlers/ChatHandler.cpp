@@ -963,6 +963,69 @@ void WorldSession::HandleTextEmoteOpcode(WorldPacket& recvData)
         ((Creature*)unit)->AI()->ReceiveEmote(GetPlayer(), text_emote);
 }
 
+// 4.3.4: CMSG_SEND_TEXT_EMOTE (0x2E24), ported from TrinityCore's 4.3.4 handler.
+void WorldSession::HandleSendTextEmoteOpcode(WorldPacket& recvData)
+{
+    uint32 emoteId;
+    uint32 soundIndex;
+    ObjectGuid targetGuid;
+    recvData >> emoteId;
+    recvData >> soundIndex;
+    recvData >> targetGuid;
+
+    if (!GetPlayer()->IsAlive())
+        return;
+
+    if (!GetPlayer()->CanSpeak())
+    {
+        std::string timeStr = secsToTimeString(m_muteTime - GameTime::GetGameTime().count());
+        ChatHandler(this).SendNotification(LANG_WAIT_BEFORE_SPEAKING, timeStr);
+        return;
+    }
+
+    sScriptMgr->OnPlayerTextEmote(GetPlayer(), emoteId, soundIndex, targetGuid);
+
+    EmotesTextEntry const* em = sEmotesTextStore.LookupEntry(emoteId);
+    if (!em)
+        return;
+
+    uint32 emoteAnim = em->textid;
+
+    switch (emoteAnim)
+    {
+        case EMOTE_STATE_SLEEP:
+        case EMOTE_STATE_SIT:
+        case EMOTE_STATE_KNEEL:
+        case EMOTE_ONESHOT_NONE:
+            break;
+        case EMOTE_STATE_DANCE:
+            GetPlayer()->SetUInt32Value(UNIT_NPC_EMOTESTATE, emoteAnim);
+            break;
+        default:
+            // Only allow text-emotes for "dead" entities (feign death included)
+            if (GetPlayer()->HasUnitState(UNIT_STATE_DIED))
+                break;
+            GetPlayer()->HandleEmoteCommand(emoteAnim);
+            break;
+    }
+
+    Unit* unit = ObjectAccessor::GetUnit(*_player, targetGuid);
+    std::string const name = unit ? unit->GetName() : "";
+
+    WorldPacket data(SMSG_TEXT_EMOTE, 8 + 4 + 4 + 4 + name.size() + 1);
+    data << _player->GetGUID();
+    data << uint32(emoteId);
+    data << uint32(soundIndex);
+    data << uint32(name.size() + 1);
+    data << name;
+    GetPlayer()->SendMessageToSetInRange(&data, sWorld->getFloatConfig(CONFIG_LISTEN_RANGE_TEXTEMOTE), true);
+
+    GetPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_DO_EMOTE, emoteId, 0, unit);
+
+    if (unit && unit->IsCreature() && ((Creature*)unit)->AI())
+        ((Creature*)unit)->AI()->ReceiveEmote(GetPlayer(), emoteId);
+}
+
 void WorldSession::HandleChatIgnoredOpcode(WorldPacket& recvData)
 {
     ObjectGuid iguid;
