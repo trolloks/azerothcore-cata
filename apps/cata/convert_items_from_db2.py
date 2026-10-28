@@ -20,11 +20,13 @@ it never touches a database.
 
 import argparse
 import json
+import struct
 import sys
 
 from audit_native_item_sparse import db2_records as sparse_records
 from audit_native_items import db2_records as item_records
-from item_derived_stats import effective_armor, load_tables, max_durability, weapon_damage
+from item_derived_stats import (disenchant_fields, effective_armor, load_tables, max_durability,
+                                weapon_damage)
 
 SIMPLE = {  # AC column <- Item-sparse field
     "Quality": "Quality", "Flags": "Flags", "FlagsExtra": "Flags2", "BuyCount": "BuyCount",
@@ -58,10 +60,23 @@ for i in range(3):
     SIMPLE[f"socketColor_{i + 1}"] = f"SocketColor{i}"
     SIMPLE[f"socketContent_{i + 1}"] = f"SocketContent{i}"
 
-UNSIGNED = ["requiredspell", "startquest", "lockid", "itemset", "area"]
-DERIVED = ["armor", "MaxDurability", "dmg_min1", "dmg_max1", "dmg_type1"]
-UNRESOLVED = ["block", "dmg_min2", "dmg_max2", "dmg_type2", "ScalingStatValue", "RequiredDisenchantSkill",
-              "DisenchantID", "PageText"]
+# The 4.3.4 sparse uses -1 for "none" in many fields; AC's columns are unsigned or defaulted.
+SENTINELS = {
+    "Quality": 0, "InventoryType": 0, "ItemLevel": 0, "RequiredLevel": 0, "RequiredSkill": 0,
+    "RequiredSkillRank": 0, "requiredspell": 0, "requiredhonorrank": 0, "RequiredCityRank": 0,
+    "RequiredReputationFaction": 0, "RequiredReputationRank": 0, "BuyPrice": 0, "SellPrice": 0,
+    "maxcount": 0, "stackable": 1, "BuyCount": 1, "ContainerSlots": 0, "delay": 0, "bonding": 0,
+    "Material": 0, "sheath": 0, "LanguageID": 0, "PageMaterial": 0, "startquest": 0,
+    "lockid": 0, "itemset": 0, "area": 0, "Map": 0, "BagFamily": 0, "TotemCategory": 0,
+    "ItemLimitCategory": 0, "HolidayId": 0, "socketBonus": 0, "GemProperties": 0, "RandomSuffix": 0,
+    "RandomProperty": 0, "ScalingStatDistribution": 0,
+}
+DERIVED = ["armor", "MaxDurability", "dmg_min1", "dmg_max1", "dmg_type1", "DisenchantID",
+           "RequiredDisenchantSkill"]
+# 3.3.5a columns the 4.3.4 Item-sparse does not carry: block, second damage and ScalingStatValue stay at
+# the schema default. The 4.x stat scaling (ItemStatAllocation/StatScalingFactor) has no AC item_template
+# columns, and PageText is world data (#259).
+UNRESOLVED = ["block", "dmg_min2", "dmg_max2", "dmg_type2", "ScalingStatValue", "PageText"]
 # Cata stat types above AC's highest ItemModType (48) that have their own item_template column. Mastery (49)
 # has no AC counterpart and is dropped instead of passed through, where the loader would zero the type and
 # apply the value as mana.
@@ -88,6 +103,12 @@ def derive(row, sparse, tables):
     damage = weapon_damage(tables, *args, row["FlagsExtra"], row["delay"], sparse["StatScalingFactor"],
                            sparse["ArmorDamageModifier"])
     row["dmg_min1"], row["dmg_max1"], row["dmg_type1"] = (*damage, sparse["DamageType"]) if damage else (0, 0, 0)
+    if "ItemDisenchantLoot" in tables:
+        row["DisenchantID"], row["RequiredDisenchantSkill"] = disenchant_fields(
+            tables["ItemDisenchantLoot"].values(), row["class"], row["Quality"], row["ItemLevel"],
+            row["RequiredLevel"], row["RequiredSkill"], row["RequiredSkillRank"], row["Flags"],
+            row["bonding"], row["area"], row["Map"], row["stackable"], row["SellPrice"],
+            row["entry"] in tables.get("ItemCurrencyCost", ()))
 
 
 def convert(item_rows, sparse_rows, item_ids, tables=None):
@@ -98,15 +119,18 @@ def convert(item_rows, sparse_rows, item_ids, tables=None):
         item, sparse = item_rows[item_id], sparse_rows[item_id]
         row = {"entry": item_id, "class": item["ClassID"], "subclass": item["SubclassID"],
                "SoundOverrideSubclass": item["SoundOverrideSubclassID"], "name": sparse["Display"],
-               "displayid": item["DisplayInfoID"], "description": sparse["Description"]}
+               "displayid": item["DisplayInfoID"], "description": sparse["Description"],
+               "DisenchantID": 0, "RequiredDisenchantSkill": -1}
         row.update({ac: sparse[field] for ac, field in SIMPLE.items()})
         for flags in ("Flags", "FlagsExtra"):  # bit 31 reads back negative from the signed parser
             row[flags] &= 0xFFFFFFFF
         if item["ClassID"] != 4:  # AC subtracts this from armor; on Cata weapons it is a damage modifier
             row["ArmorDamageModifier"] = 0
-        for column in UNSIGNED:
-            if row[column] < 0:
-                raise ValueError(f"item {item_id}: {column}={row[column]} does not fit an unsigned column")
+        for column, default in SENTINELS.items():
+            if row[column] == -1:
+                row[column] = default
+            elif row[column] < 0:
+                raise ValueError(f"item {item_id}: {column}={row[column]} is not a valid value")
         for i in range(1, 11):  # the client marks an empty stat slot -1; AC uses 0
             if row[f"stat_type{i}"] < 0:
                 row[f"stat_type{i}"] = row[f"stat_value{i}"] = 0
@@ -146,6 +170,31 @@ def to_sql(rows, build, derived=False, insert_only=False):
     return "\n".join(lines) + "\n"
 
 
+def load_currency_costs(dbc_dir):
+    """ItemCurrencyCost.db2 ids for TC's sItemCurrencyCostStore disenchant condition."""
+    with open(f"{dbc_dir}/ItemCurrencyCost.db2", "rb") as handle:
+        data = handle.read()
+    if data[:4] != b"WDB2":
+        raise ValueError("ItemCurrencyCost.db2 is not a WDB2 file")
+    record_count, field_count, record_size, string_size = struct.unpack_from("<4I", data, 4)
+    if field_count != 2 or record_size != 8:
+        raise ValueError("Unexpected ItemCurrencyCost.db2 layout")
+    off = 20 + 12  # WDBC header + tableHash/build/timestamp
+    min_id, max_id, _locale, copy_size = struct.unpack_from("<4i", data, off)
+    off += 16
+    if copy_size:
+        raise ValueError("ItemCurrencyCost.db2 copy table is not implemented")
+    if max_id:
+        off += (max_id - min_id + 1) * 6  # offset-map table, skippable
+    if len(data) != off + record_count * record_size + string_size:
+        raise ValueError("Truncated or trailing ItemCurrencyCost.db2 data")
+    ids = set()
+    for i in range(record_count):
+        first, second = struct.unpack_from("<2I", data, off + i * record_size)
+        ids.update((first, second))
+    return ids
+
+
 def report_item_ids(handle):
     """Item ids from an import report; log text (even with braces) may precede the JSON object."""
     text = handle.read()
@@ -179,6 +228,8 @@ def self_test():
     sparse[1]["Flags"] = -2147483648
     assert convert(item, sparse, [1])[0]["Flags"] == 2147483648
     sparse[1]["LockID"] = -1
+    assert convert(item, sparse, [1])[0]["lockid"] == 0
+    sparse[1]["LockID"] = -2
     try:
         convert(item, sparse, [1])
         raise AssertionError("expected a negative unsigned value to be rejected")
@@ -201,6 +252,19 @@ def self_test():
     low, high = weapon_damage(flat, 2, 18, 26, 1, 5, 0, 2000, 0.0, 0.0)
     assert (low, high) == (4.0, 4.0)  # delay 2000ms * dps 2.0 / 1000
     assert max_durability(4, 1, 5, 1, 40) == 5 * int(23.0 * 1.0 * 1.0 + 0.5)
+    flat["ItemDisenchantLoot"] = {3: (3, 4, -1, 2, 1, 10, 1)}
+    flat["ItemCurrencyCost"] = set()
+    sparse[1].update({**shirt, "Quality": 2, "ItemLevel": 5, "SellPrice": 20000, "Stackable": 1})
+    disenchant = convert(item, sparse, [1], flat)[0]
+    assert (disenchant["DisenchantID"], disenchant["RequiredDisenchantSkill"]) == (3, 1)
+    sparse[1]["SellPrice"] = 9999
+    assert convert(item, sparse, [1], flat)[0]["DisenchantID"] == 0
+    flat["ItemCurrencyCost"] = {1}
+    assert convert(item, sparse, [1], flat)[0]["DisenchantID"] == 3
+    sparse[1]["SellPrice"] = 20000
+    sparse[1]["Flags"] = 0x8000
+    assert convert(item, sparse, [1], flat)[0]["DisenchantID"] == 0
+    sparse[1]["Flags"] = 0
     import io
     assert report_item_ids(io.StringIO('log\n{"closure": {"missing_items": ["58363", "52558"]}}')) == [52558, 58363]
     assert report_item_ids(io.StringIO('{"zone": 12}')) == []
@@ -245,6 +309,8 @@ def main():
     if args.all:
         item_ids = sorted(set(item_rows) & set(sparse_rows))
     tables = load_tables(args.dbc_dir) if args.dbc_dir else None
+    if tables is not None:
+        tables["ItemCurrencyCost"] = load_currency_costs(args.dbc_dir)
     rows = convert(item_rows, sparse_rows, item_ids, tables)
     sys.stdout.write(to_sql(rows, args.build, bool(tables), args.insert_only))
 

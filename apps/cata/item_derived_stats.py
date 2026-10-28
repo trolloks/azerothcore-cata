@@ -26,6 +26,7 @@ LAYOUTS = {
     "ItemDamageAmmo": "<I7fI", "ItemDamageOneHand": "<I7fI", "ItemDamageOneHandCaster": "<I7fI",
     "ItemDamageTwoHand": "<I7fI", "ItemDamageTwoHandCaster": "<I7fI", "ItemDamageRanged": "<I7fI",
     "ItemDamageThrown": "<I7fI", "ItemDamageWand": "<I7fI",
+    "ItemDisenchantLoot": "<IiiIIII",
 }
 
 QUALITY_MULTIPLIER = (1.0, 1.0, 1.0, 1.17, 1.37, 1.68, 0.0, 0.0)
@@ -118,3 +119,28 @@ def max_durability(item_class, subclass, inventory_type, quality, item_level):
             return 0
         return 5 * int(23.0 * QUALITY_MULTIPLIER[quality] * ARMOR_MULTIPLIER[inventory_type] * penalty + 0.5)
     return 5 * int(17.0 * QUALITY_MULTIPLIER[quality] * WEAPON_MULTIPLIER[subclass] * penalty + 0.5)
+
+
+def disenchant_fields(rows, item_class, quality, item_level, required_level, required_skill,
+                      required_skill_rank, flags, bonding, area, map_id, stackable, sell_price, currency):
+    """Mirror TC FillDisenchantFields (ObjectMgr.cpp); rows are ItemDisenchantLoot values.
+
+    The 4.3.4 client does not store DisenchantID/RequiredDisenchantSkill; TC derives them from the
+    ItemDisenchantLoot DBC. Subclass is intentionally not compared, as in the reference.
+    """
+    if (flags & 0x8002) or bonding == 4 or area or map_id or stackable > 1:
+        return 0, -1
+    if quality < 2 or quality > 4 or item_class not in (2, 4):
+        return 0, -1
+    if sell_price < 10000 and not currency:
+        return 0, -1
+    for row in rows:
+        row_id, row_class, _subclass, row_quality, min_level, max_level, skill = row
+        if row_class != item_class or row_quality != quality or not min_level <= item_level <= max_level:
+            continue
+        if row_id in (60, 61) and (required_level > 60 or required_skill_rank > 300):
+            continue
+        if row_id in (66, 67) and (required_level <= 60 or (required_skill and required_skill_rank <= 300)):
+            continue
+        return row_id, skill
+    return 0, -1
