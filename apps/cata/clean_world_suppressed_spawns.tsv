@@ -1,0 +1,3 @@
+# TDB spawns that are alternate quest-state visibility variants, not distinct placements.
+# Suppressed until #180 can select between them by quest state; keep the row the quest's
+# entry-level SmartAI targets line up with. Revisit when phasing lands.

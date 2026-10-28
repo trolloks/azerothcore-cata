@@ -1316,6 +1316,8 @@ def main():
     parser.add_argument("--baseline", help="schema before the import; dangling relations it already had (native "
                                            "gaps, e.g. a quest objective TDB has no template for) do not fail the gate")
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--repair-links", action="store_true",
+                        help="restore chain links to quests that exist now; run once after all zones")
     parser.add_argument("--drop-items", default="",
                         help="comma-separated item ids the client store lacks; imported loot rows for them are dropped")
     args = parser.parse_args()
@@ -1323,6 +1325,24 @@ def main():
         if not re.fullmatch(r"\w+", name):
             parser.error(f"invalid schema name: {name!r}")
     c, u, p, src, dst = args.container, args.user, args.password, args.source, args.target
+
+    if args.repair_links:
+        if not args.apply:
+            parser.error("--repair-links requires --apply")
+        # A link cleared while its target was not imported yet is restored once the target exists.
+        for column in ("PrevQuestID", "NextQuestID", "BreadcrumbForQuestId"):
+            run(c, u, p,
+                f"UPDATE {dst}.quest_template_addon a JOIN {src}.quest_template_addon s ON s.ID=a.ID "
+                f"SET a.{column}=s.{column} WHERE a.{column}=0 AND s.{column}<>0 AND EXISTS "
+                f"(SELECT 1 FROM {dst}.quest_template q WHERE q.ID=ABS(s.{column}))")
+        run(c, u, p,
+            f"UPDATE {dst}.quest_template q JOIN {src}.quest_template s ON s.ID=q.ID "
+            f"SET q.RewardNextQuest=s.RewardNextQuest WHERE q.RewardNextQuest=0 "
+            f"AND s.RewardNextQuest<>0 AND EXISTS "
+            f"(SELECT 1 FROM {dst}.quest_template n WHERE n.ID=s.RewardNextQuest)")
+        print(json.dumps({"repaired_links": ["PrevQuestID", "NextQuestID",
+                                             "BreadcrumbForQuestId", "RewardNextQuest"]}, indent=2))
+        return 0
 
     existing = {r[0] for r in run(c, u, p, f"SELECT ID FROM {dst}.quest_template") if r}
     try:
@@ -1343,14 +1363,18 @@ def main():
     if skipped:
         report["skipped_quests"] = sorted(skipped & set(candidates), key=int)
 
-    tables = [("quest_template", "ID", missing)]
+    tables = [("quest_template", "ID")]
     for table, key in (("quest_offer_reward", "ID"), ("quest_request_items", "ID"),
                        ("quest_template_addon", "ID"),
                        ("creature_queststarter", "quest"), ("creature_questender", "quest"),
                        ("gameobject_queststarter", "quest"), ("gameobject_questender", "quest")):
         if table_exists(c, u, p, src, table):
-            tables.append((table, key, missing))
-    for table, key, ids in tables:
+            tables.append((table, key))
+    for table, key in tables:
+        # Check each table on its own so a run interrupted between two tables is repaired on rerun.
+        present = (existing if table == "quest_template" else
+                   {row[0] for row in run(c, u, p, f"SELECT DISTINCT {key} FROM {dst}.{table}") if row})
+        ids = [q for q in candidates if q not in present and q not in skipped]
         if not ids:
             continue
         count, sql = import_table(c, u, p, dst, src, table, key, ids, not args.apply)
@@ -1462,7 +1486,8 @@ def main():
             report["preexisting_dangling"] = [x for x in report["dangling"]
                                               if json.dumps(x, sort_keys=True) in native]
             report["dangling"] = [x for x in report["dangling"] if x not in report["preexisting_dangling"]]
-        status = 1 if report["dangling"] else 0
+        # 2 means "imported, dangling loader relations reported"; 1 stays for a failed run.
+        status = 2 if report["dangling"] else 0
     else:
         report["mode"] = "dry-run"
     print(json.dumps(report, indent=2, default=str))

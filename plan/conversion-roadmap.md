@@ -25,6 +25,23 @@ The rule for every change is simple:
    `.agents/docs/cataclysm-conversion-goal.md` (Reference precedence for fixtures and acceptance
    criteria).
 
+## Clean world database
+
+World content is built from TDB 434 only — no 3.3.5a baseline — by
+`apps/cata/build_clean_world.py` plus `apps/cata/import_clean_zones.sh`. `item_template` is not part
+of the builder: `apps/cata/convert_items_from_db2.py --all` converts the 4.3.4 client's Item.db2 and
+Item-sparse.db2 (with `--dbc-dir` for the derived armor and weapon columns) and its SQL is imported
+after the build. The clean schema
+(`acore_world_cata`) is now the golden reference (`acore_world_gold`): 315 tables, 221,728 creature
+spawns, 2,086 starter-zone quests, 54,086 client-derived items, and real phase data from
+`phase_area`/`spell_area`/`conditions` matched against the client DBCs. The previous hybrid golden is
+backed up and remains reproducible from `data/sql/base` plus its pending updates.
+
+Still being filled in: world-wide conditions and quest greetings, the remaining quest-state variants
+(#282), and the goblin/worgen starts (deferred behind phasing/scenario work). The harness `prepare`
+imports this schema with `--world-dump` into a freshly created world schema, and the dump hash is part
+of the database cache key, so a new generation reproduces the clean world without editing its config.
+
 ## Reference order
 
 | Priority | Source | Role |
