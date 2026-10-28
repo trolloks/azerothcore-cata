@@ -504,6 +504,10 @@ public:
 
         if (Creature* scout = creature->FindNearestCreature(NPC_CAPTIVE_SPITESCALE_SCOUT, 30.0f))
         {
+            // Already fighting someone else: leave it alone instead of stealing the encounter.
+            if (scout->IsInCombat())
+                return true;
+
             // shortcut: upstream walks the scout out over waypoint paths this world lacks; place it at
             // the matching prisoner spot instead. Restore the walk if those paths are ever imported.
             Position prisoner(-1149.03f, -5526.18f, 8.1045685f, scout->GetOrientation());
