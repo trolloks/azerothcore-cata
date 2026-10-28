@@ -478,7 +478,7 @@ enum ProvingPitData
 
 static bool IsOnProvingPitQuest(Player* player)
 {
-    static constexpr uint32 quests[] = { 24762, 24768, 24774, 24780, 24786, 26276 };
+    static constexpr uint32 quests[] = { 24642, 24754, 24762, 24768, 24774, 24780, 24786, 26276 };
     for (uint32 questId : quests)
         if (player->GetQuestStatus(questId) == QUEST_STATUS_INCOMPLETE)
             return true;
