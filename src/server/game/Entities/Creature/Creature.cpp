@@ -1232,7 +1232,12 @@ bool Creature::Create(ObjectGuid::LowType guidlow, Map* map, uint32 phaseMask, u
     LoadCreaturesAddon();
     LoadSparringPct();
 
-    //! Need to be called after LoadCreaturesAddon - MOVEMENTFLAG_HOVER is set there
+    // Cata: a template HoverHeight floats the creature; the movement flag is what makes the client
+    // apply the offset (TC-Cata CreatureMovementData::HoverInitiallyEnabled).
+    if (GetCreatureTemplate()->HoverHeight > 0.0f)
+        AddUnitMovementFlag(MOVEMENTFLAG_HOVER);
+
+    //! Need to be called after the hover flag above - GetHoverHeight() reads it
     m_positionZ += GetHoverHeight();
 
     LastUsedScriptID = GetScriptId();
