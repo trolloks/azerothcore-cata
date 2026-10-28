@@ -12,8 +12,10 @@ spawn, quest and loot phase refers to creature and gameobject templates.
 """
 
 import argparse
+import os
 from pathlib import Path
 import re
+import struct
 import sys
 
 from import_starter_content import (SMART_EVENT_PARAM_COUNTS, UNSUPPORTED_SMART_ACTIONS, WARNINGS,
@@ -168,6 +170,25 @@ def build_templates(container, user, password, target, source):
                              "creature_equip_template", "creature_template_addon",
                              "gameobject_template_addon")}
     applied.update(derive_templates(container, user, password, target, source))
+    # Only the hover rows matter; the rest of TDB's movement table would change gravity/flight
+    # defaults the fork has not modelled.
+    applied["creature_template_movement"] = copy_table(
+        container, user, password, target, source, "creature_template_movement",
+        where="`Ground`=2")
+    if VALKYR_DISPLAYS:
+        displays = ",".join(str(display) for display in VALKYR_DISPLAYS)
+        applied["valkyr_movement"] = insert_count(
+            container, user, password,
+            f"INSERT IGNORE INTO `{target}`.creature_template_movement (CreatureId, Ground) "
+            f"SELECT entry, 2 FROM `{source}`.creature_template "
+            f"WHERE modelid1 IN ({displays}) OR modelid2 IN ({displays}) "
+            f"OR modelid3 IN ({displays}) OR modelid4 IN ({displays})")
+    # This fork's client applies UNIT_FIELD_HOVERHEIGHT without requiring the hover flag, so every
+    # non-hovering creature must keep a zero height or it renders a yard above the ground.
+    applied["hover_height"] = update_count(
+        container, user, password,
+        f"UPDATE `{target}`.creature_template t LEFT JOIN `{target}`.creature_template_movement m "
+        f"ON m.CreatureId=t.entry SET t.HoverHeight=0 WHERE COALESCE(m.Ground,0)<>2")
     applied["stripped_script_names"] = strip_unregistered_scripts(container, user, password, target)
     return applied
 
@@ -181,6 +202,37 @@ STARTER_DETECTIONS = (
     # area, detection spell, quest_start, quest_end, quest_start_status, quest_end_status
     (5692, 49416, 0, 24959, 0, 41),  # Deathknell: Agatha visible until 24959 is rewarded
 )
+
+# Val'kyr displays, derived from the client's CreatureModelData model paths at build time; the
+# 4.x Ground=2 hover mode is the data the core turns into MOVEMENTFLAG_HOVER.
+VALKYR_DISPLAYS: tuple[int, ...] = ()
+
+
+def load_valkyr_displays(dbc_dir: Path) -> tuple[int, ...]:
+    """Display ids whose model path is a Val'kyr model (CreatureModelData -> CreatureDisplayInfo)."""
+    data = (dbc_dir / 'CreatureModelData.dbc').read_bytes()
+    n, fields, rec, sblk = struct.unpack('<IIII', data[4:20])
+    strings = 20 + n * rec
+    models = set()
+    for i in range(n):
+        off = 20 + i * rec
+        model_id = struct.unpack_from('<I', data, off)[0]
+        for field in range(1, fields):
+            value = struct.unpack_from('<I', data, off + 4 * field)[0]
+            if 0 < value < sblk:
+                end = data.find(b'\0', strings + value)
+                text = data[strings + value:end].decode(errors='ignore').upper()
+                if 'VALKIER' in text or 'VALKYR' in text:
+                    models.add(model_id)
+                    break
+    data = (dbc_dir / 'CreatureDisplayInfo.dbc').read_bytes()
+    n, fields, rec, sblk = struct.unpack('<IIII', data[4:20])
+    displays = set()
+    for i in range(n):
+        display_id, model_id = struct.unpack_from('<II', data, 20 + i * rec)
+        if model_id in models:
+            displays.add(display_id)
+    return tuple(sorted(displays))
 
 
 def update_count(container, user, password, sql):
@@ -453,12 +505,20 @@ def main():
     parser.add_argument("--source", default="tdb_world")
     parser.add_argument("--target", required=True)
     parser.add_argument("--phase", choices=(*PHASES, "all"), default="all")
+    parser.add_argument("--dbc-dir", type=Path, default=os.environ.get("DBC_DIR"),
+                        help="client DBC directory; the Val'kyr hover rows are derived from its model paths")
     args = parser.parse_args()
     for name in (args.source, args.target):  # spliced into SQL unquoted
         if not re.fullmatch(r"\w+", name):
             parser.error(f"invalid schema name: {name!r}")
     if args.source == args.target:
         parser.error("--source and --target must differ")
+
+    global VALKYR_DISPLAYS
+    if args.dbc_dir:
+        VALKYR_DISPLAYS = load_valkyr_displays(args.dbc_dir)
+    else:
+        print("warning: --dbc-dir/DBC_DIR not set; skipping the Val'kyr hover rows", file=sys.stderr)
 
     phases = PHASES if args.phase == "all" else {args.phase: PHASES[args.phase]}
     for name, build in phases.items():
