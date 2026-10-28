@@ -177,18 +177,14 @@ def build_templates(container, user, password, target, source):
         where="`Ground`=2")
     if VALKYR_DISPLAYS:
         displays = ",".join(str(display) for display in VALKYR_DISPLAYS)
+        excluded = ",".join(str(entry) for entry in VALKYR_SCRIPTED)
         applied["valkyr_movement"] = insert_count(
             container, user, password,
             f"INSERT IGNORE INTO `{target}`.creature_template_movement (CreatureId, Ground) "
             f"SELECT entry, 2 FROM `{source}`.creature_template "
-            f"WHERE modelid1 IN ({displays}) OR modelid2 IN ({displays}) "
-            f"OR modelid3 IN ({displays}) OR modelid4 IN ({displays})")
-    # This fork's client applies UNIT_FIELD_HOVERHEIGHT without requiring the hover flag, so every
-    # non-hovering creature must keep a zero height or it renders a yard above the ground.
-    applied["hover_height"] = update_count(
-        container, user, password,
-        f"UPDATE `{target}`.creature_template t LEFT JOIN `{target}`.creature_template_movement m "
-        f"ON m.CreatureId=t.entry SET t.HoverHeight=0 WHERE COALESCE(m.Ground,0)<>2")
+            f"WHERE (modelid1 IN ({displays}) OR modelid2 IN ({displays}) "
+            f"OR modelid3 IN ({displays}) OR modelid4 IN ({displays})) "
+            f"AND entry NOT IN ({excluded})")
     applied["stripped_script_names"] = strip_unregistered_scripts(container, user, password, target)
     return applied
 
@@ -206,6 +202,13 @@ STARTER_DETECTIONS = (
 # Val'kyr displays, derived from the client's CreatureModelData model paths at build time; the
 # 4.x Ground=2 hover mode is the data the core turns into MOVEMENTFLAG_HOVER.
 VALKYR_DISPLAYS: tuple[int, ...] = ()
+
+# Val'kyr whose scripts drive hover/fly themselves (Ingvar's Annhylde, the Scarlet Battle-maiden,
+# Svala, the Twin Val'kyr, the Lich King Shadowguard and ICC Svalna). A movement-template hover
+# would offset their scripted Z, so their script keeps control.
+VALKYR_SCRIPTED = (24068, 31655, 28534, 26668, 30810, 34496, 34497, 35347, 35348, 35349, 35350,
+                   35351, 35352, 36609, 39120, 39121, 39122, 37126, 38258)
+
 
 
 def load_valkyr_displays(dbc_dir: Path) -> tuple[int, ...]:
