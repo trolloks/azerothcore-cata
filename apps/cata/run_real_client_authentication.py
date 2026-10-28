@@ -2101,6 +2101,22 @@ def wait_for_world(manifest: Manifest, generation: Generation, record: ProcessId
     raise RuntimeError("worldserver did not reach listener and realm-online readiness")
 
 
+BUILD_INPUT_PATHS = ("src", "deps", "cmake", "modules", "CMakeLists.txt")
+
+
+def build_inputs_unchanged(revision: str, head: str) -> bool:
+    """True when no commit between a binary's revision and HEAD touches a build input.
+
+    Documentation and harness-only commits cannot change a binary, so they should not force a
+    full rebuild just to satisfy the version gate.
+    """
+    result = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "diff", "--name-only", revision, head, "--", *BUILD_INPUT_PATHS],
+        capture_output=True, text=True, check=False, timeout=60,
+    )
+    return result.returncode == 0 and not result.stdout.strip()
+
+
 def binary_identity(path: Path, head: str, *, reports_version: bool) -> dict[str, object]:
     resolved = path.resolve()
     if not resolved.is_file() or not os.access(resolved, os.X_OK):
@@ -2110,7 +2126,9 @@ def binary_identity(path: Path, head: str, *, reports_version: bool) -> dict[str
         output = run_command([str(resolved), "--version"], timeout=30)
         version = (output.stdout + output.stderr).decode(errors="replace").strip()
         if head[:12] not in version and head not in version:
-            raise RuntimeError(f"binary does not report current HEAD {head[:12]}: {resolved}")
+            reported = re.search(r"AzerothCore rev\. ([0-9a-f]{7,40})", version)
+            if reported is None or not build_inputs_unchanged(reported.group(1), head):
+                raise RuntimeError(f"binary does not report current HEAD {head[:12]}: {resolved}")
         identity["version"] = version
     return identity
 
