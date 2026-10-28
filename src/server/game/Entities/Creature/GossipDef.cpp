@@ -69,7 +69,11 @@ WorldPackets::Quest::QuestRewards BuildQuestRewards(Quest const* quest, Player* 
     }
     rewards.DisplaySpell = quest->GetRewSpell();
     rewards.Spell = quest->GetRewSpellCast();
-    // shortcut: currency/skill rewards stay zero until their Cata data and award paths are converted.
+    for (uint32 i = 0; i < QUEST_REWARD_CURRENCY_COUNT; ++i)
+    {
+        rewards.CurrencyId[i] = quest->RewardCurrencyId[i];
+        rewards.CurrencyQuantity[i] = quest->RewardCurrencyCount[i];
+    }
     return rewards;
 }
 }
@@ -463,7 +467,7 @@ void PlayerMenu::SendQuestGiverQuestDetails(Quest const* quest, ObjectGuid npcGU
     data << uint32(quest->GetFlags());                      // 3.3.3 questFlags
     data << uint32(quest->GetSuggestedPlayers());
     data << uint8(0);                                       // IsFinished? value is sent back to server in quest accept packet
-    data << uint8(0) << uint32(0);                          // DisplayPopup, RequiredSpellID
+    data << uint8(0) << uint32(quest->GetRequiredSpell());   // DisplayPopup, RequiredSpellID
 
     BuildQuestRewards(quest, _session->GetPlayer(), quest->HasFlag(QUEST_FLAGS_HIDDEN_REWARDS)).Write(data);
 
@@ -614,11 +618,13 @@ void PlayerMenu::SendQuestQueryResponse(Quest const* quest) const
         data << uint32(quest->RequiredItemCount[i]);
     }
 
-    data << uint32(0);                                      // RequiredSpell
+    data << uint32(quest->GetRequiredSpell());              // RequiredSpell
     for (uint8 i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
         data << questObjectiveText[i];
-    for (uint32 i = 0; i < 8; ++i)
-        data << uint32(0) << uint32(0);                     // reward/required currencies
+    for (uint32 i = 0; i < QUEST_REWARD_CURRENCY_COUNT; ++i)
+        data << uint32(quest->RewardCurrencyId[i]) << uint32(quest->RewardCurrencyCount[i]);
+    for (uint32 i = 0; i < QUEST_REQUIRED_CURRENCY_COUNT; ++i)
+        data << uint32(quest->RequiredCurrencyId[i]) << uint32(quest->RequiredCurrencyCount[i]);
     data << std::string() << std::string() << std::string() << std::string();
     data << quest->SoundAccept << quest->SoundTurnIn;
 
@@ -687,7 +693,7 @@ void PlayerMenu::SendQuestGiverRequestItems(Quest const* quest, ObjectGuid npcGU
     if (QuestRequestItemsLocale const* questRequestItemsLocale = sObjectMgr->GetQuestRequestItemsLocale(quest->GetQuestId()))
         ObjectMgr::GetLocaleString(questRequestItemsLocale->CompletionText, locale, requestItemsText);
 
-    if (!quest->GetReqItemsCount() && canComplete)
+    if (!quest->GetReqItemsCount() && !quest->HasRequiredCurrency() && canComplete)
     {
         SendQuestGiverOfferReward(quest, npcGUID, true);
         return;
@@ -750,7 +756,14 @@ void PlayerMenu::SendQuestGiverRequestItems(Quest const* quest, ObjectGuid npcGU
             data << uint32(0);
     }
 
-    data << uint32(0);                                   // required currency count
+    uint32 requiredCurrencyCount = 0;
+    for (uint32 i = 0; i < QUEST_REQUIRED_CURRENCY_COUNT; ++i)
+        if (quest->RequiredCurrencyId[i])
+            ++requiredCurrencyCount;
+    data << uint32(requiredCurrencyCount);               // required currency count
+    for (uint32 i = 0; i < QUEST_REQUIRED_CURRENCY_COUNT; ++i)
+        if (quest->RequiredCurrencyId[i])
+            data << uint32(quest->RequiredCurrencyId[i]) << uint32(quest->RequiredCurrencyCount[i]);
 
     if (!canComplete)
         data << uint32(0x00);
