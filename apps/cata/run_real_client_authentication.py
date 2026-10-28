@@ -1599,14 +1599,26 @@ def import_sql_directory(
         mysql(manifest, generation, path.read_bytes(), schema)
 
 
+_DEFINER_DDL = re.compile(
+    rb"^\s*(?:/\*!50013|/\*!50017|/\*!50003|CREATE\b[^\n]*\b(?:VIEW|TRIGGER|FUNCTION|PROCEDURE|EVENT)\b)",
+    re.IGNORECASE,
+)
+_DEFINER_CLAUSE = re.compile(
+    rb"DEFINER=`[^`]*`@`[^`]*`(?=\s*(?:SQL SECURITY|VIEW|TRIGGER|PROCEDURE|FUNCTION|EVENT|\*/))",
+    re.IGNORECASE,
+)
+
+
 def import_world_dump(
     manifest: Manifest, generation: Generation, path: Path, schema: str,
     expected_sha256: str = "",
 ) -> None:
     """Replace the world schema content with a prebuilt dump (e.g. the clean TDB world)."""
     container = str(generation["docker"]["container"])
+    snapshot_dir = Path(generation["paths"]["data"])
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
     snapshot_fd, snapshot_name = tempfile.mkstemp(
-        dir=manifest["root"], prefix="world-dump-", suffix=".sql",
+        dir=snapshot_dir, prefix="world-dump-", suffix=".sql",
     )
     snapshot = Path(snapshot_name)
     try:
@@ -1647,7 +1659,12 @@ def import_world_dump(
         try:
             with tempfile.TemporaryFile(dir=manifest["root"]) as handle, snapshot.open("rb") as source:
                 handle.write(b"SET autocommit=0;\n")
-                shutil.copyfileobj(source, handle)
+                for line in source:
+                    # Views and triggers carry DEFINER clauses; the schema-scoped account has
+                    # no SET_USER_ID, so drop them from DDL lines only.
+                    if b"DEFINER=" in line and _DEFINER_DDL.match(line):
+                        line = _DEFINER_CLAUSE.sub(b"", line)
+                    handle.write(line)
                 handle.write(b"\nCOMMIT;\n")
                 handle.seek(0)
                 result = subprocess.run(
@@ -2513,7 +2530,7 @@ def prepare(args: argparse.Namespace) -> None:
                 raise RuntimeError("owned populated character seed counts do not equal one")
         print(f"prepare database ready: {time.monotonic() - started:.1f}s elapsed", flush=True)
         data_destination = Path(paths["data"])
-        data_destination.mkdir()
+        data_destination.mkdir(exist_ok=True)
         copy_tree(Path(str(inputs["server_dbc_root"])), data_destination / "dbc")
         copy_tree(Path(str(inputs["data_root"])) / "maps", data_destination / "maps")
         if tree_content_hash(data_destination / "dbc") != inputs["data_dbc_hash"]:
