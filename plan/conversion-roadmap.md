@@ -44,12 +44,15 @@ of the database cache key, so a new generation reproduces the clean world withou
 
 ## Reference order
 
-| Priority | Source | Role |
-| --- | --- | --- |
-| 1 | Current `upstream/master` | Structure, framework, maintainability, and merge compatibility |
-| 2 | TrinityCore commit `c699217775d90794158422387b07a917e161b582` | Canonical 4.3.4 behavior and wire format |
-| 3 | `cata-js` commit `ab964a0e8dfe50a44fa92716ed05438f4a14dfd3` | Prior discoveries and client-visible failure notes |
-| 4 | Full `Wow-64.exe` build 15595 | Runtime acceptance judge |
+For Cataclysm behaviour the pinned TrinityCore commit is the source of truth; the real client is the
+acceptance judge. `upstream/master` governs structure, never Cata behaviour.
+
+| Source | Role |
+| --- | --- |
+| Full `Wow-64.exe` build 15595 | Runtime acceptance judge; wins over TC when they disagree |
+| TrinityCore commit `c699217775d90794158422387b07a917e161b582` | **Source of truth** for 4.3.4 behaviour, wire formats and data schemas |
+| Current `upstream/master` | Structure, framework, maintainability, and merge compatibility |
+| `cata-js` commit `ab964a0e8dfe50a44fa92716ed05438f4a14dfd3` | Prior discoveries and client-visible failure notes |
 
 The TrinityCore working tree is dirty. Read the pinned commit, not uncommitted files. The `cata-js`
 runtime log proves a useful vertical slice only through commit `3a697ce`; later aura work is

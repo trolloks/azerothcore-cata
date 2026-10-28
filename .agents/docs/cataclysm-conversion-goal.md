@@ -11,23 +11,28 @@ depart from upstream only where Cataclysm protocol, data, or gameplay difference
 
 ## Reference precedence for fixtures and acceptance criteria
 
-AzerothCore's own behaviour wins. When AC and TrinityCore-Cata represent the *same* player-visible
-outcome through different internal representations — for example persisted rows versus
-recomputed-on-login data — assert the AC-native representation. Do not change core AC logic to
-match a TC-Cata on-disk layout when AC's outcome is equivalent.
+**TrinityCore 4.3.4 at the pinned commit
+(`c699217775d90794158422387b07a917e161b582`) is the source of truth for Cataclysm behaviour.**
+When our code, data or a fixture disagrees with the pinned TC-Cata reference about a 4.3.4
+player-visible outcome, wire format, packet layout or Cata-specific data schema, the reference wins —
+except where the AC representation produces the same outcome (next paragraph). Only the real
+build-15595 client is above it: where TC and the client disagree, the client is the acceptance judge
+and the deviation is recorded.
 
-Reserve TC-Cata comparisons for genuinely Cata-specific behaviour we are porting (new mechanics,
-wire formats, packet layouts, data schemas) where AC has no prior mechanism to defer to.
+AzerothCore's own structure, ownership, interfaces and hooks stay in place. When AC and TC-Cata
+represent the *same* player-visible outcome through different internal representations — persisted
+rows versus recomputed-on-login data, for example — keep the AC-native representation and do not
+change core AC logic to match a TC-Cata on-disk layout. Worked example: issue #76 (starting cast
+spell 2457 — AC recomputes it from `character_skills` at login; a TC-Cata-derived fixture wrongly
+expected a persisted `character_spell` row).
 
-When a fixture or assertion encodes a TC-Cata representation choice rather than a real behavioural
-requirement, fix the fixture or assertion — not the core code — and note the divergence inline so
-it is not mistaken for a regression later. Worked example: issue #76 (starting cast spell 2457 —
-AC recomputes it from `character_skills` on login; a TC-Cata-derived fixture wrongly expected a
-persisted `character_spell` row).
+Protocol fixtures under `apps/cata/fixtures/` that pin wire layouts follow TC-Cata: it is the
+legitimate reference for a Cata-specific format AC has no prior version of.
 
-Protocol fixtures under `apps/cata/fixtures/` that pin wire layouts are the exception: TC-Cata is
-the legitimate reference for those, because it is a Cata-specific format AC has no prior version
-of, not an AC-versus-TC representation choice.
+When the pinned TC-Cata source and TDB 434 lack data the client requires (an authored `spell_area`
+detection row, a missing spawn fix), adding it is allowed only when the row is marked as authored in
+the code that adds it, the gameplay justification (the quest flow where applicable) is recorded on
+the issue, and the human client test accepts it. Authored data is never presented as TC-Cata data.
 
 ## Real-client acceptance is human
 
