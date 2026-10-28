@@ -122,17 +122,17 @@ def max_durability(item_class, subclass, inventory_type, quality, item_level):
 
 
 def disenchant_fields(rows, item_class, quality, item_level, required_level, required_skill,
-                      required_skill_rank, flags, bonding, area, map_id, stackable, sell_price, currency):
-    """Mirror TC FillDisenchantFields (ObjectMgr.cpp); rows are ItemDisenchantLoot values.
+                      required_skill_rank, flags, bonding, area, map_id, stackable):
+    """Mirror TC FillDisenchantFields (ObjectMgr.cpp, Shauren); rows are ItemDisenchantLoot values.
 
     The 4.3.4 client does not store DisenchantID/RequiredDisenchantSkill; TC derives them from the
-    ItemDisenchantLoot DBC. Subclass is intentionally not compared, as in the reference.
+    ItemDisenchantLoot DBC. Subclass is intentionally not compared. TC's GetSpecialPrice() clamps
+    its result to the 10,000 minimum, so FillDisenchantFields' price/currency gate never rejects;
+    it is omitted here.
     """
     if (flags & 0x8002) or bonding == 4 or area or map_id or stackable > 1:
         return 0, -1
     if quality < 2 or quality > 4 or item_class not in (2, 4):
-        return 0, -1
-    if sell_price < 10000 and not currency:
         return 0, -1
     for row in rows:
         row_id, row_class, _subclass, row_quality, min_level, max_level, skill = row
