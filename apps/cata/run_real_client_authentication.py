@@ -26,7 +26,7 @@ import uuid
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MYSQL_IMAGE = "mysql:8.4"
-DATABASE_CACHE_VERSION = 1
+DATABASE_CACHE_VERSION = 2
 CLIENT_BUILD = 15595
 CLIENT_SHA256 = "0ea9cc0458cb137f4e0767e8a1896e2042480a4a22397480d7ee64c2e696192a"
 ACCOUNT = "PLAN6USER"
@@ -899,8 +899,12 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def database_cache_key(image_id: str, directories: tuple[tuple[str, Path], ...]) -> str:
-    digest = hashlib.sha256(f"plan7-database-cache-v{DATABASE_CACHE_VERSION}\0{image_id}\0".encode())
+def database_cache_key(
+    image_id: str, directories: tuple[tuple[str, Path], ...], world_dump: str = "",
+) -> str:
+    digest = hashlib.sha256(
+        f"plan7-database-cache-v{DATABASE_CACHE_VERSION}\0{image_id}\0{world_dump}\0".encode()
+    )
     for label, directory in directories:
         paths = sorted(directory.glob("*.sql"))
         if not paths:
@@ -1595,6 +1599,87 @@ def import_sql_directory(
         mysql(manifest, generation, path.read_bytes(), schema)
 
 
+_DEFINER_DDL = re.compile(
+    rb"^\s*(?:/\*!50013|/\*!50017|/\*!50003|CREATE\b[^\n]*\b(?:VIEW|TRIGGER|FUNCTION|PROCEDURE|EVENT)\b)",
+    re.IGNORECASE,
+)
+_DEFINER_CLAUSE = re.compile(
+    rb"DEFINER=`[^`]*`@`[^`]*`(?=\s*(?:SQL SECURITY|VIEW|TRIGGER|PROCEDURE|FUNCTION|EVENT|\*/))",
+    re.IGNORECASE,
+)
+
+
+def import_world_dump(
+    manifest: Manifest, generation: Generation, path: Path, schema: str,
+    expected_sha256: str = "",
+) -> None:
+    """Replace the world schema content with a prebuilt dump (e.g. the clean TDB world)."""
+    container = str(generation["docker"]["container"])
+    snapshot_dir = Path(generation["paths"]["data"])
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    snapshot_fd, snapshot_name = tempfile.mkstemp(
+        dir=snapshot_dir, prefix="world-dump-", suffix=".sql",
+    )
+    snapshot = Path(snapshot_name)
+    try:
+        with os.fdopen(snapshot_fd, "wb") as handle, path.open("rb") as source:
+            shutil.copyfileobj(source, handle)
+        snapshot_sha = sha256(snapshot)
+        if expected_sha256 and snapshot_sha != expected_sha256:
+            raise RuntimeError(
+                "--world-dump changed while preparing; refusing to import different bytes"
+            )
+        with snapshot.open("rb") as source:
+            for line in source:
+                statement = line.lstrip().lower()
+                if statement.startswith((b"use ", b"create database")):
+                    raise RuntimeError(
+                        "--world-dump must describe one schema (no CREATE DATABASE/USE): "
+                        "dump it without --databases"
+                    )
+        mysql(
+            manifest, generation,
+            f"DROP DATABASE IF EXISTS `{schema}`; "
+            f"CREATE DATABASE `{schema}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;",
+        )
+        assert_container_owned(manifest, generation, schema)
+        # Import as an account limited to the target schema: a dump that slips a USE or
+        # CREATE DATABASE past the scan fails instead of touching auth or characters.
+        user = f"plan_dump_{secrets.token_hex(6)}"
+        password = secrets.token_hex(16)
+        mysql(
+            manifest, generation,
+            f"CREATE USER '{user}'@'%' IDENTIFIED BY '{password}'; "
+            f"GRANT ALL PRIVILEGES ON `{schema}`.* TO '{user}'@'%';",
+        )
+        command = [
+            "docker", "exec", "-i", container, "mysql",
+            "-u", user, f"-p{password}", "--database", schema,
+        ]
+        try:
+            with tempfile.TemporaryFile(dir=manifest["root"]) as handle, snapshot.open("rb") as source:
+                handle.write(b"SET autocommit=0;\n")
+                for line in source:
+                    # Views and triggers carry DEFINER clauses; the schema-scoped account has
+                    # no SET_USER_ID, so drop them from DDL lines only.
+                    if b"DEFINER=" in line and _DEFINER_DDL.match(line):
+                        line = _DEFINER_CLAUSE.sub(b"", line)
+                    handle.write(line)
+                handle.write(b"\nCOMMIT;\n")
+                handle.seek(0)
+                result = subprocess.run(
+                    command, stdin=handle, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    check=False, timeout=1800,
+                )
+            if result.returncode:
+                stderr = result.stderr.decode(errors="replace").strip()
+                raise RuntimeError(f"world dump import failed with exit {result.returncode}: {stderr}")
+        finally:
+            mysql(manifest, generation, f"DROP USER IF EXISTS '{user}'@'%';")
+    finally:
+        snapshot.unlink(missing_ok=True)
+
+
 def apply_released_updates(
     manifest: Manifest, generation: Generation, directory: Path, schema: str,
 ) -> list[str]:
@@ -2061,6 +2146,22 @@ def wait_for_world(manifest: Manifest, generation: Generation, record: ProcessId
     raise RuntimeError("worldserver did not reach listener and realm-online readiness")
 
 
+BUILD_INPUT_PATHS = ("src", "deps", "cmake", "modules", "conf", "CMakeLists.txt")
+
+
+def build_inputs_unchanged(revision: str, head: str) -> bool:
+    """True when no commit between a binary's revision and HEAD touches a build input.
+
+    Documentation and harness-only commits cannot change a binary, so they should not force a
+    full rebuild just to satisfy the version gate.
+    """
+    result = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "diff", "--name-only", revision, head, "--", *BUILD_INPUT_PATHS],
+        capture_output=True, text=True, check=False, timeout=60,
+    )
+    return result.returncode == 0 and not result.stdout.strip()
+
+
 def binary_identity(path: Path, head: str, *, reports_version: bool) -> dict[str, object]:
     resolved = path.resolve()
     if not resolved.is_file() or not os.access(resolved, os.X_OK):
@@ -2070,7 +2171,9 @@ def binary_identity(path: Path, head: str, *, reports_version: bool) -> dict[str
         output = run_command([str(resolved), "--version"], timeout=30)
         version = (output.stdout + output.stderr).decode(errors="replace").strip()
         if head[:12] not in version and head not in version:
-            raise RuntimeError(f"binary does not report current HEAD {head[:12]}: {resolved}")
+            reported = re.search(r"AzerothCore rev\. ([0-9a-f]{7,40})", version)
+            if reported is None or not build_inputs_unchanged(reported.group(1), head):
+                raise RuntimeError(f"binary does not report current HEAD {head[:12]}: {resolved}")
         identity["version"] = version
     return identity
 
@@ -2177,11 +2280,19 @@ def preflight_prepare(args: argparse.Namespace) -> dict[str, object]:
     personal_bottle = args.personal_bottle.resolve()
     if not personal_bottle.exists():
         raise RuntimeError(f"personal Bottle baseline path is absent: {personal_bottle}")
+    world_dump = args.world_dump.resolve() if args.world_dump else None
+    if world_dump and not world_dump.is_file():
+        raise RuntimeError(f"--world-dump file is absent: {world_dump}")
+    world_dump_sha = sha256(world_dump) if world_dump else ""
     return {
         "root": str(root),
         "repo_commit": head,
         "mysql_image_id": mysql_image_id,
-        "database_cache_key": database_cache_key(mysql_image_id, DATABASE_SQL_DIRECTORIES),
+        "database_cache_key": database_cache_key(
+            mysql_image_id, DATABASE_SQL_DIRECTORIES, world_dump_sha
+        ),
+        "world_dump": str(world_dump) if world_dump else "",
+        "world_dump_sha256": world_dump_sha,
         "authserver": authserver,
         "worldserver": worldserver,
         "unit_tests": unit_tests,
@@ -2239,6 +2350,11 @@ def prepare(args: argparse.Namespace) -> None:
         latest = active_generation(manifest) if manifest["generations"] else None
         if latest is not None and latest["state"] != "reset":
             if latest["state"] == "prepared":
+                if latest["inputs"].get("world_dump_sha256", "") != inputs["world_dump_sha256"]:
+                    raise RuntimeError(
+                        "the prepared generation used a different --world-dump (or none); "
+                        "reset it or prepare a new generation"
+                    )
                 if geometry_inputs_differ(latest.get("inputs", {}), inputs):
                     raise RuntimeError(
                         "the prepared generation used different geometry inputs (collision data or "
@@ -2356,12 +2472,17 @@ def prepare(args: argparse.Namespace) -> None:
                     manifest, generation, REPO_ROOT / f"data/sql/updates/db_{key}", schema,
                 )
             generation["released_updates"] = released
+            if inputs.get("world_dump"):
+                import_world_dump(manifest, generation, Path(inputs["world_dump"]), world,
+                                  inputs.get("world_dump_sha256", ""))
             dump_database_cache(manifest_path, manifest, generation, cache_key)
             generation["database_cache"] = {"key": cache_key, "result": "built"}
         # Pending migrations aren't part of the database cache key (they're not released yet, so
         # they change independently of it) and must be applied fresh every prepare, whether the
         # schemas above came from a restored cache or a fresh import.
         for key, schema in (("auth", auth), ("characters", characters), ("world", world)):
+            if key == "world" and inputs.get("world_dump"):
+                continue
             apply_released_updates(manifest, generation, REPO_ROOT / f"data/sql/updates/pending_db_{key}", schema)
         realm_count = 1 if args.mode in POPULATED_CHARACTER_MODES else 0
         mysql(
@@ -2409,7 +2530,7 @@ def prepare(args: argparse.Namespace) -> None:
                 raise RuntimeError("owned populated character seed counts do not equal one")
         print(f"prepare database ready: {time.monotonic() - started:.1f}s elapsed", flush=True)
         data_destination = Path(paths["data"])
-        data_destination.mkdir()
+        data_destination.mkdir(exist_ok=True)
         copy_tree(Path(str(inputs["server_dbc_root"])), data_destination / "dbc")
         copy_tree(Path(str(inputs["data_root"])) / "maps", data_destination / "maps")
         if tree_content_hash(data_destination / "dbc") != inputs["data_dbc_hash"]:
@@ -10039,6 +10160,8 @@ four Completed: COP_GET_CHARACTERS result=TRUE
         cache_key = database_cache_key("mysql-image", (("auth-base", sql_root),))
         assert cache_key == database_cache_key("mysql-image", (("auth-base", sql_root),))
         assert cache_key != database_cache_key("other-image", (("auth-base", sql_root),))
+        assert cache_key != database_cache_key("mysql-image", (("auth-base", sql_root),), "d" * 64)
+        assert cache_key == database_cache_key("mysql-image", (("auth-base", sql_root),), "")
         (sql_root / "one.sql").write_text("SELECT 2;\n")
         assert cache_key != database_cache_key("mysql-image", (("auth-base", sql_root),))
         changed_key = database_cache_key("mysql-image", (("auth-base", sql_root),))
@@ -11373,6 +11496,11 @@ def parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--wine-runner", type=Path, required=True)
     prepare_parser.add_argument("--personal-bottle", type=Path, required=True)
     prepare_parser.add_argument("--migration", type=Path, default=DEFAULT_MIGRATION)
+    prepare_parser.add_argument(
+        "--world-dump", type=Path,
+        help="SQL dump of a prebuilt world schema (e.g. the clean TDB world); replaces the 3.3.5a "
+             "world base and skips pending world updates",
+    )
     prepare_parser.add_argument("--display", required=True)
     prepare_parser.add_argument("--xauthority", type=Path)
     prepare_parser.add_argument(
