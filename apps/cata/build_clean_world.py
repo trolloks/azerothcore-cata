@@ -26,6 +26,7 @@ RENAMES = {
     "broadcast_text": {"MaleText": "Text", "FemaleText": "Text1"},
     "creature": {"wander_distance": "spawndist"},
     "creature_addon": {"path_id": "waypointPathId"},
+    "creature_template_addon": {"path_id": "waypointPathId"},
     "creature_formations": {"leaderGUID": "LeaderGUID", "memberGUID": "MemberGUID",
                             "angle": "FollowAngle", "dist": "FollowDistance"},
 }
@@ -37,7 +38,7 @@ EXPRESSIONS = {("creature_formations", "point_1"): "GREATEST(`InversionPoint1`,0
                ("creature", "PhaseId"): "IF(`PhaseId`=0, `PhaseGroup`, `PhaseId`)",
                ("gameobject", "PhaseId"): "IF(`PhaseId`=0, `PhaseGroup`, `PhaseId`)"}
 SPAWN_TABLES = ("creature", "gameobject", "creature_addon", "gameobject_addon",
-                "creature_formations", "waypoint_data", "creature_text",
+                "creature_formations", "waypoint_data", "waypoint_scripts", "creature_text",
                 "game_event_creature", "game_event_gameobject")
 SPAWN_GUID_COLUMNS = {"creature": {"guid"}, "gameobject": {"guid"}, "creature_addon": {"guid"},
                       "gameobject_addon": {"guid"}, "game_event_creature": {"guid"},
@@ -159,7 +160,8 @@ def strip_unregistered_scripts(container, user, password, target):
 
 
 def build_templates(container, user, password, target, source):
-    applied = {table: copy_table(container, user, password, target, source, table)
+    applied = {table: copy_table(container, user, password, target, source, table,
+                                 RENAMES.get(table))
                for table in ("gameobject_template", "creature_model_info", "creature_template",
                              "creature_equip_template", "creature_template_addon",
                              "gameobject_template_addon")}
@@ -382,6 +384,8 @@ def main():
     for name in (args.source, args.target):  # spliced into SQL unquoted
         if not re.fullmatch(r"\w+", name):
             parser.error(f"invalid schema name: {name!r}")
+    if args.source == args.target:
+        parser.error("--source and --target must differ")
 
     phases = PHASES if args.phase == "all" else {args.phase: PHASES[args.phase]}
     for name, build in phases.items():

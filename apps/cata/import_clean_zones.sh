@@ -16,8 +16,13 @@ while read -r zone map label sorts; do
     args=(--zone "$zone" --map "$map" --target "$target" --dbc-dir "$DBC_DIR" --apply)
     [ -n "${sorts:-}" ] && args+=(--quest-sorts "$sorts")
     echo "== $label"
-    # exit 1 means dangling loader-level references were reported; the report keeps them.
-    python3 "$here/import_starter_content.py" "${args[@]}" > "$out/clean-$label.json" || true
+    python3 "$here/import_starter_content.py" "${args[@]}" > "$out/clean-$label.json"
+    status=$?
+    # 2 means the zone imported but loader-level dangling references were reported (kept in the JSON).
+    if [ "$status" -ne 0 ] && [ "$status" -ne 2 ]; then
+        echo "zone import failed for $label (exit $status)" >&2
+        exit "$status"
+    fi
 done <<'ZONES'
 14 1 durotar 368
 215 1 mulgore
@@ -39,3 +44,10 @@ done <<'ZONES'
 3433 530 ghostlands
 16 1 azshara
 ZONES
+
+echo "== repairing quest chain links"
+if ! python3 "$here/import_starter_content.py" --target "$target" --repair-links --apply \
+        > "$out/clean-links.json"; then
+    echo "quest chain link repair failed" >&2
+    exit 1
+fi
