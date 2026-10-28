@@ -3,10 +3,10 @@
 
 The 4.3.4 client stores no per-item armor, weapon damage or durability; with --dbc-dir these are derived
 from the ItemArmor*/ItemDamage* tables (item_derived_stats.py). Without it, or for the columns that stay
-underived (block, second damage, scaling value, disenchant), the schema default is kept and the output
-header lists them so the gap stays visible. Item page text is not converted: the pages are world data, and
-TDB 434 lacks Cata's later pages (a reference would be dangling). Cata-only stat types are translated where AC
-has a column:
+underived (block, second damage, scaling value), the schema default is kept and the output header lists
+them so the gap stays visible. The item's PageText is copied, and the emitted SQL clears references whose
+page the target's page_text does not carry (the pages are world data; TDB 434 lacks Cata's later pages).
+Cata-only stat types are translated where AC has a column:
 50 extra armor -> armor, 51-56 resistances -> *_res; 49 mastery has no AC counterpart and is dropped
 rather than left for the loader to reinterpret as mana.
 
@@ -20,7 +20,6 @@ it never touches a database.
 
 import argparse
 import json
-import struct
 import sys
 
 from audit_native_item_sparse import db2_records as sparse_records
@@ -45,7 +44,7 @@ SIMPLE = {  # AC column <- Item-sparse field
     "area": "AreaID", "Map": "MapID", "BagFamily": "BagFamily", "TotemCategory": "TotemCategory",
     "socketBonus": "SocketBonus", "GemProperties": "GemProperties",
     "ArmorDamageModifier": "ArmorDamageModifier", "duration": "Duration",
-    "ItemLimitCategory": "ItemLimitCategory", "HolidayId": "HolidayID",
+    "ItemLimitCategory": "ItemLimitCategory", "HolidayId": "HolidayID", "PageText": "PageText",
 }
 for i in range(10):
     SIMPLE[f"stat_type{i + 1}"] = f"ItemStatType{i}"
@@ -76,7 +75,7 @@ DERIVED = ["armor", "MaxDurability", "dmg_min1", "dmg_max1", "dmg_type1", "Disen
 # 3.3.5a columns the 4.3.4 Item-sparse does not carry: block, second damage and ScalingStatValue stay at
 # the schema default. The 4.x stat scaling (ItemStatAllocation/StatScalingFactor) has no AC item_template
 # columns, and PageText is world data (#259).
-UNRESOLVED = ["block", "dmg_min2", "dmg_max2", "dmg_type2", "ScalingStatValue", "PageText"]
+UNRESOLVED = ["block", "dmg_min2", "dmg_max2", "dmg_type2", "ScalingStatValue"]
 # Cata stat types above AC's highest ItemModType (48) that have their own item_template column. Mastery (49)
 # has no AC counterpart and is dropped instead of passed through, where the loader would zero the type and
 # apply the value as mana.
@@ -107,8 +106,7 @@ def derive(row, sparse, tables):
         row["DisenchantID"], row["RequiredDisenchantSkill"] = disenchant_fields(
             tables["ItemDisenchantLoot"].values(), row["class"], row["Quality"], row["ItemLevel"],
             row["RequiredLevel"], row["RequiredSkill"], row["RequiredSkillRank"], row["Flags"],
-            row["bonding"], row["area"], row["Map"], row["stackable"], row["SellPrice"],
-            row["entry"] in tables.get("ItemCurrencyCost", ()))
+            row["bonding"], row["area"], row["Map"], row["stackable"])
 
 
 def convert(item_rows, sparse_rows, item_ids, tables=None):
@@ -160,39 +158,16 @@ def to_sql(rows, build, derived=False, insert_only=False):
              f"-- {'Derived: ' + ', '.join(DERIVED) + '. ' if derived else 'Not derived (no --dbc-dir): '
                   + ', '.join(DERIVED) + '. '}"
              f"Left at schema default: {', '.join(UNRESOLVED)}",
-             *([] if insert_only else ["START TRANSACTION;",
-                                       f"DELETE FROM `item_template` WHERE `entry` IN ({ids});"]),
+             "START TRANSACTION;",
+             *([] if insert_only else [f"DELETE FROM `item_template` WHERE `entry` IN ({ids});"]),
              f"INSERT INTO `item_template` ({','.join(f'`{c}`' for c in columns)}) VALUES"]
     values = [f"({','.join(sql_value(row[c]) for c in columns[:-1])},{build})" for row in rows]
     lines.append(",\n".join(values) + ";")
-    if not insert_only:
-        lines.append("COMMIT;")
+    # The pages are world data; clear references to pages the target DB does not carry.
+    lines.append(f"UPDATE `item_template` i LEFT JOIN `page_text` p ON p.ID=i.PageText "
+                 f"SET i.PageText=0 WHERE i.PageText<>0 AND p.ID IS NULL AND i.entry IN ({ids});")
+    lines.append("COMMIT;")
     return "\n".join(lines) + "\n"
-
-
-def load_currency_costs(dbc_dir):
-    """ItemCurrencyCost.db2 ids for TC's sItemCurrencyCostStore disenchant condition."""
-    with open(f"{dbc_dir}/ItemCurrencyCost.db2", "rb") as handle:
-        data = handle.read()
-    if data[:4] != b"WDB2":
-        raise ValueError("ItemCurrencyCost.db2 is not a WDB2 file")
-    record_count, field_count, record_size, string_size = struct.unpack_from("<4I", data, 4)
-    if field_count != 2 or record_size != 8:
-        raise ValueError("Unexpected ItemCurrencyCost.db2 layout")
-    off = 20 + 12  # WDBC header + tableHash/build/timestamp
-    min_id, max_id, _locale, copy_size = struct.unpack_from("<4i", data, off)
-    off += 16
-    if copy_size:
-        raise ValueError("ItemCurrencyCost.db2 copy table is not implemented")
-    if max_id:
-        off += (max_id - min_id + 1) * 6  # offset-map table, skippable
-    if len(data) != off + record_count * record_size + string_size:
-        raise ValueError("Truncated or trailing ItemCurrencyCost.db2 data")
-    ids = set()
-    for i in range(record_count):
-        first, second = struct.unpack_from("<2I", data, off + i * record_size)
-        ids.update((first, second))
-    return ids
 
 
 def report_item_ids(handle):
@@ -253,18 +228,23 @@ def self_test():
     assert (low, high) == (4.0, 4.0)  # delay 2000ms * dps 2.0 / 1000
     assert max_durability(4, 1, 5, 1, 40) == 5 * int(23.0 * 1.0 * 1.0 + 0.5)
     flat["ItemDisenchantLoot"] = {3: (3, 4, -1, 2, 1, 10, 1)}
-    flat["ItemCurrencyCost"] = set()
-    sparse[1].update({**shirt, "Quality": 2, "ItemLevel": 5, "SellPrice": 20000, "Stackable": 1})
+    sparse[1].update({**shirt, "Quality": 2, "ItemLevel": 5, "SellPrice": 1, "Stackable": 1})
     disenchant = convert(item, sparse, [1], flat)[0]
     assert (disenchant["DisenchantID"], disenchant["RequiredDisenchantSkill"]) == (3, 1)
-    sparse[1]["SellPrice"] = 9999
-    assert convert(item, sparse, [1], flat)[0]["DisenchantID"] == 0
-    flat["ItemCurrencyCost"] = {1}
-    assert convert(item, sparse, [1], flat)[0]["DisenchantID"] == 3
-    sparse[1]["SellPrice"] = 20000
     sparse[1]["Flags"] = 0x8000
     assert convert(item, sparse, [1], flat)[0]["DisenchantID"] == 0
     sparse[1]["Flags"] = 0
+    sparse[1]["PageText"] = 123
+    page_rows = convert(item, sparse, [1])
+    page_sql = to_sql(page_rows, 15595)
+    assert "`PageText`" in page_sql and "i.entry IN (1)" in page_sql
+    assert "i.PageText<>0 AND p.ID IS NULL" in page_sql
+    assert "START TRANSACTION;" in page_sql and page_sql.rstrip().endswith("COMMIT;")
+    insert_only_sql = to_sql(page_rows, 15595, insert_only=True)
+    assert "DELETE FROM" not in insert_only_sql
+    assert "START TRANSACTION;" in insert_only_sql and insert_only_sql.rstrip().endswith("COMMIT;")
+    assert "i.entry IN (1)" in insert_only_sql
+    sparse[1]["PageText"] = 0
     import io
     assert report_item_ids(io.StringIO('log\n{"closure": {"missing_items": ["58363", "52558"]}}')) == [52558, 58363]
     assert report_item_ids(io.StringIO('{"zone": 12}')) == []
@@ -309,8 +289,6 @@ def main():
     if args.all:
         item_ids = sorted(set(item_rows) & set(sparse_rows))
     tables = load_tables(args.dbc_dir) if args.dbc_dir else None
-    if tables is not None:
-        tables["ItemCurrencyCost"] = load_currency_costs(args.dbc_dir)
     rows = convert(item_rows, sparse_rows, item_ids, tables)
     sys.stdout.write(to_sql(rows, args.build, bool(tables), args.insert_only))
 
