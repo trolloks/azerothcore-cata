@@ -590,6 +590,26 @@ def build_interactions(container, user, password, target, source):
         f"o.BoxBroadcastTextID=b.BoxBroadcastTextId "
         f"WHERE o.BoxCoded=0 AND o.BoxMoney=0 AND (o.BoxText='' OR o.BoxText IS NULL) "
         f"AND o.BoxBroadcastTextID=0")
+    # TDB 4.3.4 leaves many trainer/vendor menus without the standard option; the worldserver then
+    # falls back to menu 0 and the trainer/vendor button is missing (#258). Generate the standard
+    # option for every trainer/vendor menu that lacks it, appended after any existing options.
+    for key, npcflag_mask, option_type, icon, text, broadcast, option_npcflag in (
+            ("gossip_trainer_options", "0x70", 5, 3, "I would like to train.", 8221, 16),
+            ("gossip_vendor_options", "0x80", 3, 1, "I want to browse your goods", 3370, 128)):
+        applied[key] = insert_count(
+            container, user, password,
+            f"INSERT IGNORE INTO `{target}`.gossip_menu_option "
+            f"(MenuID, OptionID, OptionIcon, OptionText, OptionBroadcastTextID, OptionType, "
+            f"OptionNpcFlag, ActionMenuID, ActionPoiID, BoxCoded, BoxMoney, BoxText, "
+            f"BoxBroadcastTextID, VerifiedBuild) "
+            f"SELECT t.gossip_menu_id, "
+            f"(SELECT COALESCE(MAX(o.OptionID)+1,0) FROM `{target}`.gossip_menu_option o "
+            f"WHERE o.MenuID=t.gossip_menu_id), {icon}, '{text}', {broadcast}, {option_type}, "
+            f"{option_npcflag}, 0, 0, 0, 0, '', 0, 0 "
+            f"FROM `{target}`.creature_template t "
+            f"WHERE t.gossip_menu_id<>0 AND (t.npcflag & {npcflag_mask})<>0 "
+            f"AND NOT EXISTS (SELECT 1 FROM `{target}`.gossip_menu_option o "
+            f"WHERE o.MenuID=t.gossip_menu_id AND o.OptionType={option_type})")
     return applied
 
 
