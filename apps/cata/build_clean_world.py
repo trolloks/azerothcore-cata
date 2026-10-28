@@ -270,13 +270,15 @@ VALKYR_SCRIPTED = (24068, 31655, 28534, 26668, 30810, 34496, 34497, 35347, 35348
 # Hunter Ascendant spawns (50195). Add others when the data uses them.
 HOVER_AURAS = (36550, 86137, 96851, 102602, 50195)
 
-# Scripts that call SetHover(true) on the creature itself and therefore need its template height
-# (only the height-1 entries matter here; non-1 heights are kept regardless): Svala, Illidan,
-# Sartharion's drakes, Ahn'kahet Taldaram/Jedoga, Brundir, the Feral Defender, the ICC Frostbinder,
-# the Light's Vengeance vehicle and the Blood Prince Council's Ball of Flame/Dark Nucleus helpers.
-# Keep this separate from VALKYR_SCRIPTED, whose flight-only entries must not stay hovered.
-SCRIPTED_HOVERERS = (26668, 30810, 22917, 30449, 30451, 30452, 29308, 29310, 32857, 34035, 37127,
-                     37952, 38332, 38369, 38451)
+# Scripts that call SetHover(true) on the creature itself and are actually bound in the clean
+# world, so their template height is needed (only the height-1 entries matter; non-1 heights are
+# kept regardless): Svala, Illidan, Ahn'kahet Taldaram/Jedoga, Brundir, the ICC Frostbinder, the
+# Light's Vengeance vehicle and the Blood Prince Council's Ball of Flame/Dark Nucleus helpers.
+# The Sartharion drakes (npc_vesperon/npc_shadron/npc_tenebron) and the Feral Defender
+# (npc_feral_defender) are unregistered after strip_unregistered_scripts, so their scripts do not
+# run here and they are deliberately absent until the bindings are mapped. Keep this separate
+# from VALKYR_SCRIPTED, whose flight-only entries must not stay hovered.
+SCRIPTED_HOVERERS = (26668, 30810, 22917, 29308, 29310, 32857, 37127, 37952, 38332, 38369, 38451)
 
 
 def load_valkyr_displays(dbc_dir: Path) -> tuple[int, ...]:
