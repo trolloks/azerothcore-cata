@@ -11,8 +11,9 @@ staying close to upstream.
 - **Do not write or add live-stack e2e tests unless the user explicitly asks.** Do not create `e2e/local/` scratch tests to validate a fix. Existing `e2e/` tests that break after a change may be updated. Do not mention missing coverage unless the user asked about it.
 - Planning docs go in `.agents/plans/<task-slug>/` (gitignored), named `<task-slug>.<TYPE>.md` (`PLAN`, `REQUIREMENTS`, `ANALYSIS`, …).
 - **In-world client testing is human-only.** The real-client harness only launches the client and gets into
-  the world; a human tests in-world and signs off on the issue. Never script in-world input or claim an
-  in-world acceptance result.
+  the world; never script in-world input or claim an in-world acceptance result. Human sign-off is not a
+  merge or closure gate: land on the deterministic checks and pick in-world validation up when the issue is
+  revisited; a finding becomes a new issue.
 - **Credit upstream authors.** Code, a mechanism, or data mirrored from another core (TrinityCore, cMaNGOS, …) is committed with `--author` naming the original commit's author (extra sources as `Co-authored-by`), even when rewritten against AC or confirmed by own sniffs; find them in the upstream file's commit history.
 
 ## Mandatory reading per task
