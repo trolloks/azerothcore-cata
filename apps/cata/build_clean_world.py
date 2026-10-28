@@ -193,6 +193,8 @@ def build_templates(container, user, password, target, source):
     scripted = ",".join(str(entry) for entry in SCRIPTED_HOVERERS)
     hover_template = " AND ".join(
         f"CONCAT(' ', a.auras, ' ') NOT LIKE '% {spell} %'" for spell in HOVER_AURAS)
+    hover_template_positive = " OR ".join(
+        f"CONCAT(' ', a.auras, ' ') LIKE '% {spell} %'" for spell in HOVER_AURAS)
     hover_spawn = " OR ".join(
         f"CONCAT(' ', ca.auras, ' ') LIKE '% {spell} %'" for spell in HOVER_AURAS)
     hover_cast = " OR ".join(
@@ -213,16 +215,25 @@ def build_templates(container, user, password, target, source):
         f"AND (a.auras IS NULL OR ({hover_template})) "
         f"AND t.entry NOT IN ({scripted})")
     # A difficulty template inherits its base's script/aura hover, and Creature::InitEntry reads
-    # the difficulty height, so restore the source height for the variants of every protected
-    # base (the source rows carry the TDB height; the rule above only zeroed the default 1).
+    # the difficulty height, so restore the source height for the variants of every base that has
+    # an actual hover source. A nondefault height alone is not a source (flight-only bosses keep
+    # one), so select the bases by source, not by HoverHeight<>0.
+    hover_source = (f"COALESCE(m.Ground,0)=2 OR sh.id IS NOT NULL OR sa.entryOrGuid IS NOT NULL "
+                    f"OR (a.auras IS NOT NULL AND ({hover_template_positive})) "
+                    f"OR t.entry IN ({scripted})")
     diffs = run(container, user, password,
-                f"SELECT difficulty_entry_1 FROM `{target}`.creature_template "
-                f"WHERE difficulty_entry_1<>0 AND HoverHeight<>0 "
-                f"UNION SELECT difficulty_entry_2 FROM `{target}`.creature_template "
-                f"WHERE difficulty_entry_2<>0 AND HoverHeight<>0 "
-                f"UNION SELECT difficulty_entry_3 FROM `{target}`.creature_template "
-                f"WHERE difficulty_entry_3<>0 AND HoverHeight<>0")
-    variant_ids = [row[0] for row in diffs if int(row[0])]
+                f"SELECT difficulty_entry_1, difficulty_entry_2, difficulty_entry_3 "
+                f"FROM `{target}`.creature_template t "
+                f"LEFT JOIN `{target}`.creature_template_movement m ON m.CreatureId=t.entry "
+                f"LEFT JOIN `{target}`.creature_template_addon a ON a.entry=t.entry "
+                f"LEFT JOIN (SELECT DISTINCT c.id FROM `{source}`.creature c "
+                f"JOIN `{source}`.creature_addon ca ON ca.guid=c.guid WHERE {hover_spawn}) sh "
+                f"ON sh.id=t.entry "
+                f"LEFT JOIN (SELECT DISTINCT entryOrGuid FROM `{source}`.smart_scripts ss "
+                f"WHERE ss.source_type=0 AND ({hover_cast})) sa ON sa.entryOrGuid=t.entry "
+                f"WHERE ({hover_source}) AND (t.difficulty_entry_1<>0 OR t.difficulty_entry_2<>0 "
+                f"OR t.difficulty_entry_3<>0)")
+    variant_ids = sorted({int(value) for row in diffs for value in row if value and int(value)})
     if variant_ids:
         applied["hover_difficulty"] = update_count(
             container, user, password,
@@ -260,11 +271,12 @@ VALKYR_SCRIPTED = (24068, 31655, 28534, 26668, 30810, 34496, 34497, 35347, 35348
 HOVER_AURAS = (36550, 86137, 96851, 102602, 50195)
 
 # Scripts that call SetHover(true) on the creature itself and therefore need its template height
-# (only the height-1 entries matter here; non-1 heights are kept regardless): Illidan, Sartharion's
-# drakes, Ahn'kahet Taldaram/Jedoga, Brundir, the ICC Frostbinder, the Light's Vengeance vehicle
-# and the Blood Prince Council's Ball of Flame/Dark Nucleus helpers.
-SCRIPTED_HOVERERS = VALKYR_SCRIPTED + (22917, 30449, 30451, 30452, 29308, 29310, 32857, 37127,
-                                       37952, 38332, 38369, 38451)
+# (only the height-1 entries matter here; non-1 heights are kept regardless): Svala, Illidan,
+# Sartharion's drakes, Ahn'kahet Taldaram/Jedoga, Brundir, the Feral Defender, the ICC Frostbinder,
+# the Light's Vengeance vehicle and the Blood Prince Council's Ball of Flame/Dark Nucleus helpers.
+# Keep this separate from VALKYR_SCRIPTED, whose flight-only entries must not stay hovered.
+SCRIPTED_HOVERERS = (26668, 30810, 22917, 30449, 30451, 30452, 29308, 29310, 32857, 34035, 37127,
+                     37952, 38332, 38369, 38451)
 
 
 def load_valkyr_displays(dbc_dir: Path) -> tuple[int, ...]:
