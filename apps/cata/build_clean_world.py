@@ -185,19 +185,27 @@ def build_templates(container, user, password, target, source):
             f"WHERE (modelid1 IN ({displays}) OR modelid2 IN ({displays}) "
             f"OR modelid3 IN ({displays}) OR modelid4 IN ({displays})) "
             f"AND entry NOT IN ({excluded})")
-    # This fork's client applies UNIT_FIELD_HOVERHEIGHT without requiring the hover flag, so the
+    # This fork's client applies UNIT_FIELD_HOVERHEIGHT without requiring the hover flag, so a
     # template height is only meaningful where something actually hovers the creature: a movement
-    # template, a hover aura or a script. Zero the rest or every creature renders that far up.
-    hover_auras = " AND ".join(
+    # template, a template/spawn hover aura or a script. Heights other than the default 1 are
+    # authored intent (Svala 3, Brundir 10, dragons up to 35), so only the 1s are normalized.
+    scripted = ",".join(str(entry) for entry in SCRIPTED_HOVERERS)
+    hover_template = " AND ".join(
         f"CONCAT(' ', a.auras, ' ') NOT LIKE '% {spell} %'" for spell in HOVER_AURAS)
+    hover_spawn = " OR ".join(
+        f"CONCAT(' ', ca.auras, ' ') LIKE '% {spell} %'" for spell in HOVER_AURAS)
     applied["hover_height"] = update_count(
         container, user, password,
         f"UPDATE `{target}`.creature_template t "
         f"LEFT JOIN `{target}`.creature_template_movement m ON m.CreatureId=t.entry "
         f"LEFT JOIN `{target}`.creature_template_addon a ON a.entry=t.entry "
+        f"LEFT JOIN (SELECT DISTINCT c.id FROM `{source}`.creature c "
+        f"JOIN `{source}`.creature_addon ca ON ca.guid=c.guid WHERE {hover_spawn}) sh "
+        f"ON sh.id=t.entry "
         f"SET t.HoverHeight=0 "
-        f"WHERE COALESCE(m.Ground,0)<>2 AND t.entry NOT IN ({excluded}) "
-        f"AND (a.auras IS NULL OR ({hover_auras}))")
+        f"WHERE t.HoverHeight=1 AND COALESCE(m.Ground,0)<>2 AND sh.id IS NULL "
+        f"AND (a.auras IS NULL OR ({hover_template})) "
+        f"AND t.entry NOT IN ({scripted})")
     applied["stripped_script_names"] = strip_unregistered_scripts(container, user, password, target)
     return applied
 
@@ -222,9 +230,17 @@ VALKYR_DISPLAYS: tuple[int, ...] = ()
 VALKYR_SCRIPTED = (24068, 31655, 28534, 26668, 30810, 34496, 34497, 35347, 35348, 35349, 35350,
                    35351, 35352, 36609, 39120, 39121, 39122, 37126, 38258)
 
-# SPELL_AURA_HOVER (106) template addon spells that make a creature float without a movement
-# template: the Floating Drowned (36550) in TDB. Add others when the data uses them.
-HOVER_AURAS = (36550,)
+# Client-DBC SPELL_AURA_HOVER (106) spells found on TDB template or spawn addons: the Floating
+# Drowned (36550), template auras on 44442/52362/54476/54751 (86137/96851/102602) and the Mage
+# Hunter Ascendant spawns (50195). Add others when the data uses them.
+HOVER_AURAS = (36550, 86137, 96851, 102602, 50195)
+
+# Scripts that call SetHover(true) and therefore need their template height (only the height-1
+# entries matter here; non-1 heights are kept regardless): Illidan, Sartharion and his drakes,
+# Ahn'kahet Taldaram/Jedoga, Mimiron, Auriaya, the ICC Frostbinder and Blood Prince Council, the
+# Light's Vengeance vehicle and Brundir (whose 10 is kept by the height rule anyway).
+SCRIPTED_HOVERERS = VALKYR_SCRIPTED + (22917, 28860, 30449, 30451, 30452, 29308, 29310, 32857,
+                                       33350, 33515, 37127, 37952, 37970, 37972, 37973)
 
 
 def load_valkyr_displays(dbc_dir: Path) -> tuple[int, ...]:
