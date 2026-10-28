@@ -21,6 +21,8 @@ from import_starter_content import (SMART_EVENT_PARAM_COUNTS, UNSUPPORTED_SMART_
 from starter_content_inventory import registered_script_names
 
 GUID_OFFSET = 10_000_000
+# Loot ids stay below 200k in TDB; allocated quest-only templates live in an unused range.
+QUEST_LOOT_ID_BASE = 900_000_000
 # TDB keeps a few columns under a different name; the rest of AC's spawn tables match.
 RENAMES = {
     "broadcast_text": {"MaleText": "Text", "FemaleText": "Text1"},
@@ -293,6 +295,56 @@ def build_loot(container, user, password, target, source):
                           "fishing_loot_template")}
 
 
+def build_quest_items(container, user, password, target, source):
+    """Turn the 4.x quest-item stores into loot rows AC's loot path reads.
+
+    TDB keeps quest drops in creature_questitem/gameobject_questitem, which this core only sends in
+    the creature/GO query response. A quest-required loot row drops only for a player who needs it.
+    Loot is keyed by creature_template.lootid and by the chest/fishing-hole loot id (Data1), not by
+    the entry itself; a carrier without one gets a dedicated id so no shared template is reused.
+    """
+    if not int(run(container, user, password,
+                   f"SELECT COUNT(*) FROM `{target}`.creature_loot_template")[0][0]):
+        raise RuntimeError("run the loot phase before quest_items")
+    applied = {}
+    # Restore the source loot id first so a rerun starts from the baked template, then give a
+    # carrier without one an id from the unused range instead of its entry.
+    applied["creature_loot_ids"] = update_count(
+        container, user, password,
+        f"UPDATE `{target}`.creature_template t JOIN `{source}`.creature_template s ON s.entry=t.entry "
+        f"JOIN `{source}`.creature_questitem q ON q.CreatureEntry=t.entry SET t.lootid=s.lootid")
+    applied["creature_loot_ids"] += update_count(
+        container, user, password,
+        f"UPDATE `{target}`.creature_template t JOIN `{source}`.creature_template s ON s.entry=t.entry "
+        f"JOIN `{source}`.creature_questitem q ON q.CreatureEntry=t.entry "
+        f"SET t.lootid={QUEST_LOOT_ID_BASE}+t.entry WHERE t.lootid=0")
+    applied["creature_loot_template"] = insert_count(
+        container, user, password,
+        f"INSERT IGNORE INTO `{target}`.creature_loot_template "
+        f"(Entry, Item, Reference, Chance, QuestRequired, LootMode, GroupId, MinCount, MaxCount, Comment) "
+        f"SELECT t.lootid, q.ItemId, 0, 100, 1, 1, 0, 1, 1, 'quest item' "
+        f"FROM `{source}`.creature_questitem q JOIN `{target}`.creature_template t "
+        f"ON t.entry=q.CreatureEntry "
+        f"LEFT JOIN `{target}`.creature_loot_template l ON l.Entry=t.lootid AND l.Item=q.ItemId "
+        f"WHERE l.Entry IS NULL AND t.lootid<>0")
+    # Gameobject loot is the chest/fishing-hole loot id, not the object entry.
+    applied["gameobject_loot_ids"] = update_count(
+        container, user, password,
+        f"UPDATE `{target}`.gameobject_template g JOIN `{source}`.gameobject_questitem q "
+        f"ON q.GameObjectEntry=g.entry SET g.Data1={QUEST_LOOT_ID_BASE}+g.entry "
+        f"WHERE g.type IN (3,25) AND g.Data1=0")
+    applied["gameobject_loot_template"] = insert_count(
+        container, user, password,
+        f"INSERT IGNORE INTO `{target}`.gameobject_loot_template "
+        f"(Entry, Item, Reference, Chance, QuestRequired, LootMode, GroupId, MinCount, MaxCount, Comment) "
+        f"SELECT g.Data1, q.ItemId, 0, 100, 1, 1, 0, 1, 1, 'quest item' "
+        f"FROM `{source}`.gameobject_questitem q JOIN `{target}`.gameobject_template g "
+        f"ON g.entry=q.GameObjectEntry "
+        f"LEFT JOIN `{target}`.gameobject_loot_template l ON l.Entry=g.Data1 AND l.Item=q.ItemId "
+        f"WHERE l.Entry IS NULL AND g.type IN (3,25) AND g.Data1<>0")
+    return applied
+
+
 def build_text(container, user, password, target, source):
     return {table: copy_table(container, user, password, target, source, table,
                               RENAMES.get(table))
@@ -368,8 +420,8 @@ def build_services(container, user, password, target, source):
 
 
 PHASES = {"templates": build_templates, "spawns": build_spawns, "loot": build_loot,
-          "text": build_text, "services": build_services, "pools": build_pools,
-          "interactions": build_interactions}
+          "quest_items": build_quest_items, "text": build_text, "services": build_services,
+          "pools": build_pools, "interactions": build_interactions}
 
 
 def main():
