@@ -1601,38 +1601,66 @@ def import_sql_directory(
 
 def import_world_dump(
     manifest: Manifest, generation: Generation, path: Path, schema: str,
+    expected_sha256: str = "",
 ) -> None:
     """Replace the world schema content with a prebuilt dump (e.g. the clean TDB world)."""
-    with path.open("rb") as source:
-        for line in source:
-            statement = line.lstrip().lower()
-            if statement.startswith((b"use ", b"create database")):
-                raise RuntimeError(
-                    "--world-dump must describe one schema (no CREATE DATABASE/USE): "
-                    "dump it without --databases"
-                )
-    mysql(
-        manifest, generation,
-        f"DROP DATABASE IF EXISTS `{schema}`; "
-        f"CREATE DATABASE `{schema}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;",
+    container = str(generation["docker"]["container"])
+    snapshot_fd, snapshot_name = tempfile.mkstemp(
+        dir=manifest["root"], prefix="world-dump-", suffix=".sql",
     )
-    assert_container_owned(manifest, generation, schema)
-    command = [
-        "docker", "exec", "-i", str(generation["docker"]["container"]), "mysql",
-        "-uroot", f"-p{manifest['mysql_root_password']}", "--database", schema,
-    ]
-    with tempfile.TemporaryFile(dir=manifest["root"]) as handle, path.open("rb") as source:
-        handle.write(b"SET autocommit=0;\n")
-        shutil.copyfileobj(source, handle)
-        handle.write(b"\nCOMMIT;\n")
-        handle.seek(0)
-        result = subprocess.run(
-            command, stdin=handle, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            check=False, timeout=1800,
+    snapshot = Path(snapshot_name)
+    try:
+        with os.fdopen(snapshot_fd, "wb") as handle, path.open("rb") as source:
+            shutil.copyfileobj(source, handle)
+        snapshot_sha = sha256(snapshot)
+        if expected_sha256 and snapshot_sha != expected_sha256:
+            raise RuntimeError(
+                "--world-dump changed while preparing; refusing to import different bytes"
+            )
+        with snapshot.open("rb") as source:
+            for line in source:
+                statement = line.lstrip().lower()
+                if statement.startswith((b"use ", b"create database")):
+                    raise RuntimeError(
+                        "--world-dump must describe one schema (no CREATE DATABASE/USE): "
+                        "dump it without --databases"
+                    )
+        mysql(
+            manifest, generation,
+            f"DROP DATABASE IF EXISTS `{schema}`; "
+            f"CREATE DATABASE `{schema}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;",
         )
-    if result.returncode:
-        stderr = result.stderr.decode(errors="replace").strip()
-        raise RuntimeError(f"world dump import failed with exit {result.returncode}: {stderr}")
+        assert_container_owned(manifest, generation, schema)
+        # Import as an account limited to the target schema: a dump that slips a USE or
+        # CREATE DATABASE past the scan fails instead of touching auth or characters.
+        user = f"plan_dump_{secrets.token_hex(6)}"
+        password = secrets.token_hex(16)
+        mysql(
+            manifest, generation,
+            f"CREATE USER '{user}'@'%' IDENTIFIED BY '{password}'; "
+            f"GRANT ALL PRIVILEGES ON `{schema}`.* TO '{user}'@'%';",
+        )
+        command = [
+            "docker", "exec", "-i", container, "mysql",
+            "-u", user, f"-p{password}", "--database", schema,
+        ]
+        try:
+            with tempfile.TemporaryFile(dir=manifest["root"]) as handle, snapshot.open("rb") as source:
+                handle.write(b"SET autocommit=0;\n")
+                shutil.copyfileobj(source, handle)
+                handle.write(b"\nCOMMIT;\n")
+                handle.seek(0)
+                result = subprocess.run(
+                    command, stdin=handle, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    check=False, timeout=1800,
+                )
+            if result.returncode:
+                stderr = result.stderr.decode(errors="replace").strip()
+                raise RuntimeError(f"world dump import failed with exit {result.returncode}: {stderr}")
+        finally:
+            mysql(manifest, generation, f"DROP USER IF EXISTS '{user}'@'%';")
+    finally:
+        snapshot.unlink(missing_ok=True)
 
 
 def apply_released_updates(
@@ -2101,7 +2129,7 @@ def wait_for_world(manifest: Manifest, generation: Generation, record: ProcessId
     raise RuntimeError("worldserver did not reach listener and realm-online readiness")
 
 
-BUILD_INPUT_PATHS = ("src", "deps", "cmake", "modules", "CMakeLists.txt")
+BUILD_INPUT_PATHS = ("src", "deps", "cmake", "modules", "conf", "CMakeLists.txt")
 
 
 def build_inputs_unchanged(revision: str, head: str) -> bool:
@@ -2428,7 +2456,8 @@ def prepare(args: argparse.Namespace) -> None:
                 )
             generation["released_updates"] = released
             if inputs.get("world_dump"):
-                import_world_dump(manifest, generation, Path(inputs["world_dump"]), world)
+                import_world_dump(manifest, generation, Path(inputs["world_dump"]), world,
+                                  inputs.get("world_dump_sha256", ""))
             dump_database_cache(manifest_path, manifest, generation, cache_key)
             generation["database_cache"] = {"key": cache_key, "result": "built"}
         # Pending migrations aren't part of the database cache key (they're not released yet, so
