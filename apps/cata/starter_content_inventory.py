@@ -549,7 +549,11 @@ def check_loader_relations(container, user, password, schema, creatures, gameobj
 
 
 def zone_quest_candidates(container, user, password, schema, sorts, zone, map_id) -> list[str]:
-    """Quest ids sorted under the zone's sorts plus class-sorted quests that start inside the zone."""
+    """Quest ids sorted under the zone's sorts plus any quest that starts inside the zone.
+
+    Sub-areas use their own sort ids (Coldridge Valley 132, Echo Isles 368), so a zone id alone
+    misses a starting experience; the starter spawn is the reliable link.
+    """
     sort_ids = ",".join(str(value) for value in sorts)
     ids = {r[0] for r in query(container, user, password, schema,
                                f"SELECT ID FROM {schema}.quest_template WHERE QuestSortID IN ({sort_ids})")}
@@ -561,7 +565,7 @@ def zone_quest_candidates(container, user, password, schema, sorts, zone, map_id
                                        f"SELECT DISTINCT q.ID FROM {schema}.quest_template q "
                                        f"JOIN {schema}.{starter} s ON s.quest=q.ID "
                                        f"JOIN {schema}.{spawn} o ON o.id=s.id "
-                                       f"WHERE q.QuestSortID<0 AND o.map={map_id} "
+                                       f"WHERE o.map={map_id} "
                                        f"AND (o.zoneId={zone} OR o.areaId={zone})"))
     return sorted(ids, key=int)
 

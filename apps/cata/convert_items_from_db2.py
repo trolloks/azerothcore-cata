@@ -221,6 +221,8 @@ def main():
     parser.add_argument("item_sparse_db2", nargs="?", type=argparse.FileType("rb"))
     parser.add_argument("item_ids", nargs="*", type=int)
     parser.add_argument("--build", type=int, default=15595)
+    parser.add_argument("--all", action="store_true",
+                        help="convert every item present in both DB2 files (world-wide item_template)")
     parser.add_argument("--insert-only", action="store_true",
                         help="plain INSERT for brand-new ids (the SQL linter forbids DELETE on item_template)")
     parser.add_argument("--ids-from-report", type=argparse.FileType("r"),
@@ -235,12 +237,15 @@ def main():
     except ValueError as error:
         parser.error(f"--ids-from-report: {error}")
     item_ids = sorted(set(args.item_ids) | set(report_ids))
-    if not (args.item_db2 and args.item_sparse_db2 and item_ids):
-        parser.error("item_db2, item_sparse_db2 and at least one item id (or a report with missing items) "
-                     "are required")
+    if not (args.item_db2 and args.item_sparse_db2 and (item_ids or args.all)):
+        parser.error("item_db2, item_sparse_db2 and at least one item id, --all or a report with "
+                     "missing items are required")
+    item_rows = item_records(args.item_db2.read())
+    sparse_rows = sparse_records(args.item_sparse_db2.read())
+    if args.all:
+        item_ids = sorted(set(item_rows) & set(sparse_rows))
     tables = load_tables(args.dbc_dir) if args.dbc_dir else None
-    rows = convert(item_records(args.item_db2.read()), sparse_records(args.item_sparse_db2.read()),
-                   item_ids, tables)
+    rows = convert(item_rows, sparse_rows, item_ids, tables)
     sys.stdout.write(to_sql(rows, args.build, bool(tables), args.insert_only))
 
 
