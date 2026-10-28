@@ -469,8 +469,59 @@ class spell_voodoo : public SpellScript
     }
 };
 
+enum ProvingPitData
+{
+    NPC_DARKSPEAR_JAILOR         = 39062,
+    NPC_CAPTIVE_SPITESCALE_SCOUT = 38142,
+    GO_DARKSPEAR_CAGE            = 201968,
+};
+
+static bool IsOnProvingPitQuest(Player* player)
+{
+    static constexpr uint32 quests[] = { 24762, 24768, 24774, 24780, 24786, 26276 };
+    for (uint32 questId : quests)
+        if (player->GetQuestStatus(questId) == QUEST_STATUS_INCOMPLETE)
+            return true;
+    return false;
+}
+
+// 39062 - Darkspear Jailor, ported from TrinityCore's npc_darkspear_jailor.
+class npc_darkspear_jailor : public CreatureScript
+{
+public:
+    npc_darkspear_jailor() : CreatureScript("npc_darkspear_jailor") { }
+
+    bool OnGossipSelect(Player* player, Creature* creature, uint32 /*sender*/, uint32 /*action*/) override
+    {
+        if (!IsOnProvingPitQuest(player))
+            return false;
+
+        player->PlayerTalkClass->SendCloseGossip();
+        player->KilledMonsterCredit(NPC_DARKSPEAR_JAILOR);
+
+        if (GameObject* cage = creature->FindNearestGameObject(GO_DARKSPEAR_CAGE, 30.0f))
+            cage->UseDoorOrButton();
+
+        if (Creature* scout = creature->FindNearestCreature(NPC_CAPTIVE_SPITESCALE_SCOUT, 30.0f))
+        {
+            // shortcut: upstream walks the scout out over waypoint paths this world lacks; place it at
+            // the matching prisoner spot instead. Restore the walk if those paths are ever imported.
+            Position prisoner(-1149.03f, -5526.18f, 8.1045685f, scout->GetOrientation());
+            if (scout->GetDistance(-1142.49f, -5415.59f, 10.597655f) <
+                scout->GetDistance(-1149.03f, -5526.18f, 8.1045685f))
+                prisoner = Position(-1142.49f, -5415.59f, 10.597655f, scout->GetOrientation());
+
+            scout->SetImmuneToPC(false);
+            scout->NearTeleportTo(prisoner);
+            scout->AI()->AttackStart(player);
+        }
+        return true;
+    }
+};
+
 void AddSC_durotar()
 {
+    new npc_darkspear_jailor();
     new npc_tiger_matriarch_credit();
     new npc_tiger_matriarch();
     new npc_troll_volunteer();
