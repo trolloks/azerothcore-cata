@@ -1,0 +1,1962 @@
+[
+  {
+    "zone": 85,
+    "map": 0,
+    "label": "Tirisfal Glades",
+    "race": "Undead",
+    "sorts": [
+      85,
+      152,
+      153,
+      154,
+      155,
+      156,
+      157,
+      158,
+      159,
+      160,
+      161,
+      162,
+      163,
+      164,
+      165,
+      166,
+      167,
+      168,
+      169,
+      173,
+      459,
+      810,
+      811,
+      812,
+      2117,
+      2118,
+      2119,
+      2399,
+      4915,
+      4916,
+      4917,
+      4918,
+      4919,
+      4920,
+      4921,
+      5511,
+      5692,
+      5838
+    ],
+    "candidates": 150,
+    "landed": 135,
+    "missing": 15,
+    "skipped": 2,
+    "unimported": [
+      8,
+      363,
+      364,
+      376,
+      380,
+      381,
+      382,
+      383,
+      590,
+      3901,
+      3902,
+      5847,
+      6395
+    ],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 8,
+        "gold": 2
+      },
+      "creature_loot": {
+        "tdb": 1463,
+        "gold": 1473
+      },
+      "creatures": {
+        "tdb": 2405,
+        "gold": 2405
+      },
+      "gameobject_loot": {
+        "tdb": 55,
+        "gold": 57
+      },
+      "gameobjects": {
+        "tdb": 1097,
+        "gold": 1097
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 86,
+        "gold": 86
+      },
+      "smart_scripts": {
+        "tdb": 184,
+        "gold": 179
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 226,
+        "gold": 226
+      }
+    }
+  },
+  {
+    "zone": 12,
+    "map": 0,
+    "label": "Elwynn Forest",
+    "race": "Human",
+    "sorts": [
+      9,
+      12,
+      18,
+      23,
+      24,
+      34,
+      53,
+      54,
+      55,
+      56,
+      57,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      80,
+      86,
+      87,
+      88,
+      89,
+      91,
+      92,
+      120,
+      797,
+      798,
+      5174,
+      5176,
+      5637
+    ],
+    "candidates": 130,
+    "landed": 114,
+    "missing": 16,
+    "skipped": 0,
+    "unimported": [
+      6,
+      7,
+      15,
+      18,
+      21,
+      33,
+      783,
+      3903,
+      3904,
+      3905,
+      5261,
+      5805,
+      7961,
+      7962,
+      14032,
+      26392
+    ],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 24,
+        "gold": 9
+      },
+      "creature_loot": {
+        "tdb": 1531,
+        "gold": 1540
+      },
+      "creatures": {
+        "tdb": 1972,
+        "gold": 1972
+      },
+      "gameobject_loot": {
+        "tdb": 42,
+        "gold": 42
+      },
+      "gameobjects": {
+        "tdb": 447,
+        "gold": 447
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 93,
+        "gold": 93
+      },
+      "smart_scripts": {
+        "tdb": 153,
+        "gold": 153
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 289,
+        "gold": 289
+      }
+    }
+  },
+  {
+    "zone": 1,
+    "map": 0,
+    "label": "Dun Morogh",
+    "race": "Dwarf/Gnome",
+    "sorts": [
+      1,
+      77,
+      131,
+      132,
+      133,
+      134,
+      135,
+      136,
+      137,
+      138,
+      189,
+      211,
+      212,
+      716,
+      800,
+      801,
+      802,
+      803,
+      804,
+      807,
+      808,
+      809,
+      2102,
+      4837,
+      5097,
+      5098,
+      5114,
+      5115,
+      5177,
+      5178,
+      5495
+    ],
+    "candidates": 204,
+    "landed": 166,
+    "missing": 38,
+    "skipped": 0,
+    "unimported": [
+      170,
+      179,
+      183,
+      233,
+      234,
+      282,
+      420,
+      2841,
+      2842,
+      2843,
+      2904,
+      2922,
+      2923,
+      2924,
+      2925,
+      2926,
+      2927,
+      2928,
+      2929,
+      2930,
+      2931,
+      2945,
+      2947,
+      2949,
+      2952,
+      2953,
+      2962,
+      2971,
+      3364,
+      3365,
+      4603,
+      4604,
+      4605,
+      4606,
+      5841,
+      6722,
+      24460,
+      24462
+    ],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 25,
+        "gold": 11
+      },
+      "creature_loot": {
+        "tdb": 1214,
+        "gold": 1220
+      },
+      "creatures": {
+        "tdb": 2943,
+        "gold": 2943
+      },
+      "gameobject_loot": {
+        "tdb": 52,
+        "gold": 52
+      },
+      "gameobjects": {
+        "tdb": 1217,
+        "gold": 1217
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 81,
+        "gold": 81
+      },
+      "smart_scripts": {
+        "tdb": 377,
+        "gold": 355
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 319,
+        "gold": 319
+      }
+    }
+  },
+  {
+    "zone": 141,
+    "map": 1,
+    "label": "Teldrassil",
+    "race": "Night Elf",
+    "sorts": [
+      141,
+      186,
+      187,
+      188,
+      256,
+      257,
+      258,
+      259,
+      260,
+      261,
+      262,
+      263,
+      264,
+      265,
+      266,
+      478,
+      696,
+      697,
+      698,
+      699,
+      700,
+      701,
+      702,
+      736,
+      2322,
+      4718,
+      4724
+    ],
+    "candidates": 90,
+    "landed": 67,
+    "missing": 23,
+    "skipped": 0,
+    "unimported": [
+      456,
+      457,
+      458,
+      459,
+      916,
+      917,
+      920,
+      921,
+      928,
+      978,
+      979,
+      3519,
+      3521,
+      3522,
+      3661,
+      4495,
+      5250,
+      5842,
+      13939,
+      13941,
+      28726,
+      28727,
+      28728
+    ],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 11,
+        "gold": 0
+      },
+      "creature_loot": {
+        "tdb": 3264,
+        "gold": 3276
+      },
+      "creatures": {
+        "tdb": 1655,
+        "gold": 1655
+      },
+      "gameobject_loot": {
+        "tdb": 36,
+        "gold": 36
+      },
+      "gameobjects": {
+        "tdb": 393,
+        "gold": 393
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 44,
+        "gold": 44
+      },
+      "smart_scripts": {
+        "tdb": 157,
+        "gold": 155
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 172,
+        "gold": 172
+      }
+    }
+  },
+  {
+    "zone": 3524,
+    "map": 530,
+    "label": "Azuremyst Isle",
+    "race": "Draenei",
+    "sorts": [
+      3524,
+      3526,
+      3527,
+      3528,
+      3529,
+      3530,
+      3559,
+      3560,
+      3561,
+      3564,
+      3566,
+      3567,
+      3568,
+      3569,
+      3570,
+      3571,
+      3572,
+      3573,
+      3574,
+      3575,
+      3576,
+      3577,
+      3578,
+      3579,
+      3580,
+      3581,
+      3639,
+      3857,
+      3915,
+      3916
+    ],
+    "candidates": 90,
+    "landed": 85,
+    "missing": 5,
+    "skipped": 0,
+    "unimported": [
+      9278,
+      9306,
+      9307,
+      9308,
+      9798
+    ],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 13,
+        "gold": 4
+      },
+      "creature_loot": {
+        "tdb": 936,
+        "gold": 937
+      },
+      "creatures": {
+        "tdb": 2007,
+        "gold": 2007
+      },
+      "gameobject_loot": {
+        "tdb": 149,
+        "gold": 149
+      },
+      "gameobjects": {
+        "tdb": 1034,
+        "gold": 1034
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 51,
+        "gold": 51
+      },
+      "smart_scripts": {
+        "tdb": 175,
+        "gold": 170
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 218,
+        "gold": 218
+      }
+    }
+  },
+  {
+    "zone": 4714,
+    "map": 654,
+    "label": "Gilneas",
+    "race": "Worgen",
+    "sorts": [
+      4714,
+      4725,
+      4726,
+      4727,
+      4728,
+      4729,
+      4730,
+      4731,
+      4732,
+      4733,
+      4734,
+      4735,
+      4736,
+      4786,
+      4787,
+      4788,
+      4789,
+      4790,
+      4791,
+      4792,
+      4793,
+      4794,
+      4806,
+      4807,
+      4808,
+      4810,
+      4811,
+      4817,
+      4818,
+      4841,
+      4842,
+      4858,
+      4868,
+      4869,
+      5432,
+      5720
+    ],
+    "candidates": 102,
+    "landed": 102,
+    "missing": 0,
+    "skipped": 0,
+    "unimported": [],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "creature_loot": {
+        "tdb": 1368,
+        "gold": 1368
+      },
+      "creatures": {
+        "tdb": 2480,
+        "gold": 2480
+      },
+      "gameobject_loot": {
+        "tdb": 22,
+        "gold": 22
+      },
+      "gameobjects": {
+        "tdb": 369,
+        "gold": 369
+      },
+      "phase_area": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "quests": {
+        "tdb": 97,
+        "gold": 97
+      },
+      "smart_scripts": {
+        "tdb": 35,
+        "gold": 35
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 116,
+        "gold": 116
+      }
+    }
+  },
+  {
+    "zone": 14,
+    "map": 1,
+    "label": "Durotar",
+    "race": "Orc/Troll",
+    "sorts": [
+      14,
+      362,
+      363,
+      364,
+      365,
+      366,
+      367,
+      368,
+      369,
+      370,
+      371,
+      372,
+      373,
+      374,
+      375,
+      393,
+      407,
+      410,
+      638,
+      639,
+      640,
+      814,
+      816,
+      817,
+      1296,
+      1297,
+      2320,
+      2337,
+      2979,
+      4863,
+      4864,
+      4865,
+      4866,
+      4867,
+      4875,
+      4913,
+      4981,
+      4982,
+      5691
+    ],
+    "candidates": 194,
+    "landed": 180,
+    "missing": 14,
+    "skipped": 0,
+    "unimported": [
+      787,
+      788,
+      789,
+      790,
+      792,
+      794,
+      804,
+      805,
+      4402,
+      4641,
+      5441,
+      5843,
+      6394,
+      25445
+    ],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 40,
+        "gold": 3
+      },
+      "creature_loot": {
+        "tdb": 3446,
+        "gold": 3449
+      },
+      "creatures": {
+        "tdb": 3007,
+        "gold": 3007
+      },
+      "gameobject_loot": {
+        "tdb": 344,
+        "gold": 344
+      },
+      "gameobjects": {
+        "tdb": 955,
+        "gold": 955
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 83,
+        "gold": 83
+      },
+      "smart_scripts": {
+        "tdb": 293,
+        "gold": 293
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 307,
+        "gold": 307
+      }
+    }
+  },
+  {
+    "zone": 215,
+    "map": 1,
+    "label": "Mulgore",
+    "race": "Tauren",
+    "sorts": [
+      215,
+      220,
+      221,
+      222,
+      223,
+      224,
+      225,
+      358,
+      360,
+      396,
+      397,
+      398,
+      399,
+      404,
+      470,
+      471,
+      472,
+      473,
+      474,
+      475,
+      476,
+      637,
+      818,
+      819,
+      820,
+      821,
+      2137,
+      4835,
+      4836,
+      4839,
+      4878,
+      4879,
+      4880
+    ],
+    "candidates": 121,
+    "landed": 106,
+    "missing": 15,
+    "skipped": 0,
+    "unimported": [
+      747,
+      750,
+      752,
+      753,
+      755,
+      757,
+      763,
+      780,
+      781,
+      1656,
+      3376,
+      5844,
+      14437,
+      14453,
+      24857
+    ],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 4,
+        "gold": 0
+      },
+      "creature_loot": {
+        "tdb": 2145,
+        "gold": 2147
+      },
+      "creatures": {
+        "tdb": 1819,
+        "gold": 1819
+      },
+      "gameobject_loot": {
+        "tdb": 36,
+        "gold": 36
+      },
+      "gameobjects": {
+        "tdb": 302,
+        "gold": 302
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 91,
+        "gold": 91
+      },
+      "smart_scripts": {
+        "tdb": 238,
+        "gold": 227
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 127,
+        "gold": 127
+      }
+    }
+  },
+  {
+    "zone": 3430,
+    "map": 530,
+    "label": "Eversong Woods",
+    "race": "Blood Elf",
+    "sorts": [
+      3430,
+      3431,
+      3432,
+      3460,
+      3461,
+      3462,
+      3463,
+      3464,
+      3465,
+      3466,
+      3467,
+      3468,
+      3469,
+      3470,
+      3471,
+      3472,
+      3473,
+      3474,
+      3475,
+      3476,
+      3480,
+      3481,
+      3482,
+      3484,
+      3485,
+      3531,
+      3532,
+      3533,
+      3534,
+      3558,
+      3662,
+      3663,
+      3664,
+      3665,
+      3911,
+      3912,
+      3913,
+      3914,
+      5728
+    ],
+    "candidates": 102,
+    "landed": 99,
+    "missing": 3,
+    "skipped": 0,
+    "unimported": [
+      8337,
+      8338,
+      8547
+    ],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 29,
+        "gold": 0
+      },
+      "creature_loot": {
+        "tdb": 1315,
+        "gold": 1315
+      },
+      "creatures": {
+        "tdb": 1742,
+        "gold": 1742
+      },
+      "gameobject_loot": {
+        "tdb": 139,
+        "gold": 139
+      },
+      "gameobjects": {
+        "tdb": 1085,
+        "gold": 1085
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 58,
+        "gold": 58
+      },
+      "smart_scripts": {
+        "tdb": 372,
+        "gold": 370
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 326,
+        "gold": 326
+      }
+    }
+  },
+  {
+    "zone": 4737,
+    "map": 648,
+    "label": "Kezan",
+    "race": "Goblin",
+    "sorts": [
+      4737,
+      4765,
+      4766,
+      4767,
+      4768,
+      4770,
+      4771,
+      4772,
+      4773,
+      4822,
+      4823,
+      4838,
+      4840
+    ],
+    "candidates": 43,
+    "landed": 43,
+    "missing": 0,
+    "skipped": 0,
+    "unimported": [],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 3,
+        "gold": 0
+      },
+      "creature_loot": {
+        "tdb": 40,
+        "gold": 40
+      },
+      "creatures": {
+        "tdb": 2031,
+        "gold": 2031
+      },
+      "gameobject_loot": {
+        "tdb": 5,
+        "gold": 5
+      },
+      "gameobjects": {
+        "tdb": 723,
+        "gold": 723
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 36,
+        "gold": 36
+      },
+      "smart_scripts": {
+        "tdb": 221,
+        "gold": 221
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 28,
+        "gold": 28
+      }
+    }
+  },
+  {
+    "zone": 40,
+    "map": 0,
+    "label": "Westfall",
+    "race": "Human follow-on",
+    "sorts": [
+      2,
+      20,
+      26,
+      40,
+      107,
+      108,
+      109,
+      111,
+      113,
+      115,
+      219,
+      916,
+      917,
+      918,
+      919,
+      920,
+      921,
+      922,
+      1518,
+      2364,
+      4668,
+      5289,
+      5290
+    ],
+    "candidates": 78,
+    "landed": 78,
+    "missing": 0,
+    "skipped": 0,
+    "unimported": [],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 4,
+        "gold": 4
+      },
+      "creature_loot": {
+        "tdb": 2500,
+        "gold": 2505
+      },
+      "creatures": {
+        "tdb": 2130,
+        "gold": 2130
+      },
+      "gameobject_loot": {
+        "tdb": 49,
+        "gold": 49
+      },
+      "gameobjects": {
+        "tdb": 352,
+        "gold": 352
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 75,
+        "gold": 75
+      },
+      "smart_scripts": {
+        "tdb": 179,
+        "gold": 178
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 112,
+        "gold": 112
+      }
+    }
+  },
+  {
+    "zone": 44,
+    "map": 0,
+    "label": "Redridge Mountains",
+    "race": "Human follow-on",
+    "sorts": [
+      44,
+      68,
+      69,
+      70,
+      71,
+      95,
+      96,
+      97,
+      98,
+      996,
+      997,
+      998,
+      999,
+      1000,
+      1001,
+      1002,
+      2099,
+      5321,
+      5324,
+      5325,
+      5326,
+      5327,
+      5347
+    ],
+    "candidates": 86,
+    "landed": 86,
+    "missing": 0,
+    "skipped": 0,
+    "unimported": [],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 11,
+        "gold": 2
+      },
+      "creature_loot": {
+        "tdb": 2873,
+        "gold": 2875
+      },
+      "creatures": {
+        "tdb": 932,
+        "gold": 932
+      },
+      "gameobject_loot": {
+        "tdb": 65,
+        "gold": 65
+      },
+      "gameobjects": {
+        "tdb": 393,
+        "gold": 393
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 83,
+        "gold": 83
+      },
+      "smart_scripts": {
+        "tdb": 134,
+        "gold": 133
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 203,
+        "gold": 203
+      }
+    }
+  },
+  {
+    "zone": 38,
+    "map": 0,
+    "label": "Loch Modan",
+    "race": "Dwarf/Gnome follow-on",
+    "sorts": [
+      38,
+      142,
+      143,
+      144,
+      145,
+      146,
+      147,
+      149,
+      556,
+      805,
+      806,
+      837,
+      838,
+      839,
+      923,
+      924,
+      925,
+      936,
+      2101,
+      5391,
+      5724
+    ],
+    "candidates": 99,
+    "landed": 99,
+    "missing": 0,
+    "skipped": 0,
+    "unimported": [],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 1,
+        "gold": 0
+      },
+      "creature_loot": {
+        "tdb": 1186,
+        "gold": 1192
+      },
+      "creatures": {
+        "tdb": 1264,
+        "gold": 1264
+      },
+      "gameobject_loot": {
+        "tdb": 41,
+        "gold": 41
+      },
+      "gameobjects": {
+        "tdb": 359,
+        "gold": 359
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 96,
+        "gold": 96
+      },
+      "smart_scripts": {
+        "tdb": 141,
+        "gold": 140
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 186,
+        "gold": 186
+      }
+    }
+  },
+  {
+    "zone": 148,
+    "map": 1,
+    "label": "Darkshore",
+    "race": "Night Elf follow-on",
+    "sorts": [
+      148,
+      442,
+      443,
+      444,
+      445,
+      446,
+      447,
+      448,
+      449,
+      450,
+      452,
+      453,
+      454,
+      455,
+      456,
+      2077,
+      2078,
+      2326,
+      4648,
+      4659,
+      4660,
+      4661,
+      4662,
+      4663,
+      4664,
+      4675,
+      4695,
+      4696,
+      4697,
+      4698,
+      4702,
+      4708,
+      5312,
+      5375,
+      5686
+    ],
+    "candidates": 176,
+    "landed": 176,
+    "missing": 0,
+    "skipped": 0,
+    "unimported": [],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 2,
+        "gold": 2
+      },
+      "creature_loot": {
+        "tdb": 3415,
+        "gold": 3417
+      },
+      "creatures": {
+        "tdb": 2432,
+        "gold": 2432
+      },
+      "gameobject_loot": {
+        "tdb": 327,
+        "gold": 327
+      },
+      "gameobjects": {
+        "tdb": 753,
+        "gold": 753
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 175,
+        "gold": 175
+      },
+      "smart_scripts": {
+        "tdb": 211,
+        "gold": 210
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 120,
+        "gold": 120
+      }
+    }
+  },
+  {
+    "zone": 3525,
+    "map": 530,
+    "label": "Bloodmyst Isle",
+    "race": "Draenei follow-on",
+    "sorts": [
+      3525,
+      3583,
+      3584,
+      3585,
+      3586,
+      3587,
+      3588,
+      3589,
+      3590,
+      3591,
+      3592,
+      3593,
+      3594,
+      3595,
+      3596,
+      3597,
+      3598,
+      3599,
+      3600,
+      3601,
+      3602,
+      3603,
+      3604,
+      3608,
+      3612,
+      3846,
+      3906,
+      3907,
+      3908,
+      3909,
+      3910
+    ],
+    "candidates": 83,
+    "landed": 80,
+    "missing": 3,
+    "skipped": 2,
+    "unimported": [
+      29681
+    ],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 6,
+        "gold": 0
+      },
+      "creature_loot": {
+        "tdb": 1640,
+        "gold": 1640
+      },
+      "creatures": {
+        "tdb": 1329,
+        "gold": 1329
+      },
+      "gameobject_loot": {
+        "tdb": 28,
+        "gold": 28
+      },
+      "gameobjects": {
+        "tdb": 182,
+        "gold": 182
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 78,
+        "gold": 78
+      },
+      "smart_scripts": {
+        "tdb": 79,
+        "gold": 79
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 103,
+        "gold": 103
+      }
+    }
+  },
+  {
+    "zone": 130,
+    "map": 0,
+    "label": "Silverpine Forest",
+    "race": "Undead follow-on",
+    "sorts": [
+      130,
+      172,
+      204,
+      213,
+      226,
+      227,
+      228,
+      229,
+      230,
+      231,
+      232,
+      233,
+      235,
+      236,
+      237,
+      238,
+      239,
+      240,
+      305,
+      306,
+      926,
+      927,
+      928,
+      1338,
+      2398,
+      5369,
+      5386,
+      5387,
+      5456,
+      5476,
+      5477,
+      5478,
+      5480,
+      5481,
+      5510
+    ],
+    "candidates": 95,
+    "landed": 93,
+    "missing": 2,
+    "skipped": 0,
+    "unimported": [
+      1005,
+      1006
+    ],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "creature_loot": {
+        "tdb": 1942,
+        "gold": 1955
+      },
+      "creatures": {
+        "tdb": 1579,
+        "gold": 1579
+      },
+      "gameobject_loot": {
+        "tdb": 314,
+        "gold": 314
+      },
+      "gameobjects": {
+        "tdb": 569,
+        "gold": 569
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 90,
+        "gold": 90
+      },
+      "smart_scripts": {
+        "tdb": 109,
+        "gold": 108
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 158,
+        "gold": 158
+      }
+    }
+  },
+  {
+    "zone": 3433,
+    "map": 530,
+    "label": "Ghostlands",
+    "race": "Blood Elf follow-on",
+    "sorts": [
+      3433,
+      3488,
+      3489,
+      3490,
+      3491,
+      3492,
+      3493,
+      3494,
+      3495,
+      3496,
+      3497,
+      3498,
+      3499,
+      3500,
+      3501,
+      3502,
+      3503,
+      3504,
+      3505,
+      3506,
+      3507,
+      3508,
+      3509,
+      3510,
+      3511,
+      3512,
+      3513,
+      3514,
+      3515,
+      3516,
+      3517,
+      3823,
+      3856,
+      3861,
+      5779,
+      5780
+    ],
+    "candidates": 68,
+    "landed": 68,
+    "missing": 0,
+    "skipped": 0,
+    "unimported": [],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 4,
+        "gold": 2
+      },
+      "creature_loot": {
+        "tdb": 2855,
+        "gold": 2857
+      },
+      "creatures": {
+        "tdb": 1563,
+        "gold": 1563
+      },
+      "gameobject_loot": {
+        "tdb": 1641,
+        "gold": 1641
+      },
+      "gameobjects": {
+        "tdb": 583,
+        "gold": 583
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 61,
+        "gold": 61
+      },
+      "smart_scripts": {
+        "tdb": 263,
+        "gold": 261
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 204,
+        "gold": 204
+      }
+    }
+  },
+  {
+    "zone": 17,
+    "map": 1,
+    "label": "Northern Barrens",
+    "race": "Orc/Troll follow-on",
+    "sorts": [
+      17,
+      359,
+      378,
+      379,
+      380,
+      381,
+      382,
+      383,
+      384,
+      385,
+      386,
+      387,
+      388,
+      390,
+      391,
+      392,
+      401,
+      458,
+      720,
+      815,
+      877,
+      1156,
+      1157,
+      1316,
+      1597,
+      1598,
+      1599,
+      1600,
+      1601,
+      1602,
+      1603,
+      1697,
+      1698,
+      1699,
+      1700,
+      1701,
+      1702,
+      1703,
+      1704,
+      1717,
+      1718,
+      2138,
+      2157,
+      2319,
+      2757,
+      5117,
+      5758,
+      5782
+    ],
+    "candidates": 180,
+    "landed": 170,
+    "missing": 10,
+    "skipped": 4,
+    "unimported": [
+      1101,
+      1102,
+      1109,
+      1142,
+      1144,
+      1221
+    ],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 17,
+        "gold": 0
+      },
+      "creature_loot": {
+        "tdb": 6022,
+        "gold": 6048
+      },
+      "creatures": {
+        "tdb": 2326,
+        "gold": 2326
+      },
+      "gameobject_loot": {
+        "tdb": 477,
+        "gold": 481
+      },
+      "gameobjects": {
+        "tdb": 670,
+        "gold": 670
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 154,
+        "gold": 154
+      },
+      "smart_scripts": {
+        "tdb": 295,
+        "gold": 293
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 424,
+        "gold": 424
+      }
+    }
+  },
+  {
+    "zone": 16,
+    "map": 1,
+    "label": "Azshara",
+    "race": "Horde follow-on",
+    "sorts": [
+      16,
+      878,
+      1216,
+      1217,
+      1218,
+      1219,
+      1220,
+      1221,
+      1222,
+      1223,
+      1224,
+      1225,
+      1226,
+      1227,
+      1228,
+      1229,
+      1230,
+      1231,
+      1232,
+      1233,
+      1234,
+      1235,
+      1236,
+      1237,
+      1256,
+      2321,
+      2497,
+      3137,
+      3138,
+      3140,
+      4744,
+      4745,
+      4799,
+      4800,
+      4801,
+      4814,
+      4819,
+      4821,
+      4824,
+      4825,
+      4827,
+      4828,
+      4829,
+      4830,
+      4834,
+      5306,
+      5333
+    ],
+    "candidates": 169,
+    "landed": 169,
+    "missing": 0,
+    "skipped": 0,
+    "unimported": [],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 2,
+        "gold": 0
+      },
+      "creature_loot": {
+        "tdb": 2743,
+        "gold": 2751
+      },
+      "creatures": {
+        "tdb": 3173,
+        "gold": 3173
+      },
+      "gameobject_loot": {
+        "tdb": 331,
+        "gold": 334
+      },
+      "gameobjects": {
+        "tdb": 828,
+        "gold": 828
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 168,
+        "gold": 168
+      },
+      "smart_scripts": {
+        "tdb": 191,
+        "gold": 191
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 143,
+        "gold": 143
+      }
+    }
+  },
+  {
+    "zone": 331,
+    "map": 1,
+    "label": "Ashenvale",
+    "race": "Horde/Alliance follow-on",
+    "sorts": [
+      331,
+      411,
+      412,
+      413,
+      414,
+      415,
+      416,
+      417,
+      418,
+      419,
+      420,
+      421,
+      422,
+      424,
+      425,
+      426,
+      427,
+      428,
+      429,
+      430,
+      431,
+      432,
+      433,
+      434,
+      435,
+      436,
+      437,
+      438,
+      441,
+      879,
+      1276,
+      2301,
+      2325,
+      2357,
+      2358,
+      2359,
+      2360,
+      2457,
+      2637,
+      2797,
+      2897,
+      3177,
+      3319,
+      4644,
+      4645,
+      4647,
+      4690,
+      4691,
+      4693,
+      4694,
+      4705,
+      4711,
+      4712,
+      4713,
+      4715,
+      4716,
+      4717,
+      5517
+    ],
+    "candidates": 242,
+    "landed": 139,
+    "missing": 103,
+    "skipped": 103,
+    "unimported": [],
+    "extra": [],
+    "changed": [],
+    "inventory": {
+      "conditions": {
+        "tdb": 22,
+        "gold": 0
+      },
+      "creature_loot": {
+        "tdb": 5721,
+        "gold": 5740
+      },
+      "creatures": {
+        "tdb": 4200,
+        "gold": 4200
+      },
+      "gameobject_loot": {
+        "tdb": 126,
+        "gold": 126
+      },
+      "gameobjects": {
+        "tdb": 1311,
+        "gold": 1311
+      },
+      "phase_area": {
+        "tdb": 0,
+        "gold": 0
+      },
+      "quests": {
+        "tdb": 227,
+        "gold": 128
+      },
+      "smart_scripts": {
+        "tdb": 463,
+        "gold": 461
+      },
+      "tables": {
+        "tdb": 1,
+        "gold": 1
+      },
+      "vendor_rows": {
+        "tdb": 380,
+        "gold": 380
+      }
+    }
+  }
+]
