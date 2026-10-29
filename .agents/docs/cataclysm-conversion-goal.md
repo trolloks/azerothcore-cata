@@ -65,6 +65,15 @@ Use Graphify when tracing conversion subsystems, callers, and ownership. Query a
 rebuilding it, then verify findings against current source and the pinned reference. Record missing graph
 coverage rather than treating a declaration or inferred edge as proof of runtime behavior.
 
+A fresh checkout has no graph. Build it once from the repo root: the tracked `.graphifyignore` keeps the
+scope to `src/`, `apps/`, `plan/` and `.agents/` (SQL data, `deps/` and e2e scratch are noise for code
+questions), and `graphify-out/` is gitignored so the ~100 MB artifact is never committed.
+
+```bash
+graphify .                                   # full build, ~107k nodes
+graphify query "where is quest XP awarded"   # query instead of grepping
+```
+
 GitHub issues in `trolloks/azerothcore-cata` are the canonical numbered plans and progress records.
 Keep `plan/github-issues.tsv` as the repository index. Numbered Markdown files may retain short
 issue-reference stubs for stable historical paths, but must not duplicate complete issue bodies.

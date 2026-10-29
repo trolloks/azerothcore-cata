@@ -138,3 +138,6 @@ e2e/local/**
 !e2e/local/README.md
 e2e/go.work
 e2e/go.work.sum
+
+# graphify knowledge graph (local, regenerable, ~100 MB)
+graphify-out/
