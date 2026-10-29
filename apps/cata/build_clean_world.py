@@ -201,6 +201,39 @@ def strip_unregistered_scripts(container, user, password, target):
     return stripped
 
 
+PET_LEVEL_CAP = 85
+
+
+def build_pet_levels(container, user, password, target, source):
+    """Extend pet_levelstats to the 4.3.4 level cap.
+
+    TDB 434 carries the 81-85 stats but no damage columns; a 3.3.5a-only pet with no TDB row
+    repeats its level-80 row. Pet damage is computed in C++ on 4.3.4, so the data-only bridge
+    keeps the level-80 base and scales it linearly with level (TC's base formula is linear).
+    """
+    copied = copy_table(container, user, password, target, source, "pet_levelstats",
+                        where=f"`level` BETWEEN 81 AND {PET_LEVEL_CAP}")
+    extended = 0
+    for level in range(81, PET_LEVEL_CAP + 1):
+        rows = run(container, user, password,
+                   f"INSERT IGNORE INTO `{target}`.pet_levelstats "
+                   f"(creature_entry, `level`, hp, mana, armor, str, agi, sta, inte, spi, "
+                   f"min_dmg, max_dmg) "
+                   f"SELECT p.creature_entry, {level}, p.hp, p.mana, p.armor, p.str, p.agi, p.sta, "
+                   f"p.inte, p.spi, ROUND(p.min_dmg*{level}/80), ROUND(p.max_dmg*{level}/80) "
+                   f"FROM `{target}`.pet_levelstats p WHERE p.`level`=80; SELECT ROW_COUNT()")
+        extended += int(rows[-1][0]) if rows else 0
+    rows = run(container, user, password,
+               f"UPDATE `{target}`.pet_levelstats p "
+               f"JOIN `{target}`.pet_levelstats l "
+               f"ON l.creature_entry=p.creature_entry AND l.`level`=80 "
+               f"SET p.min_dmg=ROUND(l.min_dmg*p.`level`/80), p.max_dmg=ROUND(l.max_dmg*p.`level`/80) "
+               f"WHERE p.`level` BETWEEN 81 AND {PET_LEVEL_CAP} AND p.min_dmg=0 AND p.max_dmg=0 "
+               f"AND (l.min_dmg>0 OR l.max_dmg>0); SELECT ROW_COUNT()")
+    damage = int(rows[-1][0]) if rows else 0
+    return {"copied": copied, "extended": extended, "damage": damage}
+
+
 def build_templates(container, user, password, target, source):
     applied = {table: copy_table(container, user, password, target, source, table,
                                  RENAMES.get(table))
@@ -208,6 +241,7 @@ def build_templates(container, user, password, target, source):
                              "creature_equip_template", "creature_template_addon",
                              "gameobject_template_addon", "creature_classlevelstats")}
     applied.update(derive_templates(container, user, password, target, source))
+    applied["pet_levelstats"] = build_pet_levels(container, user, password, target, source)
     # Only the hover rows matter; the rest of TDB's movement table would change gravity/flight
     # defaults the fork has not modelled.
     applied["creature_template_movement"] = copy_table(
