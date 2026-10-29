@@ -1,0 +1,12 @@
+# Local knowledge graph scope: the code and docs agents work in.
+# SQL data, vendored deps, and e2e/build scratch are noise for code questions.
+data/
+deps/
+e2e/
+.github/
+modules/
+doc/
+conf/
+sql/
+var/
+build/
