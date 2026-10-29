@@ -45,9 +45,9 @@ done <<'ZONES'
 16 1 azshara
 ZONES
 
-echo "== repairing quest chain links"
-if ! python3 "$here/import_starter_content.py" --target "$target" --repair-links --apply \
+echo "== syncing quest_template_addon"
+if ! python3 "$here/import_starter_content.py" --target "$target" --sync-addon --apply \
         > "$out/clean-links.json"; then
-    echo "quest chain link repair failed" >&2
+    echo "quest addon sync failed" >&2
     exit 1
 fi
