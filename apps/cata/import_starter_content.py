@@ -1316,8 +1316,9 @@ def main():
     parser.add_argument("--baseline", help="schema before the import; dangling relations it already had (native "
                                            "gaps, e.g. a quest objective TDB has no template for) do not fail the gate")
     parser.add_argument("--apply", action="store_true")
-    parser.add_argument("--repair-links", action="store_true",
-                        help="restore chain links to quests that exist now; run once after all zones")
+    parser.add_argument("--sync-addon", action="store_true",
+                        help="replace quest_template_addon for imported quests from the source; "
+                             "run once after all zones")
     parser.add_argument("--drop-items", default="",
                         help="comma-separated item ids the client store lacks; imported loot rows for them are dropped")
     args = parser.parse_args()
@@ -1326,22 +1327,36 @@ def main():
             parser.error(f"invalid schema name: {name!r}")
     c, u, p, src, dst = args.container, args.user, args.password, args.source, args.target
 
-    if args.repair_links:
+    if args.sync_addon:
         if not args.apply:
-            parser.error("--repair-links requires --apply")
-        # A link cleared while its target was not imported yet is restored once the target exists.
+            parser.error("--sync-addon requires --apply")
+        if src == dst:
+            parser.error("--source and --target must differ")
+        # The base schema's 3.3.5a addon rows survive the per-zone INSERT IGNORE; replace every row for an
+        # imported quest so chains, gates and exclusive groups are the 4.3.4 ones (#311).
+        common = common_columns(c, u, p, dst, src, "quest_template_addon")
+        cols = ",".join(quote(name) for name in common)
+        selected = ",".join(f"s.{quote(name)}" for name in common)
+        run(c, u, p, f"DELETE FROM {dst}.quest_template_addon")
+        count = insert_count(c, u, p,
+                             f"INSERT INTO {dst}.quest_template_addon ({cols}) "
+                             f"SELECT {selected} FROM {src}.quest_template_addon s "
+                             f"JOIN {dst}.quest_template q ON q.ID=s.ID")
+        # A link into a quest that was not imported makes the loader log and ignore it; clear it.
+        cleared = 0
         for column in ("PrevQuestID", "NextQuestID", "BreadcrumbForQuestId"):
-            run(c, u, p,
-                f"UPDATE {dst}.quest_template_addon a JOIN {src}.quest_template_addon s ON s.ID=a.ID "
-                f"SET a.{column}=s.{column} WHERE a.{column}=0 AND s.{column}<>0 AND EXISTS "
-                f"(SELECT 1 FROM {dst}.quest_template q WHERE q.ID=ABS(s.{column}))")
+            cleared += int(run(
+                c, u, p,
+                f"UPDATE {dst}.quest_template_addon a SET a.{column}=0 "
+                f"WHERE a.{column}<>0 AND NOT EXISTS "
+                f"(SELECT 1 FROM {dst}.quest_template q WHERE q.ID=ABS(a.{column})); "
+                f"SELECT ROW_COUNT()")[-1][0])
         run(c, u, p,
             f"UPDATE {dst}.quest_template q JOIN {src}.quest_template s ON s.ID=q.ID "
-            f"SET q.RewardNextQuest=s.RewardNextQuest WHERE q.RewardNextQuest=0 "
-            f"AND s.RewardNextQuest<>0 AND EXISTS "
-            f"(SELECT 1 FROM {dst}.quest_template n WHERE n.ID=s.RewardNextQuest)")
-        print(json.dumps({"repaired_links": ["PrevQuestID", "NextQuestID",
-                                             "BreadcrumbForQuestId", "RewardNextQuest"]}, indent=2))
+            f"JOIN {dst}.quest_template n ON n.ID=s.RewardNextQuest "
+            f"SET q.RewardNextQuest=s.RewardNextQuest "
+            f"WHERE q.RewardNextQuest=0 AND s.RewardNextQuest<>0")
+        print(json.dumps({"quest_template_addon": count, "cleared_links": cleared}, indent=2))
         return 0
 
     existing = {r[0] for r in run(c, u, p, f"SELECT ID FROM {dst}.quest_template") if r}
