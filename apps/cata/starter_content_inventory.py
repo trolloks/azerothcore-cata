@@ -489,13 +489,15 @@ def check_loader_relations(container, user, password, schema, creatures, gameobj
                         problems.append({"kind": "smartai_text", "id": r["action_param1"], "from": owner})
 
     if visited and {"action_type", "target_type", "target_param1"} <= cols("smart_scripts"):
-        # AC's SmartAIMgr skips rows with unsupported actions or params on no-param targets
+        # AC's SmartAIMgr skips rows with unsupported actions or params on no-param targets.
+        # TDB 434 predates target_param4, so only test the columns that exist.
+        target_params = [f"target_param{i}" for i in range(1, 5) if f"target_param{i}" in cols("smart_scripts")]
         for owner, source_type, script_id, kind in query(
                 container, user, password, schema,
                 "SELECT entryorguid, source_type, id, IF(action_type IN (16,85,119,120,127,128,129,130,133), "
                 "'smart_unsupported_action', 'smart_unused_target_param') FROM smart_scripts WHERE "
-                "action_type IN (16,85,119,120,127,128,129,130,133) OR (target_type IN (0,1,2) AND "
-                "(target_param1<>0 OR target_param2<>0 OR target_param3<>0 OR target_param4<>0))"):
+                "action_type IN (16,85,119,120,127,128,129,130,133) OR (target_type IN (0,1,2) AND ("
+                + " OR ".join(f"{param}<>0" for param in target_params) + "))"):
             if (owner, source_type) in visited:
                 problems.append({"kind": kind, "id": f"{owner}.{source_type}.{script_id}"})
 
@@ -606,8 +608,10 @@ def check_relations(container, user, password, schema, zone, map_id, quest_sorts
                                 "RewardFactionID2", "RewardFactionID3", "RewardFactionID4",
                                 "RewardFactionID5") if c in quest_cols]
     title_cols = [c for c in ("RewardTitle",) if c in quest_cols]
+    currency_cols = [c for c in [f"{prefix}CurrencyId{i}" for prefix in ("Required", "Reward")
+                                 for i in range(1, 5)] if c in quest_cols]
     wanted = (["ID"] + objective_cols + item_cols + reward_cols + choice_cols + start_cols
-              + spell_cols + faction_cols + title_cols)
+              + spell_cols + faction_cols + title_cols + currency_cols)
     dbc: dict[str, set[int]] = {}
     if dbc_dir:
         dbc_path = Path(dbc_dir)
@@ -615,7 +619,8 @@ def check_relations(container, user, password, schema, zone, map_id, quest_sorts
         if not spell_dbc.is_file():
             raise ValueError(f"missing {spell_dbc}")
         for name in ("Spell", "Faction", "FactionTemplate", "AreaTable", "CreatureDisplayInfo",
-                     "GameObjectDisplayInfo", "SoundEntries", "Emotes", "CharTitles", "CreatureFamily"):
+                     "GameObjectDisplayInfo", "SoundEntries", "Emotes", "CharTitles", "CreatureFamily",
+                     "CurrencyTypes"):
             path = dbc_path / f"{name}.dbc"
             if path.is_file():
                 dbc[name] = dbc_ids(path)
@@ -668,6 +673,11 @@ def check_relations(container, user, password, schema, zone, map_id, quest_sorts
             offset += 1
             if "CharTitles" in dbc and value > 0 and value not in dbc["CharTitles"]:
                 problems.append({"kind": "quest_title", "quest": quest, "id": str(value)})
+        for column in currency_cols:
+            value = int(row[offset])
+            offset += 1
+            if "CurrencyTypes" in dbc and value > 0 and value not in dbc["CurrencyTypes"]:
+                problems.append({"kind": "quest_currency", "quest": quest, "column": column, "id": str(value)})
 
     zone_creatures = zone_creature_entries(container, user, password, schema, zone, map_id)
     zone_gos = zone_gameobject_entries(container, user, password, schema, zone, map_id)

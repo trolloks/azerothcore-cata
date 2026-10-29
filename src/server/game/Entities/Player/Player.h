@@ -885,6 +885,7 @@ enum PlayerLoginQueryIndex
     PLAYER_LOGIN_QUERY_LOAD_CHARACTER_SETTINGS           = 36,
     PLAYER_LOGIN_QUERY_LOAD_PET_SLOTS                    = 37,
     PLAYER_LOGIN_QUERY_LOAD_OFFLINE_ACHIEVEMENTS_UPDATES = 38,
+    PLAYER_LOGIN_QUERY_LOAD_CURRENCY                     = 39,
     MAX_PLAYER_LOGIN_QUERY
 };
 
@@ -1718,6 +1719,12 @@ public:
 
     void SendProficiency(ItemClass itemClass, uint32 itemSubclassMask);
     void SendCurrencies() const;
+    [[nodiscard]] uint32 GetCurrency(uint32 currencyId, bool usePrecision = true) const;
+    [[nodiscard]] bool HasCurrency(uint32 currencyId, uint32 amount) const
+    {
+        return GetCurrency(currencyId, false) >= amount;
+    }
+    void ModifyCurrency(uint32 currencyId, int32 amount, bool suppressChatLog = false);
     void SendKnownSpells(bool firstLogin = false);
     void SendSpellModifiers() const;
     void SendLearnPacket(uint32 spellId, bool learn);
@@ -2885,6 +2892,7 @@ protected:
     uint32 m_ExtraFlags;
 
     QuestStatusMap m_QuestStatus;
+    std::unordered_map<uint32, uint32> _currencyStorage; // currency id -> quantity (4.3.4, #312)
     QuestStatusSaveMap m_QuestStatusSave;
 
     RewardedQuestSet m_RewardedQuests;

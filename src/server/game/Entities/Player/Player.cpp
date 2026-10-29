@@ -4216,6 +4216,10 @@ void Player::DeleteFromDB(ObjectGuid::LowType lowGuid, uint32 accountId, bool up
                 stmt->SetData(0, lowGuid);
                 trans->Append(stmt);
 
+                stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHAR_CURRENCY);
+                stmt->SetData(0, lowGuid);
+                trans->Append(stmt);
+
                 stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHAR_SPELL);
                 stmt->SetData(0, lowGuid);
                 trans->Append(stmt);
@@ -10243,7 +10247,74 @@ void Player::SendProficiency(ItemClass itemClass, uint32 itemSubclassMask)
 
 void Player::SendCurrencies() const
 {
-    SendDirectMessage(WorldPackets::Misc::SetupCurrency().Write());
+    WorldPackets::Misc::SetupCurrency packet;
+    for (auto const& currency : _currencyStorage)
+    {
+        if (!sCurrencyTypesStore.LookupEntry(currency.first))
+            continue;
+
+        WorldPackets::Misc::SetupCurrency::Record record;
+        record.Type = int32(currency.first);
+        record.Quantity = int32(GetCurrency(currency.first));
+        packet.Data.push_back(record);
+    }
+    SendDirectMessage(packet.Write());
+}
+
+uint32 Player::GetCurrency(uint32 currencyId, bool usePrecision) const
+{
+    auto itr = _currencyStorage.find(currencyId);
+    uint32 quantity = itr == _currencyStorage.end() ? 0 : itr->second;
+
+    if (usePrecision)
+        if (CurrencyTypesEntry const* entry = sCurrencyTypesStore.LookupEntry(currencyId))
+            if (entry->UsesPrecision())
+                quantity /= CURRENCY_PRECISION;
+
+    return quantity;
+}
+
+void Player::ModifyCurrency(uint32 currencyId, int32 amount, bool suppressChatLog)
+{
+    if (!amount)
+        return;
+
+    CurrencyTypesEntry const* currency = sCurrencyTypesStore.LookupEntry(currencyId);
+    if (!currency)
+    {
+        LOG_ERROR("entities.player", "Player {} attempted to modify invalid currency {}.",
+                  GetGUID().ToString(), currencyId);
+        return;
+    }
+
+    int64 current = GetCurrency(currencyId, false);
+    int64 updated = current + amount;
+
+    // Total cap. Patch 4.0.3a converts Justice Points above the hard cap to money at 47s50c per point.
+    if (currency->MaxQty > 0 && amount > 0 && updated > int64(currency->MaxQty))
+    {
+        if (currencyId == CURRENCY_TYPE_JUSTICE_POINTS)
+        {
+            constexpr int64 JUSTICE_POINTS_CONVERSION_MONEY = 4750;
+            int64 surplus = updated - int64(currency->MaxQty);
+            ModifyMoney(int32(surplus * JUSTICE_POINTS_CONVERSION_MONEY / CURRENCY_PRECISION), false);
+        }
+        updated = currency->MaxQty;
+    }
+
+    if (updated < 0)
+        updated = 0;
+
+    if (updated == current)
+        return;
+
+    _currencyStorage[currencyId] = uint32(updated);
+
+    WorldPackets::Misc::SetCurrency packet;
+    packet.Type = int32(currencyId);
+    packet.Quantity = int32(GetCurrency(currencyId));
+    packet.SuppressChatLog = suppressChatLog;
+    SendDirectMessage(packet.Write());
 }
 
 void Player::SendBindPointUpdate() const

@@ -413,6 +413,10 @@ bool Player::CanRewardQuest(Quest const* quest, bool msg)
         }
     }
 
+    for (uint8 i = 0; i < QUEST_REQUIRED_CURRENCY_COUNT; ++i)
+        if (quest->RequiredCurrencyId[i] && !HasCurrency(quest->RequiredCurrencyId[i], quest->RequiredCurrencyCount[i]))
+            return false;
+
     // prevent receive reward with low money and GetRewOrReqMoney() < 0
     if (quest->GetRewOrReqMoney() < 0 && !HasEnoughMoney(-quest->GetRewOrReqMoney()))
         return false;
@@ -704,6 +708,10 @@ void Player::RewardQuest(Quest const* quest, uint32 reward, Object* questGiver, 
         }
     }
 
+    for (uint8 i = 0; i < QUEST_REQUIRED_CURRENCY_COUNT; ++i)
+        if (quest->RequiredCurrencyId[i])
+            ModifyCurrency(quest->RequiredCurrencyId[i], -int32(quest->RequiredCurrencyCount[i]));
+
     RemoveTimedQuest(quest_id);
 
     std::vector<std::pair<uint32, uint32>> problematicItems;
@@ -751,6 +759,19 @@ void Player::RewardQuest(Quest const* quest, uint32 reward, Object* questGiver, 
     if (!problematicItems.empty())
     {
         SendItemRetrievalMail(problematicItems);
+    }
+
+    for (uint8 i = 0; i < QUEST_REWARD_CURRENCY_COUNT; ++i)
+    {
+        if (!quest->RewardCurrencyId[i])
+            continue;
+
+        uint32 count = quest->RewardCurrencyCount[i];
+        if (CurrencyTypesEntry const* entry = sCurrencyTypesStore.LookupEntry(quest->RewardCurrencyId[i]))
+            if (entry->UsesPrecision())
+                count *= CURRENCY_PRECISION;
+
+        ModifyCurrency(quest->RewardCurrencyId[i], int32(count), !quest->IsDFQuest());
     }
 
     RewardReputation(quest);
