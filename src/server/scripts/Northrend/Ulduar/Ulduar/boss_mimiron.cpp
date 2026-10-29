@@ -1639,12 +1639,14 @@ struct npc_ulduar_aerial_command_unit : public ScriptedAI
                 me->AttackStop();
                 me->SetReactState(REACT_PASSIVE);
                 // Raw flag removal first: MoveFall lands at ground + hover height, which would
-                // keep the ACU airborne, and SetHover(false) would relocate it without a spline.
-                // SetHover(false) afterwards is relocation-free and tells the client to stop
-                // hovering, else it keeps floating the grounded unit back up
+                // keep the ACU airborne, and SetHover(false, ...) would relocate it without a
+                // spline. Notify the client directly: SetHover's early return would skip it now
+                // that the flag is already clear.
                 me->RemoveUnitMovementFlag(MOVEMENTFLAG_HOVER);
                 me->GetMotionMaster()->MoveFall();
-                me->SetHover(false);
+                me->SendHoverUpdate(false);
+                me->SetPlayHoverAnim(false);
+                me->SetAnimTier(AnimTier::Ground);
                 _events.DelayEvents(23s);
                 break;
             case DO_ENABLE_AERIAL:

@@ -1380,6 +1380,8 @@ enum OpcodeServer : uint16
     SMSG_MULTIPLE_MOVES                             = 0x51E, // uncompressed version of SMSG_COMPRESSED_MOVES
     TC9_SMSG_READY_FOR_REDIRECT                     = 0x520,
     SMSG_PHASE_SHIFT_CHANGE                         = 0x70A0,
+    SMSG_SET_ANIM_TIER                              = 0x4335,
+    SMSG_SET_PLAY_HOVER_ANIM                        = 0x30A6,
 };
 
 inline constexpr OpcodeServer MSG_MOVE_START_FORWARD_SERVER =

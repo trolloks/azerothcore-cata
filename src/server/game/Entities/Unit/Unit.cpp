@@ -47,6 +47,7 @@
 #include "MoveSplineInit.h"
 #include "MovementGenerator.h"
 #include "MovementPackets.h"
+#include "MiscPackets.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "OutdoorPvP.h"
@@ -11597,9 +11598,17 @@ float Unit::GetSpellMinRangeForTarget(Unit const* target, SpellInfo const* spell
     return spellInfo->GetMinRange(!IsHostileTo(target));
 }
 
-void Unit::SetAnimTier(AnimTier animTier)
+void Unit::SetAnimTier(AnimTier animTier, bool notifyClient)
 {
     SetByteValue(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_ANIM_TIER, uint8(animTier));
+
+    if (notifyClient)
+    {
+        WorldPackets::Misc::SetAnimTier packet;
+        packet.Unit = GetGUID();
+        packet.Tier = uint32(animTier);
+        SendMessageToSet(packet.Write(), true);
+    }
 }
 
 uint32 Unit::GetCreatureType() const
@@ -16380,39 +16389,55 @@ void Unit::SetFeatherFall(bool enable)
     SendMessageToSet(&data, true);
 }
 
-void Unit::SetHover(bool enable)
+bool Unit::SetHover(bool enable, bool /*updateAnimTier*/)
 {
     bool isClientControlled = IsClientControlled();
 
-    if (!isClientControlled)
-    {
-        if (enable)
-            m_movementInfo.AddMovementFlag(MOVEMENTFLAG_HOVER);
-        else
-            m_movementInfo.RemoveMovementFlag(MOVEMENTFLAG_HOVER);
-    }
+    if (!isClientControlled && enable == HasUnitMovementFlag(MOVEMENTFLAG_HOVER))
+        return false;
 
-    float hoverHeight = GetHoverHeight();
+    // Read the raw field: on disable the hover flag is being removed, and GetHoverHeight()
+    // would return 0 before the descent is applied.
+    float hoverHeight = GetFloatValue(UNIT_FIELD_HOVERHEIGHT);
 
     if (enable)
     {
-        if (hoverHeight && GetPositionZ() - GetMap()->GetHeight(GetPhaseMask(), GetPositionX(), GetPositionY(), GetPositionZ()) < hoverHeight)
-            Relocate(GetPositionX(), GetPositionY(), GetPositionZ() + hoverHeight);
+        if (!isClientControlled)
+            AddUnitMovementFlag(MOVEMENTFLAG_HOVER);
+
+        //! No need to check height on ascent
+        if (hoverHeight && GetPositionZ() - GetFloorZ() < hoverHeight)
+            UpdateHeight(GetPositionZ() + hoverHeight);
     }
     else
     {
-        if (IsAlive() || !IsUnit())
+        if (!isClientControlled)
+            RemoveUnitMovementFlag(MOVEMENTFLAG_HOVER);
+
+        //! Dying creatures will MoveFall from setDeathState
+        if (hoverHeight && (!isDying() || !IsCreature()))
         {
-            float newZ = std::max<float>(GetMap()->GetHeight(GetPhaseMask(), GetPositionX(), GetPositionY(), GetPositionZ()), GetPositionZ() - hoverHeight);
+            float newZ = std::max<float>(GetFloorZ(), GetPositionZ() - hoverHeight);
             UpdateAllowedPositionZ(GetPositionX(), GetPositionY(), newZ);
-            Relocate(GetPositionX(), GetPositionY(), newZ);
+            UpdateHeight(newZ);
         }
     }
 
+    if (IsAlive())
+        SetPlayHoverAnim(enable || IsLevitating());
+    else if (IsPlayer())
+        SetPlayHoverAnim(false, false);
+
+    SendHoverUpdate(enable);
+    return true;
+}
+
+void Unit::SendHoverUpdate(bool enable)
+{
     if (!IsInWorld()) // is sent on add to map
         return;
 
-    if (isClientControlled)
+    if (IsClientControlled())
     {
         if (Player const* player = GetClientControlling())
         {
@@ -16424,13 +16449,29 @@ void Unit::SetHover(bool enable)
             data << counter;
             player->SendDirectMessage(&data);
             player->GetSession()->IncrementOrderCounter();
-            return;
         }
+        return;
     }
 
     WorldPacket data(enable ? SMSG_SPLINE_MOVE_SET_HOVER : SMSG_SPLINE_MOVE_UNSET_HOVER, 9);
     data << GetPackGUID();
     SendMessageToSet(&data, true);
+}
+
+void Unit::SetPlayHoverAnim(bool enable, bool sendUpdate)
+{
+    if (IsPlayingHoverAnim() == enable)
+        return;
+
+    m_updateFlag.PlayerHoverAnim = enable;
+
+    if (!sendUpdate)
+        return;
+
+    WorldPackets::Misc::SetPlayHoverAnim packet;
+    packet.UnitGUID = GetGUID();
+    packet.PlayHoverAnim = enable;
+    SendMessageToSet(packet.Write(), true);
 }
 
 void Unit::SetWaterWalking(bool enable)
