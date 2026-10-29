@@ -244,6 +244,32 @@ def build_pet_levels(container, user, password, target, source):
     return {"copied": copied, "extended": extended, "damage": damage}
 
 
+def sync_cata_stats(container, user, password, target, source):
+    """TDB 434 only fills basehp3/damage_exp3 from level 80 on.
+
+    The table copy uses INSERT IGNORE, so an existing (level, class) row keeps its old values;
+    refresh the two Cataclysm columns from the source first, then copy the WotLK value where TDB
+    leaves them empty so the loader does not log and fall back per row (#315).
+    """
+    present = {name for name, _ in columns(container, user, password, target, "creature_classlevelstats")}
+    if not {"basehp3", "damage_exp3"} <= present:
+        raise RuntimeError("creature_classlevelstats lacks basehp3/damage_exp3; "
+                           "apply the pending #315 update first")
+    synced = int(run(container, user, password,
+                     f"UPDATE `{target}`.creature_classlevelstats g "
+                     f"JOIN `{source}`.creature_classlevelstats t "
+                     f"ON t.level=g.level AND t.class=g.class "
+                     f"SET g.basehp3=t.basehp3, g.damage_exp3=t.damage_exp3; SELECT ROW_COUNT()")[-1][0])
+    health = int(run(container, user, password,
+                     f"UPDATE `{target}`.creature_classlevelstats "
+                     f"SET basehp3=basehp2 WHERE basehp3<=1 AND basehp2>1; SELECT ROW_COUNT()")[-1][0])
+    damage = int(run(container, user, password,
+                     f"UPDATE `{target}`.creature_classlevelstats "
+                     f"SET damage_exp3=damage_exp2 WHERE damage_exp3=0 AND damage_exp2>0; "
+                     f"SELECT ROW_COUNT()")[-1][0])
+    return {"synced": synced, "health": health, "damage": damage}
+
+
 def build_templates(container, user, password, target, source):
     applied = {table: copy_table(container, user, password, target, source, table,
                                  RENAMES.get(table))
@@ -252,6 +278,7 @@ def build_templates(container, user, password, target, source):
                              "gameobject_template_addon", "creature_classlevelstats")}
     applied.update(derive_templates(container, user, password, target, source))
     applied["pet_levelstats"] = build_pet_levels(container, user, password, target, source)
+    applied["creature_classlevelstats_cata"] = sync_cata_stats(container, user, password, target, source)
     # Only the hover rows matter; the rest of TDB's movement table would change gravity/flight
     # defaults the fork has not modelled.
     applied["creature_template_movement"] = copy_table(
