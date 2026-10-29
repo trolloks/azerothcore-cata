@@ -153,6 +153,16 @@ SCRIPT_ALIASES = {
     "npc_tenebron": "boss_sartharion_tenebron",
     "npc_feral_defender": "npc_auriaya_feral_defender",
     "boss_prince_taldaram": "boss_taldaram",
+    # TDB 434 adds the encounter, dungeon or quest qualifier to the fork's registration name.
+    # Verified by the NPC entry each fork script handles; names TDB also uses on the Cata
+    # remake of the same encounter (e.g. Mandokir 11382/52151) are deliberately not mapped.
+    "npc_alchemist_finklestein": "npc_finklestein",          # 28205
+    "npc_chromie_start": "npc_cos_chromie_start",            # 26527, Culling of Stratholme
+    "npc_chromie_middle": "npc_cos_chromie_middle",          # 27915, Culling of Stratholme
+    "npc_iron_sludge": "boss_sjonnir_iron_sludge",           # 28165, Halls of Stone
+    "npc_malformed_ooze": "boss_sjonnir_malformed_ooze",     # 27981, Halls of Stone
+    "npc_spirit_bomb": "npc_lk_spirit_bomb",                 # 39189, Icecrown Citadel
+    "npc_unstable_sphere": "npc_oculus_unstable_sphere",     # 28166, The Oculus
 }
 
 
