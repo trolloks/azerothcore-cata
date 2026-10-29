@@ -779,6 +779,7 @@ enum OpcodeClient : uint16
     CMSG_SEND_TEXT_EMOTE                            = 0x2E24,
     CMSG_LOG_DISCONNECT                             = 0x446D,
     CMSG_LOADING_SCREEN_NOTIFY                      = 0x2422,
+    CMSG_SUSPEND_TOKEN_RESPONSE                     = 0x046D,
     CMSG_VIOLENCE_LEVEL                             = 0x7816,
 };
 
@@ -802,6 +803,8 @@ enum OpcodeServer : uint16
     SMSG_CHAR_DELETE                                = 0x0304,
     SMSG_NEW_WORLD                                  = 0x79B1,
     SMSG_TRANSFER_PENDING                           = 0x18A6,
+    SMSG_SUSPEND_TOKEN                              = 0x14B1,
+    SMSG_NEW_WORLD_ABORT                            = 0x14B7,
     SMSG_TRANSFER_ABORTED                           = 0x0537,
     SMSG_CHARACTER_LOGIN_FAILED                     = 0x4417,
     SMSG_LOGIN_SET_TIME_SPEED                       = 0x4D15,

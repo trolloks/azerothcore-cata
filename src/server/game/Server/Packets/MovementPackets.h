@@ -10,6 +10,8 @@
 
 #include "ObjectGuid.h"
 #include "Packet.h"
+#include "Position.h"
+#include <optional>
 
 struct MovementInfo;
 struct Position;
@@ -90,6 +92,49 @@ namespace WorldPackets
         void WriteRunSpeedChange(WorldPacket& packet, ObjectGuid const& guid, uint32 counter, float speed);
         void ReadRunSpeedChangeAck(WorldPacket& packet, MovementInfo& info, uint32& counter, float& speed);
         void WriteRunSpeedUpdate(WorldPacket& packet, MovementInfo const& info, float speed);
+
+        struct ShipTransferPending
+        {
+            int32 ID = -1;
+            int32 OriginMapID = -1;
+        };
+
+        /// Sent when a far teleport starts; the client answers CMSG_SUSPEND_TOKEN_RESPONSE and the
+        /// server then sends NewWorld (4.3.4 flow; the 3.3.5a TransferPending + NewWorld sequence
+        /// hangs the client, #327).
+        class TransferPending final : public ServerPacket
+        {
+        public:
+            TransferPending() : ServerPacket(SMSG_TRANSFER_PENDING, 12) { }
+
+            WorldPacket const* Write() override;
+
+            int32 MapID = -1;
+            std::optional<ShipTransferPending> Ship;
+            std::optional<int32> TransferSpellID;
+        };
+
+        class SuspendToken final : public ServerPacket
+        {
+        public:
+            SuspendToken() : ServerPacket(SMSG_SUSPEND_TOKEN, 4 + 1) { }
+
+            WorldPacket const* Write() override;
+
+            uint32 SequenceIndex = 1;
+            uint8 Reason = 1;
+        };
+
+        class NewWorld final : public ServerPacket
+        {
+        public:
+            NewWorld() : ServerPacket(SMSG_NEW_WORLD, 4 + 4 + 4 + 4 + 4) { }
+
+            WorldPacket const* Write() override;
+
+            int32 MapID = 0;
+            Position Pos;
+        };
 
         class MoveSetActiveMover final : public ServerPacket
         {

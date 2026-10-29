@@ -217,6 +217,8 @@ void OpcodeTable::Initialize()
     /*0x05B1*/ DEFINE_HANDLER(CMSG_PLAYER_LOGIN,                                                     STATUS_AUTHED,     PROCESS_THREADUNSAFE,   &WorldSession::HandlePlayerLoginOpcode                  );
     /*0x79B1*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_NEW_WORLD,                                          STATUS_NEVER);
     /*0x18A6*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_TRANSFER_PENDING,                                   STATUS_NEVER);
+    /*0x14B1*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_SUSPEND_TOKEN,                                      STATUS_NEVER);
+    /*0x14B7*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_NEW_WORLD_ABORT,                                    STATUS_UNHANDLED);
     /*0x0537*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_TRANSFER_ABORTED,                                   STATUS_NEVER);
     /*0x4417*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_CHARACTER_LOGIN_FAILED,                             STATUS_NEVER);
     /*0x4D15*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_LOGIN_SET_TIME_SPEED,                               STATUS_NEVER);
@@ -429,6 +431,7 @@ void OpcodeTable::Initialize()
     /*0x7312*/ DEFINE_HANDLER(MSG_MOVE_SET_PITCH,                                                    STATUS_LOGGEDIN,   PROCESS_THREADSAFE,     &WorldSession::HandleMovementOpcodes                    );
     DEFINE_BIDIRECTIONAL_OPCODE(MSG_MOVE_SET_PITCH, MSG_MOVE_SET_PITCH, MSG_MOVE_SET_PITCH_SERVER);
     /*0x2411*/ DEFINE_HANDLER(MSG_MOVE_WORLDPORT_ACK,                                                STATUS_TRANSFER,   PROCESS_THREADUNSAFE,   &WorldSession::HandleMoveWorldportAckOpcode             );
+    /*0x046D*/ DEFINE_HANDLER(CMSG_SUSPEND_TOKEN_RESPONSE,                                           STATUS_TRANSFER,   PROCESS_THREADUNSAFE,   &WorldSession::HandleSuspendTokenResponse               );
     DEFINE_BIDIRECTIONAL_OPCODE(MSG_MOVE_WORLDPORT_ACK, MSG_MOVE_WORLDPORT_ACK, MSG_MOVE_WORLDPORT_ACK_SERVER);
     /*0x6E17*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_ON_MONSTER_MOVE,                                    STATUS_NEVER);
     /*0x75B1*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_MOVE_WATER_WALK,                                    STATUS_NEVER);

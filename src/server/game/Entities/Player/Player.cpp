@@ -1565,13 +1565,17 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
 
             if (!GetSession()->PlayerLogout())
             {
-                // send transfer packets
-                WorldPacket data(SMSG_TRANSFER_PENDING, 4 + 4 + 4);
-                data << uint32(mapid);
+                // 4.3.4 sends the transfer header, then a suspend token; NewWorld follows the
+                // client's CMSG_SUSPEND_TOKEN_RESPONSE (#327).
+                WorldPackets::Movement::TransferPending transferPending;
+                transferPending.MapID = int32(mapid);
                 if (m_transport)
-                    data << m_transport->GetEntry() << GetMapId();
-
-                SendDirectMessage(&data);
+                {
+                    transferPending.Ship.emplace();
+                    transferPending.Ship->ID = int32(m_transport->GetEntry());
+                    transferPending.Ship->OriginMapID = int32(GetMapId());
+                }
+                SendDirectMessage(transferPending.Write());
             }
 
             // remove from old map now
@@ -1586,15 +1590,10 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
             if (!GetSession()->PlayerLogout())
             {
                 SetCanTeleport(true);
-                WorldPacket data(SMSG_NEW_WORLD, 4 + 4 + 4 + 4 + 4);
-                data << uint32(mapid);
-                if (m_transport)
-                    data << m_movementInfo.transport.pos.PositionXYZOStream();
-                else
-                    data << teleportStore_dest.PositionXYZOStream();
-
-                SendDirectMessage(&data);
-                SendSavedInstances();
+                WorldPackets::Movement::SuspendToken suspendToken;
+                suspendToken.SequenceIndex = 1; // to-do incremental value (pinned TC reference)
+                suspendToken.Reason = 1;
+                SendDirectMessage(suspendToken.Write());
             }
 
             // move packet sent by client always after far teleport
