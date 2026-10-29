@@ -1506,7 +1506,8 @@ def main():
     if args.apply:
         # Gate: the imported zone must pass the #202 relation checker. Item
         # references stay open (TDB 434 has no item data) and are reported only.
-        problems = check_relations(c, u, p, dst, args.zone, args.map, sorted(sorts), candidates)
+        problems = check_relations(c, u, p, dst, args.zone, args.map, sorted(sorts), candidates,
+                                  dbc_dir=args.dbc_dir)
         item_kinds = ("quest_item", "loot_item")
         report["unresolved_items"] = [x for x in problems if x["kind"] in item_kinds]
         if "closure" in report:
@@ -1515,7 +1516,8 @@ def main():
         report["dangling"] = [x for x in problems if x["kind"] not in item_kinds]
         if args.baseline:
             native = {json.dumps(x, sort_keys=True)
-                      for x in check_relations(c, u, p, args.baseline, args.zone, args.map, sorted(sorts), candidates)}
+                      for x in check_relations(c, u, p, args.baseline, args.zone, args.map, sorted(sorts), candidates,
+                                                    dbc_dir=args.dbc_dir)}
             report["preexisting_dangling"] = [x for x in report["dangling"]
                                               if json.dumps(x, sort_keys=True) in native]
             report["dangling"] = [x for x in report["dangling"] if x not in report["preexisting_dangling"]]

@@ -13,6 +13,7 @@ starter/ender, loot reference or SmartAI link makes it exit non-zero.
 import argparse
 import json
 import re
+import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -203,6 +204,22 @@ def inventory(container, user, password, schema, zone, map_id) -> dict[str, int]
         result["creatures_note"] = "zoneId unset in this schema (AC WotLK spawns); TDB is the source denominator"
     result["tables"] = 1
     return result
+
+
+_DBC_ID_CACHE: dict[tuple[str, float], set[int]] = {}
+
+
+def dbc_ids(path: Path) -> set[int]:
+    """First-field ids of a client WDBC file (Spell, Faction, AreaTable, ...)."""
+    key = (str(path), path.stat().st_mtime)
+    if key not in _DBC_ID_CACHE:
+        data = path.read_bytes()
+        magic, records, _fields, record_size, _string_size = struct.unpack("<4sIIII", data[:20])
+        if magic != b"WDBC":
+            raise ValueError(f"{path} is not a WDBC file")
+        _DBC_ID_CACHE[key] = {struct.unpack_from("<I", data, 20 + index * record_size)[0]
+                              for index in range(records)}
+    return _DBC_ID_CACHE[key]
 
 
 def registered_script_names() -> set[str]:
@@ -571,7 +588,7 @@ def zone_quest_candidates(container, user, password, schema, sorts, zone, map_id
 
 
 def check_relations(container, user, password, schema, zone, map_id, quest_sorts=None,
-                    extra_quests=None) -> list[dict[str, str]]:
+                    extra_quests=None, dbc_dir=None) -> list[dict[str, str]]:
     """Return dangling relations for the zone's quests and spawns (quest_sorts defaults to the zone id)."""
     problems: list[dict[str, str]] = []
     if not table_exists(container, user, password, schema, "quest_template"):
@@ -584,7 +601,14 @@ def check_relations(container, user, password, schema, zone, map_id, quest_sorts
     reward_cols = [f"RewardItem{i}" for i in range(1, 5) if f"RewardItem{i}" in quest_cols]
     choice_cols = [f"RewardChoiceItemID{i}" for i in range(1, 7) if f"RewardChoiceItemID{i}" in quest_cols]
     start_cols = [c for c in ["StartItem"] + [f"ItemDrop{i}" for i in range(1, 5)] if c in quest_cols]
-    wanted = ["ID"] + objective_cols + item_cols + reward_cols + choice_cols + start_cols
+    spell_cols = [c for c in ("RequiredSpell", "RewardSpell") if c in quest_cols]
+    wanted = ["ID"] + objective_cols + item_cols + reward_cols + choice_cols + start_cols + spell_cols
+    spell_ids = None
+    if dbc_dir:
+        spell_dbc = Path(dbc_dir) / "Spell.dbc"
+        if not spell_dbc.is_file():
+            raise ValueError(f"missing {spell_dbc}")
+        spell_ids = dbc_ids(spell_dbc)
     where = f"{sort_col} IN ({','.join(str(value) for value in (quest_sorts or [zone]))})"
     if extra_quests:
         where += f" OR ID IN ({','.join(str(value) for value in extra_quests)})"
@@ -618,6 +642,11 @@ def check_relations(container, user, password, schema, zone, map_id, quest_sorts
             if has_items and value > 0 and str(value) not in item_entries:
                 problems.append({"kind": "quest_item", "quest": quest, "id": str(value)})
             offset += 1
+        for column in spell_cols:
+            value = int(row[offset])
+            offset += 1
+            if spell_ids is not None and value > 0 and value not in spell_ids:
+                problems.append({"kind": "quest_spell", "quest": quest, "column": column, "id": str(value)})
 
     zone_creatures = zone_creature_entries(container, user, password, schema, zone, map_id)
     zone_gos = zone_gameobject_entries(container, user, password, schema, zone, map_id)
@@ -696,6 +725,20 @@ def check_relations(container, user, password, schema, zone, map_id, quest_sorts
     zone_go_guids = zone_guids(container, user, password, schema, "gameobject", zone, map_id)
     creature_keys = {str(e) for e in zone_creatures} | {str(-g) for g in zone_creature_guids}
     go_keys = {str(e) for e in zone_gos} | {str(-g) for g in zone_go_guids}
+    if spell_ids is not None and table_exists(container, user, password, schema, "smart_scripts"):
+        parts = []
+        if creature_keys:
+            keys = ",".join(sorted(creature_keys))
+            parts.append(f"(entryorguid IN ({keys}) AND source_type=0)")
+        if go_keys:
+            keys = ",".join(sorted(go_keys))
+            parts.append(f"(entryorguid IN ({keys}) AND source_type=1)")
+        if parts:
+            for owner, spell in query(container, user, password, schema,
+                                      f"SELECT DISTINCT entryorguid, action_param1 FROM smart_scripts "
+                                      f"WHERE action_type=11 AND action_param1<>0 AND (" + " OR ".join(parts) + ")"):
+                if int(spell) not in spell_ids:
+                    problems.append({"kind": "smartai_cast_spell", "entry": owner, "id": spell})
 
     if table_exists(container, user, password, schema, "creature_template"):
         known_creatures = {int(r[0]) for r in query(container, user, password, schema,
@@ -833,6 +876,7 @@ def main() -> int:
     parser.add_argument("--map", type=int, default=0)
     parser.add_argument("--metadata-only", action="store_true",
                         help="skip the relation checker and print only the denominators")
+    parser.add_argument("--dbc-dir", help="4.3.4 DBC directory for client-store id checks")
     args = parser.parse_args()
 
     report = {
@@ -842,7 +886,8 @@ def main() -> int:
         "tdb": inventory(args.container, args.user, args.password, args.tdb_schema, args.zone, args.map),
     }
     problems = [] if args.metadata_only else check_relations(
-        args.container, args.user, args.password, args.tdb_schema, args.zone, args.map)
+        args.container, args.user, args.password, args.tdb_schema, args.zone, args.map,
+        dbc_dir=args.dbc_dir)
     report["tdb_dangling"] = problems
     print(json.dumps(report, indent=2))
     return 1 if problems else 0
