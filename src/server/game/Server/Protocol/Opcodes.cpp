@@ -585,7 +585,7 @@ void OpcodeTable::Initialize()
     /*0x2D36*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_DUEL_WINNER,                                        STATUS_NEVER);
     /*0x2136*/ DEFINE_HANDLER(CMSG_DUEL_ACCEPTED,                                                    STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleDuelAcceptedOpcode                 );
     /*0x6624*/ DEFINE_HANDLER(CMSG_DUEL_CANCELLED,                                                   STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleDuelCancelledOpcode                );
-    /*0x016E*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_MOUNTRESULT,                                        STATUS_NEVER);
+    /*0x2225*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_MOUNT_RESULT,                                        STATUS_NEVER);
     /*0x0D25*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_DISMOUNTRESULT,                                     STATUS_NEVER);
     /*0x0170*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_REMOVED_FROM_PVP_QUEUE,                             STATUS_NEVER);
     /*0x2807*/ DEFINE_HANDLER(CMSG_MOUNTSPECIAL_ANIM,                                                STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleMountSpecialAnimOpcode             );
@@ -625,7 +625,7 @@ void OpcodeTable::Initialize()
     /*0x193*/ DEFINE_HANDLER(CMSG_QUESTLOG_SWAP_QUEST,                                              STATUS_LOGGEDIN,   PROCESS_INPLACE,        &WorldSession::HandleQuestLogSwapQuest                  );
     /*0x0D16*/ DEFINE_HANDLER(CMSG_QUESTLOG_REMOVE_QUEST,                                            STATUS_LOGGEDIN,   PROCESS_INPLACE,        &WorldSession::HandleQuestLogRemoveQuest                );
     /*0x0E36*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_QUESTLOG_FULL,                                      STATUS_NEVER);
-    /*0x196*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_QUESTUPDATE_FAILED,                                 STATUS_NEVER);
+    /*0x6324*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_QUEST_UPDATE_FAILED,                                 STATUS_NEVER);
     /*0x6427*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_QUESTUPDATE_FAILEDTIMER,                            STATUS_NEVER);
     /*0x2937*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_QUESTUPDATE_COMPLETE,                               STATUS_NEVER);
     /*0x0D27*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_QUESTUPDATE_ADD_KILL,                               STATUS_NEVER);

@@ -73,6 +73,27 @@ def canonical_values(text: str) -> dict[str, set[int]]:
     return values
 
 
+def normalized_name(name: str) -> str:
+    """Pin spellings differ by underscores only (SMSG_LEVELUP_INFO vs SMSG_LEVEL_UP_INFO)."""
+    return name.replace("_", "").lower()
+
+
+def canonical_names(text: str) -> dict[tuple[str, str], tuple[str, int]]:
+    """(direction, normalized pin name) -> (pin name, value) for the rename audit."""
+    names: dict[tuple[str, str], tuple[str, int]] = {}
+    for enum_name, body in ENUM_RE.findall(text):
+        directions = TC_ENUM_DIRECTIONS.get(enum_name)
+        if not directions:
+            continue
+        for name, raw_value in DECL_RE.findall(body):
+            value = int(raw_value, 0)
+            if not value:
+                continue
+            for direction in directions:
+                names.setdefault((direction, normalized_name(name)), (name, value))
+    return names
+
+
 def active_opcodes(repo_root: Path) -> dict[tuple[str, str], int]:
     """(direction, name) -> value for registered CMSG and referenced SMSG/MSG opcodes."""
     header = (repo_root / OPCODES_H).read_text(encoding="utf-8")
@@ -173,11 +194,19 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     values = canonical_values(trinity_header)
+    names = canonical_names(trinity_header)
     active = active_opcodes(repo_root)
     allowlist = parse_allowlist((repo_root / ALLOWLIST).read_text(encoding="utf-8"))
 
     findings: list[str] = []
     for (direction, name), value in sorted(active.items()):
+        pinned = names.get((direction, normalized_name(name)))
+        if pinned and pinned[1] != value and (direction, name) not in allowlist:
+            findings.append(
+                f"{direction} {name} 0x{value:04X} maps to {pinned[0]} 0x{pinned[1]:04X} in "
+                f"{args.trinity_ref[:10]} but keeps a different value"
+            )
+            continue
         if value in values[direction]:
             continue
         if (direction, name) in allowlist:
