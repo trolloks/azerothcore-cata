@@ -602,13 +602,24 @@ def check_relations(container, user, password, schema, zone, map_id, quest_sorts
     choice_cols = [f"RewardChoiceItemID{i}" for i in range(1, 7) if f"RewardChoiceItemID{i}" in quest_cols]
     start_cols = [c for c in ["StartItem"] + [f"ItemDrop{i}" for i in range(1, 5)] if c in quest_cols]
     spell_cols = [c for c in ("RequiredSpell", "RewardSpell") if c in quest_cols]
-    wanted = ["ID"] + objective_cols + item_cols + reward_cols + choice_cols + start_cols + spell_cols
-    spell_ids = None
+    faction_cols = [c for c in ("RequiredFactionId1", "RequiredFactionId2", "RewardFactionID1",
+                                "RewardFactionID2", "RewardFactionID3", "RewardFactionID4",
+                                "RewardFactionID5") if c in quest_cols]
+    title_cols = [c for c in ("RewardTitle",) if c in quest_cols]
+    wanted = (["ID"] + objective_cols + item_cols + reward_cols + choice_cols + start_cols
+              + spell_cols + faction_cols + title_cols)
+    dbc: dict[str, set[int]] = {}
     if dbc_dir:
-        spell_dbc = Path(dbc_dir) / "Spell.dbc"
+        dbc_path = Path(dbc_dir)
+        spell_dbc = dbc_path / "Spell.dbc"
         if not spell_dbc.is_file():
             raise ValueError(f"missing {spell_dbc}")
-        spell_ids = dbc_ids(spell_dbc)
+        for name in ("Spell", "Faction", "FactionTemplate", "AreaTable", "CreatureDisplayInfo",
+                     "GameObjectDisplayInfo", "SoundEntries", "Emotes", "CharTitles", "CreatureFamily"):
+            path = dbc_path / f"{name}.dbc"
+            if path.is_file():
+                dbc[name] = dbc_ids(path)
+    spell_ids = dbc.get("Spell")
     where = f"{sort_col} IN ({','.join(str(value) for value in (quest_sorts or [zone]))})"
     if extra_quests:
         where += f" OR ID IN ({','.join(str(value) for value in extra_quests)})"
@@ -647,6 +658,16 @@ def check_relations(container, user, password, schema, zone, map_id, quest_sorts
             offset += 1
             if spell_ids is not None and value > 0 and value not in spell_ids:
                 problems.append({"kind": "quest_spell", "quest": quest, "column": column, "id": str(value)})
+        for column in faction_cols:
+            value = int(row[offset])
+            offset += 1
+            if "Faction" in dbc and value > 0 and value not in dbc["Faction"]:
+                problems.append({"kind": "quest_faction", "quest": quest, "column": column, "id": str(value)})
+        for column in title_cols:
+            value = int(row[offset])
+            offset += 1
+            if "CharTitles" in dbc and value > 0 and value not in dbc["CharTitles"]:
+                problems.append({"kind": "quest_title", "quest": quest, "id": str(value)})
 
     zone_creatures = zone_creature_entries(container, user, password, schema, zone, map_id)
     zone_gos = zone_gameobject_entries(container, user, password, schema, zone, map_id)
@@ -859,6 +880,57 @@ def check_relations(container, user, password, schema, zone, map_id, quest_sorts
             if target != "61":
                 problems.append({"kind": "smartai_link", "guid": guid, "source_type": source_type,
                                  "event": event_id, "link": link})
+
+    if dbc:
+        if "AreaTable" in dbc and zone_quests:
+            joined = ",".join(sorted(str(q) for q in zone_quests))
+            for quest, sort_id in query(container, user, password, schema,
+                                        f"SELECT ID, {sort_col} FROM quest_template WHERE ID IN ({joined}) "
+                                        f"AND {sort_col}>0"):
+                if int(sort_id) not in dbc["AreaTable"]:
+                    problems.append({"kind": "quest_area", "quest": quest, "id": str(sort_id)})
+        if zone_creatures and table_exists(container, user, password, schema, "creature_template"):
+            template_cols = columns(container, user, password, schema, "creature_template")
+            selected = [c for c in ("entry", "faction", "family") if c in template_cols]
+            if "entry" in selected:
+                entries = ",".join(map(str, sorted(zone_creatures)))
+                for row in query(container, user, password, schema,
+                                 f"SELECT {','.join(selected)} FROM creature_template WHERE entry IN ({entries})"):
+                    for column, value in zip(selected[1:], row[1:]):
+                        value = int(value)
+                        if column == "faction" and "FactionTemplate" in dbc:
+                            if value == 0 or value not in dbc["FactionTemplate"]:
+                                problems.append({"kind": "creature_faction", "entry": row[0], "id": str(value)})
+                        elif column == "family" and "CreatureFamily" in dbc:
+                            # 10 is the loader's accepted "none" sentinel and is not in the DBC.
+                            if value not in (0, 10) and value not in dbc["CreatureFamily"]:
+                                problems.append({"kind": "creature_family", "entry": row[0], "id": str(value)})
+        if ("CreatureDisplayInfo" in dbc and zone_creatures
+                and table_exists(container, user, password, schema, "creature_template_model")):
+            entries = ",".join(map(str, sorted(zone_creatures)))
+            for entry, display in query(container, user, password, schema,
+                                        f"SELECT CreatureID, CreatureDisplayID FROM creature_template_model "
+                                        f"WHERE CreatureID IN ({entries})"):
+                if int(display) not in dbc["CreatureDisplayInfo"]:
+                    problems.append({"kind": "creature_display", "entry": entry, "id": display})
+        if "GameObjectDisplayInfo" in dbc and zone_gos:
+            go_cols = columns(container, user, password, schema, "gameobject_template")
+            if "displayId" in go_cols:
+                entries = ",".join(map(str, sorted(zone_gos)))
+                for entry, display in query(container, user, password, schema,
+                                            f"SELECT entry, displayId FROM gameobject_template "
+                                            f"WHERE entry IN ({entries}) AND displayId<>0"):
+                    if int(display) not in dbc["GameObjectDisplayInfo"]:
+                        problems.append({"kind": "gameobject_display", "entry": entry, "id": display})
+        if zone_creatures and table_exists(container, user, password, schema, "creature_text"):
+            entries = ",".join(map(str, sorted(zone_creatures)))
+            for entry, sound, emote in query(container, user, password, schema,
+                                             f"SELECT DISTINCT CreatureID, Sound, Emote FROM creature_text "
+                                             f"WHERE CreatureID IN ({entries})"):
+                if "SoundEntries" in dbc and int(sound) > 0 and int(sound) not in dbc["SoundEntries"]:
+                    problems.append({"kind": "creature_text_sound", "entry": entry, "id": sound})
+                if "Emotes" in dbc and int(emote) > 0 and int(emote) not in dbc["Emotes"]:
+                    problems.append({"kind": "creature_text_emote", "entry": entry, "id": emote})
 
     problems.extend(check_loader_relations(container, user, password, schema, zone_creatures, zone_gos,
                                             zone_creature_guids, zone_go_guids, zone_quests, loot_entries))
