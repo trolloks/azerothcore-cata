@@ -808,6 +808,7 @@ public:                                                 // opcodes handlers
     void HandleGameObjectQueryOpcode(WorldPacket& recvPacket);
 
     void HandleMoveWorldportAckOpcode(WorldPacket& recvPacket);
+    void HandleSuspendTokenResponse(WorldPacket& recvPacket);
     void HandleMoveWorldportAck(); // for server-side calls
 
     void HandleMovementOpcodes(WorldPacket& recvPacket);

@@ -390,6 +390,45 @@ void WorldPackets::Movement::WriteRunSpeedUpdate(WorldPacket& packet, MovementIn
         packet.WriteByteSeq(guid[index]);
 }
 
+WorldPacket const* WorldPackets::Movement::TransferPending::Write()
+{
+    _worldPacket.WriteBit(TransferSpellID.has_value());
+    _worldPacket.WriteBit(Ship.has_value());
+    // AC's ByteBuffer does not flush pending bits on scalar writes like TC's append does.
+    _worldPacket.FlushBits();
+    if (Ship)
+    {
+        _worldPacket << int32(Ship->OriginMapID);
+        _worldPacket << uint32(Ship->ID);
+    }
+    if (TransferSpellID)
+        _worldPacket << int32(*TransferSpellID);
+    _worldPacket << int32(MapID);
+    _worldPacket.FlushBits();
+
+    return &_worldPacket;
+}
+
+WorldPacket const* WorldPackets::Movement::SuspendToken::Write()
+{
+    _worldPacket << uint32(SequenceIndex);
+    _worldPacket.WriteBit(Reason);
+    _worldPacket.FlushBits();
+
+    return &_worldPacket;
+}
+
+WorldPacket const* WorldPackets::Movement::NewWorld::Write()
+{
+    _worldPacket << Pos.GetPositionX();
+    _worldPacket << Pos.GetOrientation();
+    _worldPacket << Pos.GetPositionZ();
+    _worldPacket << int32(MapID);
+    _worldPacket << Pos.GetPositionY();
+
+    return &_worldPacket;
+}
+
 WorldPacket const* WorldPackets::Movement::MoveSetActiveMover::Write()
 {
     _worldPacket.WriteBit(MoverGUID[5]);

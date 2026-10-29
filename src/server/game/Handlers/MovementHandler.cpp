@@ -44,6 +44,24 @@
 
 #define MOVEMENT_PACKET_TIME_DELAY 0
 
+void WorldSession::HandleSuspendTokenResponse(WorldPacket& recvPacket)
+{
+    // The sequence index is informational; the teleport state is authoritative.
+    uint32 sequenceIndex = 0;
+    recvPacket >> sequenceIndex;
+    (void)sequenceIndex;
+
+    if (!GetPlayer()->IsBeingTeleportedFar())
+        return;
+
+    WorldLocation const& loc = GetPlayer()->GetTeleportDest();
+    WorldPackets::Movement::NewWorld packet;
+    packet.MapID = loc.GetMapId();
+    packet.Pos = loc;
+    SendPacket(packet.Write());
+    GetPlayer()->SendSavedInstances();
+}
+
 void WorldSession::HandleMoveWorldportAckOpcode(WorldPacket& /*recvData*/)
 {
     LOG_DEBUG("network", "WORLD: got MSG_MOVE_WORLDPORT_ACK.");
