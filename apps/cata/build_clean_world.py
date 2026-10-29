@@ -97,6 +97,11 @@ def copy_smart_scripts(container, user, password, target, source):
             selected.append(f"IF(s.target_type IN (0,1,2),0,s.`{name}`)")
         elif name == "action_param3":
             selected.append("IF(s.action_type=1 AND s.action_param3<>0,1,s.action_param3)")
+        elif name == "action_param1":
+            # TC's WP_START param1 is a run boolean; AC's ESCORT_START param1 is FORCED_MOVEMENT
+            # (0 none, 1 walk, 2 run). Shift 0/1 so TC's walk stays walk (#331).
+            selected.append("IF(s.action_type=53 AND s.action_param1 IN (0,1),"
+                            "s.action_param1+1,s.action_param1)")
         elif name == "action_type":
             selected.append("IF(s.source_type=9 AND s.action_type=85 AND s.target_type=7,134,s.action_type)")
         elif name.startswith("event_param") and name[11:].isdigit():

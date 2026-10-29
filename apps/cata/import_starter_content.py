@@ -954,6 +954,11 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             elif column == "action_param3":
                 # TC 4.3.4 reads TALK's third param as a nonzero true value; AC validates it as a strict boolean
                 selected.append("IF(s.action_type=1 AND s.action_param3<>0, 1, s.action_param3)")
+            elif column == "action_param1":
+                # TC's WP_START param1 is a run boolean; AC's ESCORT_START param1 is FORCED_MOVEMENT
+                # (0 none, 1 walk, 2 run). Shift 0/1 so TC's walk stays walk (#331).
+                selected.append("IF(s.action_type=53 AND s.action_param1 IN (0,1), "
+                                "s.action_param1+1, s.action_param1)")
             elif column == "action_type":
                 # SELF_CAST makes each target cast on itself; INVOKER_CAST is equivalent only for target 7.
                 # AC rejects 85, so translate this timed-list case to 134.
