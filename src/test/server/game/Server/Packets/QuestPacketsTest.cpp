@@ -18,9 +18,6 @@
 #include "QuestPackets.h"
 #include "QueryPackets.h"
 #include "QuestDef.h"
-#include "Field.h"
-#include "World.h"
-#include "WorldMock.h"
 #include "gtest/gtest.h"
 
 TEST(QuestPacketsTest, NPCQueryResponseUsesCataBitCountsAndGameObjectMask)
@@ -39,11 +36,7 @@ TEST(QuestPacketsTest, NPCQueryResponseUsesCataBitCountsAndGameObjectMask)
 
 TEST(QuestPacketsTest, RewardChoiceRejectsEmptyAndOutOfRangeSlots)
 {
-    auto originalWorld = std::move(sWorld);
-    sWorld = std::make_unique<testing::NiceMock<WorldMock>>();
-    Field fields[108];
-    Quest quest(fields);
-    sWorld = std::move(originalWorld);
+    Quest quest{};
     EXPECT_TRUE(quest.IsValidRewardChoice(0));
     EXPECT_FALSE(quest.IsValidRewardChoice(1));
     EXPECT_FALSE(quest.IsValidRewardChoice(QUEST_REWARD_CHOICES_COUNT));
