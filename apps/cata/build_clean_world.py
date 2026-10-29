@@ -206,7 +206,7 @@ def build_templates(container, user, password, target, source):
                                  RENAMES.get(table))
                for table in ("gameobject_template", "creature_model_info", "creature_template",
                              "creature_equip_template", "creature_template_addon",
-                             "gameobject_template_addon")}
+                             "gameobject_template_addon", "creature_classlevelstats")}
     applied.update(derive_templates(container, user, password, target, source))
     # Only the hover rows matter; the rest of TDB's movement table would change gravity/flight
     # defaults the fork has not modelled.
