@@ -316,7 +316,8 @@ class SpawnImportTests(unittest.TestCase):
                     report = {"phase_normalized": {table: 0}}
                     scope = {**vars(importer), "container": "", "user": "", "password": "",
                              "target": "target", "source": "source", "zone": 16, "map_id": 1,
-                             "quest_ids": "1", "dry_run": False, "report": report, "new_spawn_guids": {}}
+                             "quest_ids": "1", "dry_run": False, "report": report,
+                             "imported_spawn_guids": {}}
                     cols = [(c, False) for c in ("guid", "id", "PhaseId")]
                     with patch.object(importer, "run", side_effect=run), \
                             patch.object(importer, "columns", return_value=cols), \
@@ -326,7 +327,7 @@ class SpawnImportTests(unittest.TestCase):
                             patch.object(importer, "fetch", side_effect=[
                                 ["10000004"], ["10000001", "10000002", "10000003", "10000004"]]):
                         scope.update({name: getattr(importer, name) for name in (
-                            "columns", "common_columns", "table_exists", "insert_count", "fetch")})
+                            "run", "columns", "common_columns", "table_exists", "insert_count", "fetch")})
                         exec(compile(ast.Module(body=[insert], type_ignores=[]), "import_spawns", "exec"), scope)
                         self.assertEqual(scope["import_spawns"](table, "id", {"100"})[0], 3)
                         exists.assert_called_once_with("", "", "", "target", "phase_area")

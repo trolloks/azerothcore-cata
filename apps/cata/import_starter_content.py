@@ -5,10 +5,11 @@ For one zone, imports the missing quests (quest_template plus reward, request
 and addon companion rows), then the templates, spawns, loot and SmartAI their
 objectives, required-item suppliers and givers reference, including display
 models, creature text, waypoint paths and condition reference templates.
-AC-native rows win: existing loot, script, text and path blocks are not merged,
-and existing spawns at the same position are not duplicated. Remaining item
-references are reported; TDB 434 carries no item data, so those come from the
-client Item.db2/Item-sparse.db2 conversion instead.
+AC-native rows win: existing loot, script and path blocks are not merged, a
+creature_text group is filled line by line, and existing spawns at the same
+position are not duplicated. Remaining item references are reported; TDB 434
+carries no item data, so those come from the client Item.db2/Item-sparse.db2
+conversion instead.
 
 Dry-run by default; --apply performs the inserts. Run only against the
 run-owned disposable database.
@@ -123,7 +124,9 @@ def insert_count(container, user, password, sql):
     # SELECT ROW_COUNT() would clear the diagnostics, so capture the count first and print it last.
     rows = run(container, user, password,
                sql + "; GET DIAGNOSTICS @insert_count = ROW_COUNT; SHOW WARNINGS; SELECT @insert_count")
-    WARNINGS.extend(" ".join(row) for row in rows[:-1] if row[0] in ("Warning", "Error"))
+    # A duplicate key is the intended fill-only skip; a truncation or dropped value is not.
+    WARNINGS.extend(" ".join(row) for row in rows[:-1]
+                    if row[0] in ("Warning", "Error") and "Duplicate entry" not in row[-1])
     return int(rows[-1][0]) if rows else 0
 
 
@@ -436,7 +439,10 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             container, user, password, target, source, "creature_equip_template", "CreatureID",
             sorted(creature_entries), dry_run)
 
-    new_spawn_guids: dict[str, set[str]] = {"creature": set(), "gameobject": set()}
+    # Source GUIDs this importer owns in the target: guid + GUID_OFFSET at the source position.
+    # Keyed off the target rather than this run's inserts, so a replay still repairs the addons,
+    # paths, events and formations a failed earlier run left out (#213).
+    imported_spawn_guids: dict[str, set[str]] = {"creature": set(), "gameobject": set()}
     report["phase_normalized"] = {"creature": 0, "gameobject": 0}
 
     def import_spawns(table, id_column, entries):
@@ -459,19 +465,27 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                f"AND NOT EXISTS (SELECT 1 FROM {target}.{table} t WHERE {spawn_match(SPAWN_DEDUPE_RADIUS_M)})")
         if dry_run:
             return 0, sql
-        before = set(fetch(container, user, password,
-                           f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
+        # Only spawns this run inserts get their undefined phase stored; an existing spawn keeps
+        # whatever phase the world already gave it, even when its phase id is not in phase_area.
+        before = (set(fetch(container, user, password,
+                            f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
+                  if "PhaseId" in target_names else set())
         count = insert_count(container, user, password, sql)
-        after = set(fetch(container, user, password,
-                          f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
-        new_spawn_guids[table] = after - before
-        if "PhaseId" in target_names and new_spawn_guids[table]:
+        imported_spawn_guids[table] = set(fetch(
+            container, user, password,
+            f"SELECT s.guid+{GUID_OFFSET} FROM {source}.{table} s "
+            f"WHERE s.{id_column} IN ({ids}) AND {spawn_scope(source, table, 's', zone, map_id, quest_ids)} "
+            f"AND EXISTS (SELECT 1 FROM {target}.{table} t WHERE t.guid=s.guid+{GUID_OFFSET} "
+            f"AND {spawn_match()})"))
+        new_guids = imported_spawn_guids[table] - before
+        if new_guids:
             undefined = "PhaseId<>0"
             if table_exists(container, user, password, target, "phase_area"):
                 undefined += f" AND PhaseId NOT IN (SELECT PhaseId FROM {target}.phase_area)"
+            imported = ",".join(sorted(new_guids))
             rows = run(container, user, password,
                        f"UPDATE {target}.{table} SET PhaseId=0 "
-                       f"WHERE guid IN ({','.join(sorted(new_spawn_guids[table]))}) AND {undefined}; SELECT ROW_COUNT()")
+                       f"WHERE guid IN ({imported}) AND {undefined}; SELECT ROW_COUNT()")
             report["phase_normalized"][table] = int(rows[-1][0]) if rows else 0
         if table == "creature" and not {"MovementType", "wander_distance"} - target_names:
             # The loader resets an unknown MovementType (TDB has 3) and an idle spawn's wander distance; store that.
@@ -487,12 +501,11 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         if dry_run:
             report[table + "_sql"] = sql
 
-    new_addon_guids: set[str] = set()
     for table, spawn_table, entries in (("creature_addon", "creature", creature_entries),
                                         ("gameobject_addon", "gameobject", gameobject_entries)):
         if not entries or not table_exists(container, user, password, source, table):
             continue
-        if not dry_run and not new_spawn_guids[spawn_table]:
+        if not dry_run and not imported_spawn_guids[spawn_table]:
             continue
         ids = ",".join(sorted(entries))
         target_names = {name for name, _ in columns(container, user, password, target, table)}
@@ -510,20 +523,15 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                f"AND EXISTS (SELECT 1 FROM {target}.{spawn_table} t WHERE t.guid=a.guid+{GUID_OFFSET} "
                f"AND t.id=s.id AND t.map=s.map AND t.position_x=s.position_x "
                f"AND t.position_y=s.position_y AND t.position_z=s.position_z) "
-               f"AND a.guid+{GUID_OFFSET} IN ({','.join(sorted(new_spawn_guids[spawn_table])) or '0'})")
+               f"AND a.guid+{GUID_OFFSET} IN ({','.join(sorted(imported_spawn_guids[spawn_table])) or '0'})")
         if not dry_run:
-            before = set(fetch(container, user, password,
-                               f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
             run(container, user, password, sql)
-            if table == "creature_addon":
-                after = set(fetch(container, user, password,
-                                  f"SELECT guid FROM {target}.{table} WHERE guid>={GUID_OFFSET}"))
-                new_addon_guids = after - before
 
-    # Spawn-linked rows follow only the spawns this run inserted: game events, formations (both ends
-    # imported) and a report of the link types that are not imported yet.
-    imported = {t: ",".join(sorted(new_spawn_guids[t])) for t in ("creature", "gameobject")}
-    sources = {t: ",".join(str(int(g) - GUID_OFFSET) for g in sorted(new_spawn_guids[t])) for t in imported}
+    # Spawn-linked rows follow every mapped spawn, so a replay fills the game events and formations an
+    # interrupted run left out; INSERT IGNORE makes the repeats no-ops. Link types not imported are reported.
+    imported = {t: ",".join(sorted(imported_spawn_guids[t])) for t in ("creature", "gameobject")}
+    sources = {t: ",".join(str(int(g) - GUID_OFFSET) for g in sorted(imported_spawn_guids[t]))
+               for t in imported}
     if not dry_run:
         for kind in ("creature", "gameobject"):
             table = f"game_event_{kind}"
@@ -575,7 +583,6 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
 
     # Template addons carry the interaction bytes/auras; creature spell-click
     # rows keep the NPC's spell-click flag alive in the loader.
-    new_template_addons: set[str] = set()
     if (creature_entries
             and table_exists(container, user, password, source, "creature_template_addon")):
         present = set(fetch(container, user, password,
@@ -598,17 +605,9 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                    f"WHERE a.entry IN ({','.join(candidates)})")
             if dry_run:
                 report["creature_template_addon"] = 0
-                new_template_addons: set[str] = set()
             else:
-                before = set(fetch(container, user, password,
-                                   f"SELECT entry FROM {target}.creature_template_addon "
-                                   f"WHERE entry IN ({','.join(candidates)})"))
                 rows = run(container, user, password, sql + "; SELECT ROW_COUNT()")
                 report["creature_template_addon"] = int(rows[-1][0]) if rows else 0
-                after = set(fetch(container, user, password,
-                                  f"SELECT entry FROM {target}.creature_template_addon "
-                                  f"WHERE entry IN ({','.join(candidates)})"))
-                new_template_addons = after - before
     if creature_entries and table_exists(container, user, password, source, "npc_spellclick_spells"):
         present = set(fetch(container, user, password,
                             f"SELECT DISTINCT npc_entry FROM {target}.npc_spellclick_spells "
@@ -620,7 +619,10 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                 "npc_entry", candidates, dry_run)
 
     # Movement paths referenced by creature and template addons. Each source path lands at
-    # source id + PATH_OFFSET; the addon rows this run inserted are pointed at it.
+    # source id + PATH_OFFSET; an addon row is re-pointed only while it still carries the raw
+    # source id, i.e. this importer inserted it and never migrated it. The clean world has no
+    # spawns below GUID_OFFSET, so every addon is TDB-sourced and the raw id is its own source
+    # path; a binding that already points elsewhere has been migrated and is left alone.
     path_targets: dict[str, list[tuple[str, str]]] = {}
     if creature_entries and table_exists(container, user, password, source, "creature_addon"):
         for guid, path_id in run(container, user, password,
@@ -631,33 +633,27 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                                  f"AND ca.waypointPathId<>0 "
                                  f"AND EXISTS (SELECT 1 FROM {target}.creature_addon ta "
                                  f"JOIN {target}.creature t ON t.guid=ta.guid "
-                                 f"WHERE ta.guid=ca.guid+{GUID_OFFSET} AND t.id=c.id AND t.map=c.map "
+                                 f"WHERE ta.guid=ca.guid+{GUID_OFFSET} "
+                                 f"AND ta.path_id=ca.waypointPathId "
+                                 f"AND t.id=c.id AND t.map=c.map "
                                  f"AND t.position_x=c.position_x AND t.position_y=c.position_y "
                                  f"AND t.position_z=c.position_z)"):
             path_targets.setdefault(path_id, []).append(
                 ("creature_addon", str(int(guid) + GUID_OFFSET)))
     if (creature_entries
             and table_exists(container, user, password, source, "creature_template_addon")):
-        template_addons = set(fetch(container, user, password,
-                                    f"SELECT DISTINCT entry FROM {target}.creature_template_addon "
-                                    f"WHERE entry IN ({creature_ids})"))
         for entry, path_id in run(container, user, password,
-                                  f"SELECT entry, waypointPathId FROM {source}.creature_template_addon "
-                                  f"WHERE entry IN ({creature_ids}) AND waypointPathId<>0"):
-            if entry in template_addons:
-                path_targets.setdefault(path_id, []).append(("creature_template_addon", entry))
+                                  f"SELECT a.entry, a.waypointPathId FROM {source}.creature_template_addon a "
+                                  f"WHERE a.entry IN ({creature_ids}) AND a.waypointPathId<>0 "
+                                  f"AND EXISTS (SELECT 1 FROM {target}.creature_template_addon ta "
+                                  f"WHERE ta.entry=a.entry AND ta.path_id=a.waypointPathId)"):
+            path_targets.setdefault(path_id, []).append(("creature_template_addon", entry))
     if path_targets and table_exists(container, user, password, source, "waypoint_data"):
         waypoint_columns = [c for c in common_columns(container, user, password, target, source,
                                                       "waypoint_data") if c != "id"]
         names = ",".join(quote(c) for c in waypoint_columns)
         imported_paths = 0
         for path_id, consumers in sorted(path_targets.items()):
-            repair = []
-            for consumer_table, key in consumers:
-                if key in (new_addon_guids if consumer_table == "creature_addon" else new_template_addons):
-                    repair.append((consumer_table, key))
-            if not repair:
-                continue
             target_path = str(int(path_id) + PATH_OFFSET)
             occupied = scalar(container, user, password,
                               f"SELECT COUNT(*) FROM {target}.waypoint_data WHERE id={target_path}")
@@ -673,23 +669,24 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                                        f"({occupied} rows, source path {path_id} has {total})")
             if not dry_run:
                 grouped: dict[str, list[str]] = {}
-                for consumer_table, key in repair:
+                for consumer_table, key in consumers:
                     grouped.setdefault(consumer_table, []).append(key)
+                # Copy the path before re-pointing, so a crash in between leaves the raw id for replay.
+                run(container, user, password,
+                    f"INSERT IGNORE INTO {target}.waypoint_data (`id`,{names}) "
+                    f"SELECT {target_path},{names} FROM {source}.waypoint_data WHERE id={path_id}")
                 for consumer_table, keys in grouped.items():
                     key_column = "guid" if consumer_table == "creature_addon" else "entry"
                     run(container, user, password,
                         f"UPDATE {target}.{consumer_table} SET path_id={target_path} "
                         f"WHERE {key_column} IN ({','.join(keys)})")
-                run(container, user, password,
-                    f"INSERT IGNORE INTO {target}.waypoint_data (`id`,{names}) "
-                    f"SELECT {target_path},{names} FROM {source}.waypoint_data WHERE id={path_id}")
             imported_paths += 1
         report["waypoint_data"] = imported_paths
 
     # Source GUID -> target GUID, for scripts that target a specific spawn. Matching
-    # is done in SQL (no float round-trip) on entry, map and position: the shifted
-    # GUID counts as imported only when inserted by this run, and a
-    # native spawn at the same position is the fallback.
+    # is done in SQL (no float round-trip) on entry, map and position: a shifted
+    # GUID this importer owns counts as imported, and a native spawn at the same
+    # position is the fallback.
     def match_spawns(table, entries):
         rows = run(container, user, password,
                    f"SELECT s.guid, s.id, MAX(t.guid=s.guid+{GUID_OFFSET}), MIN(t.guid) "
@@ -698,7 +695,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                    f"GROUP BY s.guid, s.id")
         imported, native = {}, {}
         for guid, entry, is_imported, native_guid in rows:
-            if is_imported == "1" and str(int(guid) + GUID_OFFSET) in new_spawn_guids[table]:
+            if is_imported == "1" and str(int(guid) + GUID_OFFSET) in imported_spawn_guids[table]:
                 imported[guid] = entry
             else:
                 native[guid] = native_guid
@@ -917,13 +914,22 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         negative = ",".join(str(-int(guid)) for guid in script_go_guids)
         script_filters.append((f"source_type=1 AND entryorguid IN ({negative})", GUID_OFFSET))
 
-    # Discovery covers every source creature script, not only the rows inserted
-    # on this run, so text/waypoint dependencies of preserved scripts are still
-    # filled when they are missing.
-    # Dependencies are traversed only from script blocks this run accepts; a block
-    # the target already has is native and keeps its own text, lists and paths.
-    all_source_filters = list(script_filters)
-    all_creature_filters = [f for f in script_filters if f[0].startswith("source_type=0")]
+    # Dependency discovery covers every source script of the imported entries and spawns, not only the
+    # rows inserted on this run. The text/waypoint imports below are fill-only, so a replay repairs the
+    # groups and paths an interrupted run left out while native rows keep their own values (#213).
+    all_source_filters: list[tuple[str, int]] = []
+    for source_type, entries, candidates in (("0", source_creature_scripts, creature_entries),
+                                             ("1", source_gameobject_scripts, gameobject_entries)):
+        discovered = sorted(entries & candidates)
+        if discovered:
+            all_source_filters.append(
+                (f"source_type={source_type} AND entryorguid IN ({','.join(discovered)})", 0))
+    for source_type, guids in (("0", source_guids), ("1", script_go_candidates)):
+        if guids:
+            all_source_filters.append(
+                (f"source_type={source_type} AND entryorguid IN "
+                 f"({','.join(str(-int(guid)) for guid in guids)})", GUID_OFFSET))
+    all_creature_filters = [f for f in all_source_filters if f[0].startswith("source_type=0")]
 
     def insert_scripts(where, shift):
         columns_ = common_columns(container, user, password, target, source, "smart_scripts")
@@ -1080,24 +1086,29 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
     timed: set[str] = set()
     for where, _shift in all_source_filters:
         timed.update(timed_references(where))
-    handled_timed: set[str] = set()
     imported_timed: set[str] = set()
-    while timed - handled_timed:
-        batch = sorted(timed - handled_timed)
-        present = set(fetch(container, user, password,
-                            f"SELECT DISTINCT entryorguid FROM {target}.smart_scripts "
-                            f"WHERE source_type=9 AND entryorguid IN ({','.join(batch)})"))
-        new = [entry for entry in batch if entry not in present]
-        handled_timed.update(batch)
-        if not new or dry_run:
+    inserted: set[str] = set()
+    expanded: dict[str, set[str]] = {}
+    pending = set(timed)
+    while pending:
+        entry = pending.pop()
+        if entry not in inserted:
+            inserted.add(entry)
+            present = set(fetch(container, user, password,
+                                f"SELECT DISTINCT entryorguid FROM {target}.smart_scripts "
+                                f"WHERE source_type=9 AND entryorguid={entry}"))
+            if entry not in present and not dry_run:
+                insert_scripts(f"source_type=9 AND entryorguid IN ({entry})", 0)
+                imported_timed.add(entry)
+        # An owner can arrive after this list was expanded. Propagate the grown owner set so the
+        # nested lists (and their SELF/MAP talk groups) learn every owner, not only the first one.
+        owners = timed_owners.get(entry, set())
+        if entry in expanded and not owners - expanded[entry]:
             continue
-        insert_scripts(f"source_type=9 AND entryorguid IN ({','.join(new)})", 0)
-        imported_timed.update(new)
-        nested_owners: set[str] = set()
-        for entry in new:
-            nested_owners.update(timed_owners.get(entry, set()))
-        timed.update(timed_references(f"source_type=9 AND entryorguid IN ({','.join(new)})",
-                                      nested_owners))
+        expanded.setdefault(entry, set()).update(owners)
+        found = timed_references(f"source_type=9 AND entryorguid IN ({entry})", owners)
+        timed.update(found)
+        pending.update(found)
     if imported_scripts or imported_timed:
         report["smart_scripts"] = imported_scripts
         report["smart_scripts_timed"] = len(imported_timed)
@@ -1113,7 +1124,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
                 text_groups.add((mapped_owner, group))
             if int(target_type) in (9, 11, 19, 204) and int(target_param1) > 0:
                 text_groups.add((target_param1, group))
-    for timed_id in sorted(imported_timed):
+    for timed_id in sorted(timed):
         for group, target_type, target_param1 in run(
                 container, user, password,
                 f"SELECT action_param1, target_type, target_param1 FROM {source}.smart_scripts "
@@ -1123,29 +1134,31 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
             if int(target_type) in (9, 11, 19, 204) and int(target_param1) > 0:
                 text_groups.add((target_param1, group))
     if text_groups:
-        creature_list = ",".join(sorted({owner for owner, _group in text_groups}))
-        present_text = {(row[0], row[1]) for row in
-                        run(container, user, password,
-                            f"SELECT DISTINCT CreatureID, GroupID FROM {target}.creature_text "
-                            f"WHERE CreatureID IN ({creature_list})")}
-        missing_text = [(owner, group) for owner, group in text_groups
-                        if (owner, group) not in present_text]
-        if missing_text and not dry_run:
-            where = " OR ".join(f"(CreatureID={owner} AND GroupID={group})"
-                                for owner, group in sorted(missing_text))
-            columns_ = common_columns(container, user, password, target, source, "creature_text")
-            names = ",".join(quote(c) for c in columns_)
-            run(container, user, password,
-                f"INSERT IGNORE INTO {target}.creature_text ({names}) "
-                f"SELECT {names} FROM {source}.creature_text WHERE {where}")
-        report["creature_text_groups"] = len(missing_text)
+        group_filter = " OR ".join(f"(s.CreatureID={owner} AND s.GroupID={group})"
+                                   for owner, group in sorted(text_groups))
+        columns_ = common_columns(container, user, password, target, source, "creature_text")
+        names = ",".join(quote(c) for c in columns_)
+        selected = ",".join(f"s.{quote(c)}" for c in columns_)
+        added = 0
+        if not dry_run:
+            # Lines are keyed by (CreatureID, GroupID, ID): a native group keeps the lines it already
+            # has and gains the missing ones instead of blocking the whole group (#213).
+            rows = run(container, user, password,
+                       f"INSERT INTO {target}.creature_text ({names}) "
+                       f"SELECT {selected} FROM {source}.creature_text s "
+                       f"LEFT JOIN {target}.creature_text t ON t.CreatureID=s.CreatureID "
+                       f"AND t.GroupID=s.GroupID AND t.ID=s.ID "
+                       f"WHERE ({group_filter}) AND t.CreatureID IS NULL; SELECT ROW_COUNT()")
+            added = int(rows[-1][0]) if rows else 0
+        report["creature_text"] = added
+        report["creature_text_groups"] = len(text_groups)
 
     path_ids: set[str] = set()
     for where, _shift in all_creature_filters:
         path_ids.update(fetch(container, user, password,
                               f"SELECT DISTINCT action_param2 FROM {source}.smart_scripts "
                               f"WHERE {where} AND action_type=53 AND action_param2<>0"))
-    for timed_id in sorted(imported_timed):
+    for timed_id in sorted(timed):
         path_ids.update(fetch(container, user, password,
                               f"SELECT DISTINCT action_param2 FROM {source}.smart_scripts "
                               f"WHERE source_type=9 AND entryorguid={timed_id} "
