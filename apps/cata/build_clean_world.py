@@ -526,6 +526,8 @@ def build_quest_items(container, user, password, target, source):
         f"ON g.entry=q.GameObjectEntry "
         f"LEFT JOIN `{target}`.gameobject_loot_template l ON l.Entry=g.Data1 AND l.Item=q.ItemId "
         f"WHERE l.Entry IS NULL AND g.type IN (3,25) AND g.Data1<>0")
+    applied["exploration_basexp"] = copy_table(container, user, password, target, source,
+                                               "exploration_basexp")
     return applied
 
 
