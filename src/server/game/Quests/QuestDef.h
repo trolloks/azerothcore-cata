@@ -212,6 +212,7 @@ class Quest
 {
     friend class ObjectMgr;
 public:
+    Quest() = default;
     Quest(Field* questRecord);
     void LoadQuestDetails(Field* fields);
     void LoadQuestRequestItems(Field* fields);
