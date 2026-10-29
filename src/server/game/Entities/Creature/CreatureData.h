@@ -294,9 +294,9 @@ typedef std::unordered_map<uint32, CreatureTemplate> CreatureTemplateContainer;
 #pragma pack(push, 1)
 #endif
 
-// The 4.3.4 Cataclysm column (basehp3/damage_exp3) is not imported yet, so the stat tables keep the
-// three WotLK columns and clamp a Cataclysm template to the WotLK row until it lands (#315).
-constexpr uint8 MAX_CREATURE_EXPANSIONS = 3;
+// 4.3.4 creature base stats carry a fourth expansion column; TDB 434 leaves it zero below level 80,
+// which LoadCreatureClassLevelStats bridges from the WotLK column (#315).
+constexpr uint8 MAX_CREATURE_EXPANSIONS = 4;
 
 inline uint8 CreatureStatExpansion(uint8 expansion)
 {

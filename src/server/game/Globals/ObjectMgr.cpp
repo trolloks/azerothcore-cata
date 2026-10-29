@@ -10803,7 +10803,7 @@ void ObjectMgr::LoadCreatureClassLevelStats()
 {
     uint32 oldMSTime = getMSTime();
 
-    QueryResult result = WorldDatabase.Query("SELECT level, class, basehp0, basehp1, basehp2, basemana, basearmor, attackpower, rangedattackpower, damage_base, damage_exp1, damage_exp2, Strength, Agility, Stamina, Intellect, Spirit FROM creature_classlevelstats");
+    QueryResult result = WorldDatabase.Query("SELECT level, class, basehp0, basehp1, basehp2, basehp3, basemana, basearmor, attackpower, rangedattackpower, damage_base, damage_exp1, damage_exp2, damage_exp3, Strength, Agility, Stamina, Intellect, Spirit FROM creature_classlevelstats");
 
     if (!result)
     {
@@ -10849,25 +10849,40 @@ void ObjectMgr::LoadCreatureClassLevelStats()
                 }
             }
 
-            stats.BaseDamage[i] = fields[9 + i].Get<float>();
+            stats.BaseDamage[i] = fields[10 + i].Get<float>();
             if (stats.BaseDamage[i] < 0.0f)
             {
                 LOG_ERROR("sql.sql", "Creature base stats for class {}, level {} has invalid negative base damage[{}] - set to 0.0", Class, Level, i);
                 stats.BaseDamage[i] = 0.0f;
             }
+
+            // TDB 434 only fills the Cataclysm damage column from level 80 on; keep the lower
+            // expansion's value elsewhere so a Cataclysm creature never swings for zero.
+            if (stats.BaseDamage[i] == 0.0f)
+            {
+                for (uint8 j = i; j > 0;)
+                {
+                    --j;
+                    if (stats.BaseDamage[j] > 0.0f)
+                    {
+                        stats.BaseDamage[i] = stats.BaseDamage[j];
+                        break;
+                    }
+                }
+            }
         }
 
-        stats.BaseMana = fields[5].Get<uint32>();
-        stats.BaseArmor = fields[6].Get<uint32>();
+        stats.BaseMana = fields[6].Get<uint32>();
+        stats.BaseArmor = fields[7].Get<uint32>();
 
-        stats.AttackPower = fields[7].Get<uint32>();
-        stats.RangedAttackPower = fields[8].Get<uint32>();
+        stats.AttackPower = fields[8].Get<uint32>();
+        stats.RangedAttackPower = fields[9].Get<uint32>();
 
-        stats.Strength = fields[12].Get<uint32>();
-        stats.Agility = fields[13].Get<uint32>();
-        stats.Stamina = fields[14].Get<uint32>();
-        stats.Intellect = fields[15].Get<uint32>();
-        stats.Spirit = fields[16].Get<uint32>();
+        stats.Strength = fields[14].Get<uint32>();
+        stats.Agility = fields[15].Get<uint32>();
+        stats.Stamina = fields[16].Get<uint32>();
+        stats.Intellect = fields[17].Get<uint32>();
+        stats.Spirit = fields[18].Get<uint32>();
 
         if (!stats.Strength || !stats.Agility || !stats.Stamina || !stats.Intellect || !stats.Spirit)
         {
