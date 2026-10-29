@@ -509,9 +509,61 @@ private:
     uint32 _path;
 };
 
+enum ElwynnBattleWorg
+{
+    NPC_STORMWIND_INFANTRY = 49869
+};
+
+// Ported from TrinityCore 4.3.4 (pinned c6992177) zone_elwynn_forest.cpp (#211).
+struct npc_blackrock_battle_worg : public ScriptedAI
+{
+    npc_blackrock_battle_worg(Creature* creature) : ScriptedAI(creature), _isAttackingInfantry(false) { }
+
+    void Reset() override
+    {
+        me->m_Events.AddEventAtOffset([this]
+        {
+            if (Creature* infantry = me->FindNearestCreature(NPC_STORMWIND_INFANTRY, 5.0f, true))
+            {
+                _isAttackingInfantry = true;
+                _infantryGUID = infantry->GetGUID();
+                AttackStart(infantry);
+
+                if (infantry->IsAIEnabled)
+                    infantry->AI()->AttackStart(me);
+            }
+        }, 1s);
+    }
+
+    void JustDied(Unit* /*killer*/) override
+    {
+        if (Creature* infantry = ObjectAccessor::GetCreature(*me, _infantryGUID))
+            infantry->AI()->EnterEvadeMode();
+    }
+
+    void DamageTaken(Unit* attacker, uint32& /*damage*/, DamageEffectType /*damagetype*/, SpellSchoolMask /*damageSchoolMask*/) override
+    {
+        if (attacker && attacker->GetEntry() != NPC_STORMWIND_INFANTRY)
+            _isAttackingInfantry = false;
+    }
+
+    void UpdateAI(uint32 /*diff*/) override
+    {
+        if (!_isAttackingInfantry && !UpdateVictim())
+            return;
+
+        DoMeleeAttackIfReady();
+    }
+
+private:
+    ObjectGuid _infantryGUID;
+    bool _isAttackingInfantry;
+};
+
 void AddSC_elwynn_forest()
 {
     RegisterCreatureAI(npc_cameron);
     RegisterCreatureAI(npc_supervisor_raelen);
     RegisterCreatureAI(npc_eastvale_peasent);
+    RegisterCreatureAI(npc_blackrock_battle_worg);
 }
