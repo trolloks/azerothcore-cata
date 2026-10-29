@@ -795,7 +795,7 @@ public:
     inline bool IsCrowdControlled() const { return HasFlag(UNIT_FIELD_FLAGS, (UNIT_FLAG_CONFUSED | UNIT_FLAG_FLEEING | UNIT_FLAG_STUNNED)); }
     inline bool IsImmobilizedState() const { return HasUnitState(UNIT_STATE_ROOT | UNIT_STATE_STUNNED); }
 
-    void SetAnimTier(AnimTier animTier);
+    void SetAnimTier(AnimTier animTier, bool notifyClient = true);
 
     /*********************************************************/
     /***           UNIT TYPES, CLASSES, RACES...           ***/
@@ -1783,7 +1783,10 @@ public:
     void SetCanFly(bool enable);
     void SetWaterWalking(bool enable);
     void SetFeatherFall(bool enable);
-    void SetHover(bool enable);
+    virtual bool SetHover(bool enable, bool updateAnimTier = true);
+    void SendHoverUpdate(bool enable);
+    void SetPlayHoverAnim(bool enable, bool sendUpdate = true);
+    [[nodiscard]] bool IsPlayingHoverAnim() const { return m_updateFlag.PlayerHoverAnim; }
 
     MotionMaster* GetMotionMaster() { return i_motionMaster; }
     [[nodiscard]] MotionMaster const* GetMotionMaster() const { return i_motionMaster; }

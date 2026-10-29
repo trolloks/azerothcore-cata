@@ -455,6 +455,8 @@ public:
     void SetCombatMovement(bool allowMovement);
     bool IsCombatMovementAllowed() const { return _isCombatMovementAllowed; }
 
+    bool SetHover(bool enable, bool updateAnimTier = true) override;
+
     std::string GetDebugInfo() const override;
 
     bool IsUpdateNeeded() override;

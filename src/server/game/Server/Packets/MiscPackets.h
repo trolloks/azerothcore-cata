@@ -30,6 +30,28 @@ namespace WorldPackets
 {
     namespace Misc
     {
+        class SetAnimTier final : public ServerPacket
+        {
+        public:
+            SetAnimTier() : ServerPacket(SMSG_SET_ANIM_TIER, 8 + 4) { }
+
+            WorldPacket const* Write() override;
+
+            ObjectGuid Unit;
+            uint32 Tier = 0;
+        };
+
+        class SetPlayHoverAnim final : public ServerPacket
+        {
+        public:
+            SetPlayHoverAnim() : ServerPacket(SMSG_SET_PLAY_HOVER_ANIM, 8 + 1) { }
+
+            WorldPacket const* Write() override;
+
+            ObjectGuid UnitGUID;
+            bool PlayHoverAnim = false;
+        };
+
         class SetupCurrency final : public ServerPacket
         {
         public:
