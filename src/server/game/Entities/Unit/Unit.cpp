@@ -13553,6 +13553,12 @@ bool Unit::InitTamedPet(Pet* pet, uint8 level, uint32 spell_id)
     pet->InitPetCreateSpells();
     pet->SetFullHealth();
     pet->FillPetInfo(&petStable.CurrentPet.emplace());
+
+    // Tamed pets follow the tamer's phase shift like summoned pets.
+    pet->InheritPhasesFrom(this);
+    if (player)
+        player->RegisterPhaseSummon(pet);
+
     return true;
 }
 

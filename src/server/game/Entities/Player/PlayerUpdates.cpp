@@ -1399,7 +1399,7 @@ bool Player::UpdatePhasesForArea(uint32 areaId)
 
     if (m_phases != oldPhases)
     {
-        SendPhaseShift();
+        OnPhaseChanged();
         return true;
     }
 
@@ -1415,75 +1415,11 @@ void Player::SendPhaseShift()
     SendDirectMessage(phaseShift.Write());
 }
 
-bool Player::AddPhaseToSet(uint32 phaseId)
+void Player::OnPhaseChanged()
 {
-    if (!phaseId)
-        return false;
+    SendPhaseShift();
 
-    uint32& references = m_phaseRefs[phaseId];
-    if (references++)
-        return false;
-
-    m_phases.push_back(phaseId);
-    return true;
-}
-
-bool Player::RemovePhaseFromSet(uint32 phaseId)
-{
-    auto itr = m_phaseRefs.find(phaseId);
-    if (itr == m_phaseRefs.end())
-        return false;
-
-    if (--itr->second)
-        return false;
-
-    m_phaseRefs.erase(itr);
-    m_phases.erase(std::find(m_phases.begin(), m_phases.end(), phaseId));
-    return true;
-}
-
-void Player::AddPhase(uint32 phaseId, bool update)
-{
-    if (AddPhaseToSet(phaseId) && update)
-    {
-        SendPhaseShift();
-        UpdateObjectVisibility();
-    }
-}
-
-void Player::AddPhaseGroup(uint32 phaseGroupId, bool update)
-{
-    bool changed = false;
-    for (uint32 phaseId : GetPhasesForGroup(phaseGroupId))
-        changed = AddPhaseToSet(phaseId) || changed;
-
-    if (changed && update)
-    {
-        SendPhaseShift();
-        UpdateObjectVisibility();
-    }
-}
-
-void Player::RemovePhase(uint32 phaseId, bool update)
-{
-    if (RemovePhaseFromSet(phaseId) && update)
-    {
-        SendPhaseShift();
-        UpdateObjectVisibility();
-    }
-}
-
-void Player::RemovePhaseGroup(uint32 phaseGroupId, bool update)
-{
-    bool changed = false;
-    for (uint32 phaseId : GetPhasesForGroup(phaseGroupId))
-        changed = RemovePhaseFromSet(phaseId) || changed;
-
-    if (changed && update)
-    {
-        SendPhaseShift();
-        UpdateObjectVisibility();
-    }
+    WorldObject::OnPhaseChanged();
 }
 
 void Player::UpdateZone(uint32 newZone, uint32 newArea, bool force)

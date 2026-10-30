@@ -9188,6 +9188,8 @@ Pet* Player::SummonPet(uint32 entry, float x, float y, float z, float ang, PetTy
     pet->ReplaceAllNpcFlags(UNIT_NPC_FLAG_NONE);
     pet->SetUInt32Value(UNIT_FIELD_BYTES_1, 0);
     pet->InitStatsForLevel(GetLevel());
+    pet->InheritPhasesFrom(this);
+    RegisterPhaseSummon(pet);
 
     SetMinion(pet, true);
 

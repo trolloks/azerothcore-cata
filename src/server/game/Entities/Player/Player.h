@@ -44,6 +44,7 @@
 #include <array>
 #include <set>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 struct CreatureTemplate;
@@ -1895,10 +1896,9 @@ public:
     void UpdateArea(uint32 newArea);
     void SetNeedZoneUpdate(bool needUpdate) { m_needZoneUpdate = needUpdate; }
 
-    // Cata Phase.dbc/PhaseXPhaseGroup.dbc membership (distinct from the legacy WotLK phase mask).
-    // Recomputed from `phase_area` + CONDITION_SOURCE_TYPE_PHASE conditions on every area change,
-    // so it naturally survives logout/login via the same area recompute the login path already does.
-    [[nodiscard]] std::vector<uint32> const& GetPhases() const { return m_phases; }
+    // Cata phase membership (distinct from the legacy WotLK phase mask). Recomputed from
+    // `phase_area` + CONDITION_SOURCE_TYPE_PHASE conditions on every area change, so it survives
+    // logout/login via the same area recompute the login path already does.
     // True when the player is in the default (unphased) world: no phases, or the default phase granted.
     [[nodiscard]] bool IsUnphased() const;
     // Recompute phases after a quest or aura change and refresh visibility when membership changed.
@@ -1906,11 +1906,7 @@ public:
     // Returns true if membership changed and a phase-shift packet was already sent.
     bool UpdatePhasesForArea(uint32 areaId);
     void SendPhaseShift();
-    // Additive membership for Cata phase auras (SPELL_AURA_PHASE / SPELL_AURA_PHASE_GROUP).
-    void AddPhase(uint32 phaseId, bool update = true);
-    void AddPhaseGroup(uint32 phaseGroupId, bool update = true);
-    void RemovePhase(uint32 phaseId, bool update = true);
-    void RemovePhaseGroup(uint32 phaseGroupId, bool update = true);
+    void OnPhaseChanged() override;
 
     void UpdateZoneDependentAuras(uint32 zone_id);    // zones
     void UpdateAreaDependentAuras(uint32 area_id);    // subzones
@@ -2934,9 +2930,6 @@ public:
     [[nodiscard]] uint32 GetSkillFieldValue(uint32 index) const;
     void SetSkillFieldValue(uint32 index, uint32 value);
 private:
-    bool AddPhaseToSet(uint32 phaseId);
-    bool RemovePhaseFromSet(uint32 phaseId);
-
     PlayerMails m_mail;
     PlayerSpellMap m_spells;
     PlayerTalentMap m_talents;
@@ -2997,8 +2990,6 @@ private:
     uint32 m_zoneUpdateId;
     uint32 m_zoneUpdateTimer;
     uint32 m_areaUpdateId;
-    std::vector<uint32> m_phases;
-    std::unordered_map<uint32, uint32> m_phaseRefs; // phase id -> number of active grants
 
     uint32 m_deathTimer;
     time_t m_deathExpireTime;

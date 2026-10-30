@@ -60,6 +60,7 @@ public:
     void SetTempSummonType(TempSummonType type);
     void SaveToDB(uint32 /*mapid*/, uint8 /*spawnMask*/, uint32 /*phaseMask*/) override {}
     [[nodiscard]] WorldObject* GetSummoner() const;
+    [[nodiscard]] WorldObject const* GetPhaseShiftSource() const override;
     [[nodiscard]] Unit* GetSummonerUnit() const;
     [[nodiscard]] Creature* GetSummonerCreatureBase() const;
     [[nodiscard]] GameObject* GetSummonerGameObject() const;

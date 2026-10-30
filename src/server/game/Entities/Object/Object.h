@@ -555,16 +555,34 @@ public:
     [[nodiscard]] bool InSamePhase(uint32 phasemask) const { return m_useCombinedPhases ? GetPhaseMask() & phasemask : GetPhaseMask() == phasemask; }
 
     // Cata Phase/PhaseGroup (see DBCStores::GetPhasesForGroup), independent of the legacy
-    // phasemask above. A spawn row with phase 0 is unphased (default phase 169); objects without
-    // spawn data are not gated until their creator's shift is inherited (#345).
+    // phasemask above. A spawn row with phase 0 is unphased (default phase 169); dynamic objects
+    // (summons, pets) inherit their owner's set, otherwise they are not phase-gated.
     void SetSpawnPhaseId(uint32 phaseId) { m_spawnPhaseId = phaseId; m_hasSpawnPhase = true; }
     void SetSpawnPhaseGroup(uint32 phaseGroup) { m_spawnPhaseGroup = phaseGroup; m_hasSpawnPhase = true; }
     [[nodiscard]] uint32 GetSpawnPhaseId() const { return m_spawnPhaseId; }
     [[nodiscard]] uint32 GetSpawnPhaseGroup() const { return m_spawnPhaseGroup; }
     [[nodiscard]] bool HasSpawnPhase() const { return m_hasSpawnPhase; }
+    [[nodiscard]] std::vector<uint32> const& GetPhases() const { return m_phases; }
+    void AddPhase(uint32 phaseId, bool update = true);
+    void AddPhaseGroup(uint32 phaseGroupId, bool update = true);
+    void RemovePhase(uint32 phaseId, bool update = true);
+    void RemovePhaseGroup(uint32 phaseGroupId, bool update = true);
+    // Copy the owner's effective phase shift onto a summon/pet and drop any spawn gating.
+    void InheritPhasesFrom(WorldObject const* source);
+    void RegisterPhaseSummon(Creature* summon);
+    void UnregisterPhaseSummon(Creature* summon);
+    void RefreshPhaseSummons();
     [[nodiscard]] bool IsPhaseVisibleTo(Player const* player) const;
     // Exact 4.3.4 phase membership (CONDITION_PHASEID): a phase-0 spawn has no phase set.
     [[nodiscard]] bool HasPhase(uint32 phaseId) const;
+    // Summons/pets follow their owner's live phase shift instead of a stale copy.
+    [[nodiscard]] virtual WorldObject const* GetPhaseShiftSource() const { return nullptr; }
+
+    bool AddPhaseToSet(uint32 phaseId);
+    bool RemovePhaseFromSet(uint32 phaseId);
+    // Builds the effective set; false when the object is not phase-gated at all.
+    [[nodiscard]] bool GetEffectivePhases(std::vector<uint32>& phases) const;
+    virtual void OnPhaseChanged();
 
     [[nodiscard]] uint32 GetZoneId() const;
     [[nodiscard]] uint32 GetAreaId() const;
@@ -875,6 +893,14 @@ private:
     uint32 m_spawnPhaseId;                              // Cata Phase.dbc id from spawn data
     uint32 m_spawnPhaseGroup;                           // Cata PhaseXPhaseGroup.dbc id from spawn data
     bool m_hasSpawnPhase;                               // true when loaded from a spawn row (phase 0 = unphased)
+protected:
+    std::vector<uint32> m_phases;                       // own phase grants (auras/scripts)
+    std::unordered_map<uint32, uint32> m_phaseRefs;     // own phase id -> number of active grants
+    std::vector<uint32> m_inheritedPhases;              // owner shift copied onto summons/pets
+    bool m_hasPhaseShift;                               // an inherited/added set exists (empty = unphased)
+    bool m_inheritedUnphased = false;                   // owner shift is unphased (visibility only)
+    std::unordered_set<ObjectGuid> m_phaseSummons;      // summons following this object's shift
+private:
     // false: use phaseMask to represent single phases only (up to 4294967295 phases)
 
     uint16 m_notifyflags;
