@@ -20,7 +20,7 @@ import sys
 
 from import_starter_content import (SMART_EVENT_PARAM_COUNTS, UNSUPPORTED_SMART_ACTIONS, WARNINGS,
                                     columns, insert_count, run)
-from starter_content_inventory import registered_script_names
+from starter_content_inventory import registered_script_names, table_exists
 
 GUID_OFFSET = 10_000_000
 # Loot ids stay below 200k in TDB; allocated quest-only templates live in an unused range.
@@ -40,7 +40,10 @@ RENAMES = {
 EXPRESSIONS = {("creature_formations", "point_1"): "GREATEST(`InversionPoint1`,0)",
                ("creature_formations", "point_2"): "GREATEST(`InversionPoint2`,0)",
                ("creature", "PhaseId"): "IF(`PhaseId`=0, `PhaseGroup`, `PhaseId`)",
-               ("gameobject", "PhaseId"): "IF(`PhaseId`=0, `PhaseGroup`, `PhaseId`)"}
+               ("gameobject", "PhaseId"): "IF(`PhaseId`=0, `PhaseGroup`, `PhaseId`)",
+               # TDB 434 type 26 is a 4.3.4 phase/group id; AC reserves 26 for the legacy mask.
+               ("conditions", "ConditionTypeOrReference"):
+                   "IF(`ConditionTypeOrReference`=26,108,`ConditionTypeOrReference`)"}
 SPAWN_TABLES = ("creature", "gameobject", "creature_addon", "gameobject_addon",
                 "creature_formations", "waypoint_data", "waypoint_scripts", "creature_text",
                 "game_event_creature", "game_event_gameobject")
@@ -700,6 +703,30 @@ PHASES = {"templates": build_templates, "spawns": build_spawns, "loot": build_lo
           "pools": build_pools, "interactions": build_interactions}
 
 
+def migrate_legacy_phase_masks(container, user, password, target):
+    """The clean world is TDB-only, so rows imported with AC's legacy mask type 26 must move to
+    CONDITION_CATA_PHASE_ID (108); otherwise both are evaluated and the stale mask can block
+    content (#347). UPDATE IGNORE skips rows a previous run already converted; the delete drops
+    those duplicates."""
+    if not table_exists(container, user, password, target, "conditions"):
+        return 0
+    run(container, user, password,
+        f"USE `{target}`; UPDATE IGNORE conditions SET ConditionTypeOrReference=108 "
+        f"WHERE ConditionTypeOrReference=26")
+    # Only drop a legacy row when the 108 row it conflicted with is semantically equivalent;
+    # otherwise both meanings must be reviewed instead of silently losing one.
+    run(container, user, password,
+        f"USE `{target}`; DELETE t FROM conditions t JOIN conditions n "
+        f"ON n.SourceTypeOrReferenceId=t.SourceTypeOrReferenceId AND n.SourceGroup=t.SourceGroup "
+        f"AND n.SourceEntry=t.SourceEntry AND n.SourceId=t.SourceId AND n.ElseGroup=t.ElseGroup "
+        f"AND n.ConditionTarget=t.ConditionTarget AND n.ConditionValue1=t.ConditionValue1 "
+        f"AND n.ConditionValue2=t.ConditionValue2 AND n.ConditionValue3=t.ConditionValue3 "
+        f"AND n.ConditionTypeOrReference=108 AND n.NegativeCondition=t.NegativeCondition AND n.ScriptName=t.ScriptName "
+        f"WHERE t.ConditionTypeOrReference=26")
+    return int(run(container, user, password,
+                   f"SELECT COUNT(*) FROM `{target}`.conditions WHERE ConditionTypeOrReference=26")[-1][0])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--container", default="plan175-inventory-mysql")
@@ -722,6 +749,11 @@ def main():
         VALKYR_DISPLAYS = load_valkyr_displays(args.dbc_dir)
     else:
         print("warning: --dbc-dir/DBC_DIR not set; skipping the Val'kyr hover rows", file=sys.stderr)
+
+    conflicting = migrate_legacy_phase_masks(args.container, args.user, args.password, args.target)
+    if conflicting:
+        print(f"warning: {conflicting} legacy phase-mask conditions conflict with a 108 row; kept for review",
+              file=sys.stderr)
 
     phases = PHASES if args.phase == "all" else {args.phase: PHASES[args.phase]}
     for name, build in phases.items():

@@ -2121,6 +2121,21 @@ bool WorldObject::InSamePhase(WorldObject const* obj) const
     return false;
 }
 
+bool WorldObject::HasPhase(uint32 phaseId) const
+{
+    if (Player const* player = ToPlayer())
+    {
+        std::vector<uint32> const& phases = player->GetPhases();
+        return std::find(phases.begin(), phases.end(), phaseId) != phases.end();
+    }
+
+    if (!m_spawnPhaseId)
+        return false;
+
+    std::vector<uint32> const phases = GetPhasesForGroup(m_spawnPhaseId);
+    return std::find(phases.begin(), phases.end(), phaseId) != phases.end();
+}
+
 bool WorldObject::IsPhaseVisibleTo(Player const* player) const
 {
     // GMs see and interact with every Cata phase, mirroring the legacy PHASEMASK_ANYWHERE override
