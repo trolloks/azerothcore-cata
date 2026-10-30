@@ -61,6 +61,14 @@ struct ItemTemplate;
 struct MovementInfo;
 struct TradeStatusInfo;
 
+namespace WorldPackets
+{
+    namespace Movement
+    {
+        class ExtraMovementStatusElement;
+    }
+}
+
 namespace lfg
 {
     struct LfgJoinResultData;
@@ -458,7 +466,8 @@ public:
     void ReadAddonsInfo(ByteBuffer& data);
     void SendAddonsInfo();
 
-    void ReadMovementInfo(WorldPacket& data, MovementInfo* mi);
+    void ReadMovementInfo(WorldPacket& data, MovementInfo* mi,
+        WorldPackets::Movement::ExtraMovementStatusElement* extras = nullptr);
     void SanitizeMovementFlags(MovementInfo* mi);
     void WriteMovementInfo(WorldPacket* data, MovementInfo* mi);
     void SynchronizeMovement(MovementInfo& movementInfo);

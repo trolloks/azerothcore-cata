@@ -1096,13 +1096,14 @@ void WorldSession::SaveTutorialsData(CharacterDatabaseTransaction trans)
     m_TutorialsChanged = false;
 }
 
-void WorldSession::ReadMovementInfo(WorldPacket& data, MovementInfo* mi)
+void WorldSession::ReadMovementInfo(WorldPacket& data, MovementInfo* mi,
+    WorldPackets::Movement::ExtraMovementStatusElement* extras)
 {
     if (data.GetOpcode() == MSG_MOVE_HEARTBEAT)
         WorldPackets::Movement::ReadHeartbeat(data, *mi);
     else if (WorldPackets::Movement::MovementStatusElements const* sequence =
         WorldPackets::Movement::GetMovementSequence(data.GetOpcode()))
-        WorldPackets::Movement::ReadGroundMovement(data, *mi, sequence);
+        WorldPackets::Movement::ReadGroundMovement(data, *mi, sequence, nullptr, extras);
     else
     {
         data >> mi->flags;

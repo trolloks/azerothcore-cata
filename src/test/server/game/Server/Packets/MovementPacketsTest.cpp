@@ -23,6 +23,12 @@ namespace
         "000070400000A03F000020C02FD8BFF84001000020050603090207000400000CC1FF00000040410000F0402A000000"
         "0000C840317151112C0000002B0000006181210000C03F000088C04D0000000000B0400000403F000000BF000080BE"
         "0000803E44332211";
+    // Vehicle opcode sequences from the pinned 4.3.4 MovementStructures.cpp; the change-seats
+    // packets interleave the accessory GUID + seat as extra movement status elements.
+    std::string const VehicleDismissIdle = "00000040000040400000803F87A9800002030504030201";
+    std::string const VehicleDismissSparse = "0000004000004040000080BF85F0801100";
+    std::string const VehicleSeatsIdle = "000000400000803F0000404002A755FAC006030207050000050402090304030201";
+    std::string const VehicleSeatsSparse = "00000040000080BF00004040FF911CF00011110000";
 
     WorldPacket ClientPacket(OpcodeClient opcode, std::string const& hex)
     {
@@ -278,6 +284,61 @@ TEST(MovementPacketsTest, ReadsGroundMovementAndRoundTripsTheSameOpcodeLayout)
         MovementInfo info;
         EXPECT_THROW(WorldPackets::Movement::ReadGroundMovement(trailing, info, sequence),
             ByteBufferInvalidValueException) << fixture.Opcode;
+    }
+}
+
+TEST(MovementPacketsTest, ReadsVehicleControlMovementAndExtraElements)
+{
+    using namespace WorldPackets::Movement;
+
+    {
+        WorldPacket packet = ClientPacket(CMSG_DISMISS_CONTROLLED_VEHICLE, VehicleDismissIdle);
+        MovementInfo info;
+        ReadGroundMovement(packet, info, GetMovementSequence(CMSG_DISMISS_CONTROLLED_VEHICLE));
+        EXPECT_EQ(info.guid, ObjectGuid(uint64(0x01020304)));
+        EXPECT_FLOAT_EQ(info.pos.GetPositionX(), 1.0f);
+        EXPECT_FLOAT_EQ(info.pos.GetPositionY(), 2.0f);
+        EXPECT_FLOAT_EQ(info.pos.GetPositionZ(), 3.0f);
+        EXPECT_EQ(info.time, 0x01020304u);
+        EXPECT_EQ(packet.rpos(), packet.size());
+    }
+
+    {
+        WorldPacket packet = ClientPacket(CMSG_CHANGE_SEATS_ON_CONTROLLED_VEHICLE, VehicleSeatsIdle);
+        ExtraMovementStatusElement extra(GetChangeSeatsExtraSequence());
+        MovementInfo info;
+        ReadGroundMovement(packet, info, GetMovementSequence(CMSG_CHANGE_SEATS_ON_CONTROLLED_VEHICLE),
+            nullptr, &extra);
+        EXPECT_EQ(info.guid, ObjectGuid(uint64(0x01020304)));
+        EXPECT_FLOAT_EQ(info.pos.GetPositionX(), 1.0f);
+        EXPECT_FLOAT_EQ(info.pos.GetPositionY(), 2.0f);
+        EXPECT_FLOAT_EQ(info.pos.GetPositionZ(), 3.0f);
+        EXPECT_EQ(info.time, 0x01020304u);
+        EXPECT_EQ(extra.Data.guid, ObjectGuid(uint64(0x0807060504030201)));
+        EXPECT_EQ(extra.Data.byteData, 2);
+        EXPECT_EQ(packet.rpos(), packet.size());
+    }
+
+    {
+        // Sparse accessory GUID: zero bytes exercise the "no byte present" presence bits.
+        WorldPacket packet = ClientPacket(CMSG_CHANGE_SEATS_ON_CONTROLLED_VEHICLE, VehicleSeatsSparse);
+        ExtraMovementStatusElement extra(GetChangeSeatsExtraSequence());
+        MovementInfo info;
+        ReadGroundMovement(packet, info, GetMovementSequence(CMSG_CHANGE_SEATS_ON_CONTROLLED_VEHICLE),
+            nullptr, &extra);
+        EXPECT_EQ(info.guid, ObjectGuid(uint64(0x0010000000000001)));
+        EXPECT_EQ(extra.Data.guid, ObjectGuid(uint64(0x0010000000000001)));
+        EXPECT_EQ(extra.Data.byteData, -1);
+        EXPECT_EQ(packet.rpos(), packet.size());
+    }
+
+    {
+        WorldPacket packet = ClientPacket(CMSG_CHANGE_SEATS_ON_CONTROLLED_VEHICLE,
+            VehicleSeatsIdle.substr(0, VehicleSeatsIdle.size() - 8));
+        ExtraMovementStatusElement extra(GetChangeSeatsExtraSequence());
+        MovementInfo info;
+        EXPECT_THROW(ReadGroundMovement(packet, info, GetMovementSequence(CMSG_CHANGE_SEATS_ON_CONTROLLED_VEHICLE),
+            nullptr, &extra), ByteBufferException);
     }
 }
 

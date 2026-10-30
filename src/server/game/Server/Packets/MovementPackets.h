@@ -69,7 +69,32 @@ namespace WorldPackets
             MSESplineElevation,
             MSETimestamp,
             MSECounter,
+            MSEExtraElement,
+            MSEExtraFloat,
+            MSEExtraInt8,
+            MSEExtraTwoBits,
             MSEEnd,
+        };
+
+        // 4.3.4 packs some opcode-specific values into extra elements interleaved with the main
+        // movement status; MSEExtraElement consumes one entry of this sequence.
+        class ExtraMovementStatusElement
+        {
+        public:
+            explicit ExtraMovementStatusElement(MovementStatusElements const* elements) : _elements(elements) { }
+
+            void ReadNextElement(WorldPacket& packet);
+
+            struct
+            {
+                ObjectGuid guid;
+                float floatData = 0.0f;
+                int8 byteData = 0;
+            } Data;
+
+        private:
+            MovementStatusElements const* _elements;
+            uint32 _index = 0;
         };
 
         uint32 MovementFlagsToClient(uint32 flags);
@@ -77,8 +102,9 @@ namespace WorldPackets
         void ReadHeartbeat(WorldPacket& packet, MovementInfo& info);
         void WriteMovementUpdate(WorldPacket& packet, MovementInfo const& info);
         MovementStatusElements const* GetMovementSequence(uint16 opcode);
+        MovementStatusElements const* GetChangeSeatsExtraSequence();
         void ReadGroundMovement(WorldPacket& packet, MovementInfo& info, MovementStatusElements const* sequence,
-            uint32* counter = nullptr);
+            uint32* counter = nullptr, ExtraMovementStatusElement* extras = nullptr);
         void WriteGroundMovement(WorldPacket& packet, MovementInfo const& info, MovementStatusElements const* sequence,
             uint32 counter = 0);
         MovementStatusElements const* GetMovementFlagSequence(uint16 opcode);
