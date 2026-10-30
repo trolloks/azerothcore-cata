@@ -1197,7 +1197,8 @@ WorldObject::WorldObject() : WorldLocation(),
     LastUsedScriptID(0), m_name(""), m_isActive(false), _visibilityDistanceOverrideType(VisibilityDistanceType::Normal), m_zoneScript(nullptr),
     _zoneId(0), _areaId(0), _floorZ(INVALID_HEIGHT), _outdoors(false), _liquidData(), _updatePositionData(false), m_transport(nullptr),
     m_currMap(nullptr), _heartbeatTimer(HEARTBEAT_INTERVAL), m_InstanceId(0), m_phaseMask(PHASEMASK_NORMAL), m_useCombinedPhases(true),
-    m_spawnPhaseId(0), m_spawnPhaseGroup(0), m_hasSpawnPhase(false), m_notifyflags(0), m_executed_notifies(0),
+    m_spawnPhaseId(0), m_spawnPhaseGroup(0), m_hasSpawnPhase(false), m_hasPhaseShift(false), m_notifyflags(0),
+    m_executed_notifies(0),
     _objectVisibilityContainer(this)
 {
     m_serverSideVisibility.SetValue(SERVERSIDE_VISIBILITY_GHOST, GHOST_VISIBILITY_ALIVE | GHOST_VISIBILITY_GHOST);
@@ -2107,25 +2108,220 @@ std::vector<uint32> GetSpawnPhases(uint32 phaseId, uint32 phaseGroup)
 }
 }
 
+bool WorldObject::AddPhaseToSet(uint32 phaseId)
+{
+    if (!phaseId)
+        return false;
+
+    m_hasPhaseShift = true;
+    uint32& references = m_phaseRefs[phaseId];
+    if (references++)
+        return false;
+
+    m_phases.push_back(phaseId);
+    return true;
+}
+
+bool WorldObject::RemovePhaseFromSet(uint32 phaseId)
+{
+    auto itr = m_phaseRefs.find(phaseId);
+    if (itr == m_phaseRefs.end())
+        return false;
+
+    if (--itr->second)
+        return false;
+
+    m_phaseRefs.erase(itr);
+    m_phases.erase(std::find(m_phases.begin(), m_phases.end(), phaseId));
+    return true;
+}
+
+bool WorldObject::GetEffectivePhases(std::vector<uint32>& phases) const
+{
+    if (!m_hasSpawnPhase && !m_hasPhaseShift)
+        return false;
+
+    if (m_hasSpawnPhase)
+    {
+        std::vector<uint32> spawn = GetSpawnPhases(m_spawnPhaseId, m_spawnPhaseGroup);
+        phases.insert(phases.end(), spawn.begin(), spawn.end());
+    }
+
+    phases.insert(phases.end(), m_phases.begin(), m_phases.end());
+
+    if (WorldObject const* source = GetPhaseShiftSource())
+    {
+        if (Player const* player = source->ToPlayer())
+        {
+            phases.insert(phases.end(), player->GetPhases().begin(), player->GetPhases().end());
+            if (player->IsUnphased())
+                phases.push_back(DEFAULT_PHASE);
+        }
+        else
+        {
+            std::vector<uint32> inherited;
+            if (source->GetEffectivePhases(inherited))
+                phases.insert(phases.end(), inherited.begin(), inherited.end());
+            else
+                phases.push_back(DEFAULT_PHASE);
+        }
+    }
+    else
+    {
+        phases.insert(phases.end(), m_inheritedPhases.begin(), m_inheritedPhases.end());
+        if (m_inheritedUnphased)
+            phases.push_back(DEFAULT_PHASE);
+    }
+
+    if (phases.empty())
+        phases.push_back(DEFAULT_PHASE);
+
+    return true;
+}
+
+void WorldObject::AddPhase(uint32 phaseId, bool update)
+{
+    if (!AddPhaseToSet(phaseId))
+        return;
+
+    if (update)
+    {
+        OnPhaseChanged();
+        UpdateObjectVisibility();
+    }
+}
+
+void WorldObject::AddPhaseGroup(uint32 phaseGroupId, bool update)
+{
+    bool changed = false;
+    for (uint32 phaseId : GetPhasesForGroup(phaseGroupId))
+        changed = AddPhaseToSet(phaseId) || changed;
+
+    if (changed && update)
+    {
+        OnPhaseChanged();
+        UpdateObjectVisibility();
+    }
+}
+
+void WorldObject::RemovePhase(uint32 phaseId, bool update)
+{
+    if (!RemovePhaseFromSet(phaseId))
+        return;
+
+    if (update)
+    {
+        OnPhaseChanged();
+        UpdateObjectVisibility();
+    }
+}
+
+void WorldObject::RemovePhaseGroup(uint32 phaseGroupId, bool update)
+{
+    bool changed = false;
+    for (uint32 phaseId : GetPhasesForGroup(phaseGroupId))
+        changed = RemovePhaseFromSet(phaseId) || changed;
+
+    if (changed && update)
+    {
+        OnPhaseChanged();
+        UpdateObjectVisibility();
+    }
+}
+
+void WorldObject::InheritPhasesFrom(WorldObject const* source)
+{
+    // Only the inherited part is replaced: the object's own aura/script grants keep their refs.
+    m_inheritedPhases.clear();
+    m_inheritedUnphased = false;
+
+    if (Player const* player = source->ToPlayer())
+    {
+        // A player's set is the authoritative shift (unphased owners still see the summon).
+        m_inheritedPhases.assign(player->GetPhases().begin(), player->GetPhases().end());
+        m_inheritedUnphased = player->IsUnphased();
+    }
+    else
+    {
+        std::vector<uint32> phases;
+        if (source->GetEffectivePhases(phases))
+        {
+            // 169 can be the implicit unphased visibility fallback; keep it out of exact membership.
+            bool const explicitDefault = source->HasPhase(DEFAULT_PHASE);
+            bool const implicitDefault = !explicitDefault
+                && std::find(phases.begin(), phases.end(), DEFAULT_PHASE) != phases.end();
+            if (implicitDefault)
+                phases.erase(std::remove(phases.begin(), phases.end(), DEFAULT_PHASE), phases.end());
+
+            m_inheritedPhases = std::move(phases);
+            m_inheritedUnphased = implicitDefault || m_inheritedPhases.empty();
+        }
+        else
+            m_inheritedUnphased = true;
+    }
+
+    m_spawnPhaseId = 0;
+    m_spawnPhaseGroup = 0;
+    m_hasSpawnPhase = false;
+    m_hasPhaseShift = true;
+
+    if (IsInWorld())
+        UpdateObjectVisibility();
+
+    // Nested summons follow this object's new shift too.
+    RefreshPhaseSummons();
+}
+
+void WorldObject::RefreshPhaseSummons()
+{
+    for (auto itr = m_phaseSummons.begin(); itr != m_phaseSummons.end();)
+    {
+        Creature* summon = ObjectAccessor::GetCreature(*this, *itr);
+        if (!summon)
+        {
+            itr = m_phaseSummons.erase(itr);
+            continue;
+        }
+
+        summon->InheritPhasesFrom(this);
+        summon->UpdateObjectVisibility();
+        ++itr;
+    }
+}
+
+void WorldObject::OnPhaseChanged()
+{
+    RefreshPhaseSummons();
+}
+
+void WorldObject::RegisterPhaseSummon(Creature* summon)
+{
+    m_phaseSummons.insert(summon->GetGUID());
+}
+
+void WorldObject::UnregisterPhaseSummon(Creature* summon)
+{
+    m_phaseSummons.erase(summon->GetGUID());
+}
+
 bool WorldObject::InSamePhase(WorldObject const* obj) const
 {
-    // Players and DB spawns compare Cata phase sets; dynamic objects keep the legacy mask gate
-    // (e.g. transports hidden behind mask 2 until cluster synchronization completes).
     if (Player const* player = ToPlayer())
-        return obj->ToPlayer() || obj->HasSpawnPhase() ? obj->IsPhaseVisibleTo(player)
-                                                       : InSamePhase(obj->GetPhaseMask());
+        return obj->IsPhaseVisibleTo(player);
     if (Player const* player = obj->ToPlayer())
-        return m_hasSpawnPhase ? IsPhaseVisibleTo(player) : InSamePhase(obj->GetPhaseMask());
+        return IsPhaseVisibleTo(player);
 
     // Scripts still hide objects with SetPhaseMask (instance portals, Valithria, Zuramat...);
     // keep that legacy gate alongside the Cata comparison.
     if (!InSamePhase(obj->GetPhaseMask()))
         return false;
-    if (!m_hasSpawnPhase || !obj->m_hasSpawnPhase)
+
+    std::vector<uint32> mine, theirs;
+    bool const mineGated = GetEffectivePhases(mine);
+    bool const theirsGated = obj->GetEffectivePhases(theirs);
+    if (!mineGated || !theirsGated)
         return true;
 
-    std::vector<uint32> const mine = GetSpawnPhases(m_spawnPhaseId, m_spawnPhaseGroup);
-    std::vector<uint32> const theirs = GetSpawnPhases(obj->m_spawnPhaseId, obj->m_spawnPhaseGroup);
     for (uint32 phaseId : mine)
         if (std::find(theirs.begin(), theirs.end(), phaseId) != theirs.end())
             return true;
@@ -2135,11 +2331,20 @@ bool WorldObject::InSamePhase(WorldObject const* obj) const
 
 bool WorldObject::HasPhase(uint32 phaseId) const
 {
-    if (Player const* player = ToPlayer())
+    if (std::find(m_phases.begin(), m_phases.end(), phaseId) != m_phases.end())
+        return true;
+
+    // Inherited membership follows the live owner; the stored snapshot is only a fallback.
+    if (WorldObject const* source = GetPhaseShiftSource())
     {
-        std::vector<uint32> const& phases = player->GetPhases();
-        return std::find(phases.begin(), phases.end(), phaseId) != phases.end();
+        if (source->HasPhase(phaseId))
+            return true;
     }
+    else if (std::find(m_inheritedPhases.begin(), m_inheritedPhases.end(), phaseId) != m_inheritedPhases.end())
+        return true;
+
+    if (ToPlayer())
+        return false;
 
     // The spawn phase field is an exact Phase.dbc id; only the group field expands.
     if (m_spawnPhaseId == phaseId)
@@ -2180,12 +2385,13 @@ bool WorldObject::IsPhaseVisibleTo(Player const* player) const
         return false;
     }
 
-    if (!m_hasSpawnPhase)
+    std::vector<uint32> phases;
+    if (!GetEffectivePhases(phases))
         return true;
 
     bool unphased = player->IsUnphased();
     std::vector<uint32> const& playerPhases = player->GetPhases();
-    for (uint32 phaseId : GetSpawnPhases(m_spawnPhaseId, m_spawnPhaseGroup))
+    for (uint32 phaseId : phases)
         if (std::find(playerPhases.begin(), playerPhases.end(), phaseId) != playerPhases.end()
             || (unphased && phaseId == DEFAULT_PHASE))
             return true;

@@ -41,6 +41,15 @@ WorldObject* TempSummon::GetSummoner() const
     return m_summonerGUID ? ObjectAccessor::GetWorldObject(*this, m_summonerGUID) : nullptr;
 }
 
+WorldObject const* TempSummon::GetPhaseShiftSource() const
+{
+    if (Unit* summoner = GetSummonerUnit())
+        return summoner;
+    if (IsPet())
+        return GetOwner();
+    return nullptr;
+}
+
 Unit* TempSummon::GetSummonerUnit() const
 {
     if (WorldObject* summoner = GetSummoner())
@@ -203,8 +212,14 @@ void TempSummon::InitStats(uint32 duration)
 
     Unit* owner = GetSummonerUnit();
     if (owner)
+    {
+        InheritPhasesFrom(owner);
+
+        owner->RegisterPhaseSummon(this);
+
         if (Player* player = owner->ToPlayer())
             sScriptMgr->OnPlayerBeforeTempSummonInitStats(player, this, duration);
+    }
 
     m_timer = duration;
     m_lifetime = duration;
@@ -330,6 +345,9 @@ bool ForcedUnsummonDelayEvent::Execute(uint64 /*e_time*/, uint32 /*p_time*/)
 
 void TempSummon::RemoveFromWorld()
 {
+    if (Unit* summoner = GetSummonerUnit())
+        summoner->UnregisterPhaseSummon(this);
+
     if (!IsInWorld())
         return;
 

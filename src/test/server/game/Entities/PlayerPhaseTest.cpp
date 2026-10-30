@@ -164,3 +164,104 @@ TEST_F(PlayerPhaseTest, HasPhaseIsExactMembership)
     unphased->SetSpawnPhaseId(0);
     EXPECT_FALSE(unphased->HasPhase(DEFAULT_PHASE));
 }
+
+TEST_F(PlayerPhaseTest, CreatureAuraPhasesAffectVisibility)
+{
+    TestPlayer* unphased = CreateTestPlayer(18);
+    TestPlayer* auraPhase = CreateTestPlayer(19);
+    auraPhase->AddPhase(170, false);
+    TestPlayer* spawnPhase = CreateTestPlayer(28);
+    spawnPhase->AddPhase(171, false);
+
+    TestCreature* creature = CreateTestCreature(20, 900009, TEST_FACTION_HOSTILE_TO_ALL);
+    creature->SetSpawnPhaseId(171);
+    creature->AddPhase(170, false);
+
+    EXPECT_FALSE(creature->IsPhaseVisibleTo(unphased));
+    EXPECT_TRUE(creature->IsPhaseVisibleTo(auraPhase));
+    EXPECT_TRUE(creature->IsPhaseVisibleTo(spawnPhase));
+    EXPECT_TRUE(creature->HasPhase(170));
+
+    creature->RemovePhase(170, false);
+    EXPECT_FALSE(creature->IsPhaseVisibleTo(unphased));
+    EXPECT_FALSE(creature->IsPhaseVisibleTo(auraPhase));
+    EXPECT_TRUE(creature->IsPhaseVisibleTo(spawnPhase));
+}
+
+TEST_F(PlayerPhaseTest, SummonsInheritOwnerPhases)
+{
+    TestPlayer* owner = CreateTestPlayer(21);
+    owner->AddPhase(171, false);
+    TestPlayer* same = CreateTestPlayer(22);
+    same->AddPhase(171, false);
+    TestPlayer* other = CreateTestPlayer(23);
+    other->AddPhase(172, false);
+
+    TestCreature* summon = CreateTestCreature(24, 900010, TEST_FACTION_HOSTILE_TO_ALL);
+    summon->InheritPhasesFrom(owner);
+
+    EXPECT_TRUE(summon->IsPhaseVisibleTo(same));
+    EXPECT_FALSE(summon->IsPhaseVisibleTo(other));
+    EXPECT_TRUE(summon->HasPhase(171));
+
+    TestPlayer* unphasedOwner = CreateTestPlayer(25);
+    TestCreature* unphasedSummon = CreateTestCreature(26, 900011, TEST_FACTION_HOSTILE_TO_ALL);
+    unphasedSummon->InheritPhasesFrom(unphasedOwner);
+    TestPlayer* unphased = CreateTestPlayer(27);
+    EXPECT_TRUE(unphasedSummon->IsPhaseVisibleTo(unphased));
+    EXPECT_FALSE(unphasedSummon->IsPhaseVisibleTo(same));
+}
+
+TEST_F(PlayerPhaseTest, InheritanceKeepsOwnPhaseGrants)
+{
+    TestPlayer* owner = CreateTestPlayer(29);
+    owner->AddPhase(171, false);
+    TestPlayer* ownPhase = CreateTestPlayer(30);
+    ownPhase->AddPhase(170, false);
+    TestPlayer* inheritedPhase = CreateTestPlayer(31);
+    inheritedPhase->AddPhase(171, false);
+
+    TestCreature* summon = CreateTestCreature(32, 900012, TEST_FACTION_HOSTILE_TO_ALL);
+    summon->AddPhase(170, false); // own aura grant
+    summon->InheritPhasesFrom(owner);
+
+    EXPECT_TRUE(summon->IsPhaseVisibleTo(ownPhase));
+    EXPECT_TRUE(summon->IsPhaseVisibleTo(inheritedPhase));
+    EXPECT_TRUE(summon->HasPhase(170));
+    EXPECT_TRUE(summon->HasPhase(171));
+
+    summon->RemovePhase(170, false);
+    EXPECT_FALSE(summon->IsPhaseVisibleTo(ownPhase));
+    EXPECT_TRUE(summon->IsPhaseVisibleTo(inheritedPhase));
+}
+
+TEST_F(PlayerPhaseTest, UnphasedOwnerSummonKeepsOwnGrantsVisible)
+{
+    TestPlayer* owner = CreateTestPlayer(33);
+    TestPlayer* ownPhase = CreateTestPlayer(35);
+    ownPhase->AddPhase(170, false);
+    TestPlayer* otherPhase = CreateTestPlayer(36);
+    otherPhase->AddPhase(172, false);
+
+    TestCreature* summon = CreateTestCreature(34, 900013, TEST_FACTION_HOSTILE_TO_ALL);
+    summon->AddPhase(170, false);
+    summon->InheritPhasesFrom(owner);
+
+    EXPECT_TRUE(summon->IsPhaseVisibleTo(owner));
+    EXPECT_TRUE(summon->IsPhaseVisibleTo(ownPhase));
+    EXPECT_FALSE(summon->IsPhaseVisibleTo(otherPhase));
+    EXPECT_FALSE(summon->HasPhase(DEFAULT_PHASE)); // unphased visibility is not a grant
+}
+
+TEST_F(PlayerPhaseTest, UnphasedCreatureOwnerDoesNotGrantPhaseMembership)
+{
+    TestCreature* owner = CreateTestCreature(37, 900014, TEST_FACTION_HOSTILE_TO_ALL);
+    owner->SetSpawnPhaseId(0);
+
+    TestCreature* summon = CreateTestCreature(38, 900015, TEST_FACTION_HOSTILE_TO_ALL);
+    summon->InheritPhasesFrom(owner);
+
+    EXPECT_FALSE(summon->HasPhase(DEFAULT_PHASE));
+    TestPlayer* unphased = CreateTestPlayer(39);
+    EXPECT_TRUE(summon->IsPhaseVisibleTo(unphased)); // unphased visibility, not a grant
+}
