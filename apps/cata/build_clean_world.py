@@ -541,7 +541,11 @@ def import_phase_data(container, user, password, target, source):
     applied = {"phase_area": copy_table(container, user, password, target, source, "phase_area",
                                         replace=True),
                "phase_conditions": copy_table(container, user, password, target, source, "conditions",
-                                              where="SourceTypeOrReferenceId=26"),
+                                              where="SourceTypeOrReferenceId IN (25,26)"),
+               "terrain_swap_defaults": copy_table(container, user, password, target, source,
+                                                    "terrain_swap_defaults"),
+               "terrain_worldmap": copy_table(container, user, password, target, source,
+                                               "terrain_worldmap"),
                # Area auras drive quest-state detection (e.g. Shadowglen 49416/49417/60922).
                "spell_area": copy_table(container, user, password, target, source, "spell_area")}
     # TDB's spell_area has no autocast column. Enable it only for the invisibility-detection

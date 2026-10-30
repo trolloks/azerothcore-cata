@@ -1600,11 +1600,19 @@ bool ConditionMgr::isSourceTypeValid(Condition* cond)
 
     switch (cond->SourceType)
     {
-    case CONDITION_SOURCE_TYPE_TERRAIN_SWAP:
     case CONDITION_SOURCE_TYPE_GRAVEYARD:
     {
         LOG_ERROR("sql.sql", "ConditionSourceType {} in `condition` table is not supported on 3.3.5a, ignoring.", uint32(cond->SourceType));
         return false;
+    }
+    case CONDITION_SOURCE_TYPE_TERRAIN_SWAP:
+    {
+        if (!sMapStore.LookupEntry(cond->SourceEntry))
+        {
+            LOG_ERROR("sql.sql", "SourceEntry {} in a TERRAIN_SWAP condition does not exist in Map.dbc, ignoring.", cond->SourceEntry);
+            return false;
+        }
+        break;
     }
     case CONDITION_SOURCE_TYPE_PHASE:
     {

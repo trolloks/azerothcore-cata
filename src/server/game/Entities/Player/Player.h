@@ -1907,6 +1907,8 @@ public:
     bool UpdatePhasesForArea(uint32 areaId);
     void SendPhaseShift();
     void OnPhaseChanged() override;
+    // Re-evaluate the terrain swaps of the current map from their conditions.
+    void UpdateTerrainSwaps();
 
     void UpdateZoneDependentAuras(uint32 zone_id);    // zones
     void UpdateAreaDependentAuras(uint32 area_id);    // subzones
@@ -2990,6 +2992,8 @@ private:
     uint32 m_zoneUpdateId;
     uint32 m_zoneUpdateTimer;
     uint32 m_areaUpdateId;
+    std::vector<uint32> m_visibleMaps;   // active terrain swap map ids
+    std::vector<uint32> m_uiMapPhases;   // UI world-map areas of the active swaps
 
     uint32 m_deathTimer;
     time_t m_deathExpireTime;

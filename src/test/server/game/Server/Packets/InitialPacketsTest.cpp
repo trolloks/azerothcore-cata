@@ -127,6 +127,23 @@ TEST(InitialPacketsTest, WritesEmptyAndNonEmptyPhaseShiftChange)
     EXPECT_EQ(uint32(payload->contents()[18]) | uint32(payload->contents()[19]) << 8, 4u); // 2 phases * 2 bytes
     EXPECT_EQ(uint16(payload->contents()[22]) | uint16(payload->contents()[23]) << 8, 125u);
     EXPECT_EQ(uint16(payload->contents()[24]) | uint16(payload->contents()[25]) << 8, 171u);
+
+    WorldPackets::Misc::PhaseShiftChange withMaps;
+    withMaps.Client = guid;
+    withMaps.UiMapPhaseIDs = { 545, 678 };
+    withMaps.VisibleMapIDs = { 638, 655 };
+    WorldPacket const* mapPayload = withMaps.Write();
+    EXPECT_EQ(mapPayload->size(), emptyPayload->size() + 8u); // 2 UI + 2 visible entries
+    EXPECT_EQ(uint32(mapPayload->contents()[3]) | uint32(mapPayload->contents()[4]) << 8 |
+                  uint32(mapPayload->contents()[5]) << 16 | uint32(mapPayload->contents()[6]) << 24,
+              4u); // UiMapPhaseIDs byte size
+    EXPECT_EQ(uint16(mapPayload->contents()[7]) | uint16(mapPayload->contents()[8]) << 8, 545u);
+    EXPECT_EQ(uint16(mapPayload->contents()[9]) | uint16(mapPayload->contents()[10]) << 8, 678u);
+    EXPECT_EQ(uint32(mapPayload->contents()[28]) | uint32(mapPayload->contents()[29]) << 8 |
+                  uint32(mapPayload->contents()[30]) << 16 | uint32(mapPayload->contents()[31]) << 24,
+              4u); // VisibleMapIDs byte size
+    EXPECT_EQ(uint16(mapPayload->contents()[32]) | uint16(mapPayload->contents()[33]) << 8, 638u);
+    EXPECT_EQ(uint16(mapPayload->contents()[34]) | uint16(mapPayload->contents()[35]) << 8, 655u);
 }
 
 TEST(InitialPacketsTest, WritesLoginVerifyWorld)

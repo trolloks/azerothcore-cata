@@ -319,18 +319,24 @@ WorldPacket const* WorldPackets::Misc::PhaseShiftChange::Write()
 
     _worldPacket.WriteByteSeq(Client[7]);
     _worldPacket.WriteByteSeq(Client[4]);
-    _worldPacket << uint32(0); // UiMapPhaseIDs byte size: none
+    _worldPacket << uint32(UiMapPhaseIDs.size() * 2); // UiMapPhaseIDs byte size
+    for (uint16 uiMapPhaseId : UiMapPhaseIDs)
+        _worldPacket << uiMapPhaseId;
     _worldPacket.WriteByteSeq(Client[1]);
     _worldPacket << uint32(PhaseShiftFlags);
     _worldPacket.WriteByteSeq(Client[2]);
     _worldPacket.WriteByteSeq(Client[6]);
-    _worldPacket << uint32(0); // PreloadMapIDs byte size: none
+    _worldPacket << uint32(PreloadMapIDs.size() * 2); // PreloadMapIDs byte size
+    for (uint16 preloadMapId : PreloadMapIDs)
+        _worldPacket << preloadMapId;
     _worldPacket << uint32(Phases.size() * 2); // Phases byte size
-    for (uint32 phaseId : Phases)
-        _worldPacket << uint16(phaseId);
+    for (uint16 phaseId : Phases)
+        _worldPacket << phaseId;
     _worldPacket.WriteByteSeq(Client[3]);
     _worldPacket.WriteByteSeq(Client[0]);
-    _worldPacket << uint32(0); // VisibleMapIDs byte size: no terrain swaps
+    _worldPacket << uint32(VisibleMapIDs.size() * 2); // VisibleMapIDs byte size
+    for (uint16 visibleMapId : VisibleMapIDs)
+        _worldPacket << visibleMapId;
     _worldPacket.WriteByteSeq(Client[5]);
 
     return &_worldPacket;

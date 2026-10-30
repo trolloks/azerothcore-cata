@@ -1397,6 +1397,8 @@ bool Player::UpdatePhasesForArea(uint32 areaId)
             break;
     }
 
+    UpdateTerrainSwaps();
+
     if (m_phases != oldPhases)
     {
         OnPhaseChanged();
@@ -1412,7 +1414,43 @@ void Player::SendPhaseShift()
     phaseShift.Client = GetGUID();
     phaseShift.PhaseShiftFlags = IsUnphased() ? 0x8 /*Unphased*/ : 0x0;
     phaseShift.Phases.assign(m_phases.begin(), m_phases.end());
+    phaseShift.VisibleMapIDs.assign(m_visibleMaps.begin(), m_visibleMaps.end());
+    phaseShift.UiMapPhaseIDs.assign(m_uiMapPhases.begin(), m_uiMapPhases.end());
     SendDirectMessage(phaseShift.Write());
+}
+
+void Player::UpdateTerrainSwaps()
+{
+    std::vector<uint32> visibleMaps;
+    std::vector<uint32> uiMapPhases;
+
+    // UI-map phases apply on every map; only the visible terrain ids are map-scoped.
+    for (auto const& [mapId, swaps] : sObjectMgr->GetTerrainSwaps())
+    {
+        for (ObjectMgr::TerrainSwapInfo const* info : swaps)
+        {
+            ConditionList conditions = sConditionMgr->GetConditionsForNotGroupedEntry(
+                CONDITION_SOURCE_TYPE_TERRAIN_SWAP, info->Id);
+            if (!conditions.empty() && !sConditionMgr->IsObjectMeetToConditions(this, conditions))
+                continue;
+
+            if (mapId == GetMapId())
+                visibleMaps.push_back(info->Id);
+            uiMapPhases.insert(uiMapPhases.end(), info->UiMapPhaseIDs.begin(), info->UiMapPhaseIDs.end());
+        }
+    }
+
+    std::sort(visibleMaps.begin(), visibleMaps.end());
+    visibleMaps.erase(std::unique(visibleMaps.begin(), visibleMaps.end()), visibleMaps.end());
+    std::sort(uiMapPhases.begin(), uiMapPhases.end());
+    uiMapPhases.erase(std::unique(uiMapPhases.begin(), uiMapPhases.end()), uiMapPhases.end());
+
+    if (visibleMaps != m_visibleMaps || uiMapPhases != m_uiMapPhases)
+    {
+        m_visibleMaps = std::move(visibleMaps);
+        m_uiMapPhases = std::move(uiMapPhases);
+        SendPhaseShift();
+    }
 }
 
 void Player::OnPhaseChanged()
