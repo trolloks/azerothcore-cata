@@ -420,6 +420,18 @@ bool Condition::Meets(ConditionSourceInfo& sourceInfo)
         condMeets = object->GetPhaseMask() & ConditionValue1;
         break;
     }
+    case CONDITION_CATA_PHASE_ID:
+    {
+        for (uint32 phaseId : GetPhasesForGroup(ConditionValue1))
+        {
+            if (object->HasPhase(phaseId))
+            {
+                condMeets = true;
+                break;
+            }
+        }
+        break;
+    }
     case CONDITION_TITLE:
     {
         if (Unit* unit = object->ToUnit())
@@ -760,6 +772,7 @@ uint32 Condition::GetSearcherTypeMaskForCondition()
         mask |= GRID_MAP_TYPE_MASK_ALL;
         break;
     case CONDITION_PHASEMASK:
+    case CONDITION_CATA_PHASE_ID:
         mask |= GRID_MAP_TYPE_MASK_ALL;
         break;
     case CONDITION_TITLE:
@@ -2535,6 +2548,16 @@ bool ConditionMgr::isConditionTypeValid(Condition* cond)
             LOG_ERROR("sql.sql", "Phasemask condition has useless data in value2 ({})!", cond->ConditionValue2);
         if (cond->ConditionValue3)
             LOG_ERROR("sql.sql", "Phasemask condition has useless data in value3 ({})!", cond->ConditionValue3);
+        break;
+    }
+    case CONDITION_CATA_PHASE_ID:
+    {
+        if (cond->ConditionValue2)
+            LOG_ERROR("sql.sql", "Cata phase condition has useless data in value2 ({})!", cond->ConditionValue2);
+        if (cond->ConditionValue3)
+            LOG_ERROR("sql.sql", "Cata phase condition has useless data in value3 ({})!", cond->ConditionValue3);
+        if (!IsValidPhaseOrPhaseGroupId(cond->ConditionValue1))
+            LOG_ERROR("sql.sql", "Cata phase condition has invalid phase/group id {}!", cond->ConditionValue1);
         break;
     }
     case CONDITION_TITLE:

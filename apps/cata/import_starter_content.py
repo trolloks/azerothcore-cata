@@ -1219,6 +1219,9 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         for column in columns_:
             if shift and column == "SourceEntry":
                 selected.append(f"(c.{quote(column)} - {shift})")
+            elif column == "ConditionTypeOrReference":
+                # TDB 434 type 26 is a 4.3.4 phase/group id; AC's type 26 is the legacy mask.
+                selected.append("IF(c.ConditionTypeOrReference=26, 108, c.ConditionTypeOrReference)")
             elif column == "ConditionValue3":
                 selected.append("CASE WHEN c.ConditionTypeOrReference=31 THEN "
                                 "IF(c.ConditionValue1=3, IFNULL(mc3.dst_guid, c.ConditionValue3), "

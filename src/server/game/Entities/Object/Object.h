@@ -561,6 +561,8 @@ public:
     [[nodiscard]] uint32 GetSpawnPhaseId() const { return m_spawnPhaseId; }
     [[nodiscard]] bool HasSpawnPhase() const { return m_hasSpawnPhase; }
     [[nodiscard]] bool IsPhaseVisibleTo(Player const* player) const;
+    // Exact 4.3.4 phase membership (CONDITION_PHASEID): a phase-0 spawn has no phase set.
+    [[nodiscard]] bool HasPhase(uint32 phaseId) const;
 
     [[nodiscard]] uint32 GetZoneId() const;
     [[nodiscard]] uint32 GetAreaId() const;

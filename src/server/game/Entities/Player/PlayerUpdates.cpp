@@ -1299,21 +1299,48 @@ bool Player::UpdatePhasesForArea(uint32 areaId)
     m_phases.clear();
     m_phaseRefs.clear();
 
-    for (uint32 areaPhase : sObjectMgr->GetPhasesForArea(areaId))
-        for (uint32 phaseId : GetPhasesForGroup(areaPhase))
-        {
-            ConditionList conditions = sConditionMgr->GetConditionsForPhase(phaseId, areaId);
-            if (conditions.empty() || sConditionMgr->IsObjectMeetToConditions(this, conditions))
-                AddPhaseToSet(phaseId);
-        }
-
     // Area and quest refreshes must keep phases granted by active phase auras, like the 4.3.4
     // PhasingHandler::OnAreaChange does; otherwise UpdateArea drops them while the auras stay.
+    // Add them first so area conditions can test aura-granted phases.
     for (AuraEffect const* aurEff : GetAuraEffectsByType(SPELL_AURA_PHASE))
         AddPhaseToSet(uint32(aurEff->GetMiscValueB()));
     for (AuraEffect const* aurEff : GetAuraEffectsByType(SPELL_AURA_PHASE_GROUP))
         for (uint32 phaseId : GetPhasesForGroup(uint32(aurEff->GetMiscValueB())))
             AddPhaseToSet(phaseId);
+
+    // A row's condition can depend on a phase granted by another row, and phase_area has no
+    // order, so resolve to a fixed point instead of relying on row order.
+    std::vector<std::pair<uint32, ConditionList>> pending;
+    for (uint32 areaPhase : sObjectMgr->GetPhasesForArea(areaId))
+        for (uint32 phaseId : GetPhasesForGroup(areaPhase))
+            pending.emplace_back(phaseId, sConditionMgr->GetConditionsForPhase(phaseId, areaId));
+
+    std::vector<bool> granted(pending.size(), false);
+    for (size_t pass = 0; pass < pending.size() + 1; ++pass)
+    {
+        bool changed = false;
+        for (size_t i = 0; i < pending.size(); ++i)
+        {
+            auto const& [phaseId, conditions] = pending[i];
+            bool meets = conditions.empty() || sConditionMgr->IsObjectMeetToConditions(this, conditions);
+
+            if (meets && !granted[i])
+            {
+                AddPhaseToSet(phaseId);
+                granted[i] = true;
+                changed = true;
+            }
+            else if (!meets && granted[i])
+            {
+                RemovePhaseFromSet(phaseId);
+                granted[i] = false;
+                changed = true;
+            }
+        }
+
+        if (!changed)
+            break;
+    }
 
     if (m_phases != oldPhases)
     {

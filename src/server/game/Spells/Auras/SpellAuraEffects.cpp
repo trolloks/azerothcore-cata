@@ -1966,10 +1966,9 @@ void AuraEffect::HandlePhase(AuraApplication const* aurApp, uint8 mode, bool app
     if (!player)
         return; // shortcut: creature phase auras are not modelled yet (#180)
 
-    if (apply)
-        player->AddPhase(uint32(GetMiscValueB()));
-    else
-        player->RemovePhase(uint32(GetMiscValueB()));
+    // Auras are registered before this handler runs, so the refresh sees the new state and can
+    // re-evaluate area phases conditioned on aura-granted phases.
+    player->RefreshPhases();
 
     // call functions which may have additional effects after chainging state of unit
     // phase auras normally not expected at BG but anyway better check
@@ -1989,10 +1988,7 @@ void AuraEffect::HandlePhaseGroup(AuraApplication const* aurApp, uint8 mode, boo
     if (!player)
         return; // shortcut: creature phase auras are not modelled yet (#180)
 
-    if (apply)
-        player->AddPhaseGroup(uint32(GetMiscValueB()));
-    else
-        player->RemovePhaseGroup(uint32(GetMiscValueB()));
+    player->RefreshPhases();
 }
 
 /**********************/

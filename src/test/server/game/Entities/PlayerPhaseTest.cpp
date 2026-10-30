@@ -146,3 +146,21 @@ TEST_F(PlayerPhaseTest, LegacyMaskGateStillHidesScriptControlledObjects)
     hidden->SetPhaseMask(PHASEMASK_NORMAL, false);
     EXPECT_TRUE(hidden->IsPhaseVisibleTo(player));
 }
+
+TEST_F(PlayerPhaseTest, HasPhaseIsExactMembership)
+{
+    TestPlayer* player = CreateTestPlayer(15);
+    EXPECT_FALSE(player->HasPhase(DEFAULT_PHASE)); // unphased is not membership
+    player->AddPhase(170, false);
+    EXPECT_TRUE(player->HasPhase(170));
+    EXPECT_FALSE(player->HasPhase(DEFAULT_PHASE));
+
+    TestCreature* spawn = CreateTestCreature(16, 900007, TEST_FACTION_HOSTILE_TO_ALL);
+    spawn->SetSpawnPhaseId(DEFAULT_PHASE);
+    EXPECT_TRUE(spawn->HasPhase(DEFAULT_PHASE));
+    EXPECT_FALSE(spawn->HasPhase(170));
+
+    TestCreature* unphased = CreateTestCreature(17, 900008, TEST_FACTION_HOSTILE_TO_ALL);
+    unphased->SetSpawnPhaseId(0);
+    EXPECT_FALSE(unphased->HasPhase(DEFAULT_PHASE));
+}
