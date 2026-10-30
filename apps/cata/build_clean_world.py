@@ -126,6 +126,19 @@ def copy_smart_scripts(container, user, password, target, source):
                         f"SELECT {','.join(selected)} FROM `{source}`.smart_scripts s WHERE {where}")
 
 
+def copy_smart_waypoints(container, user, password, target, source):
+    """Copy the waypoint paths used by the copied WP_START actions (TDB keeps them in waypoints)."""
+    target_columns = columns(container, user, password, target, "waypoints")
+    source_columns = {name for name, _ in columns(container, user, password, source, "waypoints")}
+    names = [name for name, auto in target_columns if not auto and name in source_columns]
+    columns_sql = ",".join(f"`{name}`" for name in names)
+    return insert_count(container, user, password,
+                        f"INSERT IGNORE INTO `{target}`.waypoints ({columns_sql}) "
+                        f"SELECT {columns_sql} FROM `{source}`.waypoints w WHERE w.entry IN "
+                        f"(SELECT DISTINCT action_param2 FROM `{target}`.smart_scripts "
+                        f"WHERE action_type=53 AND action_param2<>0)")
+
+
 def derive_templates(container, user, password, target, source):
     """Fill the AC tables that TDB keeps as columns on creature_template."""
     counts = {}
@@ -535,6 +548,7 @@ def build_spawns(container, user, password, target, source):
         applied[table] = copy_table(container, user, password, target, source, table,
                                     RENAMES.get(table), SPAWN_GUID_COLUMNS.get(table, set()))
     applied["smart_scripts"] = copy_smart_scripts(container, user, password, target, source)
+    applied["waypoints"] = copy_smart_waypoints(container, user, password, target, source)
     applied.update(restore_addon_auras(container, user, password, target, source))
     applied.update(import_phase_data(container, user, password, target, source))
     applied.update(apply_starter_detections(container, user, password, target))
