@@ -1197,7 +1197,7 @@ WorldObject::WorldObject() : WorldLocation(),
     LastUsedScriptID(0), m_name(""), m_isActive(false), _visibilityDistanceOverrideType(VisibilityDistanceType::Normal), m_zoneScript(nullptr),
     _zoneId(0), _areaId(0), _floorZ(INVALID_HEIGHT), _outdoors(false), _liquidData(), _updatePositionData(false), m_transport(nullptr),
     m_currMap(nullptr), _heartbeatTimer(HEARTBEAT_INTERVAL), m_InstanceId(0), m_phaseMask(PHASEMASK_NORMAL), m_useCombinedPhases(true),
-    m_spawnPhaseId(0), m_hasSpawnPhase(false), m_notifyflags(0), m_executed_notifies(0),
+    m_spawnPhaseId(0), m_spawnPhaseGroup(0), m_hasSpawnPhase(false), m_notifyflags(0), m_executed_notifies(0),
     _objectVisibilityContainer(this)
 {
     m_serverSideVisibility.SetValue(SERVERSIDE_VISIBILITY_GHOST, GHOST_VISIBILITY_ALIVE | GHOST_VISIBILITY_GHOST);
@@ -2089,9 +2089,21 @@ bool WorldObject::CanSeeOrDetect(WorldObject const* obj, bool ignoreStealth, boo
 
 namespace
 {
-std::vector<uint32> GetSpawnPhases(uint32 phaseId)
+std::vector<uint32> GetSpawnPhases(uint32 phaseId, uint32 phaseGroup)
 {
-    return phaseId ? GetPhasesForGroup(phaseId) : std::vector<uint32>{ DEFAULT_PHASE };
+    std::vector<uint32> phases;
+    if (phaseId)
+        phases.push_back(phaseId);
+    if (phaseGroup)
+    {
+        std::vector<uint32> groupPhases = GetPhasesForGroup(phaseGroup);
+        phases.insert(phases.end(), groupPhases.begin(), groupPhases.end());
+    }
+
+    if (phases.empty())
+        phases.push_back(DEFAULT_PHASE);
+
+    return phases;
 }
 }
 
@@ -2112,8 +2124,8 @@ bool WorldObject::InSamePhase(WorldObject const* obj) const
     if (!m_hasSpawnPhase || !obj->m_hasSpawnPhase)
         return true;
 
-    std::vector<uint32> const mine = GetSpawnPhases(m_spawnPhaseId);
-    std::vector<uint32> const theirs = GetSpawnPhases(obj->m_spawnPhaseId);
+    std::vector<uint32> const mine = GetSpawnPhases(m_spawnPhaseId, m_spawnPhaseGroup);
+    std::vector<uint32> const theirs = GetSpawnPhases(obj->m_spawnPhaseId, obj->m_spawnPhaseGroup);
     for (uint32 phaseId : mine)
         if (std::find(theirs.begin(), theirs.end(), phaseId) != theirs.end())
             return true;
@@ -2129,11 +2141,16 @@ bool WorldObject::HasPhase(uint32 phaseId) const
         return std::find(phases.begin(), phases.end(), phaseId) != phases.end();
     }
 
-    if (!m_spawnPhaseId)
-        return false;
+    // The spawn phase field is an exact Phase.dbc id; only the group field expands.
+    if (m_spawnPhaseId == phaseId)
+        return true;
+    if (m_spawnPhaseGroup)
+    {
+        std::vector<uint32> const phases = GetPhasesForGroup(m_spawnPhaseGroup);
+        return std::find(phases.begin(), phases.end(), phaseId) != phases.end();
+    }
 
-    std::vector<uint32> const phases = GetPhasesForGroup(m_spawnPhaseId);
-    return std::find(phases.begin(), phases.end(), phaseId) != phases.end();
+    return false;
 }
 
 bool WorldObject::IsPhaseVisibleTo(Player const* player) const
@@ -2168,7 +2185,7 @@ bool WorldObject::IsPhaseVisibleTo(Player const* player) const
 
     bool unphased = player->IsUnphased();
     std::vector<uint32> const& playerPhases = player->GetPhases();
-    for (uint32 phaseId : GetSpawnPhases(m_spawnPhaseId))
+    for (uint32 phaseId : GetSpawnPhases(m_spawnPhaseId, m_spawnPhaseGroup))
         if (std::find(playerPhases.begin(), playerPhases.end(), phaseId) != playerPhases.end()
             || (unphased && phaseId == DEFAULT_PHASE))
             return true;

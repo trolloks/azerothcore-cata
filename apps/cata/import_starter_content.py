@@ -59,6 +59,39 @@ def spawn_scope(source, table, alias, zone, map_id, quest_ids):
             f"UNION SELECT id FROM {source}.{table}_questender WHERE quest IN ({quest_ids})))")
 
 
+def phase_group_only(dbc_dir):
+    """Phase ids that are only phase groups (PhaseXPhaseGroup minus Phase.dbc), from the client DBCs."""
+    if not dbc_dir:
+        return set()
+    base = Path(dbc_dir)
+
+    def rows(name):
+        data = (base / name).read_bytes()
+        if data[:4] != b"WDBC":
+            raise SystemExit(f"{name} in {dbc_dir} is not a WDBC file")
+        records, fields, record_size, _ = struct.unpack_from("<4I", data, 4)
+        return [struct.unpack_from(f"<{fields}I", data, 20 + i * record_size) for i in range(records)]
+
+    phases = {row[0] for row in rows("Phase.dbc")}
+    groups = {row[2] for row in rows("PhaseXPhaseGroup.dbc")}
+    return groups - phases
+
+
+def phase_group_members(dbc_dir):
+    """Map phase group id -> member phase ids from PhaseXPhaseGroup.dbc."""
+    if not dbc_dir:
+        return {}
+    data = (Path(dbc_dir) / "PhaseXPhaseGroup.dbc").read_bytes()
+    if data[:4] != b"WDBC":
+        raise SystemExit(f"PhaseXPhaseGroup.dbc in {dbc_dir} is not a WDBC file")
+    records, fields, record_size, _ = struct.unpack_from("<4I", data, 4)
+    members = {}
+    for i in range(records):
+        row = struct.unpack_from(f"<{fields}I", data, 20 + i * record_size)
+        members.setdefault(row[2], set()).add(row[1])
+    return members
+
+
 def spell_effects(dbc_dir, creature_effects=(28,)):
     """Return (creature entries by spell for the requested effects, trigger spells by spell) from SpellEffect.dbc."""
     if not dbc_dir:
@@ -204,9 +237,17 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
     pending SQL. A run interrupted after the spawn/script inserts should be
     replayed from the database dump; ownership is not persisted.
     """
+    group_members = phase_group_members(dbc_dir)
     report = {}
     if not quests:
         return report
+
+    # Phase conditions cannot be classified without the client DBCs; fail before any write so an
+    # apply run never leaves a partially imported world (#348).
+    if not dbc_dir and int(scalar(container, user, password,
+                                  f"SELECT COUNT(*) FROM {source}.conditions "
+                                  f"WHERE ConditionTypeOrReference=26")):
+        raise SystemExit("--dbc-dir is required to import TDB phase conditions (#348)")
     summoned, triggers = spell_effects(dbc_dir)
     quest_ids = ",".join(quests)
 
@@ -444,6 +485,7 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
     # paths, events and formations a failed earlier run left out (#213).
     imported_spawn_guids: dict[str, set[str]] = {"creature": set(), "gameobject": set()}
     report["phase_normalized"] = {"creature": 0, "gameobject": 0}
+    report["phase_group_normalized"] = {"creature": 0, "gameobject": 0}
 
     def import_spawns(table, id_column, entries):
         if not entries:
@@ -480,13 +522,33 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         new_guids = imported_spawn_guids[table] - before
         if new_guids:
             undefined = "PhaseId<>0"
+            area_groups, area_phase_ids = set(), set()
             if table_exists(container, user, password, target, "phase_area"):
-                undefined += f" AND PhaseId NOT IN (SELECT PhaseId FROM {target}.phase_area)"
+                area_phase_ids = {int(x) for x in fetch(container, user, password,
+                                                        f"SELECT DISTINCT PhaseId FROM {target}.phase_area")}
+                area_groups = {int(x) for x in fetch(container, user, password,
+                                                     f"SELECT DISTINCT PhaseGroup FROM {target}.phase_area")}
+                for group in area_groups:
+                    area_phase_ids |= group_members.get(group, set())
+                if area_phase_ids:
+                    undefined += f" AND PhaseId NOT IN ({','.join(map(str, sorted(area_phase_ids)))})"
             imported = ",".join(sorted(new_guids))
             rows = run(container, user, password,
                        f"UPDATE {target}.{table} SET PhaseId=0 "
                        f"WHERE guid IN ({imported}) AND {undefined}; SELECT ROW_COUNT()")
             report["phase_normalized"][table] = int(rows[-1][0]) if rows else 0
+
+            if "PhaseGroup" in target_names and group_members:
+                group_undefined = "PhaseGroup<>0"
+                if table_exists(container, user, password, target, "phase_area"):
+                    reachable = sorted(str(group) for group, members in group_members.items()
+                                       if group in area_groups or members & area_phase_ids)
+                    if reachable:
+                        group_undefined += f" AND PhaseGroup NOT IN ({','.join(reachable)})"
+                rows = run(container, user, password,
+                           f"UPDATE {target}.{table} SET PhaseGroup=0 "
+                           f"WHERE guid IN ({imported}) AND {group_undefined}; SELECT ROW_COUNT()")
+                report["phase_group_normalized"][table] = int(rows[-1][0]) if rows else 0
         if table == "creature" and not {"MovementType", "wander_distance"} - target_names:
             # The loader resets an unknown MovementType (TDB has 3) and an idle spawn's wander distance; store that.
             run(container, user, password,
@@ -1214,14 +1276,23 @@ def import_closure(container, user, password, target, source, zone, map_id, ques
         if quest_condition_entries:
             condition_filters.append((f"SourceTypeOrReferenceId=19 AND SourceEntry IN "
                                       f"({','.join(quest_condition_entries)})", 0))
+    group_only_phase_ids = phase_group_only(dbc_dir)
+
     def select_conditions(columns_, shift):
         selected = []
         for column in columns_:
             if shift and column == "SourceEntry":
                 selected.append(f"(c.{quote(column)} - {shift})")
             elif column == "ConditionTypeOrReference":
-                # TDB 434 type 26 is a 4.3.4 phase/group id; AC's type 26 is the legacy mask.
-                selected.append("IF(c.ConditionTypeOrReference=26, 108, c.ConditionTypeOrReference)")
+                # TDB 434 type 26 is a 4.3.4 phase id; AC's type 26 is the legacy mask. Values that
+                # are only a phase group become the group condition type so the meaning survives.
+                if group_only_phase_ids:
+                    ids = ",".join(map(str, sorted(group_only_phase_ids)))
+                    selected.append(f"IF(c.ConditionTypeOrReference=26, "
+                                    f"IF(c.ConditionValue1 IN ({ids}), 109, 108), "
+                                    f"c.ConditionTypeOrReference)")
+                else:
+                    selected.append("IF(c.ConditionTypeOrReference=26, 108, c.ConditionTypeOrReference)")
             elif column == "ConditionValue3":
                 selected.append("CASE WHEN c.ConditionTypeOrReference=31 THEN "
                                 "IF(c.ConditionValue1=3, IFNULL(mc3.dst_guid, c.ConditionValue3), "

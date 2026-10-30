@@ -2318,6 +2318,31 @@ void ObjectMgr::LoadGameObjectSummons()
     LOG_INFO("server.loading", " ");
 }
 
+namespace
+{
+// Worlds imported before #348 collapsed a TDB phase group into PhaseId (only when the source
+// PhaseId was 0). Move values that are group-only back; ids that are both a phase and a group
+// cannot be disambiguated from the collapsed column and need the clean-world rebuild.
+void MigrateLegacySpawnPhase(SpawnData& data, char const* table, uint32 spawnId)
+{
+    if (!data.phaseId || IsValidPhaseId(data.phaseId))
+        return;
+
+    if (IsValidPhaseGroupId(data.phaseId) && !data.phaseGroup)
+    {
+        LOG_DEBUG("sql.sql", "Table `{}` has spawn {} with phase group {} in `PhaseId`; moved to `PhaseGroup` (#348).",
+                  table, spawnId, data.phaseId);
+        data.phaseGroup = data.phaseId;
+        data.phaseId = 0;
+        return;
+    }
+
+    LOG_ERROR("sql.sql", "Table `{}` has spawn {} with non-existing phase id {} in `PhaseId`, set to 0.",
+              table, spawnId, data.phaseId);
+    data.phaseId = 0;
+}
+}
+
 void ObjectMgr::LoadCreatures()
 {
     uint32 oldMSTime = getMSTime();
@@ -2327,7 +2352,7 @@ void ObjectMgr::LoadCreatures()
                          //      10            11       12          13           14         15         16          17             18                 19                    20
                          "currentwaypoint, curhealth, curmana, MovementType, spawnMask, phaseMask, eventEntry, pool_entry, creature.npcflag, creature.unit_flags, creature.dynamicflags, "
                          //       21                     22
-                         "creature.ScriptName, creature.PhaseId "
+                         "creature.ScriptName, creature.PhaseId, creature.PhaseGroup "
                          "FROM creature "
                          "LEFT OUTER JOIN game_event_creature ON creature.guid = game_event_creature.guid "
                          "LEFT OUTER JOIN pool_creature ON creature.guid = pool_creature.guid");
@@ -2389,12 +2414,14 @@ void ObjectMgr::LoadCreatures()
         data.dynamicflags       = fields[20].Get<uint32>();
         data.ScriptId           = GetScriptId(fields[21].Get<std::string>());
         data.phaseId            = fields[22].Get<uint32>();
+        data.phaseGroup         = fields[23].Get<uint32>();
         data.spawnGroupId       = 0;
 
-        if (data.phaseId && !IsValidPhaseOrPhaseGroupId(data.phaseId))
+        MigrateLegacySpawnPhase(data, "creature", spawnId);
+        if (data.phaseGroup && !IsValidPhaseGroupId(data.phaseGroup))
         {
-            LOG_ERROR("sql.sql", "Table `creature` has creature (SpawnId: {}) with non-existing Phase/PhaseGroup id {} in `PhaseId` field, set to 0.", spawnId, data.phaseId);
-            data.phaseId = 0;
+            LOG_ERROR("sql.sql", "Table `creature` has creature (SpawnId: {}) with non-existing phase group id {} in `PhaseGroup` field, set to 0.", spawnId, data.phaseGroup);
+            data.phaseGroup = 0;
         }
 
         if (!data.ScriptId)
@@ -2588,7 +2615,7 @@ CreatureData const* ObjectMgr::LoadCreatureDataFromDB(ObjectGuid::LowType spawnI
     QueryResult result = WorldDatabase.Query("SELECT creature.guid, id, map, equipment_id, "
         "position_x, position_y, position_z, orientation, spawntimesecs, wander_distance, "
         "currentwaypoint, curhealth, curmana, MovementType, spawnMask, phaseMask, "
-        "creature.npcflag, creature.unit_flags, creature.dynamicflags, creature.ScriptName, creature.PhaseId "
+        "creature.npcflag, creature.unit_flags, creature.dynamicflags, creature.ScriptName, creature.PhaseId, creature.PhaseGroup "
         "FROM creature WHERE creature.guid = {}", spawnId);
 
     if (!result)
@@ -2625,12 +2652,14 @@ CreatureData const* ObjectMgr::LoadCreatureDataFromDB(ObjectGuid::LowType spawnI
     creatureData.dynamicflags     = fields[18].Get<uint32>();
     creatureData.ScriptId         = GetScriptId(fields[19].Get<std::string>());
     creatureData.phaseId          = fields[20].Get<uint32>();
+    creatureData.phaseGroup       = fields[21].Get<uint32>();
     creatureData.spawnGroupId     = 0;
 
-    if (creatureData.phaseId && !IsValidPhaseOrPhaseGroupId(creatureData.phaseId))
+    MigrateLegacySpawnPhase(creatureData, "creature", spawnId);
+    if (creatureData.phaseGroup && !IsValidPhaseGroupId(creatureData.phaseGroup))
     {
-        LOG_ERROR("sql.sql", "Table `creature` has creature (SpawnId: {}) with non-existing Phase/PhaseGroup id {} in `PhaseId` field, set to 0.", spawnId, creatureData.phaseId);
-        creatureData.phaseId = 0;
+        LOG_ERROR("sql.sql", "Table `creature` has creature (SpawnId: {}) with non-existing phase group id {} in `PhaseGroup` field, set to 0.", spawnId, creatureData.phaseGroup);
+        creatureData.phaseGroup = 0;
     }
 
     if (!creatureData.ScriptId)
@@ -2941,7 +2970,7 @@ void ObjectMgr::LoadGameobjects()
                          //   7          8          9          10         11             12            13     14         15         16          17
                          "rotation0, rotation1, rotation2, rotation3, spawntimesecs, animprogress, state, spawnMask, phaseMask, eventEntry, pool_entry, "
                          //   18                19
-                         "ScriptName, gameobject.PhaseId "
+                         "ScriptName, gameobject.PhaseId, gameobject.PhaseGroup "
                          "FROM gameobject LEFT OUTER JOIN game_event_gameobject ON gameobject.guid = game_event_gameobject.guid "
                          "LEFT OUTER JOIN pool_gameobject ON gameobject.guid = pool_gameobject.guid");
 
@@ -3053,11 +3082,13 @@ void ObjectMgr::LoadGameobjects()
         int16 gameEvent     = fields[16].Get<int16>();
         data.poolId         = fields[17].Get<uint32>();
         data.phaseId        = fields[19].Get<uint32>();
+        data.phaseGroup     = fields[20].Get<uint32>();
 
-        if (data.phaseId && !IsValidPhaseOrPhaseGroupId(data.phaseId))
+        MigrateLegacySpawnPhase(data, "gameobject", guid);
+        if (data.phaseGroup && !IsValidPhaseGroupId(data.phaseGroup))
         {
-            LOG_ERROR("sql.sql", "Table `gameobject` has gameobject (GUID: {} Entry: {}) with non-existing Phase/PhaseGroup id {} in `PhaseId` field, set to 0.", guid, data.id, data.phaseId);
-            data.phaseId = 0;
+            LOG_ERROR("sql.sql", "Table `gameobject` has gameobject (GUID: {} Entry: {}) with non-existing phase group id {} in `PhaseGroup` field, set to 0.", guid, data.id, data.phaseGroup);
+            data.phaseGroup = 0;
         }
 
         if (data.rotation.x < -1.0f || data.rotation.x > 1.0f)
@@ -3136,7 +3167,7 @@ GameObjectData const* ObjectMgr::LoadGameObjectDataFromDB(ObjectGuid::LowType sp
 
     QueryResult result = WorldDatabase.Query("SELECT gameobject.guid, id, map, position_x, position_y, position_z, orientation, "
         "rotation0, rotation1, rotation2, rotation3, spawntimesecs, animprogress, state, spawnMask, phaseMask, "
-        "ScriptName, gameobject.PhaseId "
+        "ScriptName, gameobject.PhaseId, gameobject.PhaseGroup "
         "FROM gameobject WHERE gameobject.guid = {}", spawnId);
 
     if (!result)
@@ -3203,11 +3234,13 @@ GameObjectData const* ObjectMgr::LoadGameObjectDataFromDB(ObjectGuid::LowType sp
     goData.spawnMask        = fields[14].Get<uint8>();
     goData.phaseMask        = fields[15].Get<uint32>();
     goData.phaseId          = fields[17].Get<uint32>();
+    goData.phaseGroup       = fields[18].Get<uint32>();
 
-    if (goData.phaseId && !IsValidPhaseOrPhaseGroupId(goData.phaseId))
+    MigrateLegacySpawnPhase(goData, "gameobject", spawnId);
+    if (goData.phaseGroup && !IsValidPhaseGroupId(goData.phaseGroup))
     {
-        LOG_ERROR("sql.sql", "Table `gameobject` has gameobject (GUID: {} Entry: {}) with non-existing Phase/PhaseGroup id {} in `PhaseId` field, set to 0.", spawnId, entry, goData.phaseId);
-        goData.phaseId = 0;
+        LOG_ERROR("sql.sql", "Table `gameobject` has gameobject (GUID: {} Entry: {}) with non-existing phase group id {} in `PhaseGroup` field, set to 0.", spawnId, entry, goData.phaseGroup);
+        goData.phaseGroup = 0;
     }
 
     if (goData.rotation.x < -1.0f || goData.rotation.x > 1.0f)
@@ -7318,6 +7351,7 @@ void ObjectMgr::LoadPhaseAreas()
 
         uint32 areaId = fields[0].Get<uint32>();
         uint32 phaseId = fields[1].Get<uint32>();
+        uint32 phaseGroup = fields[2].Get<uint32>();
 
         if (!sAreaTableStore.LookupEntry(areaId))
         {
@@ -7325,13 +7359,13 @@ void ObjectMgr::LoadPhaseAreas()
             continue;
         }
 
-        if (!IsValidPhaseOrPhaseGroupId(phaseId))
+        if ((!phaseId && !phaseGroup) || (phaseId && !IsValidPhaseId(phaseId)) || (phaseGroup && !IsValidPhaseGroupId(phaseGroup)))
         {
-            LOG_ERROR("sql.sql", "Table `phase_area` has PhaseId {} not found in `Phase.dbc` or `PhaseXPhaseGroup.dbc`, skipped.", phaseId);
+            LOG_ERROR("sql.sql", "Table `phase_area` has invalid PhaseId {} / PhaseGroup {} for area {}, skipped.", phaseId, phaseGroup, areaId);
             continue;
         }
 
-        _phasesByArea[areaId].push_back(phaseId);
+        _phasesByArea[areaId].push_back({ phaseId, phaseGroup });
         ++count;
     } while (result->NextRow());
 

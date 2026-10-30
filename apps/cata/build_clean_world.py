@@ -35,12 +35,11 @@ RENAMES = {
                             "angle": "FollowAngle", "dist": "FollowDistance"},
 }
 # TDB writes "no formation waypoint" as -1; AC's unsigned columns use 0.
-# TDB splits a spawn's phase into PhaseId and PhaseGroup; the fork stores either in PhaseId and
-# expands groups through PhaseXPhaseGroup (validated: every TDB id is a client phase or group).
+# TDB keeps a spawn's phase id and phase group in separate columns; the target has both too
+# (PhaseId is always a Phase.dbc id, PhaseGroup a PhaseXPhaseGroup.dbc id, so id collisions such as
+# 367 keep their identity). See #348.
 EXPRESSIONS = {("creature_formations", "point_1"): "GREATEST(`InversionPoint1`,0)",
                ("creature_formations", "point_2"): "GREATEST(`InversionPoint2`,0)",
-               ("creature", "PhaseId"): "IF(`PhaseId`=0, `PhaseGroup`, `PhaseId`)",
-               ("gameobject", "PhaseId"): "IF(`PhaseId`=0, `PhaseGroup`, `PhaseId`)",
                # TDB 434 type 26 is a 4.3.4 phase/group id; AC reserves 26 for the legacy mask.
                ("conditions", "ConditionTypeOrReference"):
                    "IF(`ConditionTypeOrReference`=26,108,`ConditionTypeOrReference`)"}
@@ -78,6 +77,24 @@ def copy_table(container, user, password, target, source, table, renamed_columns
     if where:
         sql += f" WHERE {where}"
     return insert_count(container, user, password, sql)
+
+
+def phase_group_only(dbc_dir):
+    """Phase ids that are only phase groups (PhaseXPhaseGroup minus Phase.dbc), from the client DBCs."""
+    if not dbc_dir:
+        return set()
+    base = Path(dbc_dir)
+
+    def rows(name):
+        data = (base / name).read_bytes()
+        if data[:4] != b"WDBC":
+            raise SystemExit(f"{name} in {dbc_dir} is not a WDBC file")
+        records, fields, record_size, _ = struct.unpack_from("<4I", data, 4)
+        return [struct.unpack_from(f"<{fields}I", data, 20 + i * record_size) for i in range(records)]
+
+    phases = {row[0] for row in rows("Phase.dbc")}
+    groups = {row[2] for row in rows("PhaseXPhaseGroup.dbc")}
+    return groups - phases
 
 
 def copy_smart_scripts(container, user, password, target, source):
@@ -516,10 +533,13 @@ def suppress_spawns(container, user, password, target):
 def import_phase_data(container, user, password, target, source):
     """Area phase membership and the type-26 conditions that gate it (#281).
 
-    Spawn PhaseId values arrive with the spawn copy (PhaseGroup mapped through EXPRESSIONS); an
-    unphased player sees the default phase (169), see Player::IsUnphased.
+    Spawn PhaseId/PhaseGroup values arrive with the spawn copy; an unphased player sees the default
+    phase (169), see Player::IsUnphased.
     """
-    applied = {"phase_area": copy_table(container, user, password, target, source, "phase_area"),
+    # phase_area is fully TDB-owned; replacing it drops rows an older import stored with the
+    # group still in PhaseId (#348).
+    applied = {"phase_area": copy_table(container, user, password, target, source, "phase_area",
+                                        replace=True),
                "phase_conditions": copy_table(container, user, password, target, source, "conditions",
                                               where="SourceTypeOrReferenceId=26"),
                # Area auras drive quest-state detection (e.g. Shadowglen 49416/49417/60922).
@@ -532,13 +552,13 @@ def import_phase_data(container, user, password, target, source):
                f"SELECT ROW_COUNT()")
     applied["spell_area_autocast"] = int(rows[-1][0]) if rows else 0
     # INSERT IGNORE leaves spawns already imported by an older build untouched, so restore their
-    # phases explicitly by the shifted GUID mapping.
+    # phase id and group explicitly by the shifted GUID mapping.
     for table in ("creature", "gameobject"):
         rows = run(container, user, password,
                    f"UPDATE `{target}`.`{table}` x JOIN `{source}`.`{table}` t "
                    f"ON x.guid=t.guid+{GUID_OFFSET} "
-                   f"SET x.PhaseId=IF(t.PhaseId=0,t.PhaseGroup,t.PhaseId) "
-                   f"WHERE x.PhaseId<>IF(t.PhaseId=0,t.PhaseGroup,t.PhaseId); SELECT ROW_COUNT()")
+                   f"SET x.PhaseId=t.PhaseId, x.PhaseGroup=t.PhaseGroup "
+                   f"WHERE x.PhaseId<>t.PhaseId OR x.PhaseGroup<>t.PhaseGroup; SELECT ROW_COUNT()")
         applied[f"phase_restored_{table}"] = int(rows[-1][0]) if rows else 0
     return applied
 
@@ -747,8 +767,22 @@ def main():
     global VALKYR_DISPLAYS
     if args.dbc_dir:
         VALKYR_DISPLAYS = load_valkyr_displays(args.dbc_dir)
+        group_only = phase_group_only(args.dbc_dir)
+        if group_only:
+            ids = ",".join(map(str, sorted(group_only)))
+            EXPRESSIONS[("conditions", "ConditionTypeOrReference")] = (
+                f"IF(`ConditionTypeOrReference`=26, IF(`ConditionValue1` IN ({ids}),109,108), "
+                f"`ConditionTypeOrReference`)")
     else:
         print("warning: --dbc-dir/DBC_DIR not set; skipping the Val'kyr hover rows", file=sys.stderr)
+
+    if not args.dbc_dir:
+        phase_conditions = int(run(args.container, args.user, args.password,
+                                   f"SELECT COUNT(*) FROM `{args.source}`.conditions "
+                                   f"WHERE ConditionTypeOrReference=26 AND "
+                                   f"(SourceTypeOrReferenceId=26 OR SourceTypeOrReferenceId IN (14,15))")[-1][0])
+        if phase_conditions:
+            sys.exit("--dbc-dir is required to build phase conditions (#348)")
 
     conflicting = migrate_legacy_phase_masks(args.container, args.user, args.password, args.target)
     if conflicting:

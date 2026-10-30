@@ -873,10 +873,16 @@ public:
         return nullptr;
     }
 
-    // Raw `phase_area` rows for one area id (not yet condition-checked or phase-group expanded).
-    [[nodiscard]] std::vector<uint32> const& GetPhasesForArea(uint32 areaId) const
+    struct PhaseAreaData
     {
-        static std::vector<uint32> const empty;
+        uint32 phaseId = 0;
+        uint32 phaseGroup = 0;
+    };
+
+    // Raw `phase_area` rows for one area id (not yet condition-checked or phase-group expanded).
+    [[nodiscard]] std::vector<PhaseAreaData> const& GetPhasesForArea(uint32 areaId) const
+    {
+        static std::vector<PhaseAreaData> const empty;
         PhaseAreaContainer::const_iterator itr = _phasesByArea.find(areaId);
         return itr != _phasesByArea.end() ? itr->second : empty;
     }
@@ -1573,7 +1579,7 @@ private:
     GossipTextContainer _gossipTextStore;
     QuestGreetingContainer _questGreetingStore;
     AreaTriggerContainer _areaTriggerStore;
-    typedef std::unordered_map<uint32 /*areaId*/, std::vector<uint32> /*phase or phase-group ids*/> PhaseAreaContainer;
+    typedef std::unordered_map<uint32 /*areaId*/, std::vector<PhaseAreaData>> PhaseAreaContainer;
     PhaseAreaContainer _phasesByArea;
     AreaTriggerTeleportContainer _areaTriggerTeleportStore;
     AreaTriggerScriptContainer _areaTriggerScriptStore;

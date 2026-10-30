@@ -68,7 +68,8 @@ struct SpawnData
     ObjectGuid::LowType spawnId{0};
     uint16 mapid{0};
     uint32 phaseMask{0};
-    uint32 phaseId{0};                                  // Cata Phase/PhaseGroup id; 0 = not phase-gated
+    uint32 phaseId{0};                                  // Cata Phase.dbc id; 0 = not phase-gated
+    uint32 phaseGroup{0};                               // Cata PhaseXPhaseGroup.dbc id; 0 = none
     float posX{0.0f};
     float posY{0.0f};
     float posZ{0.0f};

@@ -90,9 +90,10 @@ enum ConditionTypes
     CONDITION_AI_DATA                  = 104,           // dataId           value          0                  true if AI::GetData returns value
     CONDITION_PLAYER_QUEUED_RANDOM_DUNGEON = 105,       // checkDifficulty  difficulty     0                  true if player is queued for a random dungeon via RDF
     CONDITION_UNIT_IN_COMBAT           = 106,           // 0                0              0                  true if unit is engaged in combat
-    CONDITION_CATA_PHASE_ID            = 108,           // phase/group id   0              0                  true if object is in that 4.3.4 phase or group
+    CONDITION_CATA_PHASE_ID            = 108,           // phase id         0              0                  true if object is in that 4.3.4 phase
+    CONDITION_CATA_PHASE_GROUP         = 109,           // phase group id   0              0                  true if object is in any phase of that 4.3.4 group
 
-    CONDITION_AC_END                   = 109            // placeholder
+    CONDITION_AC_END                   = 110            // placeholder
 };
 
 /*! Documentation on implementing a new ConditionSourceType:
