@@ -325,7 +325,8 @@ class SpawnImportTests(unittest.TestCase):
                             patch.object(importer, "table_exists", return_value=phases is not None) as exists, \
                             patch.object(importer, "insert_count", return_value=3), \
                             patch.object(importer, "fetch", side_effect=[
-                                ["10000004"], ["10000001", "10000002", "10000003", "10000004"]]):
+                                ["10000004"], ["10000001", "10000002", "10000003", "10000004"],
+                                [str(p) for p in (phases or ())], []]):
                         scope.update({name: getattr(importer, name) for name in (
                             "run", "columns", "common_columns", "table_exists", "insert_count", "fetch")})
                         exec(compile(ast.Module(body=[insert], type_ignores=[]), "import_spawns", "exec"), scope)

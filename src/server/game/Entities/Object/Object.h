@@ -558,7 +558,9 @@ public:
     // phasemask above. A spawn row with phase 0 is unphased (default phase 169); objects without
     // spawn data are not gated until their creator's shift is inherited (#345).
     void SetSpawnPhaseId(uint32 phaseId) { m_spawnPhaseId = phaseId; m_hasSpawnPhase = true; }
+    void SetSpawnPhaseGroup(uint32 phaseGroup) { m_spawnPhaseGroup = phaseGroup; m_hasSpawnPhase = true; }
     [[nodiscard]] uint32 GetSpawnPhaseId() const { return m_spawnPhaseId; }
+    [[nodiscard]] uint32 GetSpawnPhaseGroup() const { return m_spawnPhaseGroup; }
     [[nodiscard]] bool HasSpawnPhase() const { return m_hasSpawnPhase; }
     [[nodiscard]] bool IsPhaseVisibleTo(Player const* player) const;
     // Exact 4.3.4 phase membership (CONDITION_PHASEID): a phase-0 spawn has no phase set.
@@ -870,7 +872,8 @@ private:
     uint32 m_InstanceId;                                // in map copy with instance id
     uint32 m_phaseMask;                                 // in area phase state
     bool m_useCombinedPhases;                           // true (default): use phaseMask as bit mask combining up to 32 phases
-    uint32 m_spawnPhaseId;                              // Cata Phase/PhaseGroup id from spawn data
+    uint32 m_spawnPhaseId;                              // Cata Phase.dbc id from spawn data
+    uint32 m_spawnPhaseGroup;                           // Cata PhaseXPhaseGroup.dbc id from spawn data
     bool m_hasSpawnPhase;                               // true when loaded from a spawn row (phase 0 = unphased)
     // false: use phaseMask to represent single phases only (up to 4294967295 phases)
 

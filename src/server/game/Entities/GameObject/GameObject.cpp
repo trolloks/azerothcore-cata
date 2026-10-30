@@ -1149,6 +1149,7 @@ void GameObject::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask, bool 
     data.mapid = mapid;
     data.phaseMask = phaseMask;
     data.phaseId = GetSpawnPhaseId();
+    data.phaseGroup = GetSpawnPhaseGroup();
     data.posX = GetPositionX();
     data.posY = GetPositionY();
     data.posZ = GetPositionZ();
@@ -1176,6 +1177,7 @@ void GameObject::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask, bool 
     stmt->SetData(index++, spawnMask);
     stmt->SetData(index++, GetPhaseMask());
     stmt->SetData(index++, GetSpawnPhaseId());
+    stmt->SetData(index++, GetSpawnPhaseGroup());
     stmt->SetData(index++, GetPositionX());
     stmt->SetData(index++, GetPositionY());
     stmt->SetData(index++, GetPositionZ());
@@ -1235,6 +1237,7 @@ bool GameObject::LoadGameObjectFromDB(ObjectGuid::LowType spawnId, Map* map, boo
         return false;
 
     SetSpawnPhaseId(data->phaseId);
+    SetSpawnPhaseGroup(data->phaseGroup);
 
     if (data->spawntimesecs >= 0)
     {

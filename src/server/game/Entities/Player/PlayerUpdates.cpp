@@ -1309,19 +1309,57 @@ bool Player::UpdatePhasesForArea(uint32 areaId)
             AddPhaseToSet(phaseId);
 
     // phase_area rows are inherited from parent areas; a closer area that defines the same phase
-    // excludes the parent row (4.3.4 SubAreaExclusions). Walk up and keep the first definition.
-    std::vector<std::pair<uint32, ConditionList>> pending;
+    // excludes the parent row (4.3.4 SubAreaExclusions). Resolve every definition at one level
+    // before moving up, so a group row and a direct row for the same phase both contribute their
+    // conditions.
+    struct PendingPhase
+    {
+        uint32 phaseId;
+        std::vector<ConditionList> conditionSets;
+    };
+
+    std::vector<PendingPhase> pending;
     std::unordered_set<uint32> defined;
     for (uint32 chainArea = areaId; chainArea;)
     {
-        for (uint32 areaPhase : sObjectMgr->GetPhasesForArea(chainArea))
-            for (uint32 phaseId : GetPhasesForGroup(areaPhase))
-            {
-                if (!defined.insert(phaseId).second)
-                    continue;
+        std::unordered_map<uint32, size_t> levelIndex;
+        std::vector<PendingPhase> level;
+        for (ObjectMgr::PhaseAreaData const& areaPhase : sObjectMgr->GetPhasesForArea(chainArea))
+        {
+            // Conditions can be keyed by the group or by each member phase; both must pass.
+            ConditionList groupConditions = areaPhase.phaseGroup
+                ? sConditionMgr->GetConditionsForPhase(areaPhase.phaseGroup, chainArea)
+                : ConditionList{};
 
-                pending.emplace_back(phaseId, sConditionMgr->GetConditionsForPhase(phaseId, chainArea));
-            }
+            auto addCandidate = [&](uint32 phaseId, bool fromGroup)
+            {
+                if (defined.count(phaseId))
+                    return;
+
+                auto [it, inserted] = levelIndex.emplace(phaseId, level.size());
+                if (inserted)
+                    level.push_back(PendingPhase{ phaseId, {} });
+
+                PendingPhase& entry = level[it->second];
+                if (fromGroup && !groupConditions.empty())
+                    entry.conditionSets.push_back(groupConditions);
+                ConditionList phaseConditions = sConditionMgr->GetConditionsForPhase(phaseId, chainArea);
+                if (!phaseConditions.empty())
+                    entry.conditionSets.push_back(std::move(phaseConditions));
+            };
+
+            if (areaPhase.phaseId)
+                addCandidate(areaPhase.phaseId, false);
+            if (areaPhase.phaseGroup)
+                for (uint32 phaseId : GetPhasesForGroup(areaPhase.phaseGroup))
+                    addCandidate(phaseId, true);
+        }
+
+        for (PendingPhase& entry : level)
+        {
+            defined.insert(entry.phaseId);
+            pending.push_back(std::move(entry));
+        }
 
         // AreaTable.dbc field 2 is ParentAreaID (the 3.3.5a struct calls it zone).
         AreaTableEntry const* area = sAreaTableStore.LookupEntry(chainArea);
@@ -1334,8 +1372,12 @@ bool Player::UpdatePhasesForArea(uint32 areaId)
         bool changed = false;
         for (size_t i = 0; i < pending.size(); ++i)
         {
-            auto const& [phaseId, conditions] = pending[i];
-            bool meets = conditions.empty() || sConditionMgr->IsObjectMeetToConditions(this, conditions);
+            auto const& [phaseId, conditionSets] = pending[i];
+            bool meets = std::all_of(conditionSets.begin(), conditionSets.end(),
+                [this](ConditionList const& conditions)
+                {
+                    return conditions.empty() || sConditionMgr->IsObjectMeetToConditions(this, conditions);
+                });
 
             if (meets && !granted[i])
             {
