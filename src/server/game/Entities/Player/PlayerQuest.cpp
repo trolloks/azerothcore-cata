@@ -613,6 +613,9 @@ void Player::AddQuest(Quest const* quest, Object* questGiver)
     // Xinef: area auras may change on quest accept!
     UpdateZoneDependentAuras(GetZoneId());
     UpdateAreaDependentAuras(GetAreaId());
+
+    // phase_area conditions can depend on the quest now being taken.
+    RefreshPhases();
 }
 
 void Player::CompleteQuest(uint32 quest_id)
@@ -647,6 +650,10 @@ void Player::CompleteQuest(uint32 quest_id)
     // Xinef: area auras may change on quest completion!
     UpdateZoneDependentAuras(GetZoneId());
     UpdateAreaDependentAuras(GetAreaId());
+
+    // phase_area conditions can depend on the quest now being complete.
+    RefreshPhases();
+
     AdditionalSavingAddMask(ADDITIONAL_SAVING_INVENTORY_AND_GOLD | ADDITIONAL_SAVING_QUEST_STATUS);
 
     // check if Quest Tracker is enabled
@@ -675,6 +682,10 @@ void Player::IncompleteQuest(uint32 quest_id)
         // Xinef: area auras may change on quest completion!
         UpdateZoneDependentAuras(GetZoneId());
         UpdateAreaDependentAuras(GetAreaId());
+
+        // phase_area conditions can depend on the quest becoming incomplete again.
+        RefreshPhases();
+
         AdditionalSavingAddMask(ADDITIONAL_SAVING_QUEST_STATUS);
     }
 }
@@ -976,6 +987,9 @@ void Player::FailQuest(uint32 questId)
                 if (quest->ItemDropQuantity[i] > 0 && itemTemplate->Bonding == BIND_QUEST_ITEM)
                     DestroyItemCount(quest->ItemDrop[i], quest->ItemDropQuantity[i], true);
     }
+
+    // phase_area conditions can depend on the quest being failed.
+    RefreshPhases();
 }
 
 void Player::FailQuestsOnDeath()
