@@ -546,6 +546,66 @@ class TdbQuestGapsTests(unittest.TestCase):
         self.assertIn("quest giver 500 has no spawn or summon in TDB", reasons.get("8003", []))
 
 
+
+
+class PhaseDataAuditTests(unittest.TestCase):
+    def audit(self, answers, phases=(169, 170), groups=(367,), mismatch=0):
+        def fake_query(_container, _user, _password, _schema, sql):
+            for fragment, rows in answers:
+                if fragment in sql:
+                    return rows
+            return []
+
+        with patch.object(inventory, "query", side_effect=fake_query), \
+                patch.object(inventory, "scalar", return_value=mismatch), \
+                patch.object(inventory, "phase_dbc_sets", return_value=(set(phases), set(groups))):
+            return inventory.check_phase_data("", "", "", "tdb", "ac", "/dbc")
+
+    def kinds(self, problems):
+        return {(problem["kind"], problem.get("id")) for problem in problems}
+
+    def test_valid_phase_data_has_no_problems(self):
+        problems = self.audit([
+            ("SELECT AreaId, PhaseId FROM phase_area", [["12", "169"]]),
+            ("SELECT AreaId, PhaseId, PhaseGroup FROM phase_area", [["12", "169", "0"]]),
+            ("FROM conditions", [["26", "169", "108", "169"]]),
+            ("SELECT DISTINCT `PhaseId` FROM `creature`", [["169"]]),
+            ("SELECT DISTINCT `PhaseGroup` FROM `creature`", []),
+            ("SELECT DISTINCT `PhaseId` FROM `gameobject`", []),
+            ("SELECT DISTINCT `PhaseGroup` FROM `gameobject`", []),
+        ])
+        self.assertEqual(problems, [])
+
+    def test_invalid_area_ids_and_shape_are_reported(self):
+        problems = self.audit([
+            ("SELECT AreaId, PhaseId FROM phase_area", [["12", "169"]]),
+            ("SELECT AreaId, PhaseId, PhaseGroup FROM phase_area",
+             [["12", "999", "0"], ["13", "169", "367"], ["14", "0", "999"]]),
+        ])
+        kinds = self.kinds(problems)
+        self.assertIn(("phase_area_id", "999"), kinds)
+        self.assertIn(("phase_area_shape", "169/367"), kinds)
+        self.assertIn(("phase_area_group", "999"), kinds)
+        self.assertIn(("phase_area_missing", "169"), kinds)
+
+    def test_condition_and_spawn_ids_are_checked(self):
+        problems = self.audit([
+            ("FROM conditions", [["26", "999", "108", "999"], ["26", "169", "109", "999"]]),
+            ("SELECT DISTINCT `PhaseId` FROM `creature`", [["999"]]),
+            ("SELECT DISTINCT `PhaseGroup` FROM `gameobject`", [["999"]]),
+        ])
+        kinds = self.kinds(problems)
+        self.assertIn(("phase_condition_source", "999"), kinds)
+        self.assertIn(("phase_condition_id", "999"), kinds)
+        self.assertIn(("phase_condition_group", "999"), kinds)
+        self.assertIn(("phase_spawn_id", "999"), kinds)
+        self.assertIn(("phase_spawn_group", "999"), kinds)
+
+    def test_spawn_values_must_match_the_source(self):
+        problems = self.audit([], mismatch=3)
+        self.assertIn(("phase_spawn_source_mismatch", "3"), self.kinds(problems))
+
+
 if __name__ == "__main__":
     with patch("subprocess.run", side_effect=AssertionError("offline checks must not launch subprocesses")):
         unittest.main()
