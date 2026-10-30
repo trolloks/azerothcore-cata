@@ -1295,22 +1295,28 @@ void Player::RefreshPhases()
 
 bool Player::UpdatePhasesForArea(uint32 areaId)
 {
-    std::vector<uint32> newPhases;
+    std::vector<uint32> oldPhases = std::move(m_phases);
+    m_phases.clear();
+    m_phaseRefs.clear();
 
     for (uint32 areaPhase : sObjectMgr->GetPhasesForArea(areaId))
-    {
         for (uint32 phaseId : GetPhasesForGroup(areaPhase))
         {
             ConditionList conditions = sConditionMgr->GetConditionsForPhase(phaseId, areaId);
             if (conditions.empty() || sConditionMgr->IsObjectMeetToConditions(this, conditions))
-                if (std::find(newPhases.begin(), newPhases.end(), phaseId) == newPhases.end())
-                    newPhases.push_back(phaseId);
+                AddPhaseToSet(phaseId);
         }
-    }
 
-    if (newPhases != m_phases)
+    // Area and quest refreshes must keep phases granted by active phase auras, like the 4.3.4
+    // PhasingHandler::OnAreaChange does; otherwise UpdateArea drops them while the auras stay.
+    for (AuraEffect const* aurEff : GetAuraEffectsByType(SPELL_AURA_PHASE))
+        AddPhaseToSet(uint32(aurEff->GetMiscValueB()));
+    for (AuraEffect const* aurEff : GetAuraEffectsByType(SPELL_AURA_PHASE_GROUP))
+        for (uint32 phaseId : GetPhasesForGroup(uint32(aurEff->GetMiscValueB())))
+            AddPhaseToSet(phaseId);
+
+    if (m_phases != oldPhases)
     {
-        m_phases = std::move(newPhases);
         SendPhaseShift();
         return true;
     }
@@ -1325,6 +1331,77 @@ void Player::SendPhaseShift()
     phaseShift.PhaseShiftFlags = IsUnphased() ? 0x8 /*Unphased*/ : 0x0;
     phaseShift.Phases.assign(m_phases.begin(), m_phases.end());
     SendDirectMessage(phaseShift.Write());
+}
+
+bool Player::AddPhaseToSet(uint32 phaseId)
+{
+    if (!phaseId)
+        return false;
+
+    uint32& references = m_phaseRefs[phaseId];
+    if (references++)
+        return false;
+
+    m_phases.push_back(phaseId);
+    return true;
+}
+
+bool Player::RemovePhaseFromSet(uint32 phaseId)
+{
+    auto itr = m_phaseRefs.find(phaseId);
+    if (itr == m_phaseRefs.end())
+        return false;
+
+    if (--itr->second)
+        return false;
+
+    m_phaseRefs.erase(itr);
+    m_phases.erase(std::find(m_phases.begin(), m_phases.end(), phaseId));
+    return true;
+}
+
+void Player::AddPhase(uint32 phaseId, bool update)
+{
+    if (AddPhaseToSet(phaseId) && update)
+    {
+        SendPhaseShift();
+        UpdateObjectVisibility();
+    }
+}
+
+void Player::AddPhaseGroup(uint32 phaseGroupId, bool update)
+{
+    bool changed = false;
+    for (uint32 phaseId : GetPhasesForGroup(phaseGroupId))
+        changed = AddPhaseToSet(phaseId) || changed;
+
+    if (changed && update)
+    {
+        SendPhaseShift();
+        UpdateObjectVisibility();
+    }
+}
+
+void Player::RemovePhase(uint32 phaseId, bool update)
+{
+    if (RemovePhaseFromSet(phaseId) && update)
+    {
+        SendPhaseShift();
+        UpdateObjectVisibility();
+    }
+}
+
+void Player::RemovePhaseGroup(uint32 phaseGroupId, bool update)
+{
+    bool changed = false;
+    for (uint32 phaseId : GetPhasesForGroup(phaseGroupId))
+        changed = RemovePhaseFromSet(phaseId) || changed;
+
+    if (changed && update)
+    {
+        SendPhaseShift();
+        UpdateObjectVisibility();
+    }
 }
 
 void Player::UpdateZone(uint32 newZone, uint32 newArea, bool force)

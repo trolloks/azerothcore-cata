@@ -34,6 +34,7 @@
 #include "LootMgr.h"
 #include "M2Stores.h"
 #include "MapMgr.h"
+#include "MiscPackets.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "PoolMgr.h"
@@ -1147,7 +1148,11 @@ public:
 
     static bool HandleDebugSendSetPhaseShiftCommand(ChatHandler* handler, uint32 phaseShift)
     {
-        handler->GetSession()->SendSetPhaseShift(phaseShift);
+        WorldPackets::Misc::PhaseShiftChange packet;
+        packet.Client = handler->GetPlayer()->GetGUID();
+        packet.PhaseShiftFlags = 0;
+        packet.Phases.push_back(phaseShift);
+        handler->GetSession()->SendPacket(packet.Write());
         return true;
     }
 

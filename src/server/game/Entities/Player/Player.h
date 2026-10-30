@@ -1906,6 +1906,11 @@ public:
     // Returns true if membership changed and a phase-shift packet was already sent.
     bool UpdatePhasesForArea(uint32 areaId);
     void SendPhaseShift();
+    // Additive membership for Cata phase auras (SPELL_AURA_PHASE / SPELL_AURA_PHASE_GROUP).
+    void AddPhase(uint32 phaseId, bool update = true);
+    void AddPhaseGroup(uint32 phaseGroupId, bool update = true);
+    void RemovePhase(uint32 phaseId, bool update = true);
+    void RemovePhaseGroup(uint32 phaseGroupId, bool update = true);
 
     void UpdateZoneDependentAuras(uint32 zone_id);    // zones
     void UpdateAreaDependentAuras(uint32 area_id);    // subzones
@@ -2929,6 +2934,8 @@ public:
     [[nodiscard]] uint32 GetSkillFieldValue(uint32 index) const;
     void SetSkillFieldValue(uint32 index, uint32 value);
 private:
+    bool AddPhaseToSet(uint32 phaseId);
+    bool RemovePhaseFromSet(uint32 phaseId);
 
     PlayerMails m_mail;
     PlayerSpellMap m_spells;
@@ -2991,6 +2998,7 @@ private:
     uint32 m_zoneUpdateTimer;
     uint32 m_areaUpdateId;
     std::vector<uint32> m_phases;
+    std::unordered_map<uint32, uint32> m_phaseRefs; // phase id -> number of active grants
 
     uint32 m_deathTimer;
     time_t m_deathExpireTime;

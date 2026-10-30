@@ -356,7 +356,6 @@ s2c	SMSG_SERVER_BUCK_DATA	#168	WotLK-only opcode with no 4.3.4 counterpart in th
 s2c	SMSG_SERVER_BUCK_DATA_START	#168	WotLK-only opcode with no 4.3.4 counterpart in the pin
 s2c	SMSG_SET_EXTRA_AURA_INFO_NEED_UPDATE_OBSOLETE	#168	WotLK-only opcode with no 4.3.4 counterpart in the pin
 s2c	SMSG_SET_EXTRA_AURA_INFO_OBSOLETE	#168	WotLK-only opcode with no 4.3.4 counterpart in the pin
-s2c	SMSG_SET_PHASE_SHIFT	#180	Cata phasing payload is ported with phase 7
 s2c	SMSG_SPELL_CHANCE_PROC_LOG	#168	WotLK-only opcode with no 4.3.4 counterpart in the pin
 s2c	SMSG_SPELL_CHANCE_RESIST_PUSHBACK	#168	WotLK-only opcode with no 4.3.4 counterpart in the pin
 s2c	SMSG_SPLINE_MOVE_FEATHER_FALL	#186	movement packet layout is ported with the movement work
