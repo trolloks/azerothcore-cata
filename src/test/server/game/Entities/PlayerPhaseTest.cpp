@@ -90,3 +90,59 @@ TEST_F(PlayerPhaseTest, PhasedPlayerSeesGameMasterTargets)
 
     EXPECT_TRUE(gm->IsPhaseVisibleTo(phased)); // can the phased player see the GM?
 }
+
+TEST_F(PlayerPhaseTest, SpawnPhaseZeroIsUnphasedNotAlwaysVisible)
+{
+    TestPlayer* unphased = CreateTestPlayer(5);
+    TestPlayer* phased = CreateTestPlayer(6);
+    phased->AddPhase(171, false);
+
+    TestCreature* unphasedSpawn = CreateTestCreature(7, 900001, TEST_FACTION_HOSTILE_TO_ALL);
+    unphasedSpawn->SetSpawnPhaseId(0);
+    EXPECT_TRUE(unphasedSpawn->IsPhaseVisibleTo(unphased));
+    EXPECT_FALSE(unphasedSpawn->IsPhaseVisibleTo(phased));
+
+    TestCreature* questSpawn = CreateTestCreature(8, 900002, TEST_FACTION_HOSTILE_TO_ALL);
+    questSpawn->SetSpawnPhaseId(171);
+    EXPECT_FALSE(questSpawn->IsPhaseVisibleTo(unphased));
+    EXPECT_TRUE(questSpawn->IsPhaseVisibleTo(phased));
+
+    // 169 plus a quest phase is still unphased.
+    phased->AddPhase(DEFAULT_PHASE, false);
+    EXPECT_TRUE(unphasedSpawn->IsPhaseVisibleTo(phased));
+    EXPECT_TRUE(questSpawn->IsPhaseVisibleTo(phased));
+}
+
+TEST_F(PlayerPhaseTest, CreatureCompatibilityUsesCataPhases)
+{
+    TestCreature* one = CreateTestCreature(9, 900003, TEST_FACTION_HOSTILE_TO_ALL);
+    TestCreature* two = CreateTestCreature(10, 900004, TEST_FACTION_HOSTILE_TO_ALL);
+
+    one->SetSpawnPhaseId(0);
+    two->SetSpawnPhaseId(0);
+    EXPECT_TRUE(one->InSamePhase(two)); // both unphased
+
+    two->SetSpawnPhaseId(DEFAULT_PHASE);
+    EXPECT_TRUE(one->InSamePhase(two)); // unphased + 169
+
+    two->SetSpawnPhaseId(171);
+    EXPECT_FALSE(one->InSamePhase(two)); // unphased + quest phase
+
+    one->SetSpawnPhaseId(171);
+    EXPECT_TRUE(one->InSamePhase(two)); // shared 171
+
+    one->SetSpawnPhaseId(172);
+    EXPECT_FALSE(one->InSamePhase(two));
+}
+
+TEST_F(PlayerPhaseTest, LegacyMaskGateStillHidesScriptControlledObjects)
+{
+    TestPlayer* player = CreateTestPlayer(13);
+    TestCreature* hidden = CreateTestCreature(14, 900006, TEST_FACTION_HOSTILE_TO_ALL);
+
+    hidden->SetPhaseMask(2, false); // script hiding, e.g. an instance portal
+    EXPECT_FALSE(hidden->IsPhaseVisibleTo(player));
+
+    hidden->SetPhaseMask(PHASEMASK_NORMAL, false);
+    EXPECT_TRUE(hidden->IsPhaseVisibleTo(player));
+}

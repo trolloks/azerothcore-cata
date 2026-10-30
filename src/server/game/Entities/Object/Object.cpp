@@ -1197,7 +1197,8 @@ WorldObject::WorldObject() : WorldLocation(),
     LastUsedScriptID(0), m_name(""), m_isActive(false), _visibilityDistanceOverrideType(VisibilityDistanceType::Normal), m_zoneScript(nullptr),
     _zoneId(0), _areaId(0), _floorZ(INVALID_HEIGHT), _outdoors(false), _liquidData(), _updatePositionData(false), m_transport(nullptr),
     m_currMap(nullptr), _heartbeatTimer(HEARTBEAT_INTERVAL), m_InstanceId(0), m_phaseMask(PHASEMASK_NORMAL), m_useCombinedPhases(true),
-    m_spawnPhaseId(0), m_notifyflags(0), m_executed_notifies(0), _objectVisibilityContainer(this)
+    m_spawnPhaseId(0), m_hasSpawnPhase(false), m_notifyflags(0), m_executed_notifies(0),
+    _objectVisibilityContainer(this)
 {
     m_serverSideVisibility.SetValue(SERVERSIDE_VISIBILITY_GHOST, GHOST_VISIBILITY_ALIVE | GHOST_VISIBILITY_GHOST);
     m_serverSideVisibilityDetect.SetValue(SERVERSIDE_VISIBILITY_GHOST, GHOST_VISIBILITY_ALIVE);
@@ -2086,6 +2087,40 @@ bool WorldObject::CanSeeOrDetect(WorldObject const* obj, bool ignoreStealth, boo
     return true;
 }
 
+namespace
+{
+std::vector<uint32> GetSpawnPhases(uint32 phaseId)
+{
+    return phaseId ? GetPhasesForGroup(phaseId) : std::vector<uint32>{ DEFAULT_PHASE };
+}
+}
+
+bool WorldObject::InSamePhase(WorldObject const* obj) const
+{
+    // Players and DB spawns compare Cata phase sets; dynamic objects keep the legacy mask gate
+    // (e.g. transports hidden behind mask 2 until cluster synchronization completes).
+    if (Player const* player = ToPlayer())
+        return obj->ToPlayer() || obj->HasSpawnPhase() ? obj->IsPhaseVisibleTo(player)
+                                                       : InSamePhase(obj->GetPhaseMask());
+    if (Player const* player = obj->ToPlayer())
+        return m_hasSpawnPhase ? IsPhaseVisibleTo(player) : InSamePhase(obj->GetPhaseMask());
+
+    // Scripts still hide objects with SetPhaseMask (instance portals, Valithria, Zuramat...);
+    // keep that legacy gate alongside the Cata comparison.
+    if (!InSamePhase(obj->GetPhaseMask()))
+        return false;
+    if (!m_hasSpawnPhase || !obj->m_hasSpawnPhase)
+        return true;
+
+    std::vector<uint32> const mine = GetSpawnPhases(m_spawnPhaseId);
+    std::vector<uint32> const theirs = GetSpawnPhases(obj->m_spawnPhaseId);
+    for (uint32 phaseId : mine)
+        if (std::find(theirs.begin(), theirs.end(), phaseId) != theirs.end())
+            return true;
+
+    return false;
+}
+
 bool WorldObject::IsPhaseVisibleTo(Player const* player) const
 {
     // GMs see and interact with every Cata phase, mirroring the legacy PHASEMASK_ANYWHERE override
@@ -2094,6 +2129,10 @@ bool WorldObject::IsPhaseVisibleTo(Player const* player) const
     if (Player const* target = ToPlayer())
         if (target->IsGameMaster())
             return true;
+
+    // Legacy mask gate: scripts hide objects with SetPhaseMask, which is independent of Cata phases.
+    if (!InSamePhase(player->GetPhaseMask()))
+        return false;
 
     if (Player const* other = ToPlayer())
     {
@@ -2109,12 +2148,12 @@ bool WorldObject::IsPhaseVisibleTo(Player const* player) const
         return false;
     }
 
-    if (!m_spawnPhaseId)
+    if (!m_hasSpawnPhase)
         return true;
 
     bool unphased = player->IsUnphased();
     std::vector<uint32> const& playerPhases = player->GetPhases();
-    for (uint32 phaseId : GetPhasesForGroup(m_spawnPhaseId))
+    for (uint32 phaseId : GetSpawnPhases(m_spawnPhaseId))
         if (std::find(playerPhases.begin(), playerPhases.end(), phaseId) != playerPhases.end()
             || (unphased && phaseId == DEFAULT_PHASE))
             return true;
