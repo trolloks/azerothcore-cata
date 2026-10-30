@@ -363,7 +363,10 @@ namespace WorldPackets
 
             ObjectGuid Client;
             uint32 PhaseShiftFlags = 0x8; // PhaseShiftFlags::Unphased
-            std::vector<uint32> Phases;
+            std::vector<uint16> Phases;
+            std::vector<uint16> VisibleMapIDs;
+            std::vector<uint16> UiMapPhaseIDs;
+            std::vector<uint16> PreloadMapIDs;
         };
 
         // Empty stub: no saved Compact Unit Frames profiles for a fresh character.

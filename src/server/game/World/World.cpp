@@ -664,6 +664,8 @@ void World::SetInitialWorldSettings()
     sObjectMgr->LoadAreaTriggers();
 
     LOG_INFO("server.loading", "Loading Phase Area Definitions...");
+    sObjectMgr->LoadTerrainWorldMaps();
+    sObjectMgr->LoadTerrainSwapDefaults();
     sObjectMgr->LoadPhaseAreas();
 
     LOG_INFO("server.loading", "Loading Area Trigger Teleport Definitions...");

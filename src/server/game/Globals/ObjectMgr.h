@@ -879,7 +879,21 @@ public:
         uint32 phaseGroup = 0;
     };
 
+    struct TerrainSwapInfo
+    {
+        uint32 Id = 0;
+        std::vector<uint32> UiMapPhaseIDs;
+    };
+
     // Raw `phase_area` rows for one area id (not yet condition-checked or phase-group expanded).
+    void LoadTerrainWorldMaps();
+    void LoadTerrainSwapDefaults();
+    [[nodiscard]] TerrainSwapInfo const* GetTerrainSwapInfo(uint32 id) const;
+    [[nodiscard]] std::unordered_map<uint32, std::vector<TerrainSwapInfo const*>> const& GetTerrainSwaps() const
+    {
+        return _terrainSwapsByMap;
+    }
+
     [[nodiscard]] std::vector<PhaseAreaData> const& GetPhasesForArea(uint32 areaId) const
     {
         static std::vector<PhaseAreaData> const empty;
@@ -1581,6 +1595,8 @@ private:
     AreaTriggerContainer _areaTriggerStore;
     typedef std::unordered_map<uint32 /*areaId*/, std::vector<PhaseAreaData>> PhaseAreaContainer;
     PhaseAreaContainer _phasesByArea;
+    std::unordered_map<uint32, TerrainSwapInfo> _terrainSwapInfos;
+    std::unordered_map<uint32, std::vector<TerrainSwapInfo const*>> _terrainSwapsByMap;
     AreaTriggerTeleportContainer _areaTriggerTeleportStore;
     AreaTriggerScriptContainer _areaTriggerScriptStore;
     DungeonProgressionRequirementsContainer _accessRequirementStore;

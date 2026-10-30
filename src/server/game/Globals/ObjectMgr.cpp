@@ -7327,6 +7327,74 @@ void ObjectMgr::LoadAreaTriggers()
     LOG_INFO("server.loading", " ");
 }
 
+void ObjectMgr::LoadTerrainWorldMaps()
+{
+    uint32 oldMSTime = getMSTime();
+    PreparedQueryResult result = WorldDatabase.Query(WorldDatabase.GetPreparedStatement(WORLD_SEL_TERRAIN_WORLD_MAP));
+    if (!result)
+    {
+        LOG_INFO("server.loading", ">> Loaded 0 terrain world maps. DB table `terrain_worldmap` is empty.");
+        return;
+    }
+
+    uint32 count = 0;
+    do
+    {
+        Field* fields = result->Fetch();
+        uint32 swapMap = fields[0].Get<uint32>();
+        uint32 worldMapArea = fields[1].Get<uint32>();
+        if (!sMapStore.LookupEntry(swapMap))
+        {
+            LOG_ERROR("sql.sql", "TerrainSwapMap {} defined in `terrain_worldmap` does not exist, skipped.", swapMap);
+            continue;
+        }
+
+        TerrainSwapInfo& info = _terrainSwapInfos[swapMap];
+        info.Id = swapMap;
+        info.UiMapPhaseIDs.push_back(worldMapArea);
+        ++count;
+    } while (result->NextRow());
+
+    LOG_INFO("server.loading", ">> Loaded {} terrain world maps in {} ms.", count, GetMSTimeDiffToNow(oldMSTime));
+}
+
+void ObjectMgr::LoadTerrainSwapDefaults()
+{
+    uint32 oldMSTime = getMSTime();
+    PreparedQueryResult result = WorldDatabase.Query(WorldDatabase.GetPreparedStatement(WORLD_SEL_TERRAIN_SWAP_DEFAULTS));
+    if (!result)
+    {
+        LOG_INFO("server.loading", ">> Loaded 0 terrain swap defaults. DB table `terrain_swap_defaults` is empty.");
+        return;
+    }
+
+    uint32 count = 0;
+    do
+    {
+        Field* fields = result->Fetch();
+        uint32 mapId = fields[0].Get<uint32>();
+        uint32 swapMap = fields[1].Get<uint32>();
+        if (!sMapStore.LookupEntry(mapId) || !sMapStore.LookupEntry(swapMap))
+        {
+            LOG_ERROR("sql.sql", "Terrain swap {}/{} defined in `terrain_swap_defaults` references a missing map, skipped.", mapId, swapMap);
+            continue;
+        }
+
+        TerrainSwapInfo& info = _terrainSwapInfos[swapMap];
+        info.Id = swapMap;
+        _terrainSwapsByMap[mapId].push_back(&info);
+        ++count;
+    } while (result->NextRow());
+
+    LOG_INFO("server.loading", ">> Loaded {} terrain swap defaults in {} ms.", count, GetMSTimeDiffToNow(oldMSTime));
+}
+
+ObjectMgr::TerrainSwapInfo const* ObjectMgr::GetTerrainSwapInfo(uint32 id) const
+{
+    auto itr = _terrainSwapInfos.find(id);
+    return itr != _terrainSwapInfos.end() ? &itr->second : nullptr;
+}
+
 void ObjectMgr::LoadPhaseAreas()
 {
     uint32 oldMSTime = getMSTime();
