@@ -3085,7 +3085,11 @@ void SpellMgr::LoadSpellInfoStore()
         auto const& spellEffects = effects[spellEntry->Id];
         bool supported = std::all_of(spellEffects.begin(), spellEffects.end(), [](SpellEffectEntry const* effect)
         {
-            return !effect || (effect->Effect < TOTAL_SPELL_EFFECTS && effect->EffectAura < TOTAL_AURAS
+            // Only load spells whose aura dispatch exists. The 4.3.4 aura block above 316 is
+            // pending (#177/#180); phase group is the one this slice enables.
+            return !effect || (effect->Effect < TOTAL_SPELL_EFFECTS
+                && (effect->EffectAura <= SPELL_AURA_PERIODIC_HASTE
+                    || effect->EffectAura == SPELL_AURA_PHASE_GROUP)
                 && effect->EffectImplicitTargetA < TOTAL_SPELL_TARGETS
                 && effect->EffectImplicitTargetB < TOTAL_SPELL_TARGETS);
         });

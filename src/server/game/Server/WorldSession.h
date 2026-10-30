@@ -485,7 +485,6 @@ public:
             SendAreaTriggerMessage(Acore::StringFormat(GetAcoreString(strId), std::forward<Args>(args)...));
     }
 
-    void SendSetPhaseShift(uint32 phaseShift);
     void SendTimeQueryResponse();
 
     void SendAuthResponse(uint8 code, bool shortForm, uint32 queuePos = 0);

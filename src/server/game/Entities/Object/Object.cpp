@@ -2088,11 +2088,28 @@ bool WorldObject::CanSeeOrDetect(WorldObject const* obj, bool ignoreStealth, boo
 
 bool WorldObject::IsPhaseVisibleTo(Player const* player) const
 {
-    if (!m_spawnPhaseId)
-        return true;
-
     // GMs see and interact with every Cata phase, mirroring the legacy PHASEMASK_ANYWHERE override
     if (player->IsGameMaster())
+        return true;
+    if (Player const* target = ToPlayer())
+        if (target->IsGameMaster())
+            return true;
+
+    if (Player const* other = ToPlayer())
+    {
+        // 4.3.4 PhaseShift::CanSee: unphased players see each other, others need a shared phase.
+        if (player->IsUnphased() && other->IsUnphased())
+            return true;
+
+        std::vector<uint32> const& playerPhases = player->GetPhases();
+        for (uint32 phaseId : other->GetPhases())
+            if (std::find(playerPhases.begin(), playerPhases.end(), phaseId) != playerPhases.end())
+                return true;
+
+        return false;
+    }
+
+    if (!m_spawnPhaseId)
         return true;
 
     bool unphased = player->IsUnphased();

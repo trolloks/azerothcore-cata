@@ -1440,7 +1440,6 @@ void OpcodeTable::Initialize()
     /*0x4C14*/ DEFINE_HANDLER(CMSG_REQUEST_VEHICLE_SWITCH_SEAT,                                      STATUS_LOGGEDIN,   PROCESS_INPLACE,        &WorldSession::HandleChangeSeatsOnControlledVehicle     );
     /*0x6725*/ DEFINE_HANDLER(CMSG_PET_LEARN_TALENT,                                                 STATUS_LOGGEDIN,   PROCESS_INPLACE,        &WorldSession::HandlePetLearnTalent                     );
     /*0x047B*/ DEFINE_HANDLER(CMSG_PET_UNLEARN_TALENTS,                                              STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
-    /*0x047C*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_SET_PHASE_SHIFT,                                    STATUS_NEVER);
     /*0x58B1*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_ALL_ACHIEVEMENT_DATA,                               STATUS_NEVER);
     /*0x047E*/ DEFINE_HANDLER(CMSG_FORCE_SAY_CHEAT,                                                  STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x4734*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_HEALTH_UPDATE,                                      STATUS_NEVER);

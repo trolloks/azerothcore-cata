@@ -377,7 +377,17 @@ enum AuraType
     SPELL_AURA_PREVENT_RESURRECTION                         = 314,
     SPELL_AURA_UNDERWATER_WALKING                           = 315,
     SPELL_AURA_PERIODIC_HASTE                               = 316,
-    TOTAL_AURAS                                             = 317
+    SPELL_AURA_MOD_SPELL_POWER_PCT                          = 317,
+    SPELL_AURA_MASTERY                                      = 318,
+    SPELL_AURA_MOD_MELEE_HASTE_3                            = 319,
+    SPELL_AURA_MOD_RANGED_HASTE_2                           = 320,
+    SPELL_AURA_MOD_NO_ACTIONS                               = 321,
+    SPELL_AURA_INTERFERE_TARGETTING                         = 322,
+    SPELL_AURA_323                                          = 323,
+    SPELL_AURA_324                                          = 324,
+    SPELL_AURA_325                                          = 325,
+    SPELL_AURA_PHASE_GROUP                                  = 326,  // Adds every phase of the group in miscB
+    TOTAL_AURAS                                             = 327
 };
 
 enum AuraObjectType

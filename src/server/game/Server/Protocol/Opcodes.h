@@ -1300,7 +1300,6 @@ enum OpcodeServer : uint16
     SMSG_CALENDAR_RAID_LOCKOUT_UPDATED              = 0x4636,
     SMSG_CHAR_CUSTOMIZE                             = 0x4F16,
     SMSG_PET_RENAMEABLE                             = 0x2B27,
-    SMSG_SET_PHASE_SHIFT                            = 0x47C,
     SMSG_ALL_ACHIEVEMENT_DATA                       = 0x58B1,
     SMSG_HEALTH_UPDATE                              = 0x4734,
     SMSG_POWER_UPDATE                               = 0x4A07,

@@ -2234,13 +2234,8 @@ void Player::SetGameMaster(bool on)
     }
     else
     {
-        // restore phase
-        uint32 newPhase = GetPhaseByAuras();
-
-        if (!newPhase)
-            newPhase = PHASEMASK_NORMAL;
-
-        SetPhaseMask(newPhase, false);
+        // Cata phase membership lives in m_phases; the legacy mask only carries GM visibility.
+        SetPhaseMask(uint32(PHASEMASK_NORMAL), false);
 
         m_ExtraFlags &= ~ PLAYER_EXTRA_GM_ON;
         SetFactionForRace(getRace(true));

@@ -379,6 +379,16 @@ pAuraEffectHandler AuraEffectHandler[TOTAL_AURAS] =
     &AuraEffect::HandlePreventResurrection,                       //314 SPELL_AURA_PREVENT_RESURRECTION todo
     &AuraEffect::HandleNoImmediateEffect,                         //315 SPELL_AURA_UNDERWATER_WALKING todo
     &AuraEffect::HandleNoImmediateEffect,                         //316 SPELL_AURA_PERIODIC_HASTE implemented in AuraEffect::CalculatePeriodic
+    &AuraEffect::HandleNoImmediateEffect,                         //317 SPELL_AURA_MOD_SPELL_POWER_PCT (excluded)
+    &AuraEffect::HandleNULL,                                      //318 SPELL_AURA_MASTERY
+    &AuraEffect::HandleModMeleeSpeedPct,                          //319 SPELL_AURA_MOD_MELEE_HASTE_3
+    &AuraEffect::HandleAuraModRangedHaste,                        //320 SPELL_AURA_MOD_RANGED_HASTE_2
+    &AuraEffect::HandleNULL,                                      //321 SPELL_AURA_MOD_NO_ACTIONS
+    &AuraEffect::HandleNULL,                                      //322 SPELL_AURA_INTERFERE_TARGETTING
+    &AuraEffect::HandleUnused,                                    //323 unused (4.3.4)
+    &AuraEffect::HandleNULL,                                      //324 SPELL_AURA_324
+    &AuraEffect::HandleUnused,                                    //325 unused (4.3.4)
+    &AuraEffect::HandlePhaseGroup,                                //326 SPELL_AURA_PHASE_GROUP
 };
 
 AuraEffect::AuraEffect(Aura* base, uint8 effIndex, int32* baseAmount, Unit* caster):
@@ -1952,34 +1962,14 @@ void AuraEffect::HandlePhase(AuraApplication const* aurApp, uint8 mode, bool app
         return;
 
     Unit* target = aurApp->GetTarget();
+    Player* player = target->ToPlayer();
+    if (!player)
+        return; // shortcut: creature phase auras are not modelled yet (#180)
 
-    // no-phase is also phase state so same code for apply and remove
-    uint32 newPhase = target->GetPhaseByAuras();
-
-    if (Player* player = target->ToPlayer())
-    {
-        if (!newPhase)
-            newPhase = PHASEMASK_NORMAL;
-
-        // do not change phase to GM with all phases enabled
-        if (player->IsGameMaster())
-            newPhase = PHASEMASK_ANYWHERE;
-
-        player->SetPhaseMask(newPhase, false);
-        player->GetSession()->SendSetPhaseShift(newPhase);
-    }
+    if (apply)
+        player->AddPhase(uint32(GetMiscValueB()));
     else
-    {
-        if (!newPhase)
-        {
-            newPhase = PHASEMASK_NORMAL;
-            if (Creature* creature = target->ToCreature())
-                if (CreatureData const* data = sObjectMgr->GetCreatureData(creature->GetSpawnId()))
-                    newPhase = data->phaseMask;
-        }
-
-        target->SetPhaseMask(newPhase, false);
-    }
+        player->RemovePhase(uint32(GetMiscValueB()));
 
     // call functions which may have additional effects after chainging state of unit
     // phase auras normally not expected at BG but anyway better check
@@ -1988,18 +1978,21 @@ void AuraEffect::HandlePhase(AuraApplication const* aurApp, uint8 mode, bool app
         // drop flag at invisibiliy in bg
         target->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_IMMUNE_OR_LOST_SELECTION);
     }
+}
 
-    // need triggering visibility update base at phase update of not GM invisible (other GMs anyway see in any phases)
-    if (target->IsVisible())
-    {
-        if (!target->GetMap()->Instanceable())
-        {
-            target->UpdateObjectVisibility(false);
-            target->m_last_notify_position.Relocate(-5000.0f, -5000.0f, -5000.0f);
-        }
-        else
-            target->UpdateObjectVisibility();
-    }
+void AuraEffect::HandlePhaseGroup(AuraApplication const* aurApp, uint8 mode, bool apply) const
+{
+    if (!(mode & AURA_EFFECT_HANDLE_REAL))
+        return;
+
+    Player* player = aurApp->GetTarget()->ToPlayer();
+    if (!player)
+        return; // shortcut: creature phase auras are not modelled yet (#180)
+
+    if (apply)
+        player->AddPhaseGroup(uint32(GetMiscValueB()));
+    else
+        player->RemovePhaseGroup(uint32(GetMiscValueB()));
 }
 
 /**********************/
