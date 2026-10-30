@@ -1308,12 +1308,25 @@ bool Player::UpdatePhasesForArea(uint32 areaId)
         for (uint32 phaseId : GetPhasesForGroup(uint32(aurEff->GetMiscValueB())))
             AddPhaseToSet(phaseId);
 
-    // A row's condition can depend on a phase granted by another row, and phase_area has no
-    // order, so resolve to a fixed point instead of relying on row order.
+    // phase_area rows are inherited from parent areas; a closer area that defines the same phase
+    // excludes the parent row (4.3.4 SubAreaExclusions). Walk up and keep the first definition.
     std::vector<std::pair<uint32, ConditionList>> pending;
-    for (uint32 areaPhase : sObjectMgr->GetPhasesForArea(areaId))
-        for (uint32 phaseId : GetPhasesForGroup(areaPhase))
-            pending.emplace_back(phaseId, sConditionMgr->GetConditionsForPhase(phaseId, areaId));
+    std::unordered_set<uint32> defined;
+    for (uint32 chainArea = areaId; chainArea;)
+    {
+        for (uint32 areaPhase : sObjectMgr->GetPhasesForArea(chainArea))
+            for (uint32 phaseId : GetPhasesForGroup(areaPhase))
+            {
+                if (!defined.insert(phaseId).second)
+                    continue;
+
+                pending.emplace_back(phaseId, sConditionMgr->GetConditionsForPhase(phaseId, chainArea));
+            }
+
+        // AreaTable.dbc field 2 is ParentAreaID (the 3.3.5a struct calls it zone).
+        AreaTableEntry const* area = sAreaTableStore.LookupEntry(chainArea);
+        chainArea = area ? area->zone : 0;
+    }
 
     std::vector<bool> granted(pending.size(), false);
     for (size_t pass = 0; pass < pending.size() + 1; ++pass)
