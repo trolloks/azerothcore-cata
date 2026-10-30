@@ -881,6 +881,7 @@ enum OpcodeServer : uint16
     SMSG_SET_FACTION_STANDING                       = 0x0126,
     SMSG_SET_PROFICIENCY                            = 0x6207,
     SMSG_SETUP_CURRENCY                             = 0x15A5,
+    SMSG_SET_CURRENCY                               = 0x59B0,
     SMSG_UPDATE_ACTION_BUTTONS                      = 0x38B5,
     SMSG_SEND_KNOWN_SPELLS                          = 0x0104,
     SMSG_LEARNED_SPELL                              = 0x58A2,

@@ -5603,6 +5603,16 @@ bool Player::LoadFromDB(ObjectGuid playerGuid, CharacterDatabaseQueryHolder cons
 
     SetUInt32Value(PLAYER_CHOSEN_TITLE, curTitle);
 
+    // Cata currency storage (#312); the table is created by the characters DB update.
+    if (PreparedQueryResult currencyResult = holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_CURRENCY))
+    {
+        do
+        {
+            Field* currencyFields = currencyResult->Fetch();
+            _currencyStorage[currencyFields[0].Get<uint16>()] = currencyFields[1].Get<uint32>();
+        } while (currencyResult->NextRow());
+    }
+
     // has to be called after last Relocate() in Player::LoadFromDB
     SetFallInformation(GameTime::GetGameTime().count(), GetPositionZ());
 
@@ -7294,6 +7304,18 @@ void Player::SaveToDB(CharacterDatabaseTransaction trans, bool create, bool logo
     _SaveGlyphs(trans);
     _SaveInstanceTimeRestrictions(trans);
     _SavePlayerSettings(trans);
+    CharacterDatabasePreparedStatement* currencyStmt =
+        CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHAR_CURRENCY);
+    currencyStmt->SetData(0, GetGUID().GetCounter());
+    trans->Append(currencyStmt);
+    for (auto const& [currencyId, quantity] : _currencyStorage)
+    {
+        currencyStmt = CharacterDatabase.GetPreparedStatement(CHAR_INS_CHAR_CURRENCY);
+        currencyStmt->SetData(0, GetGUID().GetCounter());
+        currencyStmt->SetData(1, currencyId);
+        currencyStmt->SetData(2, quantity);
+        trans->Append(currencyStmt);
+    }
 
     // check if stats should only be saved on logout
     // save stats can be out of transaction

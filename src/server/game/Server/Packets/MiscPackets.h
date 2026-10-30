@@ -52,6 +52,20 @@ namespace WorldPackets
             bool PlayHoverAnim = false;
         };
 
+        class SetCurrency final : public ServerPacket
+        {
+        public:
+            SetCurrency() : ServerPacket(SMSG_SET_CURRENCY, 4 + 4 + 1 + 4 + 4 + 1) { }
+
+            WorldPacket const* Write() override;
+
+            int32 Type = 0;
+            int32 Quantity = 0;
+            std::optional<int32> WeeklyQuantity;
+            std::optional<int32> TrackedQuantity;
+            bool SuppressChatLog = false;
+        };
+
         class SetupCurrency final : public ServerPacket
         {
         public:

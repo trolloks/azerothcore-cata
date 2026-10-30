@@ -510,10 +510,15 @@ def prepare(args: argparse.Namespace) -> None:
     import_sql_directory(manifest, generation, REPO_ROOT / "data/sql/base/db_auth", generation["auth_schema"])
     auth_updates = apply_released_updates(manifest, generation, REPO_ROOT / "data/sql/updates/db_auth",
                                           generation["auth_schema"])
+    auth_updates += apply_released_updates(manifest, generation, REPO_ROOT / "data/sql/updates/pending_db_auth",
+                                           generation["auth_schema"])
     import_sql_directory(manifest, generation, REPO_ROOT / "data/sql/base/db_characters",
                          generation["character_schema"])
     character_updates = apply_released_updates(manifest, generation, REPO_ROOT / "data/sql/updates/db_characters",
                                                generation["character_schema"])
+    character_updates += apply_released_updates(manifest, generation,
+                                                REPO_ROOT / "data/sql/updates/pending_db_characters",
+                                                generation["character_schema"])
 
     before = mysql(manifest, generation, "SELECT * FROM `realmlist` ORDER BY `id`;", generation["auth_schema"])
     mysql(manifest, generation, migration.read_bytes(), generation["auth_schema"])
