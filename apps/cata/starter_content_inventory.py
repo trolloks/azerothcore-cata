@@ -206,7 +206,122 @@ def inventory(container, user, password, schema, zone, map_id) -> dict[str, int]
     return result
 
 
+GUID_OFFSET = 10_000_000  # shifted spawn guids used by the clean-world import
+
 _DBC_ID_CACHE: dict[tuple[str, float], set[int]] = {}
+
+
+def dbc_field_ids(path: Path, field: int) -> set[int]:
+    """Ids from one uint32 field of a client WDBC file."""
+    data = path.read_bytes()
+    magic, records, fields, record_size, _ = struct.unpack("<4sIIII", data[:20])
+    if magic != b"WDBC":
+        raise ValueError(f"{path} is not a WDBC file")
+    if field >= fields:
+        raise ValueError(f"{path} has {fields} fields, wanted field {field}")
+    return {struct.unpack_from("<I", data, 20 + index * record_size + field * 4)[0]
+            for index in range(records)}
+
+
+def phase_dbc_sets(dbc_dir) -> tuple[set[int], set[int]]:
+    """(Phase.dbc ids, PhaseXPhaseGroup.dbc group ids)."""
+    base = Path(dbc_dir)
+    return (dbc_field_ids(base / "Phase.dbc", 0),
+            dbc_field_ids(base / "PhaseXPhaseGroup.dbc", 2))
+
+
+def spell_effect_phase_auras(dbc_dir) -> dict[int, list[tuple[int, int]]]:
+    """Spell id -> [(aura 261/326, EffectMiscValueB)] from SpellEffect.dbc."""
+    path = Path(dbc_dir) / "SpellEffect.dbc"
+    data = path.read_bytes()
+    magic, records, fields, record_size, _ = struct.unpack("<4sIIII", data[:20])
+    if magic != b"WDBC" or fields < 27:
+        raise ValueError(f"{path} has an unexpected layout")
+    effects: dict[int, list[tuple[int, int]]] = {}
+    for index in range(records):
+        row = struct.unpack_from(f"<{fields}I", data, 20 + index * record_size)
+        if row[3] in (261, 326):
+            effects.setdefault(row[24], []).append((row[3], row[13]))
+    return effects
+
+
+def check_phase_data(container, user, password, tdb_schema, ac_schema, dbc_dir) -> list[dict[str, str]]:
+    """Audit phase_area, phase conditions, spawn phases and phase-aura spells (#343)."""
+    if not dbc_dir:
+        return []
+
+    problems: list[dict[str, str]] = []
+    phases, groups = phase_dbc_sets(dbc_dir)
+
+    def problem(kind, **values):
+        problems.append({"kind": kind, **{key: str(value) for key, value in values.items()}})
+
+    # phase_area: one identity per row, valid ids, and every TDB phase row preserved.
+    source_rows = {(int(area), int(phase)) for area, phase in
+                   query(container, user, password, tdb_schema, "SELECT AreaId, PhaseId FROM phase_area")}
+    target_rows = [tuple(int(value) for value in row) for row in
+                   query(container, user, password, ac_schema,
+                         "SELECT AreaId, PhaseId, PhaseGroup FROM phase_area")]
+    for area, phase, group in target_rows:
+        if bool(phase) == bool(group):
+            problem("phase_area_shape", area=area, id=f"{phase}/{group}")
+        elif phase and phase not in phases:
+            problem("phase_area_id", area=area, id=phase)
+        elif group and group not in groups:
+            problem("phase_area_group", area=area, id=group)
+
+    target_phases = {(area, phase) for area, phase, group in target_rows if group == 0}
+    for area, phase in sorted(source_rows - target_phases):
+        problem("phase_area_missing", area=area, id=phase)
+    for area, phase in sorted(target_phases - source_rows):
+        problem("phase_area_extra", area=area, id=phase)
+
+    # Conditions: source type 26 keys and the Cata phase/group types.
+    for row in query(container, user, password, ac_schema,
+                     "SELECT SourceTypeOrReferenceId, SourceGroup, ConditionTypeOrReference, ConditionValue1 "
+                     "FROM conditions"):
+        source, source_group, cond_type, value = (int(part) for part in row)
+        if source == 26 and source_group not in phases and source_group not in groups:
+            problem("phase_condition_source", id=source_group)
+        if cond_type == 108 and value not in phases:
+            problem("phase_condition_id", id=value)
+        if cond_type == 109 and value not in groups:
+            problem("phase_condition_group", id=value)
+
+    # Spawns: ids valid and source -> target (shifted GUID) values preserved.
+    for table in ("creature", "gameobject"):
+        for column, known, kind in (("PhaseId", phases, "phase_spawn_id"),
+                                    ("PhaseGroup", groups, "phase_spawn_group")):
+            for (value,) in query(container, user, password, ac_schema,
+                                  f"SELECT DISTINCT `{column}` FROM `{table}` WHERE `{column}`<>0"):
+                if int(value) not in known:
+                    problem(kind, table=table, id=value)
+        mismatch = scalar(container, user, password, ac_schema,
+                          f"SELECT COUNT(*) FROM `{ac_schema}`.`{table}` t "
+                          f"JOIN `{tdb_schema}`.`{table}` s ON t.guid=s.guid+{GUID_OFFSET} "
+                          f"WHERE t.PhaseId<>s.PhaseId OR t.PhaseGroup<>s.PhaseGroup")
+        if mismatch:
+            problem("phase_spawn_source_mismatch", table=table, id=mismatch)
+
+    # Referenced phase-aura spells must carry a valid phase (261) or group (326).
+    referenced = query(container, user, password, ac_schema,
+                       "SELECT DISTINCT spell FROM ("
+                       "SELECT RequiredSpell AS spell FROM quest_template WHERE RequiredSpell<>0 "
+                       "UNION SELECT RewardSpell FROM quest_template WHERE RewardSpell<>0 "
+                       "UNION SELECT spell FROM spell_area "
+                       "UNION SELECT action_param1 FROM smart_scripts WHERE action_type=11 AND action_param1<>0 "
+                       "UNION SELECT action_param1 FROM smart_scripts WHERE action_type=85 AND action_param1<>0 "
+                       "UNION SELECT spell FROM creature_template_spell) x")
+    if referenced:
+        effects = spell_effect_phase_auras(dbc_dir)
+        for (spell,) in referenced:
+            for aura, value in effects.get(int(spell), ()):
+                if aura == 261 and value not in phases:
+                    problem("phase_aura_id", spell=spell, id=value)
+                elif aura == 326 and value not in groups:
+                    problem("phase_aura_group", spell=spell, id=value)
+
+    return problems
 
 
 def dbc_ids(path: Path) -> set[int]:
@@ -971,8 +1086,11 @@ def main() -> int:
         args.container, args.user, args.password, args.tdb_schema, args.zone, args.map,
         dbc_dir=args.dbc_dir)
     report["tdb_dangling"] = problems
+    phase_problems = [] if args.metadata_only else check_phase_data(
+        args.container, args.user, args.password, args.tdb_schema, args.ac_schema, args.dbc_dir)
+    report["phase_problems"] = phase_problems
     print(json.dumps(report, indent=2))
-    return 1 if problems else 0
+    return 1 if problems or phase_problems else 0
 
 
 if __name__ == "__main__":
