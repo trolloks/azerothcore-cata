@@ -16,6 +16,7 @@
  */
 
 #include "Log.h"
+#include "MovementPackets.h"
 #include "ObjectAccessor.h"
 #include "Opcodes.h"
 #include "Player.h"
@@ -35,8 +36,9 @@ void WorldSession::HandleDismissControlledVehicle(WorldPacket& recvData)
         return;
     }
 
-    ObjectGuid guid;
-    recvData >> guid.ReadAsPacked();
+    MovementInfo mi;
+    ReadMovementInfo(recvData, &mi);
+    ObjectGuid guid = mi.guid;
 
     // pussywizard: typical check for incomming movement packets
     if (!_player->m_mover || !_player->m_mover->IsInWorld() || _player->m_mover->IsDuringRemoveFromWorld() || guid != _player->m_mover->GetGUID())
@@ -45,10 +47,6 @@ void WorldSession::HandleDismissControlledVehicle(WorldPacket& recvData)
         _player->ExitVehicle();
         return;
     }
-
-    MovementInfo mi;
-    mi.guid = guid;
-    ReadMovementInfo(recvData, &mi);
 
     if (_player->m_mover->IsRooted()) // for some reason client sends it without it even if rooted
         mi.AddMovementFlag(MOVEMENTFLAG_ROOT);
@@ -88,26 +86,23 @@ void WorldSession::HandleChangeSeatsOnControlledVehicle(WorldPacket& recvData)
             break;
         case CMSG_CHANGE_SEATS_ON_CONTROLLED_VEHICLE:
             {
-                ObjectGuid guid;        // current vehicle guid
-                recvData >> guid.ReadAsPacked();
+                WorldPackets::Movement::ExtraMovementStatusElement extra(
+                    WorldPackets::Movement::GetChangeSeatsExtraSequence());
+
+                MovementInfo movementInfo;
+                ReadMovementInfo(recvData, &movementInfo, &extra);
 
                 // pussywizard:
-                if (vehicle_base->GetGUID() != guid)
+                if (vehicle_base->GetGUID() != movementInfo.guid)
                 {
                     recvData.rfinish(); // prevent warnings spam
                     return;
                 }
 
-                MovementInfo movementInfo;
-                movementInfo.guid = guid;
-                ReadMovementInfo(recvData, &movementInfo);
                 vehicle_base->m_movementInfo = movementInfo;
 
-                ObjectGuid accessory;        //  accessory guid
-                recvData >> accessory.ReadAsPacked();
-
-                int8 seatId;
-                recvData >> seatId;
+                ObjectGuid accessory = extra.Data.guid;        // accessory guid
+                int8 seatId = extra.Data.byteData;
 
                 if (!accessory)
                     GetPlayer()->ChangeSeat(-1, seatId > 0); // prev/next
