@@ -108,7 +108,9 @@ void TestCreature::SetInWorld(bool inWorld)
 
 void TestCreature::SetPhase(uint32 phase)
 {
+    // Both models: the legacy mask for grid prefiltering and the Cata spawn phase for visibility.
     SetPhaseMask(phase, false);
+    SetSpawnPhaseId(phase);
 }
 
 void TestCreature::SetFaction(uint32 faction)
@@ -126,7 +128,7 @@ void TestCreature::SetupForCombatTest(Map* map, ObjectGuid::LowType guidLow, uin
     SetTestMap(map);
     SetInWorld(true);
     SetAlive(true);
-    SetPhase(1);
+    SetPhase(DEFAULT_PHASE);
     SetHostileFaction();
     SetIsCombatDisallowed(false);
     ClearUnitState(UNIT_STATE_EVADE);

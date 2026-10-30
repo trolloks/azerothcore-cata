@@ -18,16 +18,18 @@
 #include "IntegrationTestFixture.h"
 #include "gtest/gtest.h"
 
-// A spawn with no Cata phase assigned (the default) is always visible, regardless of the
-// viewer's phase membership.
-TEST_F(IntegrationTestFixture, UngatedSpawnIsAlwaysVisible)
+// A spawn row with phase 0 is unphased (default phase 169): visible to unphased players only.
+TEST_F(IntegrationTestFixture, UngatedSpawnIsUnphased)
 {
-    TestPlayer* player = CreateTestPlayer(1, "PhaseTest", SEC_PLAYER);
-    player->SetPhasesForTest({});
+    TestPlayer* unphased = CreateTestPlayer(1, "PhaseTest", SEC_PLAYER);
+    TestPlayer* phased = CreateTestPlayer(2, "PhaseTest2", SEC_PLAYER);
+    phased->SetPhasesForTest({170});
 
-    TestCreature* creature = CreateTestCreature(2, 1, TEST_FACTION_HOSTILE_TO_MONSTERS);
+    TestCreature* creature = CreateTestCreature(3, 1, TEST_FACTION_HOSTILE_TO_MONSTERS);
+    creature->SetSpawnPhaseId(0);
     EXPECT_EQ(creature->GetSpawnPhaseId(), 0u);
-    EXPECT_TRUE(creature->IsPhaseVisibleTo(player));
+    EXPECT_TRUE(creature->IsPhaseVisibleTo(unphased));
+    EXPECT_FALSE(creature->IsPhaseVisibleTo(phased));
 }
 
 // A spawn gated to a phase the player is in is visible.

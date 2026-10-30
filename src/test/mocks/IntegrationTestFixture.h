@@ -144,7 +144,7 @@ protected:
         creature->SetTestMap(_testMap);
         creature->SetInWorld(true);
         creature->SetAlive(true);
-        creature->SetPhase(1);
+        creature->SetPhase(DEFAULT_PHASE);
         creature->SetFaction(factionId);
         creature->SetLevel(80);
         creature->SetMaxHealth(10000);

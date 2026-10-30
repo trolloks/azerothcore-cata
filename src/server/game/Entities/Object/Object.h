@@ -551,13 +551,15 @@ public:
 
     virtual void SetPhaseMask(uint32 newPhaseMask, bool update);
     [[nodiscard]] uint32 GetPhaseMask() const { return m_phaseMask; }
-    bool InSamePhase(WorldObject const* obj) const { return InSamePhase(obj->GetPhaseMask()); }
+    bool InSamePhase(WorldObject const* obj) const;
     [[nodiscard]] bool InSamePhase(uint32 phasemask) const { return m_useCombinedPhases ? GetPhaseMask() & phasemask : GetPhaseMask() == phasemask; }
 
     // Cata Phase/PhaseGroup (see DBCStores::GetPhasesForGroup), independent of the legacy
-    // phasemask above. 0 means the spawn is not gated by a Cata phase (always visible).
-    void SetSpawnPhaseId(uint32 phaseId) { m_spawnPhaseId = phaseId; }
+    // phasemask above. A spawn row with phase 0 is unphased (default phase 169); objects without
+    // spawn data are not gated until their creator's shift is inherited (#345).
+    void SetSpawnPhaseId(uint32 phaseId) { m_spawnPhaseId = phaseId; m_hasSpawnPhase = true; }
     [[nodiscard]] uint32 GetSpawnPhaseId() const { return m_spawnPhaseId; }
+    [[nodiscard]] bool HasSpawnPhase() const { return m_hasSpawnPhase; }
     [[nodiscard]] bool IsPhaseVisibleTo(Player const* player) const;
 
     [[nodiscard]] uint32 GetZoneId() const;
@@ -866,7 +868,8 @@ private:
     uint32 m_InstanceId;                                // in map copy with instance id
     uint32 m_phaseMask;                                 // in area phase state
     bool m_useCombinedPhases;                           // true (default): use phaseMask as bit mask combining up to 32 phases
-    uint32 m_spawnPhaseId;                              // Cata Phase/PhaseGroup id from spawn data; 0 = not phase-gated
+    uint32 m_spawnPhaseId;                              // Cata Phase/PhaseGroup id from spawn data
+    bool m_hasSpawnPhase;                               // true when loaded from a spawn row (phase 0 = unphased)
     // false: use phaseMask to represent single phases only (up to 4294967295 phases)
 
     uint16 m_notifyflags;
