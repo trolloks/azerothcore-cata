@@ -246,9 +246,9 @@ public:
                 player->RemoveVehicleKit();
             }
 
-            WorldPacket data(SMSG_PLAYER_VEHICLE_DATA, player->GetPackGUID().size() + 4);
+            WorldPacket data(SMSG_SET_VEHICLE_REC_ID, player->GetPackGUID().size() + 4);
             data << player->GetPackGUID();
-            data << uint32(apply ? VEHICLE_SNOBOLD_CARRIER : 0);
+            data << int32(apply ? VEHICLE_SNOBOLD_CARRIER : 0);
             player->SendMessageToSet(&data, true);
 
             if (apply)

@@ -10310,10 +10310,10 @@ void Unit::Mount(uint32 mount, uint32 VehicleId, uint32 creatureEntry)
             {
                 GetVehicleKit()->Reset();
 
-                // Send others that we now have a vehicle
-                WorldPacket data(SMSG_PLAYER_VEHICLE_DATA, GetPackGUID().size() + 4);
+                // Send others that we now have a vehicle (4.3.4 vehicle record id)
+                WorldPacket data(SMSG_SET_VEHICLE_REC_ID, GetPackGUID().size() + 4);
                 data << GetPackGUID();
-                data << uint32(VehicleId);
+                data << int32(VehicleId);
                 SendMessageToSet(&data, true);
 
                 data.Initialize(SMSG_ON_CANCEL_EXPECTED_RIDE_VEHICLE_AURA, 0);
@@ -10378,9 +10378,9 @@ void Unit::Dismount()
     if (IsPlayer() && GetVehicleKit())
     {
         // Send other players that we are no longer a vehicle
-        data.Initialize(SMSG_PLAYER_VEHICLE_DATA, 8 + 4);
+        data.Initialize(SMSG_SET_VEHICLE_REC_ID, 8 + 4);
         data << GetPackGUID();
-        data << uint32(0);
+        data << int32(0);
         ToPlayer()->SendMessageToSet(&data, true);
         // Remove vehicle from player
         RemoveVehicleKit();

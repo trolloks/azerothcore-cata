@@ -1327,7 +1327,7 @@ enum OpcodeServer : uint16
     SMSG_SERVER_INFO_RESPONSE                       = 0x74B5,
     SMSG_SERVER_BUCK_DATA_START                     = 0x4A3,
     SMSG_BATTLEGROUND_INFO_THROTTLED                = 0x34B2, // empty, "You can't do that yet"
-    SMSG_PLAYER_VEHICLE_DATA                        = 0x4A7, // guid+uint32 (vehicle)
+    SMSG_SET_VEHICLE_REC_ID                         = 0x4115, // guid + int32 vehicle record id
     SMSG_PET_GUIDS                                  = 0x2D26,
     SMSG_CLIENTCACHE_VERSION                        = 0x2734,
     SMSG_ITEM_REFUND_INFO_RESPONSE                  = 0x15A3,
