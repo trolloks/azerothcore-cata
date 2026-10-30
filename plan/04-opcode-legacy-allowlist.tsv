@@ -338,7 +338,6 @@ s2c	SMSG_PARTY_MEMBER_STATS	#182	grouping and social packets are ported with pha
 s2c	SMSG_PARTY_MEMBER_STATS_FULL	#182	grouping and social packets are ported with phase 9
 s2c	SMSG_PET_UNLEARNED_SPELL	#177	class mechanics are ported with phase 4
 s2c	SMSG_PET_UNLEARN_CONFIRM	#177	class mechanics are ported with phase 4
-s2c	SMSG_PLAYER_VEHICLE_DATA	#186	movement packet layout is ported with the movement work
 s2c	SMSG_PLAY_SPELL_IMPACT	#168	WotLK-only opcode with no 4.3.4 counterpart in the pin
 s2c	SMSG_PROFILEDATA_RESPONSE	#168	WotLK-only opcode with no 4.3.4 counterpart in the pin
 s2c	SMSG_PVP_QUEUE_STATS	#168	WotLK-only opcode with no 4.3.4 counterpart in the pin

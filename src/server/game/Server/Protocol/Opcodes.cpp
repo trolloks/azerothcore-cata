@@ -1482,7 +1482,7 @@ void OpcodeTable::Initialize()
     /*0x04A4*/ DEFINE_HANDLER(CMSG_SET_BREATH,                                                       STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x04A5*/ DEFINE_HANDLER(CMSG_QUERY_VEHICLE_STATUS,                                             STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x34B2*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_BATTLEGROUND_INFO_THROTTLED,                        STATUS_NEVER);
-    /*0x04A7*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_PLAYER_VEHICLE_DATA,                                STATUS_NEVER);
+    /*0x4115*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_SET_VEHICLE_REC_ID,                                 STATUS_NEVER);
     /*0x2705*/ DEFINE_HANDLER(CMSG_PLAYER_VEHICLE_ENTER,                                             STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleEnterPlayerVehicle                 );
     /*0x04A9*/ DEFINE_HANDLER(CMSG_CONTROLLER_EJECT_PASSENGER,                                       STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleEjectPassenger                     );
     /*0x2D26*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_PET_GUIDS,                                          STATUS_NEVER);
