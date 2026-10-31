@@ -68,6 +68,36 @@ int MapCollisionData::LoadMMapTile(uint32 tileX, uint32 tileY)
     return MMAP::MMapMgr::LoadTile(_mmapData._navMesh.get(), _map.GetId(), tileX, tileY);
 }
 
+MMapData& MapCollisionData::GetMMapDataForMap(uint32 mapId)
+{
+    if (mapId == _map.GetId())
+        return _mmapData;
+
+    if (!DisableMgr::IsPathfindingEnabled(&_map))
+        return _mmapData;
+
+    auto itr = _terrainMMapData.find(mapId);
+    if (itr != _terrainMMapData.end())
+        return itr->second->_navMesh ? *itr->second : _mmapData;
+
+    std::unique_ptr<MMapData> data = std::make_unique<MMapData>();
+    data->_navMesh = MMAP::MMapMgr::LoadNavMesh(mapId);
+    if (!data->_navMesh)
+    {
+        // Cache the failed load; optional child mmaps must not retry disk/config access per path.
+        _terrainMMapData.emplace(mapId, std::move(data));
+        return _mmapData;
+    }
+
+    // shortcut: load the whole child mesh on first use; grid loading is map-global, not per visible
+    // terrain set. Load per visible grid if startup latency in a swap zone becomes a problem.
+    MMAP::MMapMgr::LoadTilesFromDirectory(data->_navMesh.get(), mapId, sWorld->GetDataPath() + "mmaps");
+
+    MMapData& result = *data;
+    _terrainMMapData.emplace(mapId, std::move(data));
+    return result;
+}
+
 bool StaticVMapCollisionData::isInLineOfSight(float x1, float y1, float z1, float x2, float y2, float z2, VMAP::ModelIgnoreFlags ignoreFlags) const
 {
 #if defined(ENABLE_VMAP_CHECKS)
