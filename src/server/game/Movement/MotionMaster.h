@@ -240,8 +240,12 @@ public:
     void MoveFleeing(Unit* enemy, uint32 time = 0);
     void MovePoint(uint32 id, Position const& pos, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, float speed = 0.f, bool generatePath = true, bool forceDestination = true, std::optional<AnimTier> animTier = std::nullopt)
     { MovePoint(id, pos.m_positionX, pos.m_positionY, pos.m_positionZ, forcedMovement, speed, pos.GetOrientation(), generatePath, forceDestination, MOTION_SLOT_ACTIVE, animTier); }
+    void MovePoint(uint32 id, Position const& pos, bool generatePath, bool forceDestination = true)
+    { MovePoint(id, pos, FORCED_MOVEMENT_NONE, 0.f, generatePath, forceDestination); }
     void MovePoint(uint32 id, float x, float y, float z, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, float speed = 0.f, float orientation = 0.0f, bool generatePath = true, bool forceDestination = true, MovementSlot slot = MOTION_SLOT_ACTIVE, std::optional<AnimTier> animTier = std::nullopt);
     void MoveSplinePath(Movement::PointsArray* path, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE);
+    void MoveSmoothPath(uint32 pointId, Position const* pathPoints, size_t pathSize,
+        bool walk = false, bool fly = false, float velocity = 0.f);
     void MovePath(uint32 path_id, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, PathSource pathSource = PathSource::WAYPOINT_MGR);
 
     // These two movement types should only be used with creatures having landing/takeoff animations

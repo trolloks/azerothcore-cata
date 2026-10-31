@@ -35,6 +35,9 @@
 #include "WaypointMgr.h"
 #include "WaypointMovementGenerator.h"
 #include "SmartScriptMgr.h"
+#include "GenericMovementGenerator.h"
+#include <algorithm>
+#include <iterator>
 
 inline MovementGenerator* GetIdleMovementGenerator()
 {
@@ -515,6 +518,30 @@ void MotionMaster::MoveSplinePath(Movement::PointsArray* path, ForcedMovement fo
     {
         Mutate(new EscortMovementGenerator<Creature>(forcedMovement, path), MOTION_SLOT_ACTIVE);
     }
+}
+
+void MotionMaster::MoveSmoothPath(uint32 pointId, Position const* pathPoints, size_t pathSize,
+    bool walk, bool fly, float velocity)
+{
+    Movement::PointsArray path;
+    path.reserve(pathSize + 1);
+    path.emplace_back(_owner->GetPositionX(), _owner->GetPositionY(), _owner->GetPositionZ());
+    std::transform(pathPoints, pathPoints + pathSize, std::back_inserter(path),
+        [](Position const& point)
+        {
+            return G3D::Vector3(point.GetPositionX(), point.GetPositionY(), point.GetPositionZ());
+        });
+
+    Movement::MoveSplineInit init(_owner);
+    init.MovebyPath(path);
+    init.SetSmooth();
+    if (fly)
+        init.SetFly();
+    init.SetWalk(walk);
+    if (velocity > 0.0f)
+        init.SetVelocity(velocity);
+
+    Mutate(new GenericMovementGenerator(std::move(init), EFFECT_MOTION_TYPE, pointId), MOTION_SLOT_ACTIVE);
 }
 
 void MotionMaster::MovePath(uint32 path_id, ForcedMovement forcedMovement, PathSource pathSource)
