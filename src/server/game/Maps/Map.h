@@ -56,6 +56,7 @@ class WorldObject;
 class TempSummon;
 class Player;
 class CreatureGroup;
+class TerrainSwapCache;
 struct ScriptInfo;
 struct ScriptAction;
 struct Position;
@@ -230,6 +231,12 @@ public:
     std::shared_ptr<GridTerrainData> GetGridTerrainDataSharedPtr(GridCoord const& gridCoord);
     GridTerrainData* GetGridTerrainData(GridCoord const& gridCoord);
     GridTerrainData* GetGridTerrainData(float x, float y);
+    GridTerrainData* GetTerrainDataForMap(uint32 mapId, float x, float y);
+    StaticVMapCollisionData* GetStaticCollisionForMap(uint32 mapId, float x, float y);
+    [[nodiscard]] bool GetStaticObjectHitPos(std::vector<uint32> const* visibleMapIds,
+        float x1, float y1, float z1, float x2, float y2, float z2,
+        float& rx, float& ry, float& rz, float modifyDist) const;
+    [[nodiscard]] uint32 GetTerrainMapId(std::vector<uint32> const& visibleMapIds, float x, float y) const;
 
     [[nodiscard]] uint32 GetId() const { return i_mapEntry->MapID; }
 
@@ -241,23 +248,37 @@ public:
 
     // some calls like isInWater should not use vmaps due to processor power
     // can return INVALID_HEIGHT if under z+2 z coord not found height
-    [[nodiscard]] float GetHeight(float x, float y, float z, bool checkVMap = true, float maxSearchDist = DEFAULT_HEIGHT_SEARCH) const;
-    [[nodiscard]] float GetHeight(Position const& pos, bool checkVMap = true, float maxSearchDist = DEFAULT_HEIGHT_SEARCH) const { return GetHeight(pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ(), checkVMap, maxSearchDist); }
-    [[nodiscard]] float GetGridHeight(float x, float y) const;
-    [[nodiscard]] float GetMinHeight(float x, float y) const;
+    [[nodiscard]] float GetHeight(float x, float y, float z, bool checkVMap = true, float maxSearchDist = DEFAULT_HEIGHT_SEARCH,
+        std::vector<uint32> const* visibleMapIds = nullptr) const;
+    [[nodiscard]] float GetHeight(Position const& pos, bool checkVMap = true, float maxSearchDist = DEFAULT_HEIGHT_SEARCH,
+        std::vector<uint32> const* visibleMapIds = nullptr) const
+    {
+        return GetHeight(pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ(), checkVMap, maxSearchDist, visibleMapIds);
+    }
+    [[nodiscard]] float GetGridHeight(float x, float y, std::vector<uint32> const* visibleMapIds = nullptr) const;
+    [[nodiscard]] float GetMinHeight(float x, float y, std::vector<uint32> const* visibleMapIds = nullptr) const;
     Transport* GetTransportForPos(uint32 phase, float x, float y, float z, WorldObject* worldobject = nullptr);
 
-    void GetFullTerrainStatusForPosition(uint32 phaseMask, float x, float y, float z, float collisionHeight, PositionFullTerrainStatus& data, Optional<uint8> reqLiquidType = {});
-    LiquidData const GetLiquidData(uint32 phaseMask, float x, float y, float z, float collisionHeight, Optional<uint8> ReqLiquidType);
+    void GetFullTerrainStatusForPosition(uint32 phaseMask, float x, float y, float z, float collisionHeight,
+        PositionFullTerrainStatus& data, Optional<uint8> reqLiquidType = {},
+        std::vector<uint32> const* visibleMapIds = nullptr);
+    LiquidData const GetLiquidData(uint32 phaseMask, float x, float y, float z, float collisionHeight,
+        Optional<uint8> ReqLiquidType, std::vector<uint32> const* visibleMapIds = nullptr);
 
-    [[nodiscard]] bool GetAreaInfo(uint32 phaseMask, float x, float y, float z, uint32& mogpflags, int32& adtId, int32& rootId, int32& groupId) const;
-    [[nodiscard]] uint32 GetAreaId(uint32 phaseMask, float x, float y, float z) const;
-    [[nodiscard]] uint32 GetZoneId(uint32 phaseMask, float x, float y, float z) const;
-    void GetZoneAndAreaId(uint32 phaseMask, uint32& zoneid, uint32& areaid, float x, float y, float z) const;
+    [[nodiscard]] bool GetAreaInfo(uint32 phaseMask, float x, float y, float z, uint32& mogpflags, int32& adtId,
+        int32& rootId, int32& groupId, std::vector<uint32> const* visibleMapIds = nullptr) const;
+    [[nodiscard]] uint32 GetAreaId(uint32 phaseMask, float x, float y, float z,
+        std::vector<uint32> const* visibleMapIds = nullptr) const;
+    [[nodiscard]] uint32 GetZoneId(uint32 phaseMask, float x, float y, float z,
+        std::vector<uint32> const* visibleMapIds = nullptr) const;
+    void GetZoneAndAreaId(uint32 phaseMask, uint32& zoneid, uint32& areaid, float x, float y, float z,
+        std::vector<uint32> const* visibleMapIds = nullptr) const;
 
-    [[nodiscard]] float GetWaterLevel(float x, float y) const;
-    [[nodiscard]] bool IsInWater(uint32 phaseMask, float x, float y, float z, float collisionHeight) const;
-    [[nodiscard]] bool IsUnderWater(uint32 phaseMask, float x, float y, float z, float collisionHeight) const;
+    [[nodiscard]] float GetWaterLevel(float x, float y, std::vector<uint32> const* visibleMapIds = nullptr) const;
+    [[nodiscard]] bool IsInWater(uint32 phaseMask, float x, float y, float z, float collisionHeight,
+        std::vector<uint32> const* visibleMapIds = nullptr) const;
+    [[nodiscard]] bool IsUnderWater(uint32 phaseMask, float x, float y, float z, float collisionHeight,
+        std::vector<uint32> const* visibleMapIds = nullptr) const;
     [[nodiscard]] bool HasEnoughWater(WorldObject const* searcher, float x, float y, float z) const;
     [[nodiscard]] bool HasEnoughWater(WorldObject const* searcher, LiquidData const& liquidData) const;
 
@@ -393,9 +414,13 @@ public:
     BattlegroundMap* ToBattlegroundMap() { if (IsBattlegroundOrArena()) return reinterpret_cast<BattlegroundMap*>(this); else return nullptr;  }
     [[nodiscard]] BattlegroundMap const* ToBattlegroundMap() const { if (IsBattlegroundOrArena()) return reinterpret_cast<BattlegroundMap const*>(this); return nullptr; }
 
-    float GetWaterOrGroundLevel(uint32 phasemask, float x, float y, float z, float* ground = nullptr, bool swim = false, float collisionHeight = DEFAULT_COLLISION_HEIGHT) const;
-    [[nodiscard]] float GetHeight(uint32 phasemask, float x, float y, float z, bool vmap = true, float maxSearchDist = DEFAULT_HEIGHT_SEARCH) const;
-    [[nodiscard]] bool isInLineOfSight(float x1, float y1, float z1, float x2, float y2, float z2, uint32 phasemask, LineOfSightChecks checks, VMAP::ModelIgnoreFlags ignoreFlags) const;
+    float GetWaterOrGroundLevel(uint32 phasemask, float x, float y, float z, float* ground = nullptr, bool swim = false,
+        float collisionHeight = DEFAULT_COLLISION_HEIGHT, std::vector<uint32> const* visibleMapIds = nullptr) const;
+    [[nodiscard]] float GetHeight(uint32 phasemask, float x, float y, float z, bool vmap = true,
+        float maxSearchDist = DEFAULT_HEIGHT_SEARCH, std::vector<uint32> const* visibleMapIds = nullptr) const;
+    [[nodiscard]] bool isInLineOfSight(float x1, float y1, float z1, float x2, float y2, float z2, uint32 phasemask,
+        LineOfSightChecks checks, VMAP::ModelIgnoreFlags ignoreFlags,
+        std::vector<uint32> const* visibleMapIds = nullptr) const;
     bool CanReachPositionAndGetValidCoords(WorldObject const* source, PathGenerator *path, float &destX, float &destY, float &destZ, bool failOnCollision = true, bool failOnSlopes = true) const;
     bool CanReachPositionAndGetValidCoords(WorldObject const* source, float &destX, float &destY, float &destZ, bool failOnCollision = true, bool failOnSlopes = true) const;
     bool CanReachPositionAndGetValidCoords(WorldObject const* source, float startX, float startY, float startZ, float &destX, float &destY, float &destZ, bool failOnCollision = true, bool failOnSlopes = true) const;
@@ -591,6 +616,7 @@ private:
 
     bool EnsureGridLoaded(Cell const& cell);
     MapGridType* GetMapGrid(uint16 const x, uint16 const y);
+    TerrainSwapCache& GetTerrainSwapCache() const;
 
     void ScriptsProcess();
 
@@ -608,6 +634,7 @@ protected:
     MapGridManager _mapGridManager;
     MapEntry const* i_mapEntry;
     MapCollisionData _mapCollisionData;
+    mutable std::unique_ptr<TerrainSwapCache> _terrainSwapCache;
     uint8 i_spawnMode;
     uint32 i_InstanceId;
     uint32 m_unloadTimer;

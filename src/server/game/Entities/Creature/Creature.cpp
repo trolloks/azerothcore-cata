@@ -1762,7 +1762,7 @@ bool Creature::LoadCreatureFromDB(ObjectGuid::LowType spawnId, Map* map, bool ad
         m_deathState = DeathState::Dead;
         if (CanFly())
         {
-            float tz = map->GetHeight(GetPhaseMask(), data->posX, data->posY, data->posZ, true, MAX_FALL_DISTANCE);
+            float tz = map->GetHeight(GetPhaseMask(), data->posX, data->posY, data->posZ, true, MAX_FALL_DISTANCE, GetTerrainMapIds());
             if (data->posZ - tz > 0.1f && Acore::IsValidMapCoord(tz))
             {
                 Relocate(data->posX, data->posY, tz);

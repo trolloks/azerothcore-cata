@@ -1318,12 +1318,21 @@ void WorldObject::SetPositionDataUpdate()
         UpdatePositionData();
 }
 
+std::vector<uint32> const* WorldObject::GetTerrainMapIds() const
+{
+    if (IsUnit())
+        if (Player const* player = static_cast<Unit const*>(this)->GetCharmerOrOwnerPlayerOrPlayerItself())
+            return &player->GetVisibleMaps();
+
+    return nullptr;
+}
+
 void WorldObject::UpdatePositionData()
 {
     _updatePositionData = false;
 
     PositionFullTerrainStatus data;
-    GetMap()->GetFullTerrainStatusForPosition(GetPhaseMask(), GetPositionX(), GetPositionY(), GetPositionZ(), GetCollisionHeight(), data);
+    GetMap()->GetFullTerrainStatusForPosition(GetPhaseMask(), GetPositionX(), GetPositionY(), GetPositionZ(), GetCollisionHeight(), data, {}, GetTerrainMapIds());
     ProcessPositionDataChanged(data);
 }
 
@@ -1356,7 +1365,7 @@ void WorldObject::ProcessPositionDataChanged(PositionFullTerrainStatus const& da
 void WorldObject::AddToWorld()
 {
     Object::AddToWorld();
-    GetMap()->GetZoneAndAreaId(GetPhaseMask(), _zoneId, _areaId, GetPositionX(), GetPositionY(), GetPositionZ());
+    GetMap()->GetZoneAndAreaId(GetPhaseMask(), _zoneId, _areaId, GetPositionX(), GetPositionY(), GetPositionZ(), GetTerrainMapIds());
     GetMap()->AddObjectToPendingUpdateList(this);
 
     if (IsZoneWideVisible())
@@ -1537,7 +1546,7 @@ bool WorldObject::IsWithinLOS(float ox, float oy, float oz, VMAP::ModelIgnoreFla
             GetHitSpherePointFor({ ox, oy, oz }, x, y, z);
         }
 
-        return GetMap()->isInLineOfSight(x, y, z, ox, oy, oz, GetPhaseMask(), checks, ignoreFlags);
+        return GetMap()->isInLineOfSight(x, y, z, ox, oy, oz, GetPhaseMask(), checks, ignoreFlags, GetTerrainMapIds());
     }
     return true;
 }
@@ -1565,7 +1574,7 @@ bool WorldObject::IsWithinLOSInMap(WorldObject const* obj, VMAP::ModelIgnoreFlag
     else
         GetHitSpherePointFor({ obj->GetPositionX(), obj->GetPositionY(), obj->GetPositionZ() + obj->GetCollisionHeight() }, x, y, z, collisionHeight, combatReach);
 
-    return GetMap()->isInLineOfSight(x, y, z, ox, oy, oz, GetPhaseMask(), checks, ignoreFlags);
+    return GetMap()->isInLineOfSight(x, y, z, ox, oy, oz, GetPhaseMask(), checks, ignoreFlags, GetTerrainMapIds());
 }
 
 void WorldObject::GetHitSpherePointFor(Position const& dest, float& x, float& y, float& z, Optional<float> collisionHeight, Optional<float> combatReach) const
@@ -1774,7 +1783,7 @@ void WorldObject::UpdateAllowedPositionZ(float x, float y, float& z, float* grou
 
             if (max_z > INVALID_HEIGHT)
             {
-                if (canSwim && unit->GetMap()->IsInWater(unit->GetPhaseMask(), x, y, max_z - Z_OFFSET_FIND_HEIGHT, unit->GetCollisionHeight()))
+                if (canSwim && unit->GetMap()->IsInWater(unit->GetPhaseMask(), x, y, max_z - Z_OFFSET_FIND_HEIGHT, unit->GetCollisionHeight(), unit->GetTerrainMapIds()))
                 {
                     // do not allow creatures to walk on
                     // water level while swimming
@@ -3602,14 +3611,14 @@ float WorldObject::GetMapHeight(float x, float y, float z, bool vmap/* = true*/,
     if (z != MAX_HEIGHT)
         z += std::max(GetCollisionHeight(), Z_OFFSET_FIND_HEIGHT);
 
-    return GetMap()->GetHeight(GetPhaseMask(), x, y, z, vmap, distanceToSearch);
+    return GetMap()->GetHeight(GetPhaseMask(), x, y, z, vmap, distanceToSearch, GetTerrainMapIds());
 }
 
 float WorldObject::GetMapWaterOrGroundLevel(float x, float y, float z, float* ground/* = nullptr*/) const
 {
     return GetMap()->GetWaterOrGroundLevel(GetPhaseMask(), x, y, z, ground,
         IsUnit() ? !static_cast<Unit const*>(this)->HasWaterWalkAura() : false,
-        std::max(GetCollisionHeight(),  Z_OFFSET_FIND_HEIGHT));
+        std::max(GetCollisionHeight(),  Z_OFFSET_FIND_HEIGHT), GetTerrainMapIds());
 }
 
 float WorldObject::GetFloorZ() const

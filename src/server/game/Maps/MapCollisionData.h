@@ -37,6 +37,8 @@ class StaticVMapCollisionData
 
 public:
     StaticVMapCollisionData(uint32 mapId) : _mapId(mapId) {}
+    StaticVMapCollisionData(uint32 mapId, std::shared_ptr<VMAP::StaticMapTree> staticTree)
+        : _staticTree(staticTree), _mapId(mapId) {}
 
     bool isInLineOfSight(float x1, float y1, float z1, float x2, float y2, float z2, VMAP::ModelIgnoreFlags ignoreFlags) const;
     bool GetObjectHitPos(float x1, float y1, float z1, float x2, float y2, float z2, float& rx, float& ry, float& rz, float modifyDist) const;

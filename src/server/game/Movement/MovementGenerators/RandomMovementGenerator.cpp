@@ -185,7 +185,7 @@ void RandomMovementGenerator<Creature>::_setRandomLocation(Creature* creature)
                     }
 
                     if (!map->isInLineOfSight((*itr).x, (*itr).y, (*itr).z + 2.f, (*itrNext).x, (*itrNext).y, (*itrNext).z + 2.f, creature->GetPhaseMask(),
-                        LINEOFSIGHT_ALL_CHECKS, VMAP::ModelIgnoreFlags::Nothing))
+                        LINEOFSIGHT_ALL_CHECKS, VMAP::ModelIgnoreFlags::Nothing, creature->GetTerrainMapIds()))
                     {
                         _validPointsVector[_currentPoint].erase(randomIter);
                         _preComputedPaths.erase(pathIdx);

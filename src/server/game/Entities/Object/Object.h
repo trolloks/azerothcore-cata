@@ -781,6 +781,7 @@ public:
     };
     [[nodiscard]] float GetMapWaterOrGroundLevel(float x, float y, float z, float* ground = nullptr) const;
     [[nodiscard]] float GetMapHeight(float x, float y, float z, bool vmap = true, float distanceToSearch = 50.0f) const; // DEFAULT_HEIGHT_SEARCH in map.h
+    [[nodiscard]] std::vector<uint32> const* GetTerrainMapIds() const;
 
     [[nodiscard]] float GetFloorZ() const;
     [[nodiscard]] float GetMinHeightInWater() const;

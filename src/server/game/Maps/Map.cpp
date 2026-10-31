@@ -39,12 +39,15 @@
 #include "PoolMgr.h"
 #include "ScriptMgr.h"
 #include "TC9Sidecar.h"
+#include "TerrainSwapCache.h"
 #include "Transport.h"
 #include "VMapFactory.h"
 #include "Vehicle.h"
 #include "VMapMgr2.h"
 #include "Weather.h"
 #include "WeatherMgr.h"
+#include <algorithm>
+#include <cmath>
 
 #define MAP_INVALID_ZONE        0xFFFFFFFF
 
@@ -1138,14 +1141,177 @@ GridTerrainData* Map::GetGridTerrainData(float x, float y)
     return GetGridTerrainData(gridCoord);
 }
 
-float Map::GetWaterOrGroundLevel(uint32 phasemask, float x, float y, float z, float* ground /*= nullptr*/, bool /*swim = false*/, float collisionHeight) const
+TerrainSwapCache& Map::GetTerrainSwapCache() const
+{
+    if (!_terrainSwapCache)
+        _terrainSwapCache = std::make_unique<TerrainSwapCache>(sWorld->GetDataPath(), GetId());
+
+    return *_terrainSwapCache;
+}
+
+uint32 Map::GetTerrainMapId(std::vector<uint32> const& visibleMapIds, float x, float y) const
+{
+    return Acore::SelectTerrainMapId(visibleMapIds, GetId(), x, y,
+        [this](uint32 mapId, GridCoord const& gridCoord)
+        {
+            return GetTerrainSwapCache().HasGridFile(mapId, gridCoord);
+        });
+}
+
+GridTerrainData* Map::GetTerrainDataForMap(uint32 mapId, float x, float y)
+{
+    if (mapId == GetId())
+        return GetGridTerrainData(x, y);
+
+    GridCoord const gridCoord = Acore::ComputeGridCoord(x, y);
+    if (GridTerrainData* terrainData = GetTerrainSwapCache().GetGridTerrainData(mapId, gridCoord))
+        return terrainData;
+
+    // 4.3.4 falls back to the base terrain when the selected map has no tile at this position.
+    return GetGridTerrainData(gridCoord);
+}
+
+StaticVMapCollisionData* Map::GetStaticCollisionForMap(uint32 mapId, float x, float y)
+{
+    if (mapId == GetId())
+        return &_mapCollisionData.GetStaticTree();
+
+    return GetTerrainSwapCache().GetStaticCollision(mapId, Acore::ComputeGridCoord(x, y));
+}
+
+namespace
+{
+    bool IsValidRayEndpoint(float x, float y)
+    {
+        if (!std::isfinite(x) || !std::isfinite(y))
+            return false;
+
+        float const limit = SIZE_OF_GRIDS * (MAX_NUMBER_OF_GRIDS / 2.0f);
+        return std::fabs(x) <= limit && std::fabs(y) <= limit;
+    }
+
+    bool BuildGridRayCuts(float x1, float y1, float x2, float y2, std::vector<float>& cuts)
+    {
+        if (!IsValidRayEndpoint(x1, y1) || !IsValidRayEndpoint(x2, y2))
+            return false;
+
+        cuts.clear();
+        cuts.push_back(0.0f);
+        cuts.push_back(1.0f);
+
+        float const dx = x2 - x1;
+        float const dy = y2 - y1;
+
+        auto addGridBoundaryCuts = [&cuts](float start, float delta)
+        {
+            if (std::fabs(delta) < 1e-6f)
+                return;
+
+            float const low = std::min(start, start + delta);
+            float const high = std::max(start, start + delta);
+            int32 const first = int32(std::ceil(low / SIZE_OF_GRIDS));
+            int32 const last = int32(std::floor(high / SIZE_OF_GRIDS));
+            for (int32 boundary = first; boundary <= last; ++boundary)
+            {
+                float const t = (float(boundary) * SIZE_OF_GRIDS - start) / delta;
+                if (t > 0.0f && t < 1.0f)
+                    cuts.push_back(t);
+            }
+        };
+
+        addGridBoundaryCuts(x1, dx);
+        addGridBoundaryCuts(y1, dy);
+
+        std::sort(cuts.begin(), cuts.end());
+        cuts.erase(std::unique(cuts.begin(), cuts.end(),
+            [](float a, float b) { return std::fabs(a - b) < 1e-6f; }), cuts.end());
+        return true;
+    }
+}
+
+bool Map::GetStaticObjectHitPos(std::vector<uint32> const* visibleMapIds,
+    float x1, float y1, float z1, float x2, float y2, float z2,
+    float& rx, float& ry, float& rz, float modifyDist) const
+{
+    rx = x2;
+    ry = y2;
+    rz = z2;
+
+    if (!IsValidRayEndpoint(x1, y1) || !IsValidRayEndpoint(x2, y2))
+        return false;
+
+    if (!visibleMapIds || visibleMapIds->empty())
+    {
+        StaticVMapCollisionData* staticCollision = const_cast<Map*>(this)->GetStaticCollisionForMap(GetId(), x1, y1);
+        return staticCollision && staticCollision->GetObjectHitPos(x1, y1, z1, x2, y2, z2, rx, ry, rz, modifyDist);
+    }
+
+    std::vector<float> cuts;
+    if (!BuildGridRayCuts(x1, y1, x2, y2, cuts))
+        return false;
+
+    float const dx = x2 - x1;
+    float const dy = y2 - y1;
+    float const dz = z2 - z1;
+    for (size_t i = 0; i + 1 < cuts.size(); ++i)
+    {
+        float const t0 = cuts[i];
+        float const t1 = cuts[i + 1];
+        float const midT = (t0 + t1) * 0.5f;
+        uint32 const terrainMapId = GetTerrainMapId(*visibleMapIds, x1 + dx * midT, y1 + dy * midT);
+        StaticVMapCollisionData* staticCollision =
+            const_cast<Map*>(this)->GetStaticCollisionForMap(terrainMapId, x1 + dx * midT, y1 + dy * midT);
+        float hitX = x1 + dx * t1;
+        float hitY = y1 + dy * t1;
+        float hitZ = z1 + dz * t1;
+        if (staticCollision && staticCollision->GetObjectHitPos(
+            x1 + dx * t0, y1 + dy * t0, z1 + dz * t0,
+            x1 + dx * t1, y1 + dy * t1, z1 + dz * t1,
+            hitX, hitY, hitZ, 0.0f))
+        {
+            if (modifyDist != 0.0f)
+            {
+                float const length = std::sqrt(dx * dx + dy * dy + dz * dz);
+                if (length > 0.0f)
+                {
+                    float const dirX = dx / length;
+                    float const dirY = dy / length;
+                    float const dirZ = dz / length;
+                    float const fromStart = std::sqrt((hitX - x1) * (hitX - x1) +
+                        (hitY - y1) * (hitY - y1) + (hitZ - z1) * (hitZ - z1));
+                    if (modifyDist < 0.0f && fromStart <= -modifyDist)
+                    {
+                        hitX = x1;
+                        hitY = y1;
+                        hitZ = z1;
+                    }
+                    else
+                    {
+                        hitX += dirX * modifyDist;
+                        hitY += dirY * modifyDist;
+                        hitZ += dirZ * modifyDist;
+                    }
+                }
+            }
+
+            rx = hitX;
+            ry = hitY;
+            rz = hitZ;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+float Map::GetWaterOrGroundLevel(uint32 phasemask, float x, float y, float z, float* ground /*= nullptr*/, bool /*swim = false*/, float collisionHeight, std::vector<uint32> const* visibleMapIds /*= nullptr*/) const
 {
     // we need ground level (including grid height version) for proper return water level in point
-    float ground_z = GetHeight(phasemask, x, y, z + Z_OFFSET_FIND_HEIGHT, true, 50.0f);
+    float ground_z = GetHeight(phasemask, x, y, z + Z_OFFSET_FIND_HEIGHT, true, 50.0f, visibleMapIds);
     if (ground)
         *ground = ground_z;
 
-    LiquidData const& liquidData = const_cast<Map*>(this)->GetLiquidData(phasemask, x, y, ground_z, collisionHeight, {});
+    LiquidData const& liquidData = const_cast<Map*>(this)->GetLiquidData(phasemask, x, y, ground_z, collisionHeight, {}, visibleMapIds);
     switch (liquidData.Status)
     {
         case LIQUID_MAP_ABOVE_WATER:
@@ -1186,17 +1352,25 @@ Transport* Map::GetTransportForPos(uint32 phase, float x, float y, float z, Worl
     return nullptr;
 }
 
-float Map::GetHeight(float x, float y, float z, bool checkVMap /*= true*/, float maxSearchDist /*= DEFAULT_HEIGHT_SEARCH*/) const
+float Map::GetHeight(float x, float y, float z, bool checkVMap /*= true*/, float maxSearchDist /*= DEFAULT_HEIGHT_SEARCH*/, std::vector<uint32> const* visibleMapIds /*= nullptr*/) const
 {
+    uint32 const terrainMapId = visibleMapIds ? GetTerrainMapId(*visibleMapIds, x, y) : GetId();
+
     // find raw .map surface under Z coordinates
     float mapHeight = VMAP_INVALID_HEIGHT_VALUE;
-    float gridHeight = GetGridHeight(x, y);
-    if (G3D::fuzzyGe(z, gridHeight - GROUND_HEIGHT_TOLERANCE))
-        mapHeight = gridHeight;
+    if (GridTerrainData* gmap = const_cast<Map*>(this)->GetTerrainDataForMap(terrainMapId, x, y))
+    {
+        float const gridHeight = gmap->getHeight(x, y);
+        if (G3D::fuzzyGe(z, gridHeight - GROUND_HEIGHT_TOLERANCE))
+            mapHeight = gridHeight;
+    }
 
     float vmapHeight = VMAP_INVALID_HEIGHT_VALUE;
     if (checkVMap)
-        vmapHeight = _mapCollisionData.GetStaticTree().getHeight(x, y, z, maxSearchDist); // look from a bit higher pos to find the floor
+    {
+        if (StaticVMapCollisionData* staticCollision = const_cast<Map*>(this)->GetStaticCollisionForMap(terrainMapId, x, y))
+            vmapHeight = staticCollision->getHeight(x, y, z, maxSearchDist); // look from a bit higher pos to find the floor
+    }
 
     // mapHeight set for any above raw ground Z or <= INVALID_HEIGHT
     // vmapheight set for any under Z value or <= INVALID_HEIGHT
@@ -1220,17 +1394,19 @@ float Map::GetHeight(float x, float y, float z, bool checkVMap /*= true*/, float
     return mapHeight;                               // explicitly use map data
 }
 
-float Map::GetGridHeight(float x, float y) const
+float Map::GetGridHeight(float x, float y, std::vector<uint32> const* visibleMapIds /*= nullptr*/) const
 {
-    if (GridTerrainData* gmap = const_cast<Map*>(this)->GetGridTerrainData(x, y))
+    uint32 const terrainMapId = visibleMapIds ? GetTerrainMapId(*visibleMapIds, x, y) : GetId();
+    if (GridTerrainData* gmap = const_cast<Map*>(this)->GetTerrainDataForMap(terrainMapId, x, y))
         return gmap->getHeight(x, y);
 
     return INVALID_HEIGHT;
 }
 
-float Map::GetMinHeight(float x, float y) const
+float Map::GetMinHeight(float x, float y, std::vector<uint32> const* visibleMapIds /*= nullptr*/) const
 {
-    if (GridTerrainData const* grid = const_cast<Map*>(this)->GetGridTerrainData(x, y))
+    uint32 const terrainMapId = visibleMapIds ? GetTerrainMapId(*visibleMapIds, x, y) : GetId();
+    if (GridTerrainData const* grid = const_cast<Map*>(this)->GetTerrainDataForMap(terrainMapId, x, y))
         return grid->getMinHeight(x, y);
 
     return MIN_HEIGHT;
@@ -1241,13 +1417,16 @@ static inline bool IsInWMOInterior(uint32 mogpFlags)
     return (mogpFlags & 0x2000) != 0;
 }
 
-bool Map::GetAreaInfo(uint32 phaseMask, float x, float y, float z, uint32& flags, int32& adtId, int32& rootId, int32& groupId) const
+bool Map::GetAreaInfo(uint32 phaseMask, float x, float y, float z, uint32& flags, int32& adtId, int32& rootId, int32& groupId, std::vector<uint32> const* visibleMapIds /*= nullptr*/) const
 {
+    uint32 const terrainMapId = visibleMapIds ? GetTerrainMapId(*visibleMapIds, x, y) : GetId();
+    StaticVMapCollisionData* staticCollision = const_cast<Map*>(this)->GetStaticCollisionForMap(terrainMapId, x, y);
+
     float check_z = z;
     VMAP::AreaAndLiquidData vdata;
     VMAP::AreaAndLiquidData ddata;
 
-    bool hasVmapAreaInfo = _mapCollisionData.GetStaticTree().GetAreaAndLiquidData(x, y, z, {}, vdata) && vdata.areaInfo.has_value();
+    bool hasVmapAreaInfo = staticCollision && staticCollision->GetAreaAndLiquidData(x, y, z, {}, vdata) && vdata.areaInfo.has_value();
     bool hasDynamicAreaInfo = _mapCollisionData.GetDynamicTree().GetAreaAndLiquidData(x, y, z, phaseMask, {}, ddata) && ddata.areaInfo.has_value();
     auto useVmap = [&] { check_z = vdata.floorZ; groupId = vdata.areaInfo->groupId; adtId = vdata.areaInfo->adtId; rootId = vdata.areaInfo->rootId; flags = vdata.areaInfo->mogpFlags; };
     auto useDyn = [&] { check_z = ddata.floorZ; groupId = ddata.areaInfo->groupId; adtId = ddata.areaInfo->adtId; rootId = ddata.areaInfo->rootId; flags = ddata.areaInfo->mogpFlags; };
@@ -1266,7 +1445,7 @@ bool Map::GetAreaInfo(uint32 phaseMask, float x, float y, float z, uint32& flags
     if (hasVmapAreaInfo || hasDynamicAreaInfo)
     {
         // check if there's terrain between player height and object height
-        if (GridTerrainData* gmap = const_cast<Map*>(this)->GetGridTerrainData(x, y))
+        if (GridTerrainData* gmap = const_cast<Map*>(this)->GetTerrainDataForMap(terrainMapId, x, y))
         {
             float mapHeight = gmap->getHeight(x, y);
             // z + 2.0f condition taken from GetHeight(), not sure if it's such a great choice...
@@ -1280,16 +1459,18 @@ bool Map::GetAreaInfo(uint32 phaseMask, float x, float y, float z, uint32& flags
     return false;
 }
 
-uint32 Map::GetAreaId(uint32 phaseMask, float x, float y, float z) const
+uint32 Map::GetAreaId(uint32 phaseMask, float x, float y, float z, std::vector<uint32> const* visibleMapIds /*= nullptr*/) const
 {
+    uint32 const terrainMapId = visibleMapIds ? GetTerrainMapId(*visibleMapIds, x, y) : GetId();
+
     uint32 mogpFlags;
     int32 adtId, rootId, groupId;
     float vmapZ = z;
-    bool hasVmapArea = GetAreaInfo(phaseMask, x, y, vmapZ, mogpFlags, adtId, rootId, groupId);
+    bool hasVmapArea = GetAreaInfo(phaseMask, x, y, vmapZ, mogpFlags, adtId, rootId, groupId, visibleMapIds);
 
     uint32 gridAreaId    = 0;
     float  gridMapHeight = INVALID_HEIGHT;
-    if (GridTerrainData* gmap = const_cast<Map*>(this)->GetGridTerrainData(x, y))
+    if (GridTerrainData* gmap = const_cast<Map*>(this)->GetTerrainDataForMap(terrainMapId, x, y))
     {
         gridAreaId    = gmap->getArea(x, y);
         gridMapHeight = gmap->getHeight(x, y);
@@ -1316,9 +1497,9 @@ uint32 Map::GetAreaId(uint32 phaseMask, float x, float y, float z) const
     return areaId;
 }
 
-uint32 Map::GetZoneId(uint32 phaseMask, float x, float y, float z) const
+uint32 Map::GetZoneId(uint32 phaseMask, float x, float y, float z, std::vector<uint32> const* visibleMapIds /*= nullptr*/) const
 {
-    uint32 areaId = GetAreaId(phaseMask, x, y, z);
+    uint32 areaId = GetAreaId(phaseMask, x, y, z, visibleMapIds);
     if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaId))
         if (area->zone)
             return area->zone;
@@ -1326,22 +1507,25 @@ uint32 Map::GetZoneId(uint32 phaseMask, float x, float y, float z) const
     return areaId;
 }
 
-void Map::GetZoneAndAreaId(uint32 phaseMask, uint32& zoneid, uint32& areaid, float x, float y, float z) const
+void Map::GetZoneAndAreaId(uint32 phaseMask, uint32& zoneid, uint32& areaid, float x, float y, float z, std::vector<uint32> const* visibleMapIds /*= nullptr*/) const
 {
-    areaid = zoneid = GetAreaId(phaseMask, x, y, z);
+    areaid = zoneid = GetAreaId(phaseMask, x, y, z, visibleMapIds);
     if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaid))
         if (area->zone)
             zoneid = area->zone;
 }
 
-LiquidData const Map::GetLiquidData(uint32 phaseMask, float x, float y, float z, float collisionHeight, Optional<uint8> ReqLiquidType)
+LiquidData const Map::GetLiquidData(uint32 phaseMask, float x, float y, float z, float collisionHeight, Optional<uint8> ReqLiquidType, std::vector<uint32> const* visibleMapIds /*= nullptr*/)
 {
+   uint32 const terrainMapId = visibleMapIds ? GetTerrainMapId(*visibleMapIds, x, y) : GetId();
+   StaticVMapCollisionData* staticCollision = GetStaticCollisionForMap(terrainMapId, x, y);
+
    LiquidData liquidData;
    liquidData.Status = LIQUID_MAP_NO_WATER;
 
     VMAP::AreaAndLiquidData vmapData;
     bool useGridLiquid = true;
-    if (_mapCollisionData.GetStaticTree().GetAreaAndLiquidData(x, y, z, ReqLiquidType, vmapData) && vmapData.liquidInfo)
+    if (staticCollision && staticCollision->GetAreaAndLiquidData(x, y, z, ReqLiquidType, vmapData) && vmapData.liquidInfo)
     {
         useGridLiquid = !vmapData.areaInfo || !IsInWMOInterior(vmapData.areaInfo->mogpFlags);
         LOG_DEBUG("maps", "GetLiquidStatus(): vmap liquid level: {} ground: {} type: {}", vmapData.liquidInfo->level, vmapData.floorZ, vmapData.liquidInfo->type);
@@ -1358,7 +1542,7 @@ LiquidData const Map::GetLiquidData(uint32 phaseMask, float x, float y, float z,
 
             if (vmapData.liquidInfo->type && vmapData.liquidInfo->type < 21)
             {
-                if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(GetAreaId(phaseMask, x, y, z)))
+                if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(GetAreaId(phaseMask, x, y, z, visibleMapIds)))
                 {
                     uint32 overrideLiquid = area->LiquidTypeOverride[liquidFlagType];
                     if (!overrideLiquid && area->zone)
@@ -1397,7 +1581,7 @@ LiquidData const Map::GetLiquidData(uint32 phaseMask, float x, float y, float z,
 
     if (useGridLiquid)
     {
-        if (GridTerrainData* gmap = const_cast<Map*>(this)->GetGridTerrainData(x, y))
+        if (GridTerrainData* gmap = GetTerrainDataForMap(terrainMapId, x, y))
         {
             LiquidData const& map_data = gmap->GetLiquidData(x, y, z, collisionHeight, ReqLiquidType);
             // Not override LIQUID_MAP_ABOVE_WATER with LIQUID_MAP_NO_WATER:
@@ -1417,14 +1601,17 @@ LiquidData const Map::GetLiquidData(uint32 phaseMask, float x, float y, float z,
    return liquidData;
 }
 
-void Map::GetFullTerrainStatusForPosition(uint32 phaseMask, float x, float y, float z, float collisionHeight, PositionFullTerrainStatus& data, Optional<uint8> reqLiquidType)
+void Map::GetFullTerrainStatusForPosition(uint32 phaseMask, float x, float y, float z, float collisionHeight, PositionFullTerrainStatus& data, Optional<uint8> reqLiquidType, std::vector<uint32> const* visibleMapIds /*= nullptr*/)
 {
-    GridTerrainData* gmap = GetGridTerrainData(x, y);
+    uint32 const terrainMapId = visibleMapIds ? GetTerrainMapId(*visibleMapIds, x, y) : GetId();
+    StaticVMapCollisionData* staticCollision = GetStaticCollisionForMap(terrainMapId, x, y);
+    GridTerrainData* gmap = GetTerrainDataForMap(terrainMapId, x, y);
 
     VMAP::AreaAndLiquidData vmapData;
     VMAP::AreaAndLiquidData dynData;
     VMAP::AreaAndLiquidData* wmoData = nullptr;
-    _mapCollisionData.GetStaticTree().GetAreaAndLiquidData(x, y, z, reqLiquidType, vmapData);
+    if (staticCollision)
+        staticCollision->GetAreaAndLiquidData(x, y, z, reqLiquidType, vmapData);
     _mapCollisionData.GetDynamicTree().GetAreaAndLiquidData(x, y, z, phaseMask, reqLiquidType, dynData);
 
     uint32 gridAreaId = 0;
@@ -1557,15 +1744,16 @@ void Map::GetFullTerrainStatusForPosition(uint32 phaseMask, float x, float y, fl
     }
 }
 
-float Map::GetWaterLevel(float x, float y) const
+float Map::GetWaterLevel(float x, float y, std::vector<uint32> const* visibleMapIds /*= nullptr*/) const
 {
-    if (GridTerrainData* gmap = const_cast<Map*>(this)->GetGridTerrainData(x, y))
+    uint32 const terrainMapId = visibleMapIds ? GetTerrainMapId(*visibleMapIds, x, y) : GetId();
+    if (GridTerrainData* gmap = const_cast<Map*>(this)->GetTerrainDataForMap(terrainMapId, x, y))
         return gmap->getLiquidLevel(x, y);
 
     return INVALID_HEIGHT;
 }
 
-bool Map::isInLineOfSight(float x1, float y1, float z1, float x2, float y2, float z2, uint32 phasemask, LineOfSightChecks checks, VMAP::ModelIgnoreFlags ignoreFlags) const
+bool Map::isInLineOfSight(float x1, float y1, float z1, float x2, float y2, float z2, uint32 phasemask, LineOfSightChecks checks, VMAP::ModelIgnoreFlags ignoreFlags, std::vector<uint32> const* visibleMapIds /*= nullptr*/) const
 {
     if (!sWorld->getBoolConfig(CONFIG_VMAP_BLIZZLIKE_PVP_LOS))
     {
@@ -1583,9 +1771,40 @@ bool Map::isInLineOfSight(float x1, float y1, float z1, float x2, float y2, floa
         }
     }
 
-    if ((checks & LINEOFSIGHT_CHECK_VMAP) && !_mapCollisionData.GetStaticTree().isInLineOfSight(x1, y1, z1, x2, y2, z2, ignoreFlags))
+    if (checks & LINEOFSIGHT_CHECK_VMAP)
     {
-        return false;
+        if (!IsValidRayEndpoint(x1, y1) || !IsValidRayEndpoint(x2, y2))
+            return false;
+
+        if (!visibleMapIds || visibleMapIds->empty())
+        {
+            StaticVMapCollisionData* staticCollision = const_cast<Map*>(this)->GetStaticCollisionForMap(GetId(), x1, y1);
+            if (staticCollision && !staticCollision->isInLineOfSight(x1, y1, z1, x2, y2, z2, ignoreFlags))
+                return false;
+        }
+        else
+        {
+            std::vector<float> cuts;
+            if (!BuildGridRayCuts(x1, y1, x2, y2, cuts))
+                return false;
+
+            float const dx = x2 - x1;
+            float const dy = y2 - y1;
+            float const dz = z2 - z1;
+            for (size_t i = 0; i + 1 < cuts.size(); ++i)
+            {
+                float const t0 = cuts[i];
+                float const t1 = cuts[i + 1];
+                float const midT = (t0 + t1) * 0.5f;
+                uint32 const terrainMapId = GetTerrainMapId(*visibleMapIds, x1 + dx * midT, y1 + dy * midT);
+                StaticVMapCollisionData* staticCollision =
+                    const_cast<Map*>(this)->GetStaticCollisionForMap(terrainMapId, x1 + dx * midT, y1 + dy * midT);
+                if (staticCollision && !staticCollision->isInLineOfSight(
+                    x1 + dx * t0, y1 + dy * t0, z1 + dz * t0,
+                    x1 + dx * t1, y1 + dy * t1, z1 + dz * t1, ignoreFlags))
+                    return false;
+            }
+        }
     }
 
     if (sWorld->getBoolConfig(CONFIG_CHECK_GOBJECT_LOS) && (checks & LINEOFSIGHT_CHECK_GOBJECT_ALL))
@@ -1605,30 +1824,30 @@ bool Map::isInLineOfSight(float x1, float y1, float z1, float x2, float y2, floa
     return true;
 }
 
-float Map::GetHeight(uint32 phasemask, float x, float y, float z, bool vmap/*=true*/, float maxSearchDist /*= DEFAULT_HEIGHT_SEARCH*/) const
+float Map::GetHeight(uint32 phasemask, float x, float y, float z, bool vmap/*=true*/, float maxSearchDist /*= DEFAULT_HEIGHT_SEARCH*/, std::vector<uint32> const* visibleMapIds /*= nullptr*/) const
 {
     float h1, h2;
-    h1 = GetHeight(x, y, z, vmap, maxSearchDist);
+    h1 = GetHeight(x, y, z, vmap, maxSearchDist, visibleMapIds);
     h2 = _mapCollisionData.GetDynamicTree().getHeight(x, y, z, maxSearchDist, phasemask);
     return std::max<float>(h1, h2);
 }
 
-bool Map::IsInWater(uint32 phaseMask, float x, float y, float pZ, float collisionHeight) const
+bool Map::IsInWater(uint32 phaseMask, float x, float y, float pZ, float collisionHeight, std::vector<uint32> const* visibleMapIds /*= nullptr*/) const
 {
-    LiquidData const& liquidData = const_cast<Map*>(this)->GetLiquidData(phaseMask, x, y, pZ, collisionHeight, {});
+    LiquidData const& liquidData = const_cast<Map*>(this)->GetLiquidData(phaseMask, x, y, pZ, collisionHeight, {}, visibleMapIds);
     return (liquidData.Status & MAP_LIQUID_STATUS_SWIMMING) != 0;
 }
 
-bool Map::IsUnderWater(uint32 phaseMask, float x, float y, float z, float collisionHeight) const
+bool Map::IsUnderWater(uint32 phaseMask, float x, float y, float z, float collisionHeight, std::vector<uint32> const* visibleMapIds /*= nullptr*/) const
 {
-    LiquidData const& liquidData = const_cast<Map*>(this)->GetLiquidData(phaseMask, x, y, z, collisionHeight, MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_OCEAN);
+    LiquidData const& liquidData = const_cast<Map*>(this)->GetLiquidData(phaseMask, x, y, z, collisionHeight, MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_OCEAN, visibleMapIds);
     return liquidData.Status == LIQUID_MAP_UNDER_WATER;
 }
 
 bool Map::HasEnoughWater(WorldObject const* searcher, float x, float y, float z) const
 {
     LiquidData const& liquidData = const_cast<Map*>(this)->GetLiquidData(
-        searcher->GetPhaseMask(), x, y, z, searcher->GetCollisionHeight(), MAP_ALL_LIQUIDS);
+        searcher->GetPhaseMask(), x, y, z, searcher->GetCollisionHeight(), MAP_ALL_LIQUIDS, searcher->GetTerrainMapIds());
 
     if ((liquidData.Status & MAP_LIQUID_STATUS_SWIMMING) == 0)
         return false;
@@ -3475,7 +3694,7 @@ bool Map::CheckCollisionAndGetValidCoords(WorldObject const* source, float start
         return false;
     }
 
-    bool isWaterNext = IsInWater(source->GetPhaseMask(), destX, destY, destZ, source->GetCollisionHeight());
+    bool isWaterNext = IsInWater(source->GetPhaseMask(), destX, destY, destZ, source->GetCollisionHeight(), source->GetTerrainMapIds());
 
     PathGenerator path(source);
 
@@ -3507,11 +3726,12 @@ bool Map::CheckCollisionAndGetValidCoords(WorldObject const* source, float start
     // Unit is not on the ground, check for potential collision via vmaps
     if (notOnGround)
     {
-        bool col = _mapCollisionData.GetStaticTree().GetObjectHitPos(startX, startY, startZ + halfHeight,
+        float hitZ = destZ + halfHeight;
+        bool col = GetStaticObjectHitPos(source->GetTerrainMapIds(), startX, startY, startZ + halfHeight,
             destX, destY, destZ + halfHeight,
-            destX, destY, destZ, -CONTACT_DISTANCE);
+            destX, destY, hitZ, -CONTACT_DISTANCE);
 
-        destZ -= halfHeight;
+        destZ = hitZ - halfHeight;
 
         // Collided with static LOS object, move back to collision point
         if (col)
