@@ -596,7 +596,63 @@ and each stage's evidence is pinned here before a mode that drives it is written
   disconnected polygon and off-tile point). Acceptance must fail, not silently pass, when geometry is
   unavailable or disabled.
 
+## Terrain-swap mmaps generation (2026-10-31)
+
+The same tool set was used to generate navigation meshes for the two Cata swap maps used by the
+goblin and worgen starts. This is an asset-generation slice only; the runtime still selects the
+base map's navmesh, so it does **not** make pathfinding child-terrain-aware (follow-up in #176).
+
+Inputs (the extraction root above) and tool:
+
+- `maps/648*.map`: 149 tiles; `maps/654*.map`: 60 tiles.
+- `vmaps/648_*.vmtile`: 50; `vmaps/654_*.vmtile`: 41; both `.vmtree` files present.
+- `mmaps-config.yaml` with `dataDir` set to the extraction root; `skipLiquid: false`, `skipContinents:
+  false`, `skipJunkMaps: true`, `skipBattlegrounds: false`.
+- `mmaps_generator` built from `2a06fb3fc` with `TOOLS_BUILD=maps-only`; binary sha256
+  `564c80c4b9789f9f5979dd3bcc4389ff711e8dd8def8abea0461bbb90a7b4fd1`.
+
+```sh
+mmaps_generator --config "$P/mmaps-config.yaml" --threads 1 --silent 648
+mmaps_generator --config "$P/mmaps-config.yaml" --threads 1 --silent 654
+```
+
+Both runs exited 0. `--tile` was not used, so every discovered tile for the selected map was built.
+The ten 120-byte, height-less map tiles under 654 (`3125`, `3126`, `3225`, `3324`, `3424`, `3524`,
+`3624`, `3625`, `3725`, `3726`) produced no navmesh; every other 654 tile and all 149 648 tiles
+produced a tile with at least one polygon.
+
+| Output | Files | Bytes | Aggregate sha256 |
+| --- | ---: | ---: | --- |
+| `mmaps/648.mmap` | 1 | 28 | `1719207af3ef1f2a5110246921a5cee537261d55340b69240dce2c05c243379a` |
+| `mmaps/648*.mmtile` | 149 | 49,767,716 | `36e45fbd7d1ad462e51a6254ce6f1a04eaa4802939eaaf00717af0b7572b6985` |
+| `mmaps/654.mmap` | 1 | 28 | `98907e1c8cd0f790766d20540a382b3a2c558a02f9eb123d5490c468a2ce065f` |
+| `mmaps/654*.mmtile` | 50 | 33,798,056 | `95cc4b0d7ddf53f49994a42fd5e5f8a53c940dbdfbbca2d2dcd954613287fc1e` |
+
+The mmtile aggregate is sha256 over the sorted per-file sha256 values. Input aggregates for the same
+tile sets: `648` maps `f9d3a24f33a5290d2b1e5eeb2faae84a961e31df852e9ed279adad82e07d4970`, vmtiles
+`a211792f4c09e269b4f13eec45088b8ad93f417da904f056bd348939a1506fd9`; `654` maps
+`b793bac155ce1d452b13e298bbb860e0e3979412b5c5af5abe4161ef83c75eef`, vmtiles
+`b76b005df3162476c9eb555ffa41fb2a2df8671c0856299d27a058ea67ef0a34`; config
+`1115c2a51a3584ccb501d19c0b45c872b9eba9c478a67cd1757c17e80ab30cc9`.
+
+Artifact checks used the server's own formats and the repo checker:
+
+- Every `.mmtile` has `mmapMagic = 0x4d4d4150`, `dtVersion = 7`, `mmapVersion = 20`, a 56-byte
+  header, a declared payload equal to the remaining file size, and a `dtMeshHeader` with matching
+  version, layer 0 and at least one polygon.
+- `check_collision_geometry.py` passed for 648 at grid `27,26` (anchor `2400,2933.33,50`) and for 654
+  at grid `33,27` (anchor `-800,2400,50`). Both runs validated map/vmap/mmap presence, the mmap
+  params and payload, and the tile's vmap objects. As the checker states, this proves the artifacts
+  are loadable, not that a server loaded them or that a creature walked a route.
+
+Runtime gap: `MapCollisionData` still calls `MMapMgr::LoadNavMesh(map.GetId())` and loads tiles for
+`_map.GetId()`; `PathGenerator` captures that base navmesh. Using these 648/654 files requires a
+composite/terrain-selected navmesh context, per-tile loading with base fallback, origin/coordinate
+normalization and path re-selection on terrain changes. That is intentionally not part of this
+generation record.
+
 ## Not covered by this record
 
-Whole-continent extraction, flying/swimming, transports, cross-map transfer, terrain swaps and
-all-zone navigation. This freezes one map-0 route only.
+Whole-continent extraction, flying/swimming, transports, cross-map transfer, terrain-swap runtime
+selection and all-zone navigation. This freezes one map-0 route only; the 648/654 generation above
+adds assets, not runtime navigation.
