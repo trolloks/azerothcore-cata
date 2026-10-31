@@ -651,6 +651,13 @@ composite/terrain-selected navmesh context, per-tile loading with base fallback,
 normalization and path re-selection on terrain changes. That is intentionally not part of this
 generation record.
 
+A boundary fixture was built for the next slice: base map `001` grid `31,26` was generated with
+`mmaps_generator ... 1 --tile 26,31` (`001.mmap`, `0013126.mmtile`) next to child `654` grid `31,27`.
+A `dtNavMesh` initialized with the union origin and the two tiles rebased into it loads both and finds
+full paths within each side. The extracted seam is water/cliff (child/base heights differ by roughly
+100 m at the sampled boundary), so there is no cross-seam land path; crossing needs a deliberate seam
+policy rather than origin normalization alone.
+
 ## Not covered by this record
 
 Whole-continent extraction, flying/swimming, transports, cross-map transfer, terrain-swap runtime
