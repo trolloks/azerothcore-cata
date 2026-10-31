@@ -180,6 +180,9 @@ bool PathGenerator::CalculatePath(float x, float y, float z, float destX, float 
         _source->GetMap()->GetMapCollisionData().GetMMapDataForMap(destinationTerrainMapId);
     bool const usingChildMesh = &mmapData != &baseMmapData;
     bool const destinationUsesChildMesh = &destinationMmapData != &baseMmapData;
+    if (usingChildMesh)
+        _source->GetMap()->GetMapCollisionData().LoadMMapTilesForMap(terrainMapId, x, y, destX, destY);
+
     _navMesh = mmapData.GetNavMesh();
     _navMeshQuery = mmapData.GetNavMeshQuery();
     if (_navMesh != previousNavMesh)
@@ -187,10 +190,27 @@ bool PathGenerator::CalculatePath(float x, float y, float z, float destX, float 
 
     _forceDestination = forceDest;
 
+    auto rejectTerrainPath = [&]() -> bool
+    {
+        BuildShortcut();
+
+        Unit const* unit = _source->ToUnit();
+        bool const canSwim = unit ? unit->CanSwim() : true;
+        bool const canFly = unit ? unit->CanFly() : false;
+        if (canFly || (IsWaterPath(_pathPoints) && canSwim))
+        {
+            _type = PathType(PATHFIND_NORMAL | PATHFIND_NOT_USING_PATH);
+            return true;
+        }
+
+        _type = PATHFIND_NOPATH;
+        return false;
+    };
+
     // make sure navMesh works - we can run on map w/o mmap
     // check if the start and end point have a .mmtile loaded (can we pass via not loaded tile on the way?)
     Unit const* _sourceUnit = _source->ToUnit();
-    if (!_navMesh || !_navMeshQuery || (_sourceUnit && _sourceUnit->HasUnitState(UNIT_STATE_IGNORE_PATHFINDING)))
+    if (_sourceUnit && _sourceUnit->HasUnitState(UNIT_STATE_IGNORE_PATHFINDING))
     {
         BuildShortcut();
         _type = PathType(PATHFIND_NORMAL | PATHFIND_NOT_USING_PATH);
@@ -201,9 +221,12 @@ bool PathGenerator::CalculatePath(float x, float y, float z, float destX, float 
     // whose endpoints resolve to different terrain meshes instead of using a straight shortcut.
     bool const childTerrainInvolved = usingChildMesh || destinationUsesChildMesh;
     if (childTerrainInvolved && terrainMapId != destinationTerrainMapId)
+        return rejectTerrainPath();
+
+    if (!_navMesh || !_navMeshQuery)
     {
         BuildShortcut();
-        _type = PATHFIND_NOPATH;
+        _type = PathType(PATHFIND_NORMAL | PATHFIND_NOT_USING_PATH);
         return true;
     }
 
@@ -212,11 +235,7 @@ bool PathGenerator::CalculatePath(float x, float y, float z, float destX, float 
         // Preserve the ordinary missing-tile shortcut on base maps; only a selected
         // child mesh has no valid fallback for its missing tiles.
         if (usingChildMesh)
-        {
-            BuildShortcut();
-            _type = PATHFIND_NOPATH;
-            return true;
-        }
+            return rejectTerrainPath();
 
         BuildShortcut();
         _type = PathType(PATHFIND_NORMAL | PATHFIND_NOT_USING_PATH);
