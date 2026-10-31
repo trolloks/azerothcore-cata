@@ -237,6 +237,7 @@ public:
         float x1, float y1, float z1, float x2, float y2, float z2,
         float& rx, float& ry, float& rz, float modifyDist) const;
     [[nodiscard]] uint32 GetTerrainMapId(std::vector<uint32> const& visibleMapIds, float x, float y) const;
+    [[nodiscard]] uint32 GetTerrainNavMeshMapId(std::vector<uint32> const& visibleMapIds, float x, float y) const;
 
     [[nodiscard]] uint32 GetId() const { return i_mapEntry->MapID; }
 

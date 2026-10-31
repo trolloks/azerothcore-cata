@@ -165,14 +165,59 @@ bool PathGenerator::CalculatePath(float x, float y, float z, float destX, float 
     G3D::Vector3 start(x, y, z);
     SetStartPosition(start);
 
+    uint32 terrainMapId = _source->GetMapId();
+    uint32 destinationTerrainMapId = terrainMapId;
+    if (std::vector<uint32> const* terrainMaps = _source->GetTerrainMapIds(); terrainMaps && !terrainMaps->empty())
+    {
+        terrainMapId = _source->GetMap()->GetTerrainNavMeshMapId(*terrainMaps, x, y);
+        destinationTerrainMapId = _source->GetMap()->GetTerrainNavMeshMapId(*terrainMaps, destX, destY);
+    }
+
+    dtNavMesh const* previousNavMesh = _navMesh;
+    MMapData& baseMmapData = _source->GetMap()->GetMapCollisionData().GetMMapData();
+    MMapData& mmapData = _source->GetMap()->GetMapCollisionData().GetMMapDataForMap(terrainMapId);
+    MMapData& destinationMmapData =
+        _source->GetMap()->GetMapCollisionData().GetMMapDataForMap(destinationTerrainMapId);
+    bool const usingChildMesh = &mmapData != &baseMmapData;
+    bool const destinationUsesChildMesh = &destinationMmapData != &baseMmapData;
+    _navMesh = mmapData.GetNavMesh();
+    _navMeshQuery = mmapData.GetNavMeshQuery();
+    if (_navMesh != previousNavMesh)
+        Clear();
+
     _forceDestination = forceDest;
 
     // make sure navMesh works - we can run on map w/o mmap
     // check if the start and end point have a .mmtile loaded (can we pass via not loaded tile on the way?)
     Unit const* _sourceUnit = _source->ToUnit();
-    if (!_navMesh || !_navMeshQuery || (_sourceUnit && _sourceUnit->HasUnitState(UNIT_STATE_IGNORE_PATHFINDING)) ||
-        !HaveTile(start) || !HaveTile(dest))
+    if (!_navMesh || !_navMeshQuery || (_sourceUnit && _sourceUnit->HasUnitState(UNIT_STATE_IGNORE_PATHFINDING)))
     {
+        BuildShortcut();
+        _type = PathType(PATHFIND_NORMAL | PATHFIND_NOT_USING_PATH);
+        return true;
+    }
+
+    // Child/base terrain seams are not stitched in the generated data. Reject a path
+    // whose endpoints resolve to different terrain meshes instead of using a straight shortcut.
+    bool const childTerrainInvolved = usingChildMesh || destinationUsesChildMesh;
+    if (childTerrainInvolved && terrainMapId != destinationTerrainMapId)
+    {
+        BuildShortcut();
+        _type = PATHFIND_NOPATH;
+        return true;
+    }
+
+    if (!HaveTile(start) || !HaveTile(dest))
+    {
+        // Preserve the ordinary missing-tile shortcut on base maps; only a selected
+        // child mesh has no valid fallback for its missing tiles.
+        if (usingChildMesh)
+        {
+            BuildShortcut();
+            _type = PATHFIND_NOPATH;
+            return true;
+        }
+
         BuildShortcut();
         _type = PathType(PATHFIND_NORMAL | PATHFIND_NOT_USING_PATH);
         return true;

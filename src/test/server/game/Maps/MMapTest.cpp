@@ -130,26 +130,26 @@ TEST(MMapTest, LoadsGeneratedTerrainSwapNavMeshAndFindsAPath)
     {
         uint32 MapId;
         char const* MapFile;
-        char const* TileFile;
+        uint32 TileCount;
         float X;
         float Y;
         float Z;
     };
 
     // Known non-empty tiles; coordinates are world (x, y, z), converted to Detour's (y, z, x).
-    for (Case const& testCase : { Case{ 648, "648.mmap", "6482731.mmtile", 2400.0f, 266.67f, 50.0f },
-                                  Case{ 654, "654.mmap", "6543327.mmtile", -800.0f, 2400.0f, 50.0f } })
+    for (Case const& testCase : { Case{ 648, "648.mmap", 149, 2400.0f, 266.67f, 50.0f },
+                                  Case{ 654, "654.mmap", 50, -800.0f, 2400.0f, 50.0f } })
     {
         SCOPED_TRACE(testCase.MapId);
 
         std::string const mapPath = dataPath + "mmaps/" + testCase.MapFile;
-        std::string const tilePath = dataPath + "mmaps/" + testCase.TileFile;
-        if (!std::filesystem::exists(mapPath) || !std::filesystem::exists(tilePath))
+        if (!std::filesystem::exists(mapPath))
             GTEST_SKIP() << "generated terrain-swap mmaps are not present under " << dataPath;
 
         std::shared_ptr<dtNavMesh> navMesh = MMapMgr::LoadNavMeshFromFile(mapPath);
         ASSERT_NE(navMesh, nullptr);
-        ASSERT_TRUE(MMapMgr::LoadTileFromFile(navMesh.get(), testCase.MapId, tilePath));
+        EXPECT_EQ(MMapMgr::LoadTilesFromDirectory(navMesh.get(), testCase.MapId, dataPath + "mmaps"),
+            testCase.TileCount);
 
         ManagedNavMeshQuery query = MMapMgr::CreateNavMeshQuery(navMesh.get());
         ASSERT_NE(query, nullptr);

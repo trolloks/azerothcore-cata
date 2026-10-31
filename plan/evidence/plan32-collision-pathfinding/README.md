@@ -645,11 +645,11 @@ Artifact checks used the server's own formats and the repo checker:
   params and payload, and the tile's vmap objects. As the checker states, this proves the artifacts
   are loadable, not that a server loaded them or that a creature walked a route.
 
-Runtime gap: `MapCollisionData` still calls `MMapMgr::LoadNavMesh(map.GetId())` and loads tiles for
-`_map.GetId()`; `PathGenerator` captures that base navmesh. Using these 648/654 files requires a
-composite/terrain-selected navmesh context, per-tile loading with base fallback, origin/coordinate
-normalization and path re-selection on terrain changes. That is intentionally not part of this
-generation record.
+Runtime update: `PathGenerator` resolves the effective terrain map at the endpoint, loads a child
+navmesh as its own mesh (all child tiles on first use), and rejects child/base seam endpoints with
+`PATHFIND_NOPATH` in both directions. A selected child with no grid falls back to the base mesh.
+Base-map missing-tile behavior is unchanged. There is still no stitched composite mesh across a
+child/base seam; the sampled seam is water/cliff, so that remains the intended disconnected policy.
 
 A boundary fixture was built for the next slice: base map `001` grid `31,26` was generated with
 `mmaps_generator ... 1 --tile 26,31` (`001.mmap`, `0013126.mmtile`) next to child `654` grid `31,27`.

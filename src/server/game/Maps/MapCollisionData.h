@@ -22,6 +22,8 @@
 #include "MapTree.h"
 #include "MMapMgr.h"
 #include "IVMapMgr.h"
+#include <memory>
+#include <unordered_map>
 
 class Map;
 
@@ -61,6 +63,7 @@ class MMapData
     friend class MapCollisionData;
 
 public:
+    MMapData() = default;
     dtNavMesh const* GetNavMesh() const { return _navMesh.get(); }
     dtNavMeshQuery const* GetNavMeshQuery();
 
@@ -87,6 +90,7 @@ public:
     StaticVMapCollisionData const& GetStaticTree() const { return _staticVMapData; }
     MMapData& GetMMapData() { return _mmapData; }
     MMapData const& GetMMapData() const { return _mmapData; }
+    MMapData& GetMMapDataForMap(uint32 mapId);
 
     std::shared_ptr<VMAP::StaticMapTree> const GetStaticTreeSharedPtr() const { return _staticVMapData._staticTree; }
     std::shared_ptr<dtNavMesh> const GetMMapNavMeshSharedPtr() const { return _mmapData._navMesh; }
@@ -97,6 +101,7 @@ private:
     DynamicVMapCollisionData _dynamicVMapData;
     StaticVMapCollisionData _staticVMapData;
     MMapData _mmapData;
+    std::unordered_map<uint32, std::unique_ptr<MMapData>> _terrainMMapData;
 };
 
 #endif

@@ -20,6 +20,7 @@
 #include "Errors.h"
 #include "Log.h"
 #include "MapDefines.h"
+#include <filesystem>
 
 namespace MMAP
 {
@@ -129,9 +130,29 @@ namespace MMAP
         return false;
     }
 
+    uint32 MMapMgr::LoadTilesFromDirectory(dtNavMesh* navMesh, uint32 mapId, std::string const& directory)
+    {
+        if (!navMesh)
+            return 0;
+
+        uint32 loaded = 0;
+        std::error_code error;
+        for (std::filesystem::directory_iterator itr(directory, error), end; !error && itr != end; itr.increment(error))
+        {
+            std::string const fileName = itr->path().filename().string();
+            if (fileName.size() != 14 || fileName.substr(7) != ".mmtile" ||
+                fileName.compare(0, 3, Acore::StringFormat("{:03}", mapId)) != 0)
+                continue;
+
+            if (LoadTileFromFile(navMesh, mapId, itr->path().string()))
+                ++loaded;
+        }
+
+        return loaded;
+    }
+
     ManagedNavMeshQuery MMapMgr::CreateNavMeshQuery(dtNavMesh* navMesh)
     {
-        // allocate mesh query
         dtNavMeshQuery* query = dtAllocNavMeshQuery();
         ASSERT(query);
 
