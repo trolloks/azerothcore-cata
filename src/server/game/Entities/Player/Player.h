@@ -1906,6 +1906,7 @@ public:
     // Returns true if membership changed and a phase-shift packet was already sent.
     bool UpdatePhasesForArea(uint32 areaId);
     void SendPhaseShift();
+    [[nodiscard]] std::vector<uint32> const& GetVisibleMaps() const { return m_visibleMaps; }
     void OnPhaseChanged() override;
     // Re-evaluate the terrain swaps of the current map from their conditions.
     void UpdateTerrainSwaps();

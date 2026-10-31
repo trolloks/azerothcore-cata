@@ -4948,7 +4948,7 @@ void Player::RepopAtGraveyard()
 
     // Such zones are considered unreachable as a ghost and the player must be automatically revived
     // Xinef: Get Transport Check is not needed
-    if ((!IsAlive() && zone && zone->flags & AREA_FLAG_NEED_FLY) /*|| GetTransport()*/ || GetPositionZ() < GetMap()->GetMinHeight(GetPositionX(), GetPositionY()))
+    if ((!IsAlive() && zone && zone->flags & AREA_FLAG_NEED_FLY) /*|| GetTransport()*/ || GetPositionZ() < GetMap()->GetMinHeight(GetPositionX(), GetPositionY(), GetTerrainMapIds()))
     {
         ResurrectPlayer(0.5f);
         SpawnCorpseBones();
@@ -4985,7 +4985,7 @@ void Player::RepopAtGraveyard()
             SendDirectMessage(&data);
         }
     }
-    else if (GetPositionZ() < GetMap()->GetMinHeight(GetPositionX(), GetPositionY()))
+    else if (GetPositionZ() < GetMap()->GetMinHeight(GetPositionX(), GetPositionY(), GetTerrainMapIds()))
         TeleportTo(m_homebindMapId, m_homebindX, m_homebindY, m_homebindZ, GetOrientation());
 
     RemovePlayerFlag(PLAYER_FLAGS_IS_OUT_OF_BOUNDS);

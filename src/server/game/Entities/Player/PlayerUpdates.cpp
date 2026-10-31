@@ -1450,6 +1450,15 @@ void Player::UpdateTerrainSwaps()
         m_visibleMaps = std::move(visibleMaps);
         m_uiMapPhases = std::move(uiMapPhases);
         SendPhaseShift();
+
+        if (IsInWorld())
+        {
+            UpdatePositionData();
+
+            for (Unit* controlled : m_Controlled)
+                if (controlled && controlled->IsInWorld())
+                    controlled->UpdatePositionData();
+        }
     }
 }
 
