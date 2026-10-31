@@ -24,6 +24,7 @@
 #include "IVMapMgr.h"
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 
 class Map;
 
@@ -91,6 +92,7 @@ public:
     MMapData& GetMMapData() { return _mmapData; }
     MMapData const& GetMMapData() const { return _mmapData; }
     MMapData& GetMMapDataForMap(uint32 mapId);
+    void LoadMMapTilesForMap(uint32 mapId, float x1, float y1, float x2, float y2);
 
     std::shared_ptr<VMAP::StaticMapTree> const GetStaticTreeSharedPtr() const { return _staticVMapData._staticTree; }
     std::shared_ptr<dtNavMesh> const GetMMapNavMeshSharedPtr() const { return _mmapData._navMesh; }
@@ -102,6 +104,7 @@ private:
     StaticVMapCollisionData _staticVMapData;
     MMapData _mmapData;
     std::unordered_map<uint32, std::unique_ptr<MMapData>> _terrainMMapData;
+    std::unordered_map<uint32, std::unordered_set<uint32>> _terrainLoadedTiles;
 };
 
 #endif
