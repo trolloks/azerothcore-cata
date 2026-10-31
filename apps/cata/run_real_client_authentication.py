@@ -1680,6 +1680,28 @@ def import_world_dump(
         snapshot.unlink(missing_ok=True)
 
 
+def validate_world_content(manifest: Manifest, generation: Generation, schema: str) -> None:
+    """Reject a world dump/cache that would make the server run with 1 HP and zero damage."""
+    columns = set(mysql(
+        manifest, generation,
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+        f"WHERE TABLE_SCHEMA='{schema}' AND TABLE_NAME='creature_classlevelstats'",
+        schema,
+    ).splitlines())
+    missing = {"basehp3", "damage_exp3"} - columns
+    if missing:
+        raise RuntimeError(
+            f"world dump is missing creature_classlevelstats columns: {sorted(missing)}"
+        )
+
+    for table in ("creature_template", "creature", "creature_classlevelstats"):
+        count = int(mysql(manifest, generation, f"SELECT COUNT(*) FROM `{table}`", schema))
+        if count == 0:
+            raise RuntimeError(
+                f"world dump has an empty `{table}`; refusing to start a 1 HP / zero-damage world"
+            )
+
+
 def apply_released_updates(
     manifest: Manifest, generation: Generation, directory: Path, schema: str,
 ) -> list[str]:
@@ -2456,6 +2478,8 @@ def prepare(args: argparse.Namespace) -> None:
         cache = reconcile_database_cache(manifest_path, manifest, cache_key)
         if cache:
             restore_database_cache(manifest_path, manifest, generation, cache)
+            if inputs.get("world_dump"):
+                validate_world_content(manifest, generation, world)
             generation["released_updates"] = dict(manifest["database_cache"]["released_updates"])
             generation["database_cache"] = {"key": cache_key, "result": "restored"}
         else:
@@ -2475,6 +2499,7 @@ def prepare(args: argparse.Namespace) -> None:
             if inputs.get("world_dump"):
                 import_world_dump(manifest, generation, Path(inputs["world_dump"]), world,
                                   inputs.get("world_dump_sha256", ""))
+                validate_world_content(manifest, generation, world)
             dump_database_cache(manifest_path, manifest, generation, cache_key)
             generation["database_cache"] = {"key": cache_key, "result": "built"}
         # Pending migrations aren't part of the database cache key (they're not released yet, so
