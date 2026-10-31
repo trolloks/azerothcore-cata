@@ -8,8 +8,9 @@ target="${1:-acore_world_cata}"
 : "${DBC_DIR:?set DBC_DIR to the 4.3.4 client dbc directory}"
 out="${OUT_DIR:-/tmp}"
 
-# Kezan (goblin) and Gilneas (worgen) are imported for data completeness, but their start
-# experiences need phasing (#180); they are not part of the current in-world pass.
+# Kezan (goblin) and Gilneas (worgen) are imported for data completeness, including their
+# sub-areas (Lost Isles 4720, Gilneas City 4755), but their start experiences need phasing (#180);
+# they are not part of the current in-world pass.
 while read -r zone map label sorts; do
     [ -z "${zone:-}" ] && continue
     case "$zone" in \#*) continue ;; esac
@@ -26,8 +27,8 @@ while read -r zone map label sorts; do
 done <<'ZONES'
 14 1 durotar 368
 215 1 mulgore
-4737 648 kezan
-4714 654 gilneas
+4737 648 kezan 4720
+4714 654 gilneas 4755
 12 0 elwynn
 40 0 westfall
 44 0 redridge
