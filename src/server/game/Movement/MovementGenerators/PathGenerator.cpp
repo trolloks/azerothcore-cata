@@ -197,7 +197,7 @@ bool PathGenerator::CalculatePath(float x, float y, float z, float destX, float 
         Unit const* unit = _source->ToUnit();
         bool const canSwim = unit ? unit->CanSwim() : true;
         bool const canFly = unit ? unit->CanFly() : false;
-        if (canFly || (IsWaterPath(_pathPoints) && canSwim))
+        if (canFly || (canSwim && IsContinuousWaterPath(_startPosition, _actualEndPosition)))
         {
             _type = PathType(PATHFIND_NORMAL | PATHFIND_NOT_USING_PATH);
             return true;
@@ -1332,4 +1332,20 @@ bool PathGenerator::IsWaterPath(Movement::PointsArray pathPoints) const
     }
 
     return waterPath;
+}
+
+bool PathGenerator::IsContinuousWaterPath(G3D::Vector3 const& start, G3D::Vector3 const& end) const
+{
+    G3D::Vector3 const delta = end - start;
+    float const distance = delta.length();
+    uint32 const steps = std::max(1u, std::min(512u, uint32(std::ceil(distance / 10.0f))));
+    for (uint32 i = 0; i <= steps; ++i)
+    {
+        G3D::Vector3 const point = start + delta * (float(i) / float(steps));
+        NavTerrain const terrain = GetNavTerrain(point.x, point.y, point.z);
+        if (terrain != NAV_MAGMA && terrain != NAV_WATER)
+            return false;
+    }
+
+    return true;
 }
