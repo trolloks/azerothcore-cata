@@ -234,6 +234,21 @@ def main() -> int:
     report["crowley_smartai"] = crowley_smartai
     if crowley_smartai != 1:
         problems.append(f"expected Crowley 35552 to use SmartAI, found {crowley_smartai}")
+    # Last Stand (14222) finishes with three player-side spells on Crowley's reward.
+    last_stand = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM smart_scripts WHERE entryorguid=35566 AND source_type=0 "
+        "AND action_type=134 AND action_param1 IN (98274,68630,72788)")
+    report["last_stand_reward_spells"] = last_stand
+    if last_stand != 3:
+        problems.append(f"expected 3 Last Stand reward spells on Crowley 35566, found {last_stand}")
+    last_stand_event = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM smart_scripts WHERE entryorguid=35566 AND source_type=0 "
+        "AND event_type=20 AND event_param1=14222")
+    report["last_stand_reward_event"] = last_stand_event
+    if last_stand_event != 1:
+        problems.append(f"expected one Last Stand reward event on Crowley 35566, found {last_stand_event}")
 
     graveyard_links = scalar(
         args.container, args.user, args.password, args.clean,
