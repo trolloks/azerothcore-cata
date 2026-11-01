@@ -1988,52 +1988,52 @@ void Player::Regenerate(Powers power)
 
 void Player::RegenerateHealth()
 {
+    // Cata regenerates health as a percentage of maximum health, not from the legacy spirit DBCs.
+    if (IsInCombat() && !IsPolymorphed() && !m_baseHealthRegen &&
+        !HasAuraType(SPELL_AURA_MOD_REGEN_DURING_COMBAT) && !HasAuraType(SPELL_AURA_MOD_HEALTH_REGEN_IN_COMBAT))
+        return;
+
     uint32 curValue = GetHealth();
     uint32 maxValue = GetMaxHealth();
 
     if (curValue >= maxValue)
         return;
 
-    float HealthIncreaseRate = sWorld->getRate(RATE_HEALTH);
+    float healthIncreaseRate = sWorld->getRate(RATE_HEALTH);
+    float addValue = 0.0f;
 
-    if (sWorld->getBoolConfig(CONFIG_LOW_LEVEL_REGEN_BOOST) && GetLevel() < 15)
-        HealthIncreaseRate = sWorld->getRate(RATE_HEALTH) * (2.066f - (GetLevel() * 0.066f));
-
-    float addvalue = 0.0f;
-
-    // polymorphed case
     if (IsPolymorphed())
-        addvalue = (float)GetMaxHealth() / 3;
-    // normal regen case (maybe partly in combat case)
-    else if (!IsInCombat() || HasRegenDuringCombatAura())
+        addValue = float(GetMaxHealth()) / 3.0f;
+    else if (!IsInCombat() || HasAuraType(SPELL_AURA_MOD_REGEN_DURING_COMBAT))
     {
-        addvalue = OCTRegenHPPerSpirit() * HealthIncreaseRate;
-
-        if (!IsStandState())
-        {
-            addvalue *= 1.33f;
-        }
-
-        addvalue *= GetTotalAuraMultiplier(SPELL_AURA_MOD_HEALTH_REGEN_PERCENT);
+        addValue = healthIncreaseRate;
 
         if (!IsInCombat())
         {
-            addvalue += GetTotalAuraModifier(SPELL_AURA_MOD_REGEN) * 2 * IN_MILLISECONDS / (5 * IN_MILLISECONDS);
+            if (GetLevel() < 15)
+                addValue = 0.20f * float(GetMaxHealth()) / GetLevel() * healthIncreaseRate;
+            else
+                addValue = 0.015f * float(GetMaxHealth()) * healthIncreaseRate;
+
+            for (AuraEffect const* auraEffect : GetAuraEffectsByType(SPELL_AURA_MOD_HEALTH_REGEN_PERCENT))
+                AddPct(addValue, auraEffect->GetAmount());
+
+            addValue += GetTotalAuraModifier(SPELL_AURA_MOD_REGEN) * 0.4f;
         }
-        else if (HasRegenDuringCombatAura())
-        {
-            ApplyPct(addvalue, GetTotalAuraModifier(SPELL_AURA_MOD_REGEN_DURING_COMBAT));
-        }
+        else if (HasAuraType(SPELL_AURA_MOD_REGEN_DURING_COMBAT))
+            ApplyPct(addValue, GetTotalAuraModifier(SPELL_AURA_MOD_REGEN_DURING_COMBAT));
+
+        if (!IsStandState())
+            addValue *= 1.5f;
     }
 
-    // always regeneration bonus (including combat)
-    addvalue += GetTotalAuraModifier(SPELL_AURA_MOD_HEALTH_REGEN_IN_COMBAT);
-    addvalue += m_baseHealthRegen / 2.5f;
+    addValue += GetTotalAuraModifier(SPELL_AURA_MOD_HEALTH_REGEN_IN_COMBAT);
+    addValue += m_baseHealthRegen / 2.5f;
 
-    if (addvalue < 0)
-        addvalue = 0;
+    if (addValue < 0.0f)
+        addValue = 0.0f;
 
-    ModifyHealth(int32(addvalue));
+    ModifyHealth(int32(addValue));
 }
 
 void Player::ResetAllPowers()
