@@ -142,6 +142,36 @@ def main() -> int:
     if gilneas_phase_172_rows != 4:
         problems.append(f"expected 4 Gilneas phase-172 rows, found {gilneas_phase_172_rows}")
 
+    gilneas_phase_179_rows = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM phase_area WHERE PhaseId=179 AND AreaId IN (4757,4758,4759,4761)")
+    report["gilneas_phase_179_rows"] = gilneas_phase_179_rows
+    if gilneas_phase_179_rows != 4:
+        problems.append(f"expected 4 Gilneas phase-179 rows, found {gilneas_phase_179_rows}")
+    gilneas_phase_179_condition = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM conditions WHERE SourceTypeOrReferenceId=26 "
+        "AND SourceGroup=179 AND ConditionTypeOrReference=9 AND ConditionValue1=14222")
+    report["gilneas_phase_179_condition"] = gilneas_phase_179_condition
+    if gilneas_phase_179_condition != 1:
+        problems.append(f"expected the phase-179 Last Stand condition, found {gilneas_phase_179_condition}")
+
+    gilneas_phase_105_181 = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM phase_area WHERE AreaId=4714 AND PhaseId IN (105,181)")
+    report["gilneas_phase_105_181_rows"] = gilneas_phase_105_181
+    if gilneas_phase_105_181 != 2:
+        problems.append(f"expected 2 Gilneas phase-105/181 rows, found {gilneas_phase_105_181}")
+    gilneas_phase_105_181_conditions = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM conditions WHERE SourceTypeOrReferenceId=26 "
+        "AND SourceGroup IN (105,181) AND SourceEntry=4714 "
+        "AND ConditionTypeOrReference=8 AND ConditionValue1 IN (14222,14375)")
+    report["gilneas_phase_105_181_conditions"] = gilneas_phase_105_181_conditions
+    if gilneas_phase_105_181_conditions != 2:
+        problems.append(
+            f"expected two Gilneas phase-105/181 conditions, found {gilneas_phase_105_181_conditions}")
+
     gilneas_phase_condition = scalar(
         args.container, args.user, args.password, args.clean,
         "SELECT COUNT(*) FROM conditions WHERE SourceTypeOrReferenceId=26 "
