@@ -128,6 +128,21 @@ def main() -> int:
         problems.append(
             f"{phase_autocast_mismatches} Gilneas phase 59073 rows are not autocast")
 
+    gilneas_phase_areas = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM phase_area WHERE PhaseId IN (170,171) AND AreaId IN (4755,4756,4757)")
+    report["gilneas_phase_area_rows"] = gilneas_phase_areas
+    if gilneas_phase_areas != 6:
+        problems.append(f"expected 6 Gilneas phase-170/171 phase_area rows, found {gilneas_phase_areas}")
+
+    gilneas_phase_condition = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM conditions WHERE SourceTypeOrReferenceId=26 "
+        "AND SourceGroup IN (170,171) AND ConditionValue1 IN (14078,14159)")
+    report["gilneas_phase_condition"] = gilneas_phase_condition
+    if gilneas_phase_condition != 3:
+        problems.append(f"expected three Gilneas phase-170/171 quest conditions, found {gilneas_phase_condition}")
+
     # A class trainer with several GOSSIP_OPTION_TRAINER rows shows duplicate
     # training entries. Profession trainers legitimately have more than one.
     duplicate_trainer_options = scalar(
