@@ -60,6 +60,18 @@ namespace
         return dir.GetPath() / "maps" / Acore::StringFormat("{:03}{:02}{:02}.map", mapId, gridCoord.x_coord, gridCoord.y_coord);
     }
 
+    std::filesystem::path MMapFilePath(TemporaryMapDirectory const& dir, uint32 mapId, GridCoord const& gridCoord)
+    {
+        return dir.GetPath() / "mmaps" / Acore::StringFormat("{:03}{:02}{:02}.mmtile", mapId, gridCoord.x_coord, gridCoord.y_coord);
+    }
+
+    void WriteMMapFile(std::filesystem::path const& path)
+    {
+        std::filesystem::create_directories(path.parent_path());
+        std::ofstream file(path, std::ios::binary);
+        file.put('\0');
+    }
+
     void WriteFlatMapFile(std::filesystem::path const& path, uint16 areaId, float height)
     {
         map_fileheader header{};
@@ -117,6 +129,67 @@ TEST(TerrainSwapTest, SelectsChildTerrainOnlyWhenItsGridExists)
     // The base map itself is never selected as a child.
     std::vector<uint32> const withBase{ 0, 648 };
     EXPECT_EQ(Acore::SelectTerrainMapId(withBase, 0, 1000.0f, 2000.0f, always), 648u);
+}
+
+TEST(TerrainSwapTest, SelectsNavMeshMapOnlyWhenChildTileExists)
+{
+    auto never = [](uint32, GridCoord const&) { return false; };
+    auto always = [](uint32, GridCoord const&) { return true; };
+
+    auto hasGrid = [](uint32, GridCoord const&) { return true; };
+    auto has654Grid = [](uint32 mapId, GridCoord const&) { return mapId == 654; };
+    auto noGrid = [](uint32, GridCoord const&) { return false; };
+
+    std::vector<uint32> const noVisibleMaps;
+    EXPECT_EQ(Acore::SelectTerrainNavMeshMapId(noVisibleMaps, 0, 1000.0f, 2000.0f, hasGrid, always), 0u);
+
+    // A single visible child map needs its own tile; otherwise navigation uses the base mesh.
+    std::vector<uint32> const oneVisibleMap{ 648 };
+    EXPECT_EQ(Acore::SelectTerrainNavMeshMapId(oneVisibleMap, 0, 1000.0f, 2000.0f, hasGrid, always), 648u);
+    EXPECT_EQ(Acore::SelectTerrainNavMeshMapId(oneVisibleMap, 0, 1000.0f, 2000.0f, hasGrid, never), 0u);
+    EXPECT_EQ(Acore::SelectTerrainNavMeshMapId(oneVisibleMap, 0, 1000.0f, 2000.0f, noGrid, always), 0u);
+
+    // Multiple visible maps: the terrain-selected child must also have an mmap tile.
+    std::vector<uint32> const twoVisibleMaps{ 648, 654 };
+    GridCoord const tile = Acore::ComputeGridCoord(1000.0f, 2000.0f);
+    EXPECT_EQ(Acore::SelectTerrainNavMeshMapId(twoVisibleMaps, 0, 1000.0f, 2000.0f, has654Grid,
+        [&tile](uint32 mapId, GridCoord const& gridCoord)
+        {
+            return mapId == 654 && gridCoord.x_coord == tile.x_coord && gridCoord.y_coord == tile.y_coord;
+        }), 654u);
+
+    // No child mmap tile: fall back to the base mesh.
+    EXPECT_EQ(Acore::SelectTerrainNavMeshMapId(twoVisibleMaps, 0, 1000.0f, 2000.0f, has654Grid, never), 0u);
+
+    // The base map is never selected as a child.
+    std::vector<uint32> const withBase{ 0, 648 };
+    EXPECT_EQ(Acore::SelectTerrainNavMeshMapId(withBase, 0, 1000.0f, 2000.0f, hasGrid, always), 648u);
+
+    // The first grid-selected child wins; a later child's tile cannot override it.
+    EXPECT_EQ(Acore::SelectTerrainNavMeshMapId(twoVisibleMaps, 0, 1000.0f, 2000.0f, hasGrid,
+        [](uint32 mapId, GridCoord const&)
+        {
+            return mapId == 654;
+        }), 0u);
+    EXPECT_EQ(Acore::SelectTerrainNavMeshMapId(twoVisibleMaps, 0, 1000.0f, 2000.0f, noGrid, always), 0u);
+}
+
+TEST(TerrainSwapTest, CachesMMapTilePresence)
+{
+    TemporaryMapDirectory const dir;
+    GridCoord const tile = Acore::ComputeGridCoord(1000.0f, 2000.0f);
+    GridCoord const missingTile = Acore::ComputeGridCoord(-5000.0f, -5000.0f);
+
+    WriteMMapFile(MMapFilePath(dir, 654, tile));
+
+    TerrainSwapCache cache(dir.GetDataPath(), 0);
+    EXPECT_TRUE(cache.HasMMapTile(654, tile));
+    EXPECT_FALSE(cache.HasMMapTile(654, missingTile));
+    EXPECT_FALSE(cache.HasMMapTile(648, tile));
+
+    // Remove the file after the first check: the cached result must remain stable.
+    std::filesystem::remove(MMapFilePath(dir, 654, tile));
+    EXPECT_TRUE(cache.HasMMapTile(654, tile));
 }
 
 TEST(TerrainSwapTest, LoadsChildGridTerrainAndCachesMissingTiles)
@@ -233,5 +306,13 @@ TEST(TerrainSwapTest, ComparesRealSwapAndBaseTilesWhenDataIsAvailable)
         EXPECT_EQ(Acore::SelectTerrainMapId({}, tileCase.BaseMapId, sampleX, sampleY, hasGridFile), tileCase.BaseMapId);
         EXPECT_EQ(Acore::SelectTerrainMapId({ tileCase.SwapMapId }, tileCase.BaseMapId, sampleX, sampleY, hasGridFile),
             tileCase.SwapMapId);
+
+        auto hasMMapTile = [&cache](uint32 mapId, GridCoord const& gridCoord)
+        {
+            return cache.HasMMapTile(mapId, gridCoord);
+        };
+        bool const childTileExists = cache.HasMMapTile(tileCase.SwapMapId, tile);
+        EXPECT_EQ(Acore::SelectTerrainNavMeshMapId({ tileCase.SwapMapId }, tileCase.BaseMapId, sampleX, sampleY,
+            hasGridFile, hasMMapTile), childTileExists ? tileCase.SwapMapId : tileCase.BaseMapId);
     }
 }

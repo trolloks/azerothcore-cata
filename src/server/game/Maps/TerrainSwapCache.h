@@ -49,6 +49,7 @@ public:
     TerrainSwapCache& operator=(TerrainSwapCache const&) = delete;
 
     [[nodiscard]] bool HasGridFile(uint32 mapId, GridCoord const& gridCoord);
+    [[nodiscard]] bool HasMMapTile(uint32 mapId, GridCoord const& gridCoord);
     GridTerrainData* GetGridTerrainData(uint32 mapId, GridCoord const& gridCoord);
     StaticVMapCollisionData* GetStaticCollision(uint32 mapId, GridCoord const& gridCoord);
 
@@ -61,6 +62,7 @@ private:
     [[nodiscard]] bool HasGridFileUnlocked(uint32 mapId, GridCoord const& gridCoord);
     [[nodiscard]] bool HasVMapTileUnlocked(uint32 mapId, GridCoord const& gridCoord);
     [[nodiscard]] std::string GetGridFileName(uint32 mapId, GridCoord const& gridCoord) const;
+    [[nodiscard]] std::string GetMMapTileFileName(uint32 mapId, GridCoord const& gridCoord) const;
 
     std::string _dataPath;
     uint32 _baseMapId;
@@ -88,6 +90,20 @@ namespace Acore
                 return mapId;
 
         return baseMapId;
+    }
+
+    /// 4.3.4 navigation uses the child mesh only when both its terrain grid and mmap tile
+    /// exist; missing child tiles fall back to the base mesh.
+    template <typename HasGridFile, typename HasMMapTile>
+    uint32 SelectTerrainNavMeshMapId(std::vector<uint32> const& visibleMapIds, uint32 baseMapId, float x, float y,
+        HasGridFile&& hasGridFile, HasMMapTile&& hasMMapTile)
+    {
+        uint32 const mapId = SelectTerrainMapId(visibleMapIds, baseMapId, x, y, hasGridFile);
+        if (mapId == baseMapId)
+            return baseMapId;
+
+        GridCoord const gridCoord = Acore::ComputeGridCoord(x, y);
+        return hasGridFile(mapId, gridCoord) && hasMMapTile(mapId, gridCoord) ? mapId : baseMapId;
     }
 }
 

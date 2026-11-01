@@ -41,6 +41,7 @@ struct TerrainSwapCache::Entry
     uint32 MapId;
     std::unordered_map<uint32, std::shared_ptr<GridTerrainData>> Grids;
     std::unordered_map<uint32, bool> GridFileExists;
+    std::unordered_map<uint32, bool> MMapTileExists;
     std::unordered_map<uint32, bool> VMapTileExists;
     std::shared_ptr<VMAP::StaticMapTree> StaticTree;
     std::shared_ptr<VMAP::StaticMapTree> FallbackTree;
@@ -64,6 +65,11 @@ std::string TerrainSwapCache::GetGridFileName(uint32 mapId, GridCoord const& gri
     return Acore::StringFormat("{}maps/{:03}{:02}{:02}.map", _dataPath, mapId, gridCoord.x_coord, gridCoord.y_coord);
 }
 
+std::string TerrainSwapCache::GetMMapTileFileName(uint32 mapId, GridCoord const& gridCoord) const
+{
+    return Acore::StringFormat("{}mmaps/{:03}{:02}{:02}.mmtile", _dataPath, mapId, gridCoord.x_coord, gridCoord.y_coord);
+}
+
 TerrainSwapCache::Entry& TerrainSwapCache::GetEntry(uint32 mapId)
 {
     std::unique_ptr<Entry>& entry = _entries[mapId];
@@ -77,6 +83,21 @@ bool TerrainSwapCache::HasGridFile(uint32 mapId, GridCoord const& gridCoord)
 {
     std::lock_guard<std::mutex> lock(_mutex);
     return HasGridFileUnlocked(mapId, gridCoord);
+}
+
+bool TerrainSwapCache::HasMMapTile(uint32 mapId, GridCoord const& gridCoord)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+
+    Entry& entry = GetEntry(mapId);
+    uint32 const key = GetGridKey(gridCoord);
+    auto itr = entry.MMapTileExists.find(key);
+    if (itr != entry.MMapTileExists.end())
+        return itr->second;
+
+    bool const exists = std::filesystem::exists(GetMMapTileFileName(mapId, gridCoord));
+    entry.MMapTileExists.emplace(key, exists);
+    return exists;
 }
 
 bool TerrainSwapCache::HasGridFileUnlocked(uint32 mapId, GridCoord const& gridCoord)

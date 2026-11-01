@@ -1160,13 +1160,15 @@ uint32 Map::GetTerrainMapId(std::vector<uint32> const& visibleMapIds, float x, f
 
 uint32 Map::GetTerrainNavMeshMapId(std::vector<uint32> const& visibleMapIds, float x, float y) const
 {
-    uint32 const mapId = GetTerrainMapId(visibleMapIds, x, y);
-    if (mapId == GetId() || GetTerrainSwapCache().HasGridFile(mapId, Acore::ComputeGridCoord(x, y)))
-        return mapId;
-
-    // Terrain data falls back to the base grid when the selected child has no tile;
-    // navigation must use the base mesh for that position too.
-    return GetId();
+    return Acore::SelectTerrainNavMeshMapId(visibleMapIds, GetId(), x, y,
+        [this](uint32 mapId, GridCoord const& gridCoord)
+        {
+            return GetTerrainSwapCache().HasGridFile(mapId, gridCoord);
+        },
+        [this](uint32 mapId, GridCoord const& gridCoord)
+        {
+            return GetTerrainSwapCache().HasMMapTile(mapId, gridCoord);
+        });
 }
 
 GridTerrainData* Map::GetTerrainDataForMap(uint32 mapId, float x, float y)
