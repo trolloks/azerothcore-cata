@@ -145,10 +145,10 @@ def main() -> int:
     gilneas_phase_condition = scalar(
         args.container, args.user, args.password, args.clean,
         "SELECT COUNT(*) FROM conditions WHERE SourceTypeOrReferenceId=26 "
-        "AND SourceGroup IN (170,171,172) AND ConditionValue1 IN (14078,14159,14293)")
+        "AND SourceGroup IN (170,171,172) AND ConditionValue1 IN (14078,14159,14294,14293)")
     report["gilneas_phase_condition"] = gilneas_phase_condition
-    if gilneas_phase_condition != 4:
-        problems.append(f"expected four Gilneas phase 170/171/172 conditions, found {gilneas_phase_condition}")
+    if gilneas_phase_condition != 5:
+        problems.append(f"expected five Gilneas phase 170/171/172 conditions, found {gilneas_phase_condition}")
 
     # A class trainer with several GOSSIP_OPTION_TRAINER rows shows duplicate
     # training entries. Profession trainers legitimately have more than one.
