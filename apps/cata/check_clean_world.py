@@ -137,10 +137,10 @@ def main() -> int:
 
     gilneas_phase_172_rows = scalar(
         args.container, args.user, args.password, args.clean,
-        "SELECT COUNT(*) FROM phase_area WHERE PhaseId=172 AND AreaId IN (4757,4758)")
+        "SELECT COUNT(*) FROM phase_area WHERE PhaseId=172 AND AreaId IN (4757,4758,4759,4761)")
     report["gilneas_phase_172_rows"] = gilneas_phase_172_rows
-    if gilneas_phase_172_rows != 2:
-        problems.append(f"expected 2 Gilneas phase-172 rows, found {gilneas_phase_172_rows}")
+    if gilneas_phase_172_rows != 4:
+        problems.append(f"expected 4 Gilneas phase-172 rows, found {gilneas_phase_172_rows}")
 
     gilneas_phase_condition = scalar(
         args.container, args.user, args.password, args.clean,
