@@ -117,6 +117,17 @@ def main() -> int:
     if legacy_conditions:
         problems.append(f"{legacy_conditions} legacy phase-mask conditions remain")
 
+    # 59073 is the Gilneas phase-170 aura. Autocast is valid to disable for other
+    # spell_area rows, but this phase must be applied automatically in every area.
+    phase_autocast_mismatches = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM `spell_area` WHERE `spell`=59073 AND `autocast`<>1",
+    )
+    report["gilneas_phase_autocast_mismatches"] = phase_autocast_mismatches
+    if phase_autocast_mismatches:
+        problems.append(
+            f"{phase_autocast_mismatches} Gilneas phase 59073 rows are not autocast")
+
     low_level_stats = scalar(args.container, args.user, args.password, args.clean,
                              "SELECT COUNT(*) FROM creature_classlevelstats "
                              "WHERE level<=5 AND (basehp0<=1 OR damage_base<=0)")
