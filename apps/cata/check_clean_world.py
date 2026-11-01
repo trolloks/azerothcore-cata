@@ -135,13 +135,20 @@ def main() -> int:
     if gilneas_phase_areas != 6:
         problems.append(f"expected 6 Gilneas phase-170/171 phase_area rows, found {gilneas_phase_areas}")
 
+    gilneas_phase_172_rows = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM phase_area WHERE PhaseId=172 AND AreaId IN (4757,4758)")
+    report["gilneas_phase_172_rows"] = gilneas_phase_172_rows
+    if gilneas_phase_172_rows != 2:
+        problems.append(f"expected 2 Gilneas phase-172 rows, found {gilneas_phase_172_rows}")
+
     gilneas_phase_condition = scalar(
         args.container, args.user, args.password, args.clean,
         "SELECT COUNT(*) FROM conditions WHERE SourceTypeOrReferenceId=26 "
-        "AND SourceGroup IN (170,171) AND ConditionValue1 IN (14078,14159)")
+        "AND SourceGroup IN (170,171,172) AND ConditionValue1 IN (14078,14159,14293)")
     report["gilneas_phase_condition"] = gilneas_phase_condition
-    if gilneas_phase_condition != 3:
-        problems.append(f"expected three Gilneas phase-170/171 quest conditions, found {gilneas_phase_condition}")
+    if gilneas_phase_condition != 4:
+        problems.append(f"expected four Gilneas phase 170/171/172 conditions, found {gilneas_phase_condition}")
 
     # A class trainer with several GOSSIP_OPTION_TRAINER rows shows duplicate
     # training entries. Profession trainers legitimately have more than one.
