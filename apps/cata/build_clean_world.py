@@ -785,6 +785,11 @@ def build_services(container, user, password, target, source):
 
 def build_spell_support(container, user, password, target, source):
     """Spell destinations and implicit targets are content, including scripted spell chains."""
+    # Replace complete TDB-owned blocks: old and shifted GUID conditions cannot both match.
+    run(container, user, password,
+        f"DELETE t FROM `{target}`.conditions t JOIN `{source}`.conditions s "
+        "ON s.SourceTypeOrReferenceId=13 AND t.SourceTypeOrReferenceId=13 "
+        "AND s.SourceGroup=t.SourceGroup AND s.SourceEntry=t.SourceEntry AND s.SourceId=t.SourceId")
     return {
         "spell_target_position": copy_table(container, user, password, target, source, "spell_target_position"),
         "spell_target_conditions": copy_table(container, user, password, target, source, "conditions",

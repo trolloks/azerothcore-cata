@@ -13,13 +13,17 @@ class SpellSupportTest(unittest.TestCase):
         db.create_function("IF", 3, lambda test, yes, no: yes if test else no)
         for schema in ("source", "target"):
             db.execute(f"ATTACH DATABASE ':memory:' AS {schema}")
-            db.execute(f"CREATE TABLE {schema}.spell_target_position (ID INTEGER, EffectIndex INTEGER, MapID INTEGER)")
+            db.execute(f"CREATE TABLE {schema}.spell_target_position (ID INTEGER, EffectIndex INTEGER, MapID INTEGER, "
+                       "PRIMARY KEY (ID,EffectIndex))")
             db.execute(f"CREATE TABLE {schema}.conditions (SourceTypeOrReferenceId INTEGER, "
-                       "ConditionTypeOrReference INTEGER, ConditionValue1 INTEGER, ConditionValue3 INTEGER)")
+                       "SourceGroup INTEGER, SourceEntry INTEGER, SourceId INTEGER, "
+                       "ConditionTypeOrReference INTEGER, ConditionValue1 INTEGER, ConditionValue3 INTEGER, "
+                       "PRIMARY KEY (SourceTypeOrReferenceId,SourceGroup,SourceEntry,SourceId,"
+                       "ConditionTypeOrReference,ConditionValue1,ConditionValue3))")
         db.execute("INSERT INTO source.spell_target_position VALUES (68630, 0, 654)")
-        db.executemany("INSERT INTO source.conditions VALUES (?, ?, ?, ?)",
-                       [(13, 31, 3, 42), (13, 31, 5, 43), (13, 31, 6, 44), (13, 31, 3, 0),
-                        (18, 31, 3, 45)])
+        db.executemany("INSERT INTO source.conditions VALUES (?, 1, ?, 0, 31, ?, ?)",
+                       [(13, 1, 3, 42), (13, 2, 5, 43), (13, 3, 6, 44), (13, 4, 3, 0), (18, 5, 3, 45)])
+        db.executemany("INSERT INTO target.conditions VALUES (13, 1, ?, 0, 31, 3, ?)", [(1, 42), (6, 46)])
 
         def columns(_container, _user, _password, schema, table):
             return [(row[1], False) for row in db.execute(f"PRAGMA {schema}.table_info({table})")]
@@ -27,13 +31,21 @@ class SpellSupportTest(unittest.TestCase):
         def insert(_container, _user, _password, sql):
             return db.execute(sql.replace("INSERT IGNORE", "INSERT OR IGNORE")).rowcount
 
+        def run(_container, _user, _password, sql):
+            self.assertIn("DELETE t FROM `target`.conditions t", sql)
+            db.execute("DELETE FROM target.conditions AS t WHERE t.SourceTypeOrReferenceId=13 "
+                       "AND EXISTS (SELECT 1 FROM source.conditions s WHERE s.SourceTypeOrReferenceId=13 "
+                       "AND s.SourceGroup=t.SourceGroup AND s.SourceEntry=t.SourceEntry AND s.SourceId=t.SourceId)")
+
         with patch.object(builder, "columns", side_effect=columns), \
-                patch.object(builder, "insert_count", side_effect=insert):
+                patch.object(builder, "insert_count", side_effect=insert), \
+                patch.object(builder, "run", side_effect=run):
+            builder.build_spell_support("", "", "", "target", "source")
             builder.build_spell_support("", "", "", "target", "source")
 
         self.assertEqual(db.execute("SELECT * FROM target.spell_target_position").fetchall(), [(68630, 0, 654)])
-        self.assertEqual(db.execute("SELECT ConditionValue3 FROM target.conditions").fetchall(),
-                         [(10_000_042,), (10_000_043,), (44,), (0,)])
+        self.assertEqual(db.execute("SELECT ConditionValue3 FROM target.conditions ORDER BY SourceEntry").fetchall(),
+                         [(10_000_042,), (10_000_043,), (44,), (0,), (46,)])
 
     def test_spell_area_autocast_uses_tdb_flags(self):
         db = sqlite3.connect(":memory:")

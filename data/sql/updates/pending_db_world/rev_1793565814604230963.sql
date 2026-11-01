@@ -17,8 +17,10 @@ INSERT INTO `spell_target_position` (`ID`,`EffectIndex`,`MapID`,`PositionX`,`Pos
 (95679,0,654,-2225.7,1827.34,13.194,3.31613,0),
 (101644,0,654,-1550.37,1573.4,20.4521,0.58027,0);
 
-DELETE FROM `conditions` WHERE `SourceTypeOrReferenceId`=13 AND `SourceEntry` IN (30221,43333,67063,67350,67805,68070,
-68087,68228,68235,68558,68591,68638,68682,69123,80281,93275);
+DELETE FROM `conditions` WHERE `SourceTypeOrReferenceId`=13 AND `SourceEntry` IN (30221,43333,67063,67350);
+DELETE FROM `conditions` WHERE `SourceTypeOrReferenceId`=13 AND `SourceEntry` IN (67805,68070,68087,68228);
+DELETE FROM `conditions` WHERE `SourceTypeOrReferenceId`=13 AND `SourceEntry` IN (68235,68558,68591,68638);
+DELETE FROM `conditions` WHERE `SourceTypeOrReferenceId`=13 AND `SourceEntry` IN (68682,69123,80281,93275);
 INSERT INTO `conditions` (`SourceTypeOrReferenceId`,`SourceGroup`,`SourceEntry`,`SourceId`,`ElseGroup`,
 `ConditionTypeOrReference`,`ConditionTarget`,`ConditionValue1`,`ConditionValue2`,`ConditionValue3`,`NegativeCondition`,
 `ErrorType`,`ErrorTextId`,`ScriptName`,`Comment`) VALUES
@@ -84,16 +86,19 @@ UPDATE `spell_area` SET `autocast`=1 WHERE `spell`=76642 AND `area`=4761 AND `qu
 AND `aura_spell`=0 AND `racemask`=0 AND `gender`=2 AND `quest_start_status`=64 AND `quest_end_status`=43;
 
 -- The direct phase-181 login grant must end with the native aura window.
-DELETE FROM `conditions` WHERE `SourceTypeOrReferenceId`=26 AND `SourceGroup`=181 AND `SourceEntry`=4714 AND
-`ConditionTypeOrReference`=8 AND `ConditionValue1`=14321;
+DELETE FROM `conditions` WHERE `SourceTypeOrReferenceId`=26 AND `SourceGroup`=181 AND `SourceEntry`=4714;
 INSERT INTO `conditions` (`SourceTypeOrReferenceId`,`SourceGroup`,`SourceEntry`,`SourceId`,`ElseGroup`,
 `ConditionTypeOrReference`,`ConditionTarget`,`ConditionValue1`,`ConditionValue2`,`ConditionValue3`,`NegativeCondition`,
 `Comment`) VALUES
+(26,181,4714,0,0,8,0,14375,0,0,0,'Phase 181 after quest 14375 is rewarded'),
 (26,181,4714,0,0,8,0,14321,0,0,1,'Phase 181 until Invasion is rewarded');
 
 -- Replace scratch-only bindings; Toss Keg uses the existing abomination/Liam chain.
-DELETE FROM `spell_script_names` WHERE `ScriptName` IN ('spell_worgen_two_forms','spell_black_gunpowder_keg',
-'spell_gen_two_forms','spell_gen_darkflight','spell_gen_enable_worgen_altered_form');
+DELETE FROM `spell_script_names` WHERE `ScriptName`='spell_worgen_two_forms';
+DELETE FROM `spell_script_names` WHERE `ScriptName`='spell_black_gunpowder_keg';
+DELETE FROM `spell_script_names` WHERE `ScriptName`='spell_gen_two_forms';
+DELETE FROM `spell_script_names` WHERE `ScriptName`='spell_gen_darkflight';
+DELETE FROM `spell_script_names` WHERE `ScriptName`='spell_gen_enable_worgen_altered_form';
 INSERT INTO `spell_script_names` (`spell_id`,`ScriptName`) VALUES
 (68996,'spell_gen_two_forms'),
 (68992,'spell_gen_darkflight');
