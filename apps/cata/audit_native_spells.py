@@ -107,6 +107,12 @@ def sql_additions(path):
     return result
 
 
+def supported_effect(row):
+    return ((row[1] < 165 or row[1] in (167, 170))
+            and (row[3] < 317 or row[3] in (326, 352, 358))
+            and row[22] < 111 and row[23] < 111)
+
+
 def audit(root, sql_path):
     source = (ROOT / "src/server/shared/DataStores/DBCfmt.h").read_text()
     formats = dict(re.findall(r'char constexpr (\w+)\[\] = "([^"]+)";', source))
@@ -137,7 +143,7 @@ def audit(root, sql_path):
         if row[25] in slots:
             raise ValueError(f"Duplicate spell/effect slot: {row[24:26]}")
         slots[row[25]] = row
-        if row[1] >= 165 or row[3] >= 317 or row[22] >= 111 or row[23] >= 111:
+        if not supported_effect(row):
             unsupported.add(row[24])
     required, queue, edges = set(), list(direct), []
     while queue:

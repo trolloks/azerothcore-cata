@@ -3085,11 +3085,14 @@ void SpellMgr::LoadSpellInfoStore()
         auto const& spellEffects = effects[spellEntry->Id];
         bool supported = std::all_of(spellEffects.begin(), spellEffects.end(), [](SpellEffectEntry const* effect)
         {
-            // Only load spells whose aura dispatch exists. The 4.3.4 aura block above 316 is
-            // pending (#177/#180); phase group is the one this slice enables.
-            return !effect || (effect->Effect < TOTAL_SPELL_EFFECTS
+            // Keep unimplemented Cata effects and auras excluded when their dispatch arrays grow.
+            return !effect || ((effect->Effect < SPELL_EFFECT_DAMAGE_FROM_MAX_HEALTH_PCT
+                    || effect->Effect == SPELL_EFFECT_UPDATE_PLAYER_PHASE
+                    || effect->Effect == SPELL_EFFECT_UPDATE_ZONE_AURAS_AND_PHASES)
                 && (effect->EffectAura <= SPELL_AURA_PERIODIC_HASTE
-                    || effect->EffectAura == SPELL_AURA_PHASE_GROUP)
+                    || effect->EffectAura == SPELL_AURA_PHASE_GROUP
+                    || effect->EffectAura == SPELL_AURA_ENABLE_ALTERED_FORM
+                    || effect->EffectAura == SPELL_AURA_WORGEN_ALTERED_FORM)
                 && effect->EffectImplicitTargetA < TOTAL_SPELL_TARGETS
                 && effect->EffectImplicitTargetB < TOTAL_SPELL_TARGETS);
         });
