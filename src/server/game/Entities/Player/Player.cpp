@@ -190,6 +190,7 @@ Player::Player(WorldSession* session): Unit(), m_mover(this), _cinematicMgr(*thi
     m_trade = nullptr;
 
     m_cinematic = 0;
+    m_movie = 0;
 
     PlayerTalkClass = new PlayerMenu(GetSession());
     m_currentBuybackSlot = BUYBACK_SLOT_START;
@@ -5816,6 +5817,7 @@ void Player::SendCinematicStart(uint32 CinematicSequenceId) const
 
 void Player::SendMovieStart(uint32 MovieId)
 {
+    SetMovie(MovieId);
     WorldPacket data(SMSG_TRIGGER_MOVIE, 4);
     data << uint32(MovieId);
     SendDirectMessage(&data);

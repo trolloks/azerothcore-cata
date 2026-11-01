@@ -164,3 +164,18 @@ TEST(OpcodeTableTest, UsesCataclysmValuesForRenamedServerOpcodes)
     ASSERT_NE(table[SMSG_LEVELUP_INFO], nullptr);
     EXPECT_STREQ(table[SMSG_LEVELUP_INFO]->Name, "SMSG_LEVELUP_INFO");
 }
+
+TEST(OpcodeTableTest, DispatchesCompleteMovie)
+{
+    EXPECT_EQ(uint16(CMSG_COMPLETE_MOVIE), 0x4136);
+    EXPECT_EQ(uint16(SMSG_TRIGGER_MOVIE), 0x4625);
+
+    OpcodeTable table;
+    table.Initialize();
+
+    ClientOpcodeHandler const* completeMovie = table[CMSG_COMPLETE_MOVIE];
+    ASSERT_NE(completeMovie, nullptr);
+    EXPECT_STREQ(completeMovie->Name, "CMSG_COMPLETE_MOVIE");
+    EXPECT_EQ(completeMovie->Status, STATUS_LOGGEDIN);
+    EXPECT_EQ(completeMovie->ProcessingPlace, PROCESS_THREADUNSAFE);
+}

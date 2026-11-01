@@ -1417,7 +1417,7 @@ void OpcodeTable::Initialize()
     /*0x781E*/ DEFINE_HANDLER(CMSG_UPDATE_MISSILE_TRAJECTORY,                                        STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleUpdateMissileTrajectory            );
     /*0x2015*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_UPDATE_ACCOUNT_DATA_COMPLETE,                       STATUS_NEVER);
     /*0x4625*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_TRIGGER_MOVIE,                                      STATUS_NEVER);
-    /*0x4136*/ DEFINE_HANDLER(CMSG_COMPLETE_MOVIE,                                                   STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
+    /*0x4136*/ DEFINE_HANDLER(CMSG_COMPLETE_MOVIE,                                                   STATUS_LOGGEDIN,   PROCESS_THREADUNSAFE,   &WorldSession::HandleCompleteMovie                     );
     /*0x0466*/ DEFINE_HANDLER(CMSG_SET_GLYPH_SLOT,                                                   STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x0467*/ DEFINE_HANDLER(CMSG_SET_GLYPH,                                                        STATUS_NEVER,      PROCESS_INPLACE,        &WorldSession::Handle_NULL                              );
     /*0x4405*/ DEFINE_SERVER_OPCODE_HANDLER(SMSG_ACHIEVEMENT_EARNED,                                 STATUS_NEVER);

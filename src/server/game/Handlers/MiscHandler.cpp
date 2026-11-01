@@ -952,6 +952,14 @@ void WorldSession::HandleCompleteCinematic(WorldPacket& /*recv_data*/)
     GetPlayer()->GetCinematicMgr().EndCinematic();
 }
 
+void WorldSession::HandleCompleteMovie(WorldPacket& /*recv_data*/)
+{
+    if (!GetPlayer()->GetMovie())
+        return;
+
+    GetPlayer()->SetMovie(0);
+}
+
 void WorldSession::HandleNextCinematicCamera(WorldPacket& /*recv_data*/)
 {
     // Sent by client when cinematic actually begun. So we begin the server side process
