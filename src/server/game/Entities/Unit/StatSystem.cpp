@@ -952,30 +952,28 @@ void Player::UpdateManaRegen()
         return;
     }
 
-    float Intellect = GetStat(STAT_INTELLECT);
-    // Mana regen from spirit and intellect
-    float power_regen = std::sqrt(Intellect) * OCTRegenMPPerSpirit();
-    // Apply PCT bonus from SPELL_AURA_MOD_POWER_REGEN_PERCENT aura on spirit base regen
-    power_regen *= GetTotalAuraMultiplierByMiscValue(SPELL_AURA_MOD_POWER_REGEN_PERCENT, POWER_MANA);
+    PlayerClassLevelInfo classInfo;
+    sObjectMgr->GetPlayerClassLevelInfo(getClass(), GetLevel(), &classInfo);
 
-    // Mana regen from SPELL_AURA_MOD_POWER_REGEN aura
-    float power_regen_mp5 = (GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_POWER_REGEN, POWER_MANA) + m_baseManaRegen) / 5.0f;
+    float powerRegenMod = GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_POWER_REGEN, POWER_MANA) / 5.0f;
+    float powerRegenModPct = GetTotalAuraMultiplierByMiscValue(SPELL_AURA_MOD_POWER_REGEN_PERCENT, POWER_MANA);
 
-    // Get bonus from SPELL_AURA_MOD_MANA_REGEN_FROM_STAT aura
-    AuraEffectList const& regenAura = GetAuraEffectsByType(SPELL_AURA_MOD_MANA_REGEN_FROM_STAT);
-    for (AuraEffectList::const_iterator i = regenAura.begin(); i != regenAura.end(); ++i)
-    {
-        power_regen_mp5 += GetStat(Stats((*i)->GetMiscValue())) * (*i)->GetAmount() / 500.0f;
-    }
+    // Base mana regenerates 5% per five seconds; spirit adds the Cata GT ratio.
+    float baseRegen = classInfo.basemana / 100.0f;
+    baseRegen += powerRegenMod;
+    baseRegen += m_baseManaRegen / 5.0f;
 
-    // Set regen rate in cast state apply only on spirit based regen
+    float spiritRegen = OCTRegenMPPerSpirit();
+    if (GetStat(STAT_INTELLECT) > 0.0f)
+        spiritRegen *= std::sqrt(GetStat(STAT_INTELLECT));
+
+    baseRegen *= powerRegenModPct;
+    spiritRegen *= powerRegenModPct;
+
     int32 modManaRegenInterrupt = GetTotalAuraModifier(SPELL_AURA_MOD_MANA_REGEN_INTERRUPT);
-    if (modManaRegenInterrupt > 100)
-        modManaRegenInterrupt = 100;
     SetStatFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER + index,
-        power_regen_mp5 + CalculatePct(power_regen, modManaRegenInterrupt));
-
-    SetStatFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER + index, power_regen_mp5 + power_regen);
+        baseRegen + CalculatePct(spiritRegen, modManaRegenInterrupt));
+    SetStatFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER + index, baseRegen + spiritRegen);
 }
 
 void Player::UpdateEnergyRegen()
