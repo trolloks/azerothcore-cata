@@ -168,6 +168,15 @@ def main() -> int:
         problems.append(
             f"{duplicate_trainer_options} class-trainer menus have duplicate training options")
 
+    # 19696 is Lorna's mastiff voice-over; only her mastiff line (38744) may use it.
+    # TDB applies it to Crowley, Liam, and Genn lines, which is audible during Sacrifices.
+    mastiff_sound_misuse = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM creature_text WHERE Sound=19696 AND BroadcastTextId<>38744")
+    report["mastiff_sound_misuse"] = mastiff_sound_misuse
+    if mastiff_sound_misuse:
+        problems.append(f"{mastiff_sound_misuse} non-Lorna rows use Lorna's mastiff sound")
+
     graveyard_links = scalar(
         args.container, args.user, args.password, args.clean,
         "SELECT COUNT(*) FROM graveyard_zone")

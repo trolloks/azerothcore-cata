@@ -27,7 +27,7 @@ GUID_OFFSET = 10_000_000
 QUEST_LOOT_ID_BASE = 900_000_000
 # TDB keeps a few columns under a different name; the rest of AC's spawn tables match.
 RENAMES = {
-    "broadcast_text": {"MaleText": "Text", "FemaleText": "Text1"},
+    "broadcast_text": {"MaleText": "Text", "FemaleText": "Text1", "SoundEntriesId": "SoundEntriesID"},
     "creature": {"wander_distance": "spawndist"},
     "creature_addon": {"path_id": "waypointPathId"},
     "creature_template_addon": {"path_id": "waypointPathId"},
