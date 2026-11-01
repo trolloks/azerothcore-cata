@@ -22,6 +22,7 @@
 #include "ObjectAccessor.h"
 #include "Player.h"
 #include "PassiveAI.h"
+#include "Random.h"
 #include "ScriptedCreature.h"
 #include "SpellInfo.h"
 #include "SpellScript.h"
@@ -126,6 +127,34 @@ struct npc_frightened_citizen : public PassiveAI
     }
 private:
     EventMap _events;
+};
+
+/*######
+## Quest 14098 - Knocking on a Merchant Square Door (67869)
+######*/
+
+class spell_gilneas_knocking : public SpellScript
+{
+    PrepareSpellScript(spell_gilneas_knocking);
+
+    bool Validate(SpellInfo const* spellInfo) override
+    {
+        return ValidateSpellInfo({
+            uint32(spellInfo->GetEffect(EFFECT_1).BasePoints),
+            uint32(spellInfo->GetEffect(EFFECT_2).BasePoints)
+        });
+    }
+
+    void HandleEffect()
+    {
+        SpellInfo const* spellInfo = GetSpellInfo();
+        GetCaster()->CastSpell(GetCaster(), spellInfo->GetEffect(urand(0, 1) == 0 ? EFFECT_1 : EFFECT_2).BasePoints, true);
+    }
+
+    void Register() override
+    {
+        OnCast += SpellCastFn(spell_gilneas_knocking::HandleEffect);
+    }
 };
 
 /*######
@@ -673,4 +702,5 @@ void AddSC_gilneas_chapter_1()
     RegisterCreatureAI(npc_greymanes_horse);
     RegisterCreatureAI(npc_crowleys_horse);
     RegisterCreatureAI(npc_gilnean_crow);
+    RegisterSpellScript(spell_gilneas_knocking);
 }
