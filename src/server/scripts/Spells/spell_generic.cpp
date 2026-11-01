@@ -6243,8 +6243,11 @@ class spell_gen_throw_torch : public SpellScript
         return ValidateSpellInfo({ SPELL_THROW_TORCH });
     }
 
-    void HandleEffect(SpellMissInfo /*missInfo*/)
+    void HandleEffect(SpellMissInfo missInfo)
     {
+        if (missInfo != SPELL_MISS_NONE)
+            return;
+
         if (Player* player = GetCaster()->ToPlayer())
             if (GetHitUnit() && !GetHitUnit()->HasAura(SPELL_THROW_TORCH))
                 player->KilledMonsterCredit(CREDIT_ROUND_UP_WORGEN);
