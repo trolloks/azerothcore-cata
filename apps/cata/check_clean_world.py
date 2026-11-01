@@ -128,6 +128,24 @@ def main() -> int:
         problems.append(
             f"{phase_autocast_mismatches} Gilneas phase 59073 rows are not autocast")
 
+    # A class trainer with several GOSSIP_OPTION_TRAINER rows shows duplicate
+    # training entries. Profession trainers legitimately have more than one.
+    duplicate_trainer_options = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM ("
+        "SELECT g.MenuID FROM gossip_menu_option g "
+        "JOIN creature_template c ON c.gossip_menu_id=g.MenuID "
+        "JOIN creature_default_trainer cdt ON cdt.CreatureId=c.entry "
+        "JOIN trainer t ON t.Id=cdt.TrainerId "
+        "WHERE g.OptionType=5 AND t.Type=0 "
+        "GROUP BY g.MenuID HAVING COUNT(DISTINCT g.OptionID)>1"
+        ") AS duplicates",
+    )
+    report["duplicate_class_trainer_options"] = duplicate_trainer_options
+    if duplicate_trainer_options:
+        problems.append(
+            f"{duplicate_trainer_options} class-trainer menus have duplicate training options")
+
     low_level_stats = scalar(args.container, args.user, args.password, args.clean,
                              "SELECT COUNT(*) FROM creature_classlevelstats "
                              "WHERE level<=5 AND (basehp0<=1 OR damage_base<=0)")
