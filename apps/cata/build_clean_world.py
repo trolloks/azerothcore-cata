@@ -28,6 +28,7 @@ QUEST_LOOT_ID_BASE = 900_000_000
 # TDB keeps a few columns under a different name; the rest of AC's spawn tables match.
 RENAMES = {
     "broadcast_text": {"MaleText": "Text", "FemaleText": "Text1", "SoundEntriesId": "SoundEntriesID"},
+    "vehicle_seat_addon": {"SeatOrientation": "SeatOffsetO"},
     "creature": {"wander_distance": "spawndist"},
     "creature_addon": {"path_id": "waypointPathId"},
     "creature_template_addon": {"path_id": "waypointPathId"},
@@ -361,7 +362,14 @@ def build_templates(container, user, password, target, source):
                                  RENAMES.get(table))
                for table in ("gameobject_template", "creature_model_info", "creature_template",
                              "creature_equip_template", "creature_template_addon",
-                             "gameobject_template_addon", "creature_classlevelstats")}
+                             "gameobject_template_addon", "creature_classlevelstats",
+                             "npc_spellclick_spells", "vehicle_template_accessory",
+                             "vehicle_seat_addon")}
+    # Spellclick eligibility is stored as source-type-18 conditions, not on the
+    # npc_spellclick_spells row; without them every restored vehicle becomes open.
+    applied["spellclick_conditions"] = copy_table(
+        container, user, password, target, source, "conditions",
+        where="`SourceTypeOrReferenceId`=18")
     applied.update(derive_templates(container, user, password, target, source))
     applied["pet_levelstats"] = build_pet_levels(container, user, password, target, source)
     applied["creature_classlevelstats_cata"] = sync_cata_stats(container, user, password, target, source)
