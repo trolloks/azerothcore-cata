@@ -220,6 +220,20 @@ def main() -> int:
     report["spellclick_example_condition"] = spellclick_example
     if spellclick_example != 1:
         problems.append(f"expected the NPC 25334 spellclick quest condition, found {spellclick_example}")
+    # Quest 14212 is auto-accepted; Crowley must summon the ride on accept.
+    crowley_summon = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM smart_scripts WHERE entryorguid=35552 AND source_type=0 "
+        "AND event_type=19 AND event_param1=14212 AND action_type=12 AND action_param1=35231")
+    report["crowley_summon"] = crowley_summon
+    if crowley_summon != 1:
+        problems.append(f"expected Crowley's Horse summon on quest 14212, found {crowley_summon}")
+    crowley_smartai = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM creature_template WHERE entry=35552 AND AIName='SmartAI'")
+    report["crowley_smartai"] = crowley_smartai
+    if crowley_smartai != 1:
+        problems.append(f"expected Crowley 35552 to use SmartAI, found {crowley_smartai}")
 
     graveyard_links = scalar(
         args.container, args.user, args.password, args.clean,
