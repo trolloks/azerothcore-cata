@@ -307,9 +307,40 @@ public:
     }
 };
 
+enum TrainingDummy
+{
+    NPC_SPELL_PRACTICE_CREDIT = 44175,
+    SPELL_CHARGE              = 100,
+    SPELL_JUDGEMENT           = 20271,
+    SPELL_STEADY_SHOT         = 56641,
+    SPELL_EVISCERATE          = 2098,
+    SPELL_PRIMAL_STRIKE       = 73899,
+    SPELL_IMMOLATE            = 348,
+    SPELL_ARCANE_MISSILES     = 5143
+};
+
 struct npc_training_dummy : NullCreatureAI
 {
     npc_training_dummy(Creature* creature) : NullCreatureAI(creature) { }
+
+    void SpellHit(Unit* caster, SpellInfo const* spell) override
+    {
+        switch (spell->Id)
+        {
+            case SPELL_CHARGE:
+            case SPELL_JUDGEMENT:
+            case SPELL_STEADY_SHOT:
+            case SPELL_EVISCERATE:
+            case SPELL_PRIMAL_STRIKE:
+            case SPELL_IMMOLATE:
+            case SPELL_ARCANE_MISSILES:
+                if (Player* player = caster->ToPlayer())
+                    player->KilledMonsterCredit(NPC_SPELL_PRACTICE_CREDIT);
+                break;
+            default:
+                break;
+        }
+    }
 
     void JustEnteredCombat(Unit* who) override
     {
