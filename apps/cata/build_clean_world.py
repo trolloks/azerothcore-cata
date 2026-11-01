@@ -97,6 +97,54 @@ def phase_group_only(dbc_dir):
     return groups - phases
 
 
+def load_world_safe_locs(dbc_dir):
+    """Read the client WorldSafeLocs.dbc rows used by game_graveyard."""
+    data = (Path(dbc_dir) / "WorldSafeLocs.dbc").read_bytes()
+    if data[:4] != b"WDBC":
+        raise SystemExit(f"WorldSafeLocs.dbc in {dbc_dir} is not a WDBC file")
+    records, fields, record_size, string_size = struct.unpack_from("<4I", data, 4)
+    string_start = 20 + records * record_size
+    strings = data[string_start:string_start + string_size]
+
+    def string_at(offset):
+        end = strings.find(b"\0", offset)
+        return strings[offset:end].decode("utf-8", "replace") if 0 <= offset < len(strings) else ""
+
+    rows = []
+    for i in range(records):
+        entry, map_id, x, y, z, name_offset = struct.unpack_from(
+            "<IIfffI", data, 20 + i * record_size)
+        rows.append((entry, map_id, x, y, z, string_at(name_offset)))
+    return rows
+
+
+def build_graveyards(container, user, password, target, source, dbc_dir):
+    """Copy TDB zone links and add the Cata safe locations missing from the old TDB list."""
+    applied = {"graveyard_zone": copy_table(
+        container, user, password, target, source, "graveyard_zone", replace=True)}
+    links = {int(row[0]) for row in run(
+        container, user, password, f"SELECT DISTINCT ID FROM `{target}`.graveyard_zone")}
+    existing = {int(row[0]) for row in run(
+        container, user, password, f"SELECT ID FROM `{target}`.game_graveyard")}
+
+    def quote(value):
+        return "'" + value.replace("\\", "\\\\").replace("'", "''") + "'"
+
+    values = []
+    for entry, map_id, x, y, z, comment in load_world_safe_locs(dbc_dir):
+        if entry in existing or (entry not in links and map_id != 654):
+            continue
+        values.append(f"({entry},{map_id},{x:.8f},{y:.8f},{z:.8f},{quote(comment)})")
+    if values:
+        applied["game_graveyard"] = insert_count(
+            container, user, password,
+            f"INSERT IGNORE INTO `{target}`.game_graveyard "
+            f"(`ID`,`Map`,`x`,`y`,`z`,`Comment`) VALUES " + ",".join(values))
+    else:
+        applied["game_graveyard"] = 0
+    return applied
+
+
 def copy_smart_scripts(container, user, password, target, source):
     """Shift spawn-script guids and drop the rows AC's loader would reject."""
     target_columns = columns(container, user, password, target, "smart_scripts")
@@ -724,7 +772,8 @@ def build_services(container, user, password, target, source):
 
 PHASES = {"templates": build_templates, "spawns": build_spawns, "loot": build_loot,
           "quest_items": build_quest_items, "text": build_text, "services": build_services,
-          "pools": build_pools, "interactions": build_interactions}
+          "pools": build_pools, "interactions": build_interactions,
+          "graveyards": build_graveyards}
 
 
 def migrate_legacy_phase_masks(container, user, password, target):
@@ -796,8 +845,14 @@ def main():
     phases = PHASES if args.phase == "all" else {args.phase: PHASES[args.phase]}
     for name, build in phases.items():
         print(f"== {name}")
-        for table, count in build(args.container, args.user, args.password,
-                                  args.target, args.source).items():
+        if name == "graveyards":
+            if not args.dbc_dir:
+                parser.error("--dbc-dir is required to build graveyards")
+            built = build(args.container, args.user, args.password, args.target,
+                          args.source, args.dbc_dir)
+        else:
+            built = build(args.container, args.user, args.password, args.target, args.source)
+        for table, count in built.items():
             print(f"{table}: {count}")
     for warning in WARNINGS:
         print(warning, file=sys.stderr)

@@ -146,6 +146,31 @@ def main() -> int:
         problems.append(
             f"{duplicate_trainer_options} class-trainer menus have duplicate training options")
 
+    graveyard_links = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM graveyard_zone")
+    report["graveyard_links"] = graveyard_links
+    if not graveyard_links:
+        problems.append("graveyard_zone is empty")
+
+    unresolved_graveyard_links = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM graveyard_zone gz "
+        "LEFT JOIN game_graveyard gg ON gg.ID=gz.ID WHERE gg.ID IS NULL")
+    report["unresolved_graveyard_links"] = unresolved_graveyard_links
+    if unresolved_graveyard_links:
+        problems.append(
+            f"{unresolved_graveyard_links} graveyard-zone links have no game_graveyard location")
+
+    gilneas_graveyard_links = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM graveyard_zone gz "
+        "JOIN game_graveyard gg ON gg.ID=gz.ID "
+        "WHERE gz.GhostZone=4755 AND gg.Map=654")
+    report["gilneas_graveyard_links"] = gilneas_graveyard_links
+    if not gilneas_graveyard_links:
+        problems.append("Gilneas has no linked map-654 graveyard")
+
     low_level_stats = scalar(args.container, args.user, args.password, args.clean,
                              "SELECT COUNT(*) FROM creature_classlevelstats "
                              "WHERE level<=5 AND (basehp0<=1 OR damage_base<=0)")
