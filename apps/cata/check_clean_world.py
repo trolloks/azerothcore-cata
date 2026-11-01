@@ -204,6 +204,23 @@ def main() -> int:
     if horse_accessory != 1:
         problems.append(f"expected Crowley as Crowley's Horse accessory, found {horse_accessory}")
 
+    # Spellclick conditions are separate source-type-18 rows; an empty list means
+    # unrestricted, so a restore that drops them silently opens quest-gated vehicles.
+    spellclick_conditions = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM conditions WHERE SourceTypeOrReferenceId=18")
+    report["spellclick_conditions"] = spellclick_conditions
+    if spellclick_conditions < 187:
+        problems.append(f"spellclick conditions are incomplete: {spellclick_conditions} rows")
+    spellclick_example = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM conditions WHERE SourceTypeOrReferenceId=18 "
+        "AND SourceGroup=25334 AND SourceEntry=46598 AND ConditionTypeOrReference=9 "
+        "AND ConditionValue1=11652")
+    report["spellclick_example_condition"] = spellclick_example
+    if spellclick_example != 1:
+        problems.append(f"expected the NPC 25334 spellclick quest condition, found {spellclick_example}")
+
     graveyard_links = scalar(
         args.container, args.user, args.password, args.clean,
         "SELECT COUNT(*) FROM graveyard_zone")

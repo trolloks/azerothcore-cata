@@ -366,6 +366,11 @@ def build_templates(container, user, password, target, source):
                              "gameobject_template_addon", "creature_classlevelstats",
                              "npc_spellclick_spells", "vehicle_template_accessory",
                              "vehicle_seat_addon")}
+    # Spellclick eligibility is stored as source-type-18 conditions, not on the
+    # npc_spellclick_spells row; without them every restored vehicle becomes open.
+    applied["spellclick_conditions"] = copy_table(
+        container, user, password, target, source, "conditions",
+        where="`SourceTypeOrReferenceId`=18")
     applied.update(derive_templates(container, user, password, target, source))
     applied["pet_levelstats"] = build_pet_levels(container, user, password, target, source)
     applied["creature_classlevelstats_cata"] = sync_cata_stats(container, user, password, target, source)
