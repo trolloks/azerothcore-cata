@@ -361,7 +361,9 @@ def build_templates(container, user, password, target, source):
                                  RENAMES.get(table))
                for table in ("gameobject_template", "creature_model_info", "creature_template",
                              "creature_equip_template", "creature_template_addon",
-                             "gameobject_template_addon", "creature_classlevelstats")}
+                             "gameobject_template_addon", "creature_classlevelstats",
+                             "npc_spellclick_spells", "vehicle_template_accessory",
+                             "vehicle_seat_addon")}
     applied.update(derive_templates(container, user, password, target, source))
     applied["pet_levelstats"] = build_pet_levels(container, user, password, target, source)
     applied["creature_classlevelstats_cata"] = sync_cata_stats(container, user, password, target, source)

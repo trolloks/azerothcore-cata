@@ -176,6 +176,33 @@ def main() -> int:
     report["mastiff_sound_misuse"] = mastiff_sound_misuse
     if mastiff_sound_misuse:
         problems.append(f"{mastiff_sound_misuse} non-Lorna rows use Lorna's mastiff sound")
+    # TDB 434 ships 685 spellclick, 422 vehicle-accessory and 15 seat-addon rows. The
+    # starter-zone import only reaches spawned creatures, so summoned vehicles such as
+    # Crowley's Horse lose their click/accessory rows unless the template phase copies them.
+    vehicle_tables = {
+        table: scalar(args.container, args.user, args.password, args.clean, f"SELECT COUNT(*) FROM `{table}`")
+        for table in ("npc_spellclick_spells", "vehicle_template_accessory", "vehicle_seat_addon")
+    }
+    report["vehicle_tables"] = vehicle_tables
+    if vehicle_tables["npc_spellclick_spells"] < 600:
+        problems.append(f"npc_spellclick_spells is incomplete: {vehicle_tables['npc_spellclick_spells']} rows")
+    if vehicle_tables["vehicle_template_accessory"] < 400:
+        problems.append(
+            f"vehicle_template_accessory is incomplete: {vehicle_tables['vehicle_template_accessory']} rows")
+    if not vehicle_tables["vehicle_seat_addon"]:
+        problems.append("vehicle_seat_addon is empty")
+    horse_spellclick = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM npc_spellclick_spells WHERE npc_entry IN (35231,44428) AND spell_id=46598")
+    horse_accessory = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM vehicle_template_accessory WHERE entry=35231 AND accessory_entry=35230")
+    report["crowley_horse_spellclick"] = horse_spellclick
+    report["crowley_horse_accessory"] = horse_accessory
+    if horse_spellclick != 2:
+        problems.append(f"expected 2 Crowley's Horse spellclick rows, found {horse_spellclick}")
+    if horse_accessory != 1:
+        problems.append(f"expected Crowley as Crowley's Horse accessory, found {horse_accessory}")
 
     graveyard_links = scalar(
         args.container, args.user, args.password, args.clean,
