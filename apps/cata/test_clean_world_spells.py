@@ -23,7 +23,9 @@ class SpellSupportTest(unittest.TestCase):
         db.execute("INSERT INTO source.spell_target_position VALUES (68630, 0, 654)")
         db.executemany("INSERT INTO source.conditions VALUES (?, 1, ?, 0, 31, ?, ?)",
                        [(13, 1, 3, 42), (13, 2, 5, 43), (13, 3, 6, 44), (13, 4, 3, 0), (18, 5, 3, 45)])
-        db.executemany("INSERT INTO target.conditions VALUES (13, 1, ?, 0, 31, 3, ?)", [(1, 42), (6, 46)])
+        db.execute("INSERT INTO source.conditions VALUES (13, 2, 1, 0, 31, 5, 47)")
+        db.execute("INSERT INTO target.conditions VALUES (13, 3, 1, 0, 31, 3, 42)")
+        db.execute("INSERT INTO target.conditions VALUES (13, 1, 6, 0, 31, 3, 46)")
 
         def columns(_container, _user, _password, schema, table):
             return [(row[1], False) for row in db.execute(f"PRAGMA {schema}.table_info({table})")]
@@ -33,9 +35,9 @@ class SpellSupportTest(unittest.TestCase):
 
         def run(_container, _user, _password, sql):
             self.assertIn("DELETE t FROM `target`.conditions t", sql)
-            db.execute("DELETE FROM target.conditions AS t WHERE t.SourceTypeOrReferenceId=13 "
-                       "AND EXISTS (SELECT 1 FROM source.conditions s WHERE s.SourceTypeOrReferenceId=13 "
-                       "AND s.SourceGroup=t.SourceGroup AND s.SourceEntry=t.SourceEntry AND s.SourceId=t.SourceId)")
+            predicate = sql.split(" ON ", 1)[1]
+            db.execute("DELETE FROM target.conditions AS t WHERE EXISTS "
+                       f"(SELECT 1 FROM source.conditions s WHERE {predicate})")
 
         with patch.object(builder, "columns", side_effect=columns), \
                 patch.object(builder, "insert_count", side_effect=insert), \
@@ -44,8 +46,8 @@ class SpellSupportTest(unittest.TestCase):
             builder.build_spell_support("", "", "", "target", "source")
 
         self.assertEqual(db.execute("SELECT * FROM target.spell_target_position").fetchall(), [(68630, 0, 654)])
-        self.assertEqual(db.execute("SELECT ConditionValue3 FROM target.conditions ORDER BY SourceEntry").fetchall(),
-                         [(10_000_042,), (10_000_043,), (44,), (0,), (46,)])
+        rows = db.execute("SELECT ConditionValue3 FROM target.conditions ORDER BY SourceEntry,SourceGroup").fetchall()
+        self.assertEqual(rows, [(10_000_042,), (10_000_047,), (10_000_043,), (44,), (0,), (46,)])
 
     def test_spell_area_autocast_uses_tdb_flags(self):
         db = sqlite3.connect(":memory:")

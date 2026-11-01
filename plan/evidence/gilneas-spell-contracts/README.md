@@ -3,7 +3,8 @@
 Reference: TrinityCore `c699217775d90794158422387b07a917e161b582`, TDB 434.22011 and native build-15595 DBCs.
 
 The clean-world builder now imports spell destinations and implicit target conditions, translates TC area-aura
-flags into AC autocast, and preserves authored phase-area grants on replay. The pending migration restores eleven
+flags into AC autocast, and preserves authored phase-area grants on replay. TDB-owned spell-target blocks replace
+legacy blocks by spell/source id, including changed effect masks; AC-only spell blocks stay intact. The pending migration restores eleven
 Gilneas destinations, nineteen target-condition rows and the native area-aura windows. It replaces the scratch
 Two Forms/keg bindings. Keg credit remains on the existing abomination → Liam → explosion path.
 
