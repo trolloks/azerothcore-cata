@@ -43,7 +43,11 @@ EXPRESSIONS = {("creature_formations", "point_1"): "GREATEST(`InversionPoint1`,0
                ("creature_formations", "point_2"): "GREATEST(`InversionPoint2`,0)",
                # TDB 434 type 26 is a 4.3.4 phase/group id; AC reserves 26 for the legacy mask.
                ("conditions", "ConditionTypeOrReference"):
-                   "IF(`ConditionTypeOrReference`=26,108,`ConditionTypeOrReference`)"}
+                   "IF(`ConditionTypeOrReference`=26,108,`ConditionTypeOrReference`)",
+               ("conditions", "ConditionValue3"):
+                   f"IF(`ConditionTypeOrReference`=31 AND `ConditionValue1` IN (3,5) "
+                   f"AND `ConditionValue3`<>0,`ConditionValue3`+{GUID_OFFSET},`ConditionValue3`)",
+               ("spell_area", "autocast"): "(`flags` & 1)"}
 SPAWN_TABLES = ("creature", "gameobject", "creature_addon", "gameobject_addon",
                 "creature_formations", "waypoint_data", "waypoint_scripts", "creature_text",
                 "game_event_creature", "game_event_gameobject")
@@ -592,10 +596,8 @@ def import_phase_data(container, user, password, target, source):
     Spawn PhaseId/PhaseGroup values arrive with the spawn copy; an unphased player sees the default
     phase (169), see Player::IsUnphased.
     """
-    # phase_area is fully TDB-owned; replacing it drops rows an older import stored with the
-    # group still in PhaseId (#348).
-    applied = {"phase_area": copy_table(container, user, password, target, source, "phase_area",
-                                        replace=True),
+    # Keep authored campaign grants when repairing an existing clean world.
+    applied = {"phase_area": copy_table(container, user, password, target, source, "phase_area"),
                "phase_conditions": copy_table(container, user, password, target, source, "conditions",
                                               where="SourceTypeOrReferenceId IN (25,26)"),
                "terrain_swap_defaults": copy_table(container, user, password, target, source,
@@ -604,11 +606,14 @@ def import_phase_data(container, user, password, target, source):
                                                "terrain_worldmap"),
                # Area auras drive quest-state detection (e.g. Shadowglen 49416/49417/60922).
                "spell_area": copy_table(container, user, password, target, source, "spell_area")}
-    # TDB's spell_area has no autocast column. Enable it only for the invisibility-detection
-    # spells this build relies on; other rows keep the schema default rather than auto-applying.
-    detections = ",".join(sorted(INVISIBILITY_DETECTION.values()))
+    # Repair worlds built before TDB's AUTOCAST flag was mapped to AC's column.
     rows = run(container, user, password,
-               f"UPDATE `{target}`.spell_area SET autocast=1 WHERE spell IN ({detections}); "
+               f"UPDATE `{target}`.spell_area t JOIN `{source}`.spell_area s "
+               "ON t.spell=s.spell AND t.area=s.area AND t.quest_start=s.quest_start "
+               "AND t.quest_end=s.quest_end AND t.aura_spell=s.aura_spell "
+               "AND t.racemask=s.racemask AND t.gender=s.gender "
+               "AND t.quest_start_status=s.quest_start_status AND t.quest_end_status=s.quest_end_status "
+               "SET t.autocast=(s.flags & 1); "
                f"SELECT ROW_COUNT()")
     applied["spell_area_autocast"] = int(rows[-1][0]) if rows else 0
     # INSERT IGNORE leaves spawns already imported by an older build untouched, so restore their
@@ -778,10 +783,19 @@ def build_services(container, user, password, target, source):
     return applied
 
 
+def build_spell_support(container, user, password, target, source):
+    """Spell destinations and implicit targets are content, including scripted spell chains."""
+    return {
+        "spell_target_position": copy_table(container, user, password, target, source, "spell_target_position"),
+        "spell_target_conditions": copy_table(container, user, password, target, source, "conditions",
+                                               where="SourceTypeOrReferenceId=13"),
+    }
+
+
 PHASES = {"templates": build_templates, "spawns": build_spawns, "loot": build_loot,
           "quest_items": build_quest_items, "text": build_text, "services": build_services,
           "pools": build_pools, "interactions": build_interactions,
-          "graveyards": build_graveyards}
+          "graveyards": build_graveyards, "spells": build_spell_support}
 
 
 def migrate_legacy_phase_masks(container, user, password, target):
