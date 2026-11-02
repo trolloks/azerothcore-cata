@@ -13714,11 +13714,17 @@ void Unit::Kill(Unit* killer, Unit* victim, bool durabilityLoss, WeaponAttackTyp
     // find player: owner of controlled `this` or `this` itself maybe
     Player* player = killer ? killer->GetCharmerOrOwnerPlayerOrPlayerItself() : nullptr;
     Creature* creature = victim->ToCreature();
+    Player* tapPlayer = creature ? creature->GetLootRecipient() : nullptr;
+    Group* tapGroup = creature ? creature->GetLootRecipientGroup() : nullptr;
 
+    bool hasEnoughDamage = true;
+    bool isLootRewardDisabled = false;
     bool isRewardAllowed = true;
     if (creature)
     {
-        isRewardAllowed = (creature->IsDamageEnoughForLootingAndReward() && !creature->IsLootRewardDisabled());
+        hasEnoughDamage = creature->IsDamageEnoughForLootingAndReward();
+        isLootRewardDisabled = creature->IsLootRewardDisabled();
+        isRewardAllowed = hasEnoughDamage && !isLootRewardDisabled;
         if (!isRewardAllowed)
             creature->SetLootRecipient(nullptr);
     }
@@ -13813,6 +13819,37 @@ void Unit::Kill(Unit* killer, Unit* victim, bool durabilityLoss, WeaponAttackTyp
         }
 
         player->RewardPlayerAndGroupAtKill(victim, false);
+    }
+
+    // Quest kill credit belongs to the tapper's group even when NPC damage pushes them below
+    // the loot threshold. Loot stays restricted; credit alternate KillCredit entries too.
+    if (!hasEnoughDamage && !isLootRewardDisabled && creature)
+    {
+        bool const isPvP = creature->GetCharmerOrOwnerGUID().IsPlayer() && !creature->IsVehicle();
+        if (!isPvP)
+        {
+            auto credit = [&](Player* creditPlayer, bool checkDistance)
+            {
+                if (!creditPlayer || !creditPlayer->IsInMap(creature))
+                    return;
+
+                if (checkDistance && !creditPlayer->IsAtGroupRewardDistance(creature))
+                    return;
+
+                if (checkDistance && !creditPlayer->IsAlive() && creditPlayer->GetCorpse())
+                    return;
+
+                creditPlayer->KilledMonster(creature->GetCreatureTemplate(), creature->GetGUID());
+            };
+
+            if (tapGroup)
+            {
+                for (GroupReference* itr = tapGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+                    credit(itr->GetSource(), true);
+            }
+            else
+                credit(tapPlayer, false);
+        }
     }
 
     // Do KILL and KILLED procs. KILL proc is called only for the unit who landed the killing blow (and its owner - for pets and totems) regardless of who tapped the victim
