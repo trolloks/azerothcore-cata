@@ -17,7 +17,10 @@
 
 #include "IntegrationTestFixture.h"
 #include "Player.h"
+#include "DBCStores.h"
 #include "ScriptDefines/ServerScript.h"
+#include "Spell.h"
+#include "SpellInfoTestHelper.h"
 #include "WorldPacket.h"
 #include <gtest/gtest.h>
 
@@ -47,4 +50,36 @@ TEST_F(MovieHandlerTest, StartsAndClearsPendingMovie)
     // A repeat acknowledgement is harmless when no movie is pending.
     player->GetSession()->HandleCompleteMovie(complete);
     EXPECT_EQ(player->GetMovie(), 0u);
+}
+
+TEST_F(MovieHandlerTest, MovieSpellRequiresAClientMovieEntry)
+{
+    TestPlayer* player = CreateTestPlayer();
+    constexpr uint32 testMovieId = 900001;
+    auto spellInfo = SpellInfoBuilder()
+        .WithEffect(EFFECT_0, SPELL_EFFECT_PLAY_MOVIE)
+        .WithEffectMiscValue(EFFECT_0, testMovieId)
+        .BuildUnique();
+    Spell spell(player, spellInfo.get(), TRIGGERED_FULL_MASK);
+    spell.unitTarget = player;
+    spell.effectHandleMode = SPELL_EFFECT_HANDLE_HIT_TARGET;
+
+    spell.EffectPlayMovie(EFFECT_0);
+    EXPECT_EQ(player->GetMovie(), 0u);
+
+    sMovieStore.SetEntry(testMovieId, new MovieEntry{ testMovieId });
+    spell.EffectPlayMovie(EFFECT_0);
+    EXPECT_EQ(player->GetMovie(), testMovieId);
+    sMovieStore.SetEntry(testMovieId, nullptr);
+}
+
+TEST(MovieSpellTargets, CampaignEffectsRequireAUnitTarget)
+{
+    for (SpellEffects effect : { SPELL_EFFECT_PLAY_MOVIE, SPELL_EFFECT_UPDATE_PLAYER_PHASE,
+        SPELL_EFFECT_UPDATE_ZONE_AURAS_AND_PHASES })
+    {
+        auto spellInfo = SpellInfoBuilder().WithEffect(EFFECT_0, effect).BuildUnique();
+        EXPECT_EQ(spellInfo->Effects[EFFECT_0].GetUsedTargetObjectType(), TARGET_OBJECT_TYPE_UNIT);
+        EXPECT_EQ(spellInfo->Effects[EFFECT_0].GetImplicitTargetType(), EFFECT_IMPLICIT_TARGET_EXPLICIT);
+    }
 }

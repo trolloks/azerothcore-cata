@@ -28,6 +28,7 @@
 #include "Group.h"
 #include "Pet.h"
 #include "ReputationMgr.h"
+#include "ScriptDefines/PlayerScript.h"
 #include "SkillDiscovery.h"
 #include "SpellAuraEffects.h"
 #include "SpellPackets.h"
@@ -6259,6 +6260,83 @@ class spell_gen_throw_torch : public SpellScript
     }
 };
 
+enum WorgenFormSpells
+{
+    SPELL_WORGEN_ALTERED_FORM = 97709
+};
+
+class spell_gen_two_forms : public SpellScript
+{
+    PrepareSpellScript(spell_gen_two_forms);
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_WORGEN_ALTERED_FORM });
+    }
+
+    SpellCastResult CheckCast()
+    {
+        if (GetCaster()->IsInCombat() ||
+            GetCaster()->GetAuraEffectsByType(SPELL_AURA_WORGEN_ALTERED_FORM).size() > 1)
+        {
+            SetCustomCastResultMessage(SPELL_CUSTOM_ERROR_CANT_TRANSFORM);
+            return SPELL_FAILED_CUSTOM_ERROR;
+        }
+
+        return SPELL_CAST_OK;
+    }
+
+    void HandleTransform(SpellEffIndex effIndex)
+    {
+        PreventHitDefaultEffect(effIndex);
+        Unit* target = GetHitUnit();
+        if (target->HasAuraType(SPELL_AURA_WORGEN_ALTERED_FORM))
+            target->RemoveAurasByType(SPELL_AURA_WORGEN_ALTERED_FORM);
+        else
+            target->CastSpell(target, SPELL_WORGEN_ALTERED_FORM, CastSpellExtraArgs(true).AddSpellBP0(1));
+    }
+
+    void Register() override
+    {
+        OnCheckCast += SpellCheckCastFn(spell_gen_two_forms::CheckCast);
+        OnEffectHitTarget += SpellEffectFn(spell_gen_two_forms::HandleTransform, EFFECT_0, SPELL_EFFECT_DUMMY);
+    }
+};
+
+class spell_gen_darkflight : public SpellScript
+{
+    PrepareSpellScript(spell_gen_darkflight);
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_WORGEN_ALTERED_FORM });
+    }
+
+    void TriggerTransform()
+    {
+        GetCaster()->CastSpell(GetCaster(), SPELL_WORGEN_ALTERED_FORM, true);
+    }
+
+    void Register() override
+    {
+        AfterCast += SpellCastFn(spell_gen_darkflight::TriggerTransform);
+    }
+};
+
+class player_gen_worgen_altered_form : public PlayerScript
+{
+public:
+    player_gen_worgen_altered_form() : PlayerScript("player_gen_worgen_altered_form",
+        { PLAYERHOOK_ON_PLAYER_ENTER_COMBAT }) { }
+
+    void OnPlayerEnterCombat(Player* player, Unit* /*enemy*/) override
+    {
+        // AC's combat hook replaces TC's server-only ENTER_COMBAT proc spell 97681.
+        if (player->HasAuraType(SPELL_AURA_ENABLE_ALTERED_FORM))
+            player->CastSpell(player, SPELL_WORGEN_ALTERED_FORM, true);
+    }
+};
+
 void AddSC_generic_spell_scripts()
 {
     RegisterSpellScript(spell_silithyst);
@@ -6450,4 +6528,7 @@ void AddSC_generic_spell_scripts()
     RegisterSpellScript(spell_gen_filter_party_level_80);
     RegisterSpellScript(spell_gen_submerge_visual);
     RegisterSpellScript(spell_gen_throw_torch);
+    RegisterSpellScript(spell_gen_two_forms);
+    RegisterSpellScript(spell_gen_darkflight);
+    new player_gen_worgen_altered_form();
 }

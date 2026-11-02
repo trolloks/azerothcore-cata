@@ -389,6 +389,38 @@ pAuraEffectHandler AuraEffectHandler[TOTAL_AURAS] =
     &AuraEffect::HandleNULL,                                      //324 SPELL_AURA_324
     &AuraEffect::HandleUnused,                                    //325 unused (4.3.4)
     &AuraEffect::HandlePhaseGroup,                                //326 SPELL_AURA_PHASE_GROUP
+    &AuraEffect::HandleNULL,                                      //327 excluded
+    &AuraEffect::HandleNULL,                                      //328 excluded
+    &AuraEffect::HandleNULL,                                      //329 excluded
+    &AuraEffect::HandleNULL,                                      //330 excluded
+    &AuraEffect::HandleNULL,                                      //331 excluded
+    &AuraEffect::HandleNULL,                                      //332 excluded
+    &AuraEffect::HandleNULL,                                      //333 excluded
+    &AuraEffect::HandleNULL,                                      //334 excluded
+    &AuraEffect::HandleNULL,                                      //335 excluded
+    &AuraEffect::HandleNULL,                                      //336 excluded
+    &AuraEffect::HandleNULL,                                      //337 excluded
+    &AuraEffect::HandleNULL,                                      //338 excluded
+    &AuraEffect::HandleNULL,                                      //339 excluded
+    &AuraEffect::HandleNULL,                                      //340 excluded
+    &AuraEffect::HandleNULL,                                      //341 excluded
+    &AuraEffect::HandleNULL,                                      //342 excluded
+    &AuraEffect::HandleNULL,                                      //343 excluded
+    &AuraEffect::HandleNULL,                                      //344 excluded
+    &AuraEffect::HandleNULL,                                      //345 excluded
+    &AuraEffect::HandleNULL,                                      //346 excluded
+    &AuraEffect::HandleNULL,                                      //347 excluded
+    &AuraEffect::HandleNULL,                                      //348 excluded
+    &AuraEffect::HandleNULL,                                      //349 excluded
+    &AuraEffect::HandleNULL,                                      //350 excluded
+    &AuraEffect::HandleNULL,                                      //351 excluded
+    &AuraEffect::HandleNULL,                                      //352 SPELL_AURA_ENABLE_ALTERED_FORM
+    &AuraEffect::HandleNULL,                                      //353 excluded
+    &AuraEffect::HandleNULL,                                      //354 excluded
+    &AuraEffect::HandleNULL,                                      //355 excluded
+    &AuraEffect::HandleNULL,                                      //356 excluded
+    &AuraEffect::HandleNULL,                                      //357 excluded
+    &AuraEffect::HandleNULL,                                      //358 SPELL_AURA_WORGEN_ALTERED_FORM
 };
 
 AuraEffect::AuraEffect(Aura* base, uint8 effIndex, int32* baseAmount, Unit* caster):

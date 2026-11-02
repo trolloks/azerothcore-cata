@@ -128,6 +128,44 @@ def main() -> int:
         problems.append(
             f"{phase_autocast_mismatches} Gilneas phase 59073 rows are not autocast")
 
+    for spell, start, end in ((68481, 14375, 14321), (68482, 14321, 14386), (68483, 14386, 14466)):
+        count = scalar(
+            args.container, args.user, args.password, args.clean,
+            f"SELECT COUNT(*) FROM spell_area WHERE spell={spell} AND area=4714 "
+            f"AND quest_start={start} AND quest_end={end} "
+            "AND quest_start_status=64 AND quest_end_status=43 AND autocast=1")
+        report[f"gilneas_phase_aura_{spell}"] = count
+        if count != 1:
+            problems.append(f"missing automatic Gilneas phase aura {spell} with its native quest window")
+
+    for spell, entry in ((68558, 36140), (68591, 36286), (68682, 36312), (69123, 36198)):
+        count = scalar(
+            args.container, args.user, args.password, args.clean,
+            "SELECT COUNT(*) FROM conditions WHERE SourceTypeOrReferenceId=13 AND SourceGroup=1 "
+            f"AND SourceEntry={spell} AND ConditionTypeOrReference=31 "
+            f"AND ConditionValue1=3 AND ConditionValue2={entry} AND NegativeCondition=0")
+        report[f"gilneas_target_{spell}"] = count
+        if count != 1:
+            problems.append(f"missing Gilneas spell {spell} target restriction to creature {entry}")
+
+    destinations = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM spell_target_position WHERE ID IN (68630,72788) AND EffectIndex=0 "
+        "AND MapID=654 AND ABS(PositionX+1818.4)<0.01 AND ABS(PositionY-2294.25)<0.01 "
+        "AND ABS(PositionZ-42.2135)<0.01 AND ABS(Orientation-3.24666)<0.01")
+    report["gilneas_transition_destinations"] = destinations
+    if destinations != 2:
+        problems.append("missing Gilneas transition destinations for Curse of the Worgen / Last Stand Complete")
+
+    bindings = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM spell_script_names WHERE "
+        "(spell_id=68996 AND ScriptName='spell_gen_two_forms') OR "
+        "(spell_id=68992 AND ScriptName='spell_gen_darkflight')")
+    report["worgen_form_bindings"] = bindings
+    if bindings != 2:
+        problems.append("missing Two Forms / Darkflight spell script bindings")
+
     gilneas_phase_areas = scalar(
         args.container, args.user, args.password, args.clean,
         "SELECT COUNT(*) FROM phase_area WHERE PhaseId IN (170,171) AND AreaId IN (4755,4756,4757)")

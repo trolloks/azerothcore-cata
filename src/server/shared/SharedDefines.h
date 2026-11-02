@@ -856,7 +856,7 @@ enum SpellEffects
     SPELL_EFFECT_JUMP_DEST                          = 42,
     SPELL_EFFECT_TELEPORT_UNITS_FACE_CASTER         = 43,
     SPELL_EFFECT_SKILL_STEP                         = 44,
-    SPELL_EFFECT_ADD_HONOR                          = 45,
+    SPELL_EFFECT_PLAY_MOVIE                         = 45,
     SPELL_EFFECT_SPAWN                              = 46,
     SPELL_EFFECT_TRADE_SKILL                        = 47,
     SPELL_EFFECT_STEALTH                            = 48,
@@ -976,7 +976,13 @@ enum SpellEffects
     SPELL_EFFECT_TALENT_SPEC_SELECT                 = 162,
     SPELL_EFFECT_163                                = 163,
     SPELL_EFFECT_REMOVE_AURA                        = 164,
-    TOTAL_SPELL_EFFECTS                             = 165
+    SPELL_EFFECT_DAMAGE_FROM_MAX_HEALTH_PCT         = 165,
+    SPELL_EFFECT_GIVE_CURRENCY                      = 166,
+    SPELL_EFFECT_UPDATE_PLAYER_PHASE                = 167,
+    SPELL_EFFECT_ALLOW_CONTROL_PET                  = 168,
+    SPELL_EFFECT_DESTROY_ITEM                       = 169,
+    SPELL_EFFECT_UPDATE_ZONE_AURAS_AND_PHASES        = 170,
+    TOTAL_SPELL_EFFECTS                             = 171
 };
 
 // EnumUtils: DESCRIBE THIS
@@ -1291,6 +1297,7 @@ enum SpellCustomErrors
     SPELL_CUSTOM_ERROR_MAX_NUMBER_OF_VOLUNTEERS         = 97, // You already have the max number of volunteers.
     SPELL_CUSTOM_ERROR_FROSTMOURNE_RENDERED_RESURRECT   = 98, // Frostmourne has rendered you unable to resurrect.
     SPELL_CUSTOM_ERROR_CANT_MOUNT_WITH_SHAPESHIFT       = 99, // You can't mount while affected by that shapeshift.
+    SPELL_CUSTOM_ERROR_CANT_TRANSFORM                   = 128, // You cannot transform right now
 };
 
 enum StealthType
