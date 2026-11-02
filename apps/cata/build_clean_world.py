@@ -16,13 +16,16 @@ import os
 from pathlib import Path
 import re
 import struct
+import subprocess
 import sys
 
+import convert_items_from_db2 as item_converter
 from import_starter_content import (SMART_EVENT_PARAM_COUNTS, UNSUPPORTED_SMART_ACTIONS, WARNINGS,
                                     columns, insert_count, run)
 from starter_content_inventory import registered_script_names, table_exists
 
 GUID_OFFSET = 10_000_000
+DBC_DIR = None
 # Loot ids stay below 200k in TDB; allocated quest-only templates live in an unused range.
 QUEST_LOOT_ID_BASE = 900_000_000
 # TDB keeps a few columns under a different name; the rest of AC's spawn tables match.
@@ -797,7 +800,36 @@ def build_spell_support(container, user, password, target, source):
     }
 
 
-PHASES = {"templates": build_templates, "spawns": build_spawns, "loot": build_loot,
+def build_item_support(container, user, password, target, source):
+    """Import Item.db2-only items that TDB's item_template does not carry.
+
+    TDB's equipment references predate Cataclysm's pruned monster items. Item.db2 still has
+    their class, subclass, display, inventory type and sheathe; Item-sparse does not. Use a
+    neutral sparse row so those items resolve without inventing stats.
+    """
+    if not DBC_DIR:
+        return {}
+
+    dbc_dir = Path(DBC_DIR)
+    item_rows = item_converter.item_records((dbc_dir / "Item.db2").read_bytes())
+    sparse_rows = item_converter.sparse_records((dbc_dir / "Item-sparse.db2").read_bytes())
+    existing = {int(row[0]) for row in run(
+        container, user, password, f"SELECT entry FROM `{target}`.item_template")}
+    missing = sorted(set(item_rows) - existing)
+    if not missing:
+        return {"item_db2_only": 0}
+
+    tables = item_converter.load_tables(dbc_dir)
+    rows = item_converter.convert(item_rows, sparse_rows, missing, tables, allow_missing_sparse=True)
+    sql = item_converter.to_sql(rows, 15595, bool(tables), insert_only=True)
+    subprocess.run(
+        ["docker", "exec", "-i", "-e", f"MYSQL_PWD={password}", container,
+         "mysql", "-u", user, target],
+        input=sql, text=True, check=True)
+    return {"item_db2_only": len(missing)}
+
+
+PHASES = {"templates": build_templates, "items": build_item_support, "spawns": build_spawns, "loot": build_loot,
           "quest_items": build_quest_items, "text": build_text, "services": build_services,
           "pools": build_pools, "interactions": build_interactions,
           "graveyards": build_graveyards, "spells": build_spell_support}
@@ -844,7 +876,8 @@ def main():
     if args.source == args.target:
         parser.error("--source and --target must differ")
 
-    global VALKYR_DISPLAYS
+    global VALKYR_DISPLAYS, DBC_DIR
+    DBC_DIR = args.dbc_dir
     if args.dbc_dir:
         VALKYR_DISPLAYS = load_valkyr_displays(args.dbc_dir)
         group_only = phase_group_only(args.dbc_dir)

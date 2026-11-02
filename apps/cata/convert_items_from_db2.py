@@ -109,12 +109,27 @@ def derive(row, sparse, tables):
             row["bonding"], row["area"], row["Map"], row["stackable"])
 
 
-def convert(item_rows, sparse_rows, item_ids, tables=None):
+def synthetic_sparse(item):
+    """Neutral Item-sparse row for an item that only exists in Item.db2."""
+    sparse = {field: 0 for field in SIMPLE.values()}
+    sparse.update({"Display": f"Monster - Item {item['ID']}", "Description": "",
+                   "InventoryType": item["InventoryType"], "Material": item["Material"],
+                   "SheatheType": item["SheatheType"], "AllowableClass": -1, "AllowableRace": -1,
+                   "Stackable": 1, "BuyCount": 1, "StatScalingFactor": 0, "DamageType": 0})
+    return sparse
+
+
+def convert(item_rows, sparse_rows, item_ids, tables=None, allow_missing_sparse=False):
     rows = []
     for item_id in item_ids:
-        if item_id not in item_rows or item_id not in sparse_rows:
-            raise KeyError(f"item {item_id} missing from Item.db2 or Item-sparse.db2")
-        item, sparse = item_rows[item_id], sparse_rows[item_id]
+        item = item_rows.get(item_id)
+        if item is None:
+            raise KeyError(f"item {item_id} missing from Item.db2")
+        sparse = sparse_rows.get(item_id)
+        if sparse is None:
+            if not allow_missing_sparse:
+                raise KeyError(f"item {item_id} missing from Item-sparse.db2")
+            sparse = synthetic_sparse(item)
         row = {"entry": item_id, "class": item["ClassID"], "subclass": item["SubclassID"],
                "SoundOverrideSubclass": item["SoundOverrideSubclassID"], "name": sparse["Display"],
                "displayid": item["DisplayInfoID"], "description": sparse["Description"],
@@ -216,9 +231,16 @@ def self_test():
         raise AssertionError("expected KeyError for a missing item")
     except KeyError:
         pass
+    synthetic_item = {2: {"ID": 2, "ClassID": 2, "SubclassID": 3, "SoundOverrideSubclassID": -1,
+                          "DisplayInfoID": 9, "InventoryType": 26, "Material": 1, "SheatheType": 1}}
+    synthetic = convert(synthetic_item, {}, [2], allow_missing_sparse=True)[0]
+    assert synthetic["name"] == "Monster - Item 2" and synthetic["displayid"] == 9
+    assert synthetic["sheath"] == 1
     flat = {name: {5: (5,) + (2.0,) * 7 + (5,)} for name in ("ItemArmorQuality", "ItemDamageRanged")}
     flat["ItemArmorTotal"] = {5: (5, 5, 10.0, 20.0, 30.0, 40.0)}
     flat["ArmorLocation"] = {7: (7, 0.5, 0.5, 0.5, 0.5, 0.5), 5: (5, 1.0, 1.0, 1.0, 1.0, 1.0)}
+    derived_synthetic = convert(synthetic_item, {}, [2], flat, allow_missing_sparse=True)[0]
+    assert derived_synthetic["sheath"] == 1
     assert effective_armor(flat, 4, 1, 20, 1, 5) == int(2.0 * 10.0 * 1.0 + 0.5)  # robe uses the chest row
     assert effective_armor(flat, 4, 2, 7, 1, 5) == int(2.0 * 20.0 * 0.5 + 0.5)
     shirt = {"ItemLevel": 5, "StatScalingFactor": 0.0, "ArmorDamageModifier": 0.0, "DamageType": 0}
@@ -266,11 +288,15 @@ def main():
     parser.add_argument("item_ids", nargs="*", type=int)
     parser.add_argument("--build", type=int, default=15595)
     parser.add_argument("--all", action="store_true",
-                        help="convert every item present in both DB2 files (world-wide item_template)")
+                        help="convert every Item.db2 item; Item.db2-only entries get neutral sparse defaults")
+    parser.add_argument("--item-db2-only", action="store_true",
+                        help="allow item ids missing from Item-sparse.db2, using neutral defaults")
     parser.add_argument("--insert-only", action="store_true",
                         help="plain INSERT for brand-new ids (the SQL linter forbids DELETE on item_template)")
     parser.add_argument("--ids-from-report", type=argparse.FileType("r"),
                         help="import_starter_content.py JSON report; its closure.missing_items are converted")
+    parser.add_argument("--ids-from-file", type=argparse.FileType("r"),
+                        help="text file with one item id per line")
     parser.add_argument("--dbc-dir", help="directory with the ItemArmor*/ItemDamage*/ArmorLocation .dbc files")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
@@ -280,16 +306,23 @@ def main():
         report_ids = report_item_ids(args.ids_from_report) if args.ids_from_report else []
     except ValueError as error:
         parser.error(f"--ids-from-report: {error}")
-    item_ids = sorted(set(args.item_ids) | set(report_ids))
+    file_ids = []
+    if args.ids_from_file:
+        for line in args.ids_from_file:
+            line = line.strip()
+            if line:
+                file_ids.append(int(line))
+    item_ids = sorted(set(args.item_ids) | set(report_ids) | set(file_ids))
     if not (args.item_db2 and args.item_sparse_db2 and (item_ids or args.all)):
         parser.error("item_db2, item_sparse_db2 and at least one item id, --all or a report with "
                      "missing items are required")
     item_rows = item_records(args.item_db2.read())
     sparse_rows = sparse_records(args.item_sparse_db2.read())
     if args.all:
-        item_ids = sorted(set(item_rows) & set(sparse_rows))
+        item_ids = sorted(item_rows)
     tables = load_tables(args.dbc_dir) if args.dbc_dir else None
-    rows = convert(item_rows, sparse_rows, item_ids, tables)
+    rows = convert(item_rows, sparse_rows, item_ids, tables,
+                   allow_missing_sparse=args.item_db2_only or args.all)
     sys.stdout.write(to_sql(rows, args.build, bool(tables), args.insert_only))
 
 

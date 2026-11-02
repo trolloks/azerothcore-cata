@@ -166,6 +166,24 @@ def main() -> int:
     if bindings != 2:
         problems.append("missing Two Forms / Darkflight spell script bindings")
 
+    item_template_entries = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(*) FROM item_template")
+    report["item_template_entries"] = item_template_entries
+    if item_template_entries != 64775:
+        problems.append(f"expected 64775 item_template entries, found {item_template_entries}")
+
+    missing_equipment_items = scalar(
+        args.container, args.user, args.password, args.clean,
+        "SELECT COUNT(DISTINCT item) FROM ("
+        "SELECT ItemID1 item FROM creature_equip_template WHERE ItemID1<>0 "
+        "UNION SELECT ItemID2 FROM creature_equip_template WHERE ItemID2<>0 "
+        "UNION SELECT ItemID3 FROM creature_equip_template WHERE ItemID3<>0) e "
+        "LEFT JOIN item_template i ON i.entry=e.item WHERE i.entry IS NULL")
+    report["missing_equipment_items"] = missing_equipment_items
+    if missing_equipment_items:
+        problems.append(f"{missing_equipment_items} equipment item ids have no item_template row")
+
     gilneas_phase_areas = scalar(
         args.container, args.user, args.password, args.clean,
         "SELECT COUNT(*) FROM phase_area WHERE PhaseId IN (170,171) AND AreaId IN (4755,4756,4757)")
