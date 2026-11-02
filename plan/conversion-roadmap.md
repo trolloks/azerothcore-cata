@@ -427,6 +427,15 @@ disconnects.
 - Treat existing database data as immutable. A plan that needs a database must define its disposable
   Docker container, volume, unused-port check, ownership manifest, and bounded cleanup first.
 
+## Reviewing conversion claims
+
+- Resolve a numeric spell effect or aura through `SharedDefines.h` or `SpellAuraDefines.h` before
+  calling a handler wrong; the number alone is not a name.
+- Before reporting a missing quest-credit path, trace the existing `SpellHit`/SmartAI chain and the
+  TC/TDB data. A missing `spell_script_names` row is not proof that no path exists.
+- Verify phase and quest windows against the actual quest prerequisites and the TC/TDB
+  `spell_area`/`phase_area` rows; do not infer order from ids or from one condition row.
+
 ## Plan issues
 
 GitHub issues hold the complete plans and progress. `github-issues.tsv` is the repository index; the
